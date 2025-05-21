@@ -95,7 +95,51 @@ export const saveProgressNote = async (youthId: string, noteData: Omit<ProgressN
   return data ? mapNoteFromSupabase(data[0]) : null;
 };
 
-export const saveAssessment = async (youthId: string, collection: string, documentId: string, data: any) => {
+// Type definitions for different assessment types
+export interface BehaviorWorksheetData {
+  id: string;
+  youth_id: string;
+  events: any[];
+  summary: string;
+  skillstoImprove: string[];
+  createdat: string;
+  updatedat?: string;
+}
+
+export interface RiskAssessmentData {
+  id: string;
+  youth_id: string;
+  assessmentdate: string;
+  completedby: string;
+  domains: any;
+  traumahistory: string;
+  strengths: string;
+  recommendedlevel: number;
+  overallrisklevel: string;
+  interventiontargets: string[];
+  createdat: string;
+  updatedat?: string;
+}
+
+export interface SuccessPlanData {
+  id: string;
+  youth_id: string;
+  goals: any[];
+  strengths: string;
+  supportnetwork: any[];
+  resources: any[];
+  challengestoaddress: string;
+  createdat: string;
+  updatedat?: string;
+}
+
+// Generic function to save assessment data
+export const saveAssessment = async (
+  youthId: string, 
+  collection: string, 
+  documentId: string, 
+  data: any
+) => {
   const { error } = await supabase
     .from(`${collection}`)
     .upsert([{
@@ -112,7 +156,12 @@ export const saveAssessment = async (youthId: string, collection: string, docume
   return { id: documentId };
 };
 
-export const fetchAssessment = async (youthId: string, collection: string, documentId: string) => {
+// Typed function to fetch assessment data
+export const fetchAssessment = async (
+  youthId: string, 
+  collection: string, 
+  documentId: string
+): Promise<BehaviorWorksheetData | RiskAssessmentData | SuccessPlanData | null> => {
   const { data, error } = await supabase
     .from(`${collection}`)
     .select('*')

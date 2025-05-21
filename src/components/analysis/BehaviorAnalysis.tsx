@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { FileText, Download, Save } from "lucide-react";
 import { toast } from "sonner";
-import { saveAssessment, fetchAssessment } from "@/utils/supabase-utils";
+import { saveAssessment, fetchAssessment, BehaviorWorksheetData } from "@/utils/supabase-utils";
 
 interface BehaviorAnalysisProps {
   youthId: string;
@@ -77,7 +78,7 @@ export const BehaviorAnalysis = ({ youthId, youth }: BehaviorAnalysisProps) => {
     try {
       setIsLoading(true);
       
-      const worksheetData = await fetchAssessment(youthId, 'worksheets', 'behaviorAnalysis');
+      const worksheetData = await fetchAssessment(youthId, 'worksheets', 'behaviorAnalysis') as BehaviorWorksheetData | null;
       
       if (worksheetData) {
         setWorksheet({

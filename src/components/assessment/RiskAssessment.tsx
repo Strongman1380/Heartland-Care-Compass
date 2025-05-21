@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { FileText, Download, Save } from "lucide-react";
 import { toast } from "sonner";
-import { saveAssessment, fetchAssessment } from "@/utils/supabase-utils";
+import { saveAssessment, fetchAssessment, RiskAssessmentData } from "@/utils/supabase-utils";
 
 interface RiskAssessmentProps {
   youthId: string;
@@ -169,7 +170,7 @@ export const RiskAssessment = ({ youthId, youth }: RiskAssessmentProps) => {
     try {
       setIsLoading(true);
       
-      const assessmentData = await fetchAssessment(youthId, 'assessments', 'riskNeeds');
+      const assessmentData = await fetchAssessment(youthId, 'assessments', 'riskNeeds') as RiskAssessmentData | null;
       
       if (assessmentData) {
         // Map the data from Supabase to our RiskAssessment interface

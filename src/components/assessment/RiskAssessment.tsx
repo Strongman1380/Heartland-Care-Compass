@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,9 +8,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { FileText, Download, Save } from "lucide-react";
-import { doc, getDoc, setDoc, Timestamp } from "firebase/firestore";
-import { firestore } from "@/pages/Index";
 import { toast } from "sonner";
+import { saveAssessment, fetchAssessment } from "@/utils/supabase-utils";
 
 interface RiskAssessmentProps {
   youthId: string;
@@ -164,25 +162,22 @@ export const RiskAssessment = ({ youthId, youth }: RiskAssessmentProps) => {
   const [questionResponses, setQuestionResponses] = useState<Record<string, boolean>>({});
   
   useEffect(() => {
-    fetchAssessment();
+    fetchAssessmentData();
   }, [youthId]);
   
-  const fetchAssessment = async () => {
+  const fetchAssessmentData = async () => {
     try {
       setIsLoading(true);
       
-      const assessmentDocRef = doc(firestore, `youths/${youthId}/assessments/riskNeeds`);
-      const assessmentDoc = await getDoc(assessmentDocRef);
+      const assessmentData = await fetchAssessment(youthId, 'assessments', 'riskNeeds');
       
-      if (assessmentDoc.exists()) {
-        const data = assessmentDoc.data() as Omit<RiskAssessment, 'id'>;
-        
+      if (assessmentData) {
         setAssessment({
-          id: assessmentDoc.id,
-          ...data,
-          assessmentDate: data.assessmentDate,
-          createdAt: data.createdAt,
-          updatedAt: data.updatedAt
+          id: assessmentData.id,
+          ...assessmentData,
+          assessmentDate: assessmentData.assessmentDate ? new Date(assessmentData.assessmentDate) : new Date(),
+          createdAt: assessmentData.createdAt ? new Date(assessmentData.createdAt) : new Date(),
+          updatedAt: assessmentData.updatedAt ? new Date(assessmentData.updatedAt) : new Date()
         });
         
         // Reconstruct question responses from scores
@@ -316,17 +311,13 @@ export const RiskAssessment = ({ youthId, youth }: RiskAssessmentProps) => {
         ...assessment,
         overallRiskLevel: riskLevel,
         recommendedLevel,
-        updatedAt: Timestamp.now(),
-        assessmentDate: assessment.assessmentDate instanceof Date 
-          ? Timestamp.fromDate(assessment.assessmentDate) 
-          : assessment.assessmentDate,
-        createdAt: assessment.createdAt instanceof Date 
-          ? Timestamp.fromDate(assessment.createdAt) 
-          : assessment.createdAt
+        updatedAt: new Date()
       };
       
-      await setDoc(
-        doc(firestore, `youths/${youthId}/assessments/riskNeeds`), 
+      await saveAssessment(
+        youthId,
+        'assessments',
+        'riskNeeds',
         updatedAssessment
       );
       

@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,26 +7,16 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { AlertCircle, ChevronDown, ChevronRight, FileText, Search } from "lucide-react";
-import { collection, addDoc, query, where, orderBy, getDocs, Timestamp } from "firebase/firestore";
-import { firestore } from "@/pages/Index";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { fetchProgressNotes, saveProgressNote } from "@/utils/supabase-utils";
+import { ProgressNote } from "@/types/app-types";
 
 interface ProgressNotesProps {
   youthId: string;
   youth: any;
-}
-
-interface ProgressNote {
-  id?: string;
-  date: Date | Timestamp;
-  category: string;
-  note: string;
-  rating: number;
-  staff: string;
-  createdAt: Date | Timestamp;
 }
 
 const NOTE_CATEGORIES = [
@@ -67,20 +56,9 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
   const fetchNotes = async () => {
     try {
       setIsLoading(true);
-      
-      const notesRef = collection(firestore, `youths/${youthId}/notes`);
-      const q = query(notesRef, orderBy("date", "desc"));
-      const querySnapshot = await getDocs(q);
-      
-      const fetchedNotes = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        date: doc.data().date.toDate(),
-        createdAt: doc.data().createdAt.toDate()
-      }));
-      
-      setNotes(fetchedNotes as ProgressNote[]);
-      setFilteredNotes(fetchedNotes as ProgressNote[]);
+      const fetchedNotes = await fetchProgressNotes(youthId);
+      setNotes(fetchedNotes);
+      setFilteredNotes(fetchedNotes);
     } catch (error) {
       console.error("Error fetching notes:", error);
       toast.error("Failed to load progress notes");
@@ -129,20 +107,16 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
       const noteDate = new Date(formData.date);
       const rating = parseInt(formData.rating);
       
-      const newNote: ProgressNote = {
+      const newNote: Omit<ProgressNote, 'id' | 'createdAt'> = {
+        youth_id: youthId,
         date: noteDate,
         category: formData.category,
         note: formData.note.trim(),
         rating,
         staff: formData.staff.trim() || "Staff Member",
-        createdAt: new Date(),
       };
       
-      await addDoc(collection(firestore, `youths/${youthId}/notes`), {
-        ...newNote,
-        date: Timestamp.fromDate(noteDate),
-        createdAt: Timestamp.now(),
-      });
+      await saveProgressNote(youthId, newNote);
       
       toast.success("Progress note added successfully");
       

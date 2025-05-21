@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,9 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { FileText, Download, Save } from "lucide-react";
-import { doc, getDoc, setDoc, Timestamp } from "firebase/firestore";
-import { firestore } from "@/pages/Index";
 import { toast } from "sonner";
+import { saveAssessment, fetchAssessment } from "@/utils/supabase-utils";
 
 interface BehaviorAnalysisProps {
   youthId: string;
@@ -31,8 +29,8 @@ interface BehaviorWorksheet {
   events: BehaviorEvent[];
   summary: string;
   skillsToImprove: string[];
-  createdAt: Date | Timestamp;
-  updatedAt: Date | Timestamp;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 const DEFAULT_SKILLS = [
@@ -79,16 +77,16 @@ export const BehaviorAnalysis = ({ youthId, youth }: BehaviorAnalysisProps) => {
     try {
       setIsLoading(true);
       
-      const worksheetDocRef = doc(firestore, `youths/${youthId}/worksheets/behaviorAnalysis`);
-      const worksheetDoc = await getDoc(worksheetDocRef);
+      const worksheetData = await fetchAssessment(youthId, 'worksheets', 'behaviorAnalysis');
       
-      if (worksheetDoc.exists()) {
-        const data = worksheetDoc.data() as Omit<BehaviorWorksheet, 'id'>;
+      if (worksheetData) {
         setWorksheet({
-          id: worksheetDoc.id,
-          ...data,
-          createdAt: data.createdAt,
-          updatedAt: data.updatedAt
+          id: worksheetData.id,
+          events: worksheetData.events || Array(3).fill({}).map(() => ({ ...EMPTY_EVENT })),
+          summary: worksheetData.summary || "",
+          skillsToImprove: worksheetData.skillsToImprove || [],
+          createdAt: worksheetData.createdAt ? new Date(worksheetData.createdAt) : new Date(),
+          updatedAt: worksheetData.updatedAt ? new Date(worksheetData.updatedAt) : new Date()
         });
       } else {
         // Initialize with default structure if no worksheet exists
@@ -151,14 +149,13 @@ export const BehaviorAnalysis = ({ youthId, youth }: BehaviorAnalysisProps) => {
       
       const worksheetData = {
         ...worksheet,
-        updatedAt: Timestamp.now(),
-        createdAt: worksheet.createdAt instanceof Date 
-          ? Timestamp.fromDate(worksheet.createdAt) 
-          : worksheet.createdAt
+        updatedAt: new Date(),
       };
       
-      await setDoc(
-        doc(firestore, `youths/${youthId}/worksheets/behaviorAnalysis`), 
+      await saveAssessment(
+        youthId, 
+        'worksheets', 
+        'behaviorAnalysis',
         worksheetData
       );
       

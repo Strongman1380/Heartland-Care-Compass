@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -6,34 +5,23 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { collection, addDoc, query, where, orderBy, getDocs, Timestamp } from "firebase/firestore";
-import { firestore } from "@/pages/Index";
 import { toast } from "sonner";
 import { format, startOfWeek, endOfWeek, eachDayOfInterval } from "date-fns";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle, ArrowRight, Calendar, Download, FileText } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { fetchBehaviorPoints, saveBehaviorPoints } from "@/utils/supabase-utils";
+import { BehaviorPoints } from "@/types/app-types";
 
 interface BehaviorCardProps {
   youthId: string;
   youth: any;
 }
 
-interface PointEntry {
-  id?: string;
-  date: Date | Timestamp;
-  morningPoints: number;
-  afternoonPoints: number;
-  eveningPoints: number;
-  totalPoints: number;
-  comments: string;
-  createdAt: Date | Timestamp;
-}
-
 export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
   const [activeTab, setActiveTab] = useState("daily");
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [pointEntries, setPointEntries] = useState<PointEntry[]>([]);
+  const [pointEntries, setPointEntries] = useState<BehaviorPoints[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [formData, setFormData] = useState({
     morningPoints: 0,
@@ -63,19 +51,9 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
   const fetchPointEntries = async () => {
     try {
       setIsLoading(true);
-      
-      const entriesRef = collection(firestore, `youths/${youthId}/points`);
-      const q = query(entriesRef, orderBy("date", "desc"));
-      const querySnapshot = await getDocs(q);
-      
-      const entries = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        date: doc.data().date.toDate()
-      }));
-      
-      setPointEntries(entries as PointEntry[]);
-      calculateWeeklyAverages(entries as PointEntry[]);
+      const entries = await fetchBehaviorPoints(youthId);
+      setPointEntries(entries);
+      calculateWeeklyAverages(entries);
     } catch (error) {
       console.error("Error fetching point entries:", error);
       toast.error("Failed to load behavior cards");
@@ -84,12 +62,12 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
     }
   };
 
-  const calculateWeeklyAverages = (entries: PointEntry[]) => {
+  const calculateWeeklyAverages = (entries: BehaviorPoints[]) => {
     const startOfCurrentWeek = startOfWeek(new Date());
     const endOfCurrentWeek = endOfWeek(new Date());
     
     const thisWeekEntries = entries.filter(entry => {
-      const entryDate = entry.date as Date;
+      const entryDate = entry.date instanceof Date ? entry.date : new Date(entry.date);
       return entryDate >= startOfCurrentWeek && entryDate <= endOfCurrentWeek;
     });
     
@@ -109,7 +87,7 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
     
     if (name === "morningPoints" || name === "afternoonPoints" || name === "eveningPoints") {
       const numValue = parseInt(value) || 0;
-      // Ensure points are between 0 and 35 for each period
+      // Ensure points are between 0 and 35
       const clampedValue = Math.max(0, Math.min(35, numValue));
       setFormData(prev => ({ ...prev, [name]: clampedValue }));
     } else {
@@ -127,22 +105,17 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
         (formData.afternoonPoints || 0) + 
         (formData.eveningPoints || 0);
       
-      const pointEntry: PointEntry = {
+      const pointEntry = {
+        youth_id: youthId,
         date: selectedDate,
         morningPoints: formData.morningPoints || 0,
         afternoonPoints: formData.afternoonPoints || 0,
         eveningPoints: formData.eveningPoints || 0,
         totalPoints,
         comments: formData.comments,
-        createdAt: Timestamp.now(),
       };
       
-      await addDoc(collection(firestore, `youths/${youthId}/points`), {
-        ...pointEntry,
-        date: Timestamp.fromDate(selectedDate),
-        createdAt: Timestamp.now(),
-      });
-      
+      await saveBehaviorPoints(youthId, pointEntry);
       toast.success("Behavior card saved successfully");
       
       // Check if points are below threshold for current level

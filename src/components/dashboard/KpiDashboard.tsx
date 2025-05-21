@@ -1,42 +1,25 @@
-
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { collection, query, where, orderBy, getDocs, Timestamp } from "firebase/firestore";
-import { firestore } from "@/pages/Index";
 import { toast } from "sonner";
 import { format, subDays, startOfMonth, endOfMonth } from "date-fns";
 import { AlertCircle, Calendar, TrendingDown, TrendingUp } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area, BarChart, Bar, Legend, PieChart, Pie, Cell } from 'recharts';
+import { fetchBehaviorPoints, fetchProgressNotes } from "@/utils/supabase-utils";
+import { BehaviorPoints, ProgressNote } from "@/types/app-types";
 
 interface KpiDashboardProps {
   youthId: string;
   youth: any;
 }
 
-interface PointData {
-  id: string;
-  date: Date | Timestamp;
-  morningPoints: number;
-  afternoonPoints: number;
-  eveningPoints: number;
-  totalPoints: number;
-}
-
-interface NoteData {
-  id: string;
-  date: Date | Timestamp;
-  category: string;
-  rating: number;
-}
-
 export const KpiDashboard = ({ youthId, youth }: KpiDashboardProps) => {
   const [timeframe, setTimeframe] = useState<"week" | "month" | "quarter">("week");
   const [isLoading, setIsLoading] = useState(true);
-  const [pointsData, setPointsData] = useState<PointData[]>([]);
-  const [notesData, setNotesData] = useState<NoteData[]>([]);
+  const [pointsData, setPointsData] = useState<BehaviorPoints[]>([]);
+  const [notesData, setNotesData] = useState<ProgressNote[]>([]);
   const [pointsChartData, setPointsChartData] = useState<any[]>([]);
   const [categoriesData, setCategoriesData] = useState<any[]>([]);
   const [ratingsData, setRatingsData] = useState<any[]>([]);
@@ -65,30 +48,12 @@ export const KpiDashboard = ({ youthId, youth }: KpiDashboardProps) => {
       setIsLoading(true);
       
       // Fetch points data
-      const pointsRef = collection(firestore, `youths/${youthId}/points`);
-      const pointsQuery = query(pointsRef, orderBy("date", "asc"));
-      const pointsSnapshot = await getDocs(pointsQuery);
-      
-      const formattedPointsData = pointsSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        date: doc.data().date.toDate()
-      }));
-      
-      setPointsData(formattedPointsData as PointData[]);
+      const points = await fetchBehaviorPoints(youthId);
+      setPointsData(points);
       
       // Fetch notes data
-      const notesRef = collection(firestore, `youths/${youthId}/notes`);
-      const notesQuery = query(notesRef, orderBy("date", "asc"));
-      const notesSnapshot = await getDocs(notesQuery);
-      
-      const formattedNotesData = notesSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        date: doc.data().date.toDate()
-      }));
-      
-      setNotesData(formattedNotesData as NoteData[]);
+      const notes = await fetchProgressNotes(youthId);
+      setNotesData(notes);
     } catch (error) {
       console.error("Error fetching KPI data:", error);
       toast.error("Failed to load dashboard data");

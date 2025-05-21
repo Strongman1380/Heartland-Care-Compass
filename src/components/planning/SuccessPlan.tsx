@@ -92,7 +92,8 @@ export const SuccessPlan = ({ youthId, youth }: SuccessPlanProps) => {
     try {
       setIsLoading(true);
       
-      const planData = await fetchAssessment(youthId, 'plans', 'successPlan') as SuccessPlanData | null;
+      // Changed 'plans' to 'successplans' to match the AssessmentTable type
+      const planData = await fetchAssessment(youthId, 'successplans', 'successPlan') as SuccessPlanData | null;
       
       if (planData) {
         setPlan({
@@ -139,9 +140,10 @@ export const SuccessPlan = ({ youthId, youth }: SuccessPlanProps) => {
         updatedat: new Date().toISOString()
       };
       
+      // Changed 'plans' to 'successplans' to match the AssessmentTable type
       await saveAssessment(
         youthId,
-        'plans',
+        'successplans',
         'successPlan',
         formattedData
       );

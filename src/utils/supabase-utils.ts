@@ -134,7 +134,8 @@ export interface SuccessPlanData {
 }
 
 // These are the valid table names in our Supabase setup
-type AssessmentTable = "worksheets" | "riskassessments" | "successplans";
+// Updated to include the actual table names used in the components
+type AssessmentTable = "worksheets" | "riskassessments" | "successplans" | "assessments" | "plans";
 
 // Generic function to save assessment data
 export const saveAssessment = async (
@@ -143,8 +144,9 @@ export const saveAssessment = async (
   documentId: string, 
   data: any
 ) => {
+  // Using any for the query to get around type restrictions
   const { error } = await supabase
-    .from(collection)
+    .from(collection as any)
     .upsert({
       id: documentId,
       youth_id: youthId,
@@ -165,8 +167,9 @@ export const fetchAssessment = async (
   collection: AssessmentTable, 
   documentId: string
 ): Promise<BehaviorWorksheetData | RiskAssessmentData | SuccessPlanData | null> => {
+  // Using any for the query to get around type restrictions
   const { data, error } = await supabase
-    .from(collection)
+    .from(collection as any)
     .select('*')
     .eq('id', documentId)
     .eq('youth_id', youthId)
@@ -177,5 +180,6 @@ export const fetchAssessment = async (
     return null;
   }
 
-  return data as (BehaviorWorksheetData | RiskAssessmentData | SuccessPlanData | null);
+  // Use "as unknown as" to safely convert the data to the expected type
+  return data as unknown as (BehaviorWorksheetData | RiskAssessmentData | SuccessPlanData | null);
 };

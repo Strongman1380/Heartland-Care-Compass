@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -170,7 +169,8 @@ export const RiskAssessment = ({ youthId, youth }: RiskAssessmentProps) => {
     try {
       setIsLoading(true);
       
-      const assessmentData = await fetchAssessment(youthId, 'assessments', 'riskNeeds') as RiskAssessmentData | null;
+      // Changed 'assessments' to 'riskassessments' to match the AssessmentTable type
+      const assessmentData = await fetchAssessment(youthId, 'riskassessments', 'riskNeeds') as RiskAssessmentData | null;
       
       if (assessmentData) {
         // Map the data from Supabase to our RiskAssessment interface
@@ -345,9 +345,10 @@ export const RiskAssessment = ({ youthId, youth }: RiskAssessmentProps) => {
         updatedat: new Date().toISOString()
       };
       
+      // Changed 'assessments' to 'riskassessments' to match the AssessmentTable type
       await saveAssessment(
         youthId,
-        'assessments',
+        'riskassessments',
         'riskNeeds',
         formattedData
       );

@@ -29,7 +29,11 @@ export const YouthSelector = ({ onSelectYouth }: YouthSelectorProps) => {
         throw youthsError;
       }
 
-      const mappedYouths = youthsData.map(mapYouthFromSupabase);
+      const mappedYouths = youthsData
+        .map(mapYouthFromSupabase)
+        // Filter out any youths that don't have an id
+        .filter(youth => youth.id && youth.id.trim() !== "");
+        
       setYouths(mappedYouths);
     } catch (err) {
       console.error("Error fetching youths:", err);
@@ -84,9 +88,12 @@ export const YouthSelector = ({ onSelectYouth }: YouthSelectorProps) => {
               <div className="p-2 text-gray-500 text-center">No youth profiles found</div>
             ) : (
               youths.map((youth) => (
-                <SelectItem key={youth.id} value={youth.id}>
-                  {youth.firstName} {youth.lastName} - Level {youth.level}
-                </SelectItem>
+                // Only render SelectItem if youth has a valid id
+                youth.id ? (
+                  <SelectItem key={youth.id} value={youth.id}>
+                    {youth.firstName} {youth.lastName} - Level {youth.level}
+                  </SelectItem>
+                ) : null
               ))
             )}
           </SelectContent>

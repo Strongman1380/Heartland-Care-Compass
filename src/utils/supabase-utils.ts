@@ -51,7 +51,7 @@ export const fetchProgressNotes = async (youthId: string) => {
 export const saveBehaviorPoints = async (youthId: string, pointData: Omit<BehaviorPoints, 'id' | 'createdAt'>) => {
   const formattedData = {
     youth_id: youthId,
-    date: pointData.date,
+    date: pointData.date instanceof Date ? pointData.date.toISOString() : pointData.date,
     morningpoints: pointData.morningPoints,
     afternoonpoints: pointData.afternoonPoints,
     eveningpoints: pointData.eveningPoints,
@@ -61,7 +61,7 @@ export const saveBehaviorPoints = async (youthId: string, pointData: Omit<Behavi
 
   const { data, error } = await supabase
     .from('points')
-    .insert([formattedData])
+    .insert(formattedData)
     .select();
 
   if (error) {
@@ -75,7 +75,7 @@ export const saveBehaviorPoints = async (youthId: string, pointData: Omit<Behavi
 export const saveProgressNote = async (youthId: string, noteData: Omit<ProgressNote, 'id' | 'createdAt'>) => {
   const formattedData = {
     youth_id: youthId,
-    date: noteData.date,
+    date: noteData.date instanceof Date ? noteData.date.toISOString() : noteData.date,
     category: noteData.category,
     note: noteData.note,
     rating: noteData.rating,
@@ -84,7 +84,7 @@ export const saveProgressNote = async (youthId: string, noteData: Omit<ProgressN
 
   const { data, error } = await supabase
     .from('notes')
-    .insert([formattedData])
+    .insert(formattedData)
     .select();
 
   if (error) {
@@ -133,20 +133,23 @@ export interface SuccessPlanData {
   updatedat?: string;
 }
 
+// These are the valid table names in our Supabase setup
+type AssessmentTable = "worksheets" | "riskassessments" | "successplans";
+
 // Generic function to save assessment data
 export const saveAssessment = async (
   youthId: string, 
-  collection: string, 
+  collection: AssessmentTable, 
   documentId: string, 
   data: any
 ) => {
   const { error } = await supabase
-    .from(`${collection}`)
-    .upsert([{
+    .from(collection)
+    .upsert({
       id: documentId,
       youth_id: youthId,
       ...data
-    }]);
+    });
 
   if (error) {
     console.error(`Error saving to ${collection}:`, error);
@@ -159,11 +162,11 @@ export const saveAssessment = async (
 // Typed function to fetch assessment data
 export const fetchAssessment = async (
   youthId: string, 
-  collection: string, 
+  collection: AssessmentTable, 
   documentId: string
 ): Promise<BehaviorWorksheetData | RiskAssessmentData | SuccessPlanData | null> => {
   const { data, error } = await supabase
-    .from(`${collection}`)
+    .from(collection)
     .select('*')
     .eq('id', documentId)
     .eq('youth_id', youthId)
@@ -174,5 +177,5 @@ export const fetchAssessment = async (
     return null;
   }
 
-  return data;
+  return data as (BehaviorWorksheetData | RiskAssessmentData | SuccessPlanData | null);
 };

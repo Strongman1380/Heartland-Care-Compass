@@ -6,9 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { addDoc, collection, Timestamp } from "firebase/firestore";
-import { firestore } from "@/pages/Index";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 interface AddYouthDialogProps {
   onClose: () => void;
@@ -67,24 +66,30 @@ export const AddYouthDialog = ({ onClose }: AddYouthDialogProps) => {
       }
       
       const youthData = {
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-        dob: Timestamp.fromDate(new Date(formData.dob)),
+        firstname: formData.firstName,
+        lastname: formData.lastName,
+        dob: formData.dob ? new Date(formData.dob).toISOString() : null,
         age,
-        admissionDate: formData.admissionDate ? Timestamp.fromDate(new Date(formData.admissionDate)) : Timestamp.now(),
+        admissiondate: formData.admissionDate ? new Date(formData.admissionDate).toISOString() : new Date().toISOString(),
         level: parseInt(formData.level, 10),
-        pointTotal: 0,
-        referralSource: formData.referralSource,
-        referralReason: formData.referralReason,
-        educationInfo: formData.educationInfo,
-        medicalInfo: formData.medicalInfo,
-        mentalHealthInfo: formData.mentalHealthInfo,
-        legalStatus: formData.legalStatus,
-        createdAt: Timestamp.now(),
-        updatedAt: Timestamp.now(),
+        pointtotal: 0,
+        referralsource: formData.referralSource,
+        referralreason: formData.referralReason,
+        educationinfo: formData.educationInfo,
+        medicalinfo: formData.medicalInfo,
+        mentalhealthinfo: formData.mentalHealthInfo,
+        legalstatus: formData.legalStatus,
+        createdat: new Date().toISOString(),
+        updatedat: new Date().toISOString(),
       };
       
-      await addDoc(collection(firestore, "youths"), youthData);
+      const { error } = await supabase
+        .from('youths')
+        .insert(youthData);
+        
+      if (error) {
+        throw error;
+      }
       
       toast.success("Youth profile added successfully");
       onClose();

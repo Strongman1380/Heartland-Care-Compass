@@ -1,11 +1,10 @@
 
 import { useState, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
-import { doc, getDoc } from "firebase/firestore";
-import { firestore } from "@/pages/Index";
+import { supabase } from "@/integrations/supabase/client";
+import { mapYouthFromSupabase, type Youth } from "@/types/app-types";
 
 import { YouthProfile } from "@/components/youth/YouthProfile";
 import { BehaviorCard } from "@/components/behavior/BehaviorCard";
@@ -15,16 +14,6 @@ import { RiskAssessment } from "@/components/assessment/RiskAssessment";
 import { SuccessPlan } from "@/components/planning/SuccessPlan";
 import { KpiDashboard } from "@/components/dashboard/KpiDashboard";
 import { ReportCenter } from "@/components/reports/ReportCenter";
-
-interface Youth {
-  id: string;
-  firstName: string;
-  lastName: string;
-  age: number;
-  level: number;
-  pointTotal: number;
-  [key: string]: any;
-}
 
 interface YouthDashboardProps {
   youthId: string;
@@ -41,14 +30,18 @@ export const YouthDashboard = ({ youthId }: YouthDashboardProps) => {
         setIsLoading(true);
         setError(null);
         
-        const youthDocRef = doc(firestore, "youths", youthId);
-        const youthDoc = await getDoc(youthDocRef);
+        const { data: youthData, error: youthError } = await supabase
+          .from("youths")
+          .select("*")
+          .eq("id", youthId)
+          .single();
         
-        if (youthDoc.exists()) {
-          setYouth({
-            id: youthDoc.id,
-            ...youthDoc.data(),
-          } as Youth);
+        if (youthError) {
+          throw youthError;
+        }
+        
+        if (youthData) {
+          setYouth(mapYouthFromSupabase(youthData));
         } else {
           setError("Youth profile not found");
         }

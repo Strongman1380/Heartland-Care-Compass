@@ -9,7 +9,148 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      [_ in never]: never
+      notes: {
+        Row: {
+          category: string | null
+          createdat: string | null
+          date: string | null
+          id: string
+          note: string | null
+          rating: number | null
+          staff: string | null
+          youth_id: string | null
+        }
+        Insert: {
+          category?: string | null
+          createdat?: string | null
+          date?: string | null
+          id?: string
+          note?: string | null
+          rating?: number | null
+          staff?: string | null
+          youth_id?: string | null
+        }
+        Update: {
+          category?: string | null
+          createdat?: string | null
+          date?: string | null
+          id?: string
+          note?: string | null
+          rating?: number | null
+          staff?: string | null
+          youth_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notes_youth_id_fkey"
+            columns: ["youth_id"]
+            isOneToOne: false
+            referencedRelation: "youths"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      points: {
+        Row: {
+          afternoonpoints: number | null
+          comments: string | null
+          createdat: string | null
+          date: string | null
+          eveningpoints: number | null
+          id: string
+          morningpoints: number | null
+          totalpoints: number | null
+          youth_id: string | null
+        }
+        Insert: {
+          afternoonpoints?: number | null
+          comments?: string | null
+          createdat?: string | null
+          date?: string | null
+          eveningpoints?: number | null
+          id?: string
+          morningpoints?: number | null
+          totalpoints?: number | null
+          youth_id?: string | null
+        }
+        Update: {
+          afternoonpoints?: number | null
+          comments?: string | null
+          createdat?: string | null
+          date?: string | null
+          eveningpoints?: number | null
+          id?: string
+          morningpoints?: number | null
+          totalpoints?: number | null
+          youth_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "points_youth_id_fkey"
+            columns: ["youth_id"]
+            isOneToOne: false
+            referencedRelation: "youths"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      youths: {
+        Row: {
+          admissiondate: string | null
+          age: number | null
+          createdat: string | null
+          dob: string | null
+          educationinfo: string | null
+          firstname: string
+          id: string
+          lastname: string
+          legalstatus: string | null
+          level: number | null
+          medicalinfo: string | null
+          mentalhealthinfo: string | null
+          pointtotal: number | null
+          referralreason: string | null
+          referralsource: string | null
+          updatedat: string | null
+        }
+        Insert: {
+          admissiondate?: string | null
+          age?: number | null
+          createdat?: string | null
+          dob?: string | null
+          educationinfo?: string | null
+          firstname: string
+          id?: string
+          lastname: string
+          legalstatus?: string | null
+          level?: number | null
+          medicalinfo?: string | null
+          mentalhealthinfo?: string | null
+          pointtotal?: number | null
+          referralreason?: string | null
+          referralsource?: string | null
+          updatedat?: string | null
+        }
+        Update: {
+          admissiondate?: string | null
+          age?: number | null
+          createdat?: string | null
+          dob?: string | null
+          educationinfo?: string | null
+          firstname?: string
+          id?: string
+          lastname?: string
+          legalstatus?: string | null
+          level?: number | null
+          medicalinfo?: string | null
+          mentalhealthinfo?: string | null
+          pointtotal?: number | null
+          referralreason?: string | null
+          referralsource?: string | null
+          updatedat?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

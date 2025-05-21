@@ -3,28 +3,6 @@ import { useState } from "react";
 import { YouthDashboard } from "@/components/dashboard/YouthDashboard";
 import { YouthSelector } from "@/components/common/YouthSelector";
 import { Header } from "@/components/layout/Header";
-import { initializeApp } from "firebase/app";
-import { getFirestore } from "firebase/firestore";
-import { getStorage } from "firebase/storage";
-
-// Initialize Firebase
-const firebaseConfig = {
-  apiKey: "YOUR_API_KEY", // Replace with your Firebase API key
-  authDomain: "heartland-boys-home.firebaseapp.com",
-  projectId: "heartland-boys-home",
-  storageBucket: "heartland-boys-home.appspot.com",
-  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-  appId: "YOUR_APP_ID"
-};
-
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-const storage = getStorage(app);
-
-export const firebaseApp = app;
-export const firestore = db;
-export const firebaseStorage = storage;
 
 const Index = () => {
   const [selectedYouthId, setSelectedYouthId] = useState<string | null>(null);

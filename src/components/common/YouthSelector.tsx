@@ -1,20 +1,11 @@
 
-import { useEffect, useState } from "react";
-import { collection, getDocs } from "firebase/firestore";
-import { firestore } from "@/pages/Index";
-import { Avatar } from "@/components/ui/avatar";
-import { Input } from "@/components/ui/input";
-import { Search } from "lucide-react";
-
-interface Youth {
-  id: string;
-  firstName: string;
-  lastName: string;
-  level: number;
-  pointTotal: number;
-  age: number;
-  imageUrl?: string;
-}
+import { useState, useEffect } from "react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
+import { PlusCircle } from "lucide-react";
+import { AddYouthDialog } from "@/components/youth/AddYouthDialog";
+import { supabase } from "@/integrations/supabase/client";
+import { mapYouthFromSupabase, type Youth } from "@/types/app-types";
 
 interface YouthSelectorProps {
   onSelectYouth: (youthId: string) => void;
@@ -22,112 +13,97 @@ interface YouthSelectorProps {
 
 export const YouthSelector = ({ onSelectYouth }: YouthSelectorProps) => {
   const [youths, setYouths] = useState<Youth[]>([]);
-  const [filteredYouths, setFilteredYouths] = useState<Youth[]>([]);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [isLoading, setIsLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [isAddYouthDialogOpen, setIsAddYouthDialogOpen] = useState(false);
 
-  useEffect(() => {
-    const fetchYouths = async () => {
-      try {
-        const youthsCollection = collection(firestore, "youths");
-        const snapshot = await getDocs(youthsCollection);
-        const youthsData = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...(doc.data() as Omit<Youth, "id">),
-        }));
-        
-        setYouths(youthsData);
-        setFilteredYouths(youthsData);
-      } catch (error) {
-        console.error("Error fetching youths:", error);
-      } finally {
-        setIsLoading(false);
+  const fetchYouths = async () => {
+    try {
+      setLoading(true);
+      const { data: youthsData, error: youthsError } = await supabase
+        .from("youths")
+        .select("*")
+        .order("firstname", { ascending: true });
+
+      if (youthsError) {
+        throw youthsError;
       }
-    };
 
-    fetchYouths();
-  }, []);
-
-  useEffect(() => {
-    if (searchTerm) {
-      const filtered = youths.filter((youth) =>
-        `${youth.firstName} ${youth.lastName}`
-          .toLowerCase()
-          .includes(searchTerm.toLowerCase())
-      );
-      setFilteredYouths(filtered);
-    } else {
-      setFilteredYouths(youths);
-    }
-  }, [searchTerm, youths]);
-
-  const getLevelColor = (level: number) => {
-    switch (level) {
-      case 1: return "bg-red-100 text-red-800";
-      case 2: return "bg-yellow-100 text-yellow-800";
-      case 3: return "bg-blue-100 text-blue-800";
-      case 4: return "bg-green-100 text-green-800";
-      default: return "bg-gray-100 text-gray-800";
+      const mappedYouths = youthsData.map(mapYouthFromSupabase);
+      setYouths(mappedYouths);
+    } catch (err) {
+      console.error("Error fetching youths:", err);
+      setError("Failed to load youth profiles");
+    } finally {
+      setLoading(false);
     }
   };
 
-  if (isLoading) {
-    return <div className="text-center py-8">Loading youth profiles...</div>;
+  useEffect(() => {
+    fetchYouths();
+  }, []);
+
+  const handleYouthSelect = (youthId: string) => {
+    onSelectYouth(youthId);
+  };
+
+  const handleAddYouthDialogClose = () => {
+    setIsAddYouthDialogOpen(false);
+    // Refresh the list after adding a new youth
+    fetchYouths();
+  };
+
+  if (loading) {
+    return (
+      <div className="mb-4 p-2 border rounded bg-blue-50 animate-pulse">
+        <div className="h-10 bg-slate-200 rounded"></div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="mb-4 p-4 border border-red-300 rounded bg-red-50 text-red-700">
+        <p>{error}</p>
+        <Button variant="outline" size="sm" className="mt-2" onClick={fetchYouths}>
+          Retry
+        </Button>
+      </div>
+    );
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-4">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold text-gray-800">Active Youth</h2>
-        <div className="relative w-full max-w-xs">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-          <Input
-            type="text"
-            placeholder="Search by name"
-            className="pl-10"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </div>
+    <div className="flex flex-col md:flex-row gap-3 items-center">
+      <div className="relative w-full md:w-96">
+        <Select onValueChange={handleYouthSelect}>
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder="Select a youth..." />
+          </SelectTrigger>
+          <SelectContent>
+            {youths.length === 0 ? (
+              <div className="p-2 text-gray-500 text-center">No youth profiles found</div>
+            ) : (
+              youths.map((youth) => (
+                <SelectItem key={youth.id} value={youth.id}>
+                  {youth.firstName} {youth.lastName} - Level {youth.level}
+                </SelectItem>
+              ))
+            )}
+          </SelectContent>
+        </Select>
       </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        {filteredYouths.length > 0 ? (
-          filteredYouths.map((youth) => (
-            <div
-              key={youth.id}
-              className="border rounded-md p-4 hover:shadow-md transition-shadow cursor-pointer flex items-center space-x-3"
-              onClick={() => onSelectYouth(youth.id)}
-            >
-              <Avatar>
-                {youth.imageUrl ? (
-                  <img src={youth.imageUrl} alt={`${youth.firstName} ${youth.lastName}`} />
-                ) : (
-                  <div className="bg-blue-200 h-full w-full flex items-center justify-center">
-                    <span className="text-blue-700 font-medium">
-                      {youth.firstName[0]}
-                      {youth.lastName[0]}
-                    </span>
-                  </div>
-                )}
-              </Avatar>
-              <div className="flex-1">
-                <p className="font-medium">{youth.firstName} {youth.lastName}</p>
-                <div className="flex items-center justify-between mt-1">
-                  <span className="text-sm text-gray-500">Age: {youth.age}</span>
-                  <span className={`text-xs px-2 py-1 rounded-full ${getLevelColor(youth.level)}`}>
-                    Level {youth.level}
-                  </span>
-                </div>
-              </div>
-            </div>
-          ))
-        ) : (
-          <div className="col-span-full text-center py-8 text-gray-500">
-            {youths.length === 0 ? "No youth profiles found. Add a youth to get started." : "No matching results found."}
-          </div>
-        )}
-      </div>
+      
+      <Button 
+        onClick={() => setIsAddYouthDialogOpen(true)} 
+        variant="outline" 
+        className="whitespace-nowrap"
+      >
+        <PlusCircle size={16} className="mr-2" /> Add New Youth
+      </Button>
+      
+      {isAddYouthDialogOpen && (
+        <AddYouthDialog onClose={handleAddYouthDialogClose} />
+      )}
     </div>
   );
 };

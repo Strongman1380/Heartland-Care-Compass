@@ -84,9 +84,9 @@ export const BehaviorAnalysis = ({ youthId, youth }: BehaviorAnalysisProps) => {
           id: worksheetData.id,
           events: worksheetData.events || Array(3).fill({}).map(() => ({ ...EMPTY_EVENT })),
           summary: worksheetData.summary || "",
-          skillsToImprove: worksheetData.skillsToImprove || [],
-          createdAt: worksheetData.createdAt ? new Date(worksheetData.createdAt) : new Date(),
-          updatedAt: worksheetData.updatedAt ? new Date(worksheetData.updatedAt) : new Date()
+          skillsToImprove: worksheetData.skillstoImprove || [],
+          createdAt: worksheetData.createdat ? new Date(worksheetData.createdat) : new Date(),
+          updatedAt: worksheetData.updatedat ? new Date(worksheetData.updatedat) : new Date()
         });
       } else {
         // Initialize with default structure if no worksheet exists
@@ -148,8 +148,11 @@ export const BehaviorAnalysis = ({ youthId, youth }: BehaviorAnalysisProps) => {
       setIsSaving(true);
       
       const worksheetData = {
-        ...worksheet,
-        updatedAt: new Date(),
+        events: worksheet.events,
+        summary: worksheet.summary,
+        skillstoImprove: worksheet.skillsToImprove,
+        createdat: new Date().toISOString(),
+        updatedat: new Date().toISOString()
       };
       
       await saveAssessment(

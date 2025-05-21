@@ -24,7 +24,7 @@ interface DomainScore {
 
 interface RiskAssessment {
   id?: string;
-  assessmentDate: Date | Timestamp;
+  assessmentDate: Date;
   completedBy: string;
   domains: {
     priorOffending: DomainScore;
@@ -41,8 +41,8 @@ interface RiskAssessment {
   recommendedLevel: number;
   overallRiskLevel: string;
   interventionTargets: string[];
-  createdAt: Date | Timestamp;
-  updatedAt: Date | Timestamp;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 const DOMAIN_QUESTIONS = {
@@ -172,12 +172,28 @@ export const RiskAssessment = ({ youthId, youth }: RiskAssessmentProps) => {
       const assessmentData = await fetchAssessment(youthId, 'assessments', 'riskNeeds');
       
       if (assessmentData) {
+        // Map the data from Supabase to our RiskAssessment interface
         setAssessment({
           id: assessmentData.id,
-          ...assessmentData,
-          assessmentDate: assessmentData.assessmentDate ? new Date(assessmentData.assessmentDate) : new Date(),
-          createdAt: assessmentData.createdAt ? new Date(assessmentData.createdAt) : new Date(),
-          updatedAt: assessmentData.updatedAt ? new Date(assessmentData.updatedAt) : new Date()
+          assessmentDate: assessmentData.assessmentdate ? new Date(assessmentData.assessmentdate) : new Date(),
+          completedBy: assessmentData.completedby || "",
+          domains: assessmentData.domains || {
+            priorOffending: { score: 0, notes: "", maxScore: 10 },
+            familyCircumstances: { score: 0, notes: "", maxScore: 10 },
+            education: { score: 0, notes: "", maxScore: 10 },
+            peerRelations: { score: 0, notes: "", maxScore: 10 },
+            substanceUse: { score: 0, notes: "", maxScore: 10 },
+            recreation: { score: 0, notes: "", maxScore: 10 },
+            personality: { score: 0, notes: "", maxScore: 10 },
+            attitudes: { score: 0, notes: "", maxScore: 10 }
+          },
+          traumaHistory: assessmentData.traumahistory || "",
+          strengths: assessmentData.strengths || "",
+          recommendedLevel: assessmentData.recommendedlevel || 1,
+          overallRiskLevel: assessmentData.overallrisklevel || "Low",
+          interventionTargets: assessmentData.interventiontargets || [],
+          createdAt: assessmentData.createdat ? new Date(assessmentData.createdat) : new Date(),
+          updatedAt: assessmentData.updatedat ? new Date(assessmentData.updatedat) : new Date()
         });
         
         // Reconstruct question responses from scores
@@ -314,11 +330,25 @@ export const RiskAssessment = ({ youthId, youth }: RiskAssessmentProps) => {
         updatedAt: new Date()
       };
       
+      // Format the data for Supabase
+      const formattedData = {
+        assessmentdate: updatedAssessment.assessmentDate.toISOString(),
+        completedby: updatedAssessment.completedBy,
+        domains: updatedAssessment.domains,
+        traumahistory: updatedAssessment.traumaHistory,
+        strengths: updatedAssessment.strengths,
+        recommendedlevel: updatedAssessment.recommendedLevel,
+        overallrisklevel: updatedAssessment.overallRiskLevel,
+        interventiontargets: updatedAssessment.interventionTargets,
+        createdat: updatedAssessment.createdAt.toISOString(),
+        updatedat: new Date().toISOString()
+      };
+      
       await saveAssessment(
         youthId,
         'assessments',
         'riskNeeds',
-        updatedAssessment
+        formattedData
       );
       
       setAssessment(updatedAssessment);
@@ -364,22 +394,11 @@ export const RiskAssessment = ({ youthId, youth }: RiskAssessmentProps) => {
     return "bg-green-500";
   };
   
-  const formatDate = (date: Date | Timestamp) => {
+  const formatDate = (date: Date) => {
     if (!date) return "";
     
     try {
-      // Handle Firestore timestamp
-      if (typeof date === 'object' && 'toDate' in date) {
-        const jsDate = date.toDate();
-        return jsDate.toISOString().split('T')[0];
-      }
-      
-      // Handle JS Date
-      if (date instanceof Date) {
-        return date.toISOString().split('T')[0];
-      }
-      
-      return "";
+      return date.toISOString().split('T')[0];
     } catch (error) {
       console.error("Error formatting date:", error);
       return "";

@@ -1,19 +1,16 @@
-
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
-import { FileText, Download, Save } from "lucide-react";
-import { doc, getDoc, setDoc, collection, getDocs, query, orderBy, Timestamp } from "firebase/firestore";
-import { firestore } from "@/pages/Index";
+import { FileText, Download, Save, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { format } from "date-fns";
+import { saveAssessment, fetchAssessment } from "@/utils/supabase-utils";
 
 interface SuccessPlanProps {
   youthId: string;
@@ -24,298 +21,134 @@ interface Goal {
   id: string;
   title: string;
   description: string;
-  startDate: Date | Timestamp;
-  targetDate: Date | Timestamp;
-  objectives: {
-    id: string;
-    text: string;
-    completed: boolean;
-  }[];
-  targetSkills: string[];
-  progress: number; // 0-100
-  notes: string;
+  targetDate: Date;
+  status: 'not-started' | 'in-progress' | 'completed' | 'on-hold';
+  progress: number;
+  category: string;
+  steps: Step[];
 }
 
-interface SuccessPlan {
+interface Step {
+  id: string;
+  description: string;
+  completed: boolean;
+  dueDate?: Date;
+}
+
+interface SuccessPlanData {
   id?: string;
-  createdDate: Date | Timestamp;
-  reviewDate: Date | Timestamp;
-  createdBy: string;
-  youthName: string;
   goals: Goal[];
-  strengths: string;
-  barriers: string;
-  supports: string;
-  createdAt: Date | Timestamp;
-  updatedAt: Date | Timestamp;
+  strengths: string[];
+  supportNetwork: string[];
+  barriers: string[];
+  notes: string;
+  lastReviewDate: Date;
+  nextReviewDate: Date;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
-const SKILL_OPTIONS = [
-  "Anger management",
-  "Emotional regulation",
-  "Impulse control",
-  "Decision making",
-  "Problem solving",
-  "Communication",
-  "Conflict resolution",
-  "Stress management",
-  "Time management",
-  "Goal setting",
-  "Responsibility",
-  "Empathy",
-  "Teamwork",
-  "Self-awareness",
-  "Self-confidence"
+const GOAL_CATEGORIES = [
+  "Education",
+  "Employment",
+  "Housing",
+  "Health",
+  "Mental Health",
+  "Substance Use",
+  "Family",
+  "Social",
+  "Legal",
+  "Financial",
+  "Personal Development"
 ];
 
+const generateId = () => Math.random().toString(36).substring(2, 9);
+
 export const SuccessPlan = ({ youthId, youth }: SuccessPlanProps) => {
-  const [successPlan, setSuccessPlan] = useState<SuccessPlan>({
-    createdDate: new Date(),
-    reviewDate: new Date(new Date().setDate(new Date().getDate() + 90)), // 90 days from now
-    createdBy: "",
-    youthName: `${youth.firstName} ${youth.lastName}`,
-    goals: [
-      {
-        id: "goal-1",
-        title: "",
-        description: "",
-        startDate: new Date(),
-        targetDate: new Date(new Date().setDate(new Date().getDate() + 30)), // 30 days from now
-        objectives: [
-          { id: "obj-1-1", text: "", completed: false },
-          { id: "obj-1-2", text: "", completed: false },
-          { id: "obj-1-3", text: "", completed: false },
-        ],
-        targetSkills: [],
-        progress: 0,
-        notes: ""
-      },
-      {
-        id: "goal-2",
-        title: "",
-        description: "",
-        startDate: new Date(),
-        targetDate: new Date(new Date().setDate(new Date().getDate() + 30)),
-        objectives: [
-          { id: "obj-2-1", text: "", completed: false },
-          { id: "obj-2-2", text: "", completed: false },
-          { id: "obj-2-3", text: "", completed: false },
-        ],
-        targetSkills: [],
-        progress: 0,
-        notes: ""
-      },
-      {
-        id: "goal-3",
-        title: "",
-        description: "",
-        startDate: new Date(),
-        targetDate: new Date(new Date().setDate(new Date().getDate() + 30)),
-        objectives: [
-          { id: "obj-3-1", text: "", completed: false },
-          { id: "obj-3-2", text: "", completed: false },
-          { id: "obj-3-3", text: "", completed: false },
-        ],
-        targetSkills: [],
-        progress: 0,
-        notes: ""
-      }
-    ],
-    strengths: "",
-    barriers: "",
-    supports: "",
+  const [plan, setPlan] = useState<SuccessPlanData>({
+    goals: [],
+    strengths: [],
+    supportNetwork: [],
+    barriers: [],
+    notes: "",
+    lastReviewDate: new Date(),
+    nextReviewDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
     createdAt: new Date(),
     updatedAt: new Date()
   });
   
-  const [activeGoalIndex, setActiveGoalIndex] = useState(0);
-  const [assessmentData, setAssessmentData] = useState<any>(null);
-  const [behaviorData, setbehaviorData] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [activeTab, setActiveTab] = useState("goals");
+  const [activeGoalId, setActiveGoalId] = useState<string | null>(null);
+  const [newStrength, setNewStrength] = useState("");
+  const [newSupport, setNewSupport] = useState("");
+  const [newBarrier, setNewBarrier] = useState("");
   
   useEffect(() => {
-    fetchPlanAndSupportingData();
+    fetchSuccessPlan();
   }, [youthId]);
   
-  const fetchPlanAndSupportingData = async () => {
+  const fetchSuccessPlan = async () => {
     try {
       setIsLoading(true);
       
-      // Fetch existing success plan
-      const planDocRef = doc(firestore, `youths/${youthId}/plans/successPlan`);
-      const planDoc = await getDoc(planDocRef);
+      const planData = await fetchAssessment(youthId, 'plans', 'successPlan');
       
-      if (planDoc.exists()) {
-        const data = planDoc.data() as Omit<SuccessPlan, 'id'>;
-        
-        // Convert timestamps to dates
-        const formattedGoals = data.goals.map(goal => ({
-          ...goal,
-          startDate: goal.startDate,
-          targetDate: goal.targetDate
-        }));
-        
-        setSuccessPlan({
-          id: planDoc.id,
-          ...data,
-          goals: formattedGoals,
-          createdDate: data.createdDate,
-          reviewDate: data.reviewDate,
-          createdAt: data.createdAt,
-          updatedAt: data.updatedAt
+      if (planData) {
+        setPlan({
+          id: planData.id,
+          goals: planData.goals || [],
+          strengths: planData.strengths || [],
+          supportNetwork: planData.supportnetwork || [],
+          barriers: planData.barriers || [],
+          notes: planData.notes || "",
+          lastReviewDate: planData.lastreviewdate ? new Date(planData.lastreviewdate) : new Date(),
+          nextReviewDate: planData.nextreviewdate ? new Date(planData.nextreviewdate) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+          createdAt: planData.createdat ? new Date(planData.createdat) : new Date(),
+          updatedAt: planData.updatedat ? new Date(planData.updatedat) : new Date()
         });
-      } else {
-        // If no plan exists, initialize with youth's name
-        setSuccessPlan(prev => ({
-          ...prev,
-          youthName: `${youth.firstName} ${youth.lastName}`
-        }));
+        
+        // Set active goal if there are any goals
+        if (planData.goals && planData.goals.length > 0) {
+          setActiveGoalId(planData.goals[0].id);
+        }
       }
-      
-      // Fetch assessment data for recommendations
-      const assessmentDocRef = doc(firestore, `youths/${youthId}/assessments/riskNeeds`);
-      const assessmentDoc = await getDoc(assessmentDocRef);
-      
-      if (assessmentDoc.exists()) {
-        setAssessmentData(assessmentDoc.data());
-      }
-      
-      // Fetch recent point entries
-      const pointsRef = collection(firestore, `youths/${youthId}/points`);
-      const q = query(pointsRef, orderBy("date", "desc"));
-      const pointsSnapshot = await getDocs(q);
-      
-      const pointEntries = pointsSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      
-      setbehaviorData(pointEntries);
     } catch (error) {
-      console.error("Error fetching success plan data:", error);
+      console.error("Error fetching success plan:", error);
       toast.error("Failed to load success plan");
     } finally {
       setIsLoading(false);
     }
   };
   
-  const handleBasicInfoChange = (field: keyof SuccessPlan, value: string) => {
-    setSuccessPlan(prev => ({
-      ...prev,
-      [field]: value
-    }));
-  };
-  
-  const handleDateChange = (field: 'createdDate' | 'reviewDate', value: string) => {
-    setSuccessPlan(prev => ({
-      ...prev,
-      [field]: new Date(value)
-    }));
-  };
-  
-  const handleGoalChange = (index: number, field: keyof Goal, value: any) => {
-    const updatedGoals = [...successPlan.goals];
-    updatedGoals[index] = {
-      ...updatedGoals[index],
-      [field]: value
-    };
-    
-    setSuccessPlan(prev => ({
-      ...prev,
-      goals: updatedGoals
-    }));
-  };
-  
-  const handleGoalDateChange = (index: number, field: 'startDate' | 'targetDate', value: string) => {
-    const updatedGoals = [...successPlan.goals];
-    updatedGoals[index] = {
-      ...updatedGoals[index],
-      [field]: new Date(value)
-    };
-    
-    setSuccessPlan(prev => ({
-      ...prev,
-      goals: updatedGoals
-    }));
-  };
-  
-  const handleObjectiveChange = (goalIndex: number, objectiveIndex: number, text: string) => {
-    const updatedGoals = [...successPlan.goals];
-    updatedGoals[goalIndex].objectives[objectiveIndex].text = text;
-    
-    setSuccessPlan(prev => ({
-      ...prev,
-      goals: updatedGoals
-    }));
-  };
-  
-  const handleObjectiveToggle = (goalIndex: number, objectiveIndex: number) => {
-    const updatedGoals = [...successPlan.goals];
-    updatedGoals[goalIndex].objectives[objectiveIndex].completed = 
-      !updatedGoals[goalIndex].objectives[objectiveIndex].completed;
-    
-    // Update progress percentage
-    const totalObjectives = updatedGoals[goalIndex].objectives.length;
-    const completedObjectives = updatedGoals[goalIndex].objectives.filter(obj => obj.completed).length;
-    updatedGoals[goalIndex].progress = Math.round((completedObjectives / totalObjectives) * 100);
-    
-    setSuccessPlan(prev => ({
-      ...prev,
-      goals: updatedGoals
-    }));
-  };
-  
-  const handleSkillToggle = (goalIndex: number, skill: string) => {
-    const updatedGoals = [...successPlan.goals];
-    const currentSkills = [...updatedGoals[goalIndex].targetSkills];
-    
-    if (currentSkills.includes(skill)) {
-      updatedGoals[goalIndex].targetSkills = currentSkills.filter(s => s !== skill);
-    } else {
-      updatedGoals[goalIndex].targetSkills = [...currentSkills, skill];
-    }
-    
-    setSuccessPlan(prev => ({
-      ...prev,
-      goals: updatedGoals
-    }));
-  };
-  
   const handleSavePlan = async () => {
     try {
       setIsSaving(true);
       
-      // Convert dates to Firestore timestamps
-      const preparedGoals = successPlan.goals.map(goal => ({
-        ...goal,
-        startDate: goal.startDate instanceof Date 
-          ? Timestamp.fromDate(goal.startDate) 
-          : goal.startDate,
-        targetDate: goal.targetDate instanceof Date 
-          ? Timestamp.fromDate(goal.targetDate) 
-          : goal.targetDate
-      }));
-      
-      const planData = {
-        ...successPlan,
-        goals: preparedGoals,
-        updatedAt: Timestamp.now(),
-        createdDate: successPlan.createdDate instanceof Date 
-          ? Timestamp.fromDate(successPlan.createdDate) 
-          : successPlan.createdDate,
-        reviewDate: successPlan.reviewDate instanceof Date 
-          ? Timestamp.fromDate(successPlan.reviewDate) 
-          : successPlan.reviewDate,
-        createdAt: successPlan.createdAt instanceof Date 
-          ? Timestamp.fromDate(successPlan.createdAt) 
-          : successPlan.createdAt
+      const formattedData = {
+        goals: plan.goals,
+        strengths: plan.strengths,
+        supportnetwork: plan.supportNetwork,
+        barriers: plan.barriers,
+        notes: plan.notes,
+        lastreviewdate: plan.lastReviewDate.toISOString(),
+        nextreviewdate: plan.nextReviewDate.toISOString(),
+        createdat: plan.createdAt.toISOString(),
+        updatedat: new Date().toISOString()
       };
       
-      await setDoc(
-        doc(firestore, `youths/${youthId}/plans/successPlan`), 
-        planData
+      await saveAssessment(
+        youthId,
+        'plans',
+        'successPlan',
+        formattedData
       );
+      
+      setPlan(prev => ({
+        ...prev,
+        updatedAt: new Date()
+      }));
       
       toast.success("Success plan saved");
     } catch (error) {
@@ -326,73 +159,213 @@ export const SuccessPlan = ({ youthId, youth }: SuccessPlanProps) => {
     }
   };
   
-  const handlePrintPlan = () => {
-    window.print();
-  };
-  
-  const handleExportPdf = () => {
-    // PDF export functionality would be implemented here
-    console.log("Export PDF");
-  };
-  
-  const getProgressColor = (progress: number) => {
-    if (progress >= 75) return "bg-green-500";
-    if (progress >= 50) return "bg-blue-500";
-    if (progress >= 25) return "bg-yellow-500";
-    return "bg-red-500";
-  };
-  
-  const formatDate = (date: Date | Timestamp) => {
-    if (!date) return "";
+  const handleAddGoal = () => {
+    const newGoal: Goal = {
+      id: generateId(),
+      title: "New Goal",
+      description: "",
+      targetDate: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000), // 90 days from now
+      status: 'not-started',
+      progress: 0,
+      category: GOAL_CATEGORIES[0],
+      steps: []
+    };
     
-    try {
-      // Handle Firestore timestamp
-      if (typeof date === 'object' && 'toDate' in date) {
-        const jsDate = date.toDate();
-        return jsDate.toISOString().split('T')[0];
-      }
-      
-      // Handle JS Date
-      if (date instanceof Date) {
-        return date.toISOString().split('T')[0];
-      }
-      
-      return "";
-    } catch (error) {
-      console.error("Error formatting date:", error);
-      return "";
+    setPlan(prev => ({
+      ...prev,
+      goals: [...prev.goals, newGoal]
+    }));
+    
+    setActiveGoalId(newGoal.id);
+  };
+  
+  const handleDeleteGoal = (goalId: string) => {
+    setPlan(prev => ({
+      ...prev,
+      goals: prev.goals.filter(goal => goal.id !== goalId)
+    }));
+    
+    if (activeGoalId === goalId) {
+      const remainingGoals = plan.goals.filter(goal => goal.id !== goalId);
+      setActiveGoalId(remainingGoals.length > 0 ? remainingGoals[0].id : null);
     }
   };
   
-  const getSuggestedSkills = () => {
-    if (!assessmentData) return [];
+  const handleUpdateGoal = (goalId: string, field: keyof Goal, value: any) => {
+    setPlan(prev => ({
+      ...prev,
+      goals: prev.goals.map(goal => 
+        goal.id === goalId 
+          ? { ...goal, [field]: value } 
+          : goal
+      )
+    }));
+  };
+  
+  const handleAddStep = (goalId: string) => {
+    const newStep: Step = {
+      id: generateId(),
+      description: "",
+      completed: false
+    };
     
-    const suggestions = [];
+    setPlan(prev => ({
+      ...prev,
+      goals: prev.goals.map(goal => 
+        goal.id === goalId 
+          ? { 
+              ...goal, 
+              steps: [...goal.steps, newStep] 
+            } 
+          : goal
+      )
+    }));
+  };
+  
+  const handleUpdateStep = (goalId: string, stepId: string, field: keyof Step, value: any) => {
+    setPlan(prev => ({
+      ...prev,
+      goals: prev.goals.map(goal => 
+        goal.id === goalId 
+          ? { 
+              ...goal, 
+              steps: goal.steps.map(step => 
+                step.id === stepId 
+                  ? { ...step, [field]: value } 
+                  : step
+              ) 
+            } 
+          : goal
+      )
+    }));
     
-    // Check domains with high scores
-    if (assessmentData.domains?.attitudes?.score >= 5) {
-      suggestions.push("Responsibility", "Empathy");
+    // Update goal progress when step completion changes
+    if (field === 'completed') {
+      updateGoalProgress(goalId);
     }
+  };
+  
+  const handleDeleteStep = (goalId: string, stepId: string) => {
+    setPlan(prev => ({
+      ...prev,
+      goals: prev.goals.map(goal => 
+        goal.id === goalId 
+          ? { 
+              ...goal, 
+              steps: goal.steps.filter(step => step.id !== stepId) 
+            } 
+          : goal
+      )
+    }));
     
-    if (assessmentData.domains?.personality?.score >= 5) {
-      suggestions.push("Emotional regulation", "Impulse control", "Self-awareness");
-    }
-    
-    if (assessmentData.domains?.peerRelations?.score >= 5) {
-      suggestions.push("Communication", "Conflict resolution", "Teamwork");
-    }
-    
-    // Add any intervention targets
-    if (assessmentData.interventionTargets?.length > 0) {
-      assessmentData.interventionTargets.forEach((target: string) => {
-        if (target === "Anger Management") suggestions.push("Anger management");
-        if (target === "Emotion Regulation") suggestions.push("Emotional regulation");
-        if (target === "Social Skills Training") suggestions.push("Communication", "Teamwork");
+    // Update goal progress after deleting a step
+    updateGoalProgress(goalId);
+  };
+  
+  const updateGoalProgress = (goalId: string) => {
+    setPlan(prev => {
+      const updatedGoals = prev.goals.map(goal => {
+        if (goal.id === goalId) {
+          const totalSteps = goal.steps.length;
+          const completedSteps = goal.steps.filter(step => step.completed).length;
+          const progress = totalSteps > 0 ? Math.round((completedSteps / totalSteps) * 100) : 0;
+          
+          return {
+            ...goal,
+            progress
+          };
+        }
+        return goal;
       });
+      
+      return {
+        ...prev,
+        goals: updatedGoals
+      };
+    });
+  };
+  
+  const handleAddStrength = () => {
+    if (newStrength.trim()) {
+      setPlan(prev => ({
+        ...prev,
+        strengths: [...prev.strengths, newStrength.trim()]
+      }));
+      setNewStrength("");
     }
-    
-    // Return unique suggestions
-    return [...new Set(suggestions)];
+  };
+  
+  const handleRemoveStrength = (index: number) => {
+    setPlan(prev => ({
+      ...prev,
+      strengths: prev.strengths.filter((_, i) => i !== index)
+    }));
+  };
+  
+  const handleAddSupport = () => {
+    if (newSupport.trim()) {
+      setPlan(prev => ({
+        ...prev,
+        supportNetwork: [...prev.supportNetwork, newSupport.trim()]
+      }));
+      setNewSupport("");
+    }
+  };
+  
+  const handleRemoveSupport = (index: number) => {
+    setPlan(prev => ({
+      ...prev,
+      supportNetwork: prev.supportNetwork.filter((_, i) => i !== index)
+    }));
+  };
+  
+  const handleAddBarrier = () => {
+    if (newBarrier.trim()) {
+      setPlan(prev => ({
+        ...prev,
+        barriers: [...prev.barriers, newBarrier.trim()]
+      }));
+      setNewBarrier("");
+    }
+  };
+  
+  const handleRemoveBarrier = (index: number) => {
+    setPlan(prev => ({
+      ...prev,
+      barriers: prev.barriers.filter((_, i) => i !== index)
+    }));
+  };
+  
+  const handleNotesChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setPlan(prev => ({
+      ...prev,
+      notes: e.target.value
+    }));
+  };
+  
+  const handleDateChange = (field: 'lastReviewDate' | 'nextReviewDate', value: string) => {
+    setPlan(prev => ({
+      ...prev,
+      [field]: new Date(value)
+    }));
+  };
+  
+  const formatDate = (date: Date) => {
+    if (!date) return "";
+    return date.toISOString().split('T')[0];
+  };
+  
+  const getActiveGoal = () => {
+    return plan.goals.find(goal => goal.id === activeGoalId) || null;
+  };
+  
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'completed': return 'bg-green-500';
+      case 'in-progress': return 'bg-blue-500';
+      case 'on-hold': return 'bg-yellow-500';
+      default: return 'bg-gray-300';
+    }
   };
   
   if (isLoading) {
@@ -412,16 +385,16 @@ export const SuccessPlan = ({ youthId, youth }: SuccessPlanProps) => {
         <div>
           <h2 className="text-2xl font-bold mb-2">Youth Success Plan</h2>
           <p className="text-gray-600 mb-4">
-            Create personalized goals and objectives for behavioral change and skill development.
+            Create and track goals, identify strengths and supports to help youth succeed.
           </p>
         </div>
         
         <div className="flex space-x-2 mb-4 sm:mb-0">
-          <Button variant="outline" size="sm" onClick={handlePrintPlan}>
+          <Button variant="outline" size="sm">
             <FileText size={16} className="mr-2" />
             Print
           </Button>
-          <Button variant="outline" size="sm" onClick={handleExportPdf}>
+          <Button variant="outline" size="sm">
             <Download size={16} className="mr-2" />
             Export PDF
           </Button>
@@ -432,273 +405,399 @@ export const SuccessPlan = ({ youthId, youth }: SuccessPlanProps) => {
         </div>
       </div>
 
-      <Card>
-        <CardHeader className="bg-blue-50">
-          <CardTitle>Plan Information</CardTitle>
-          <CardDescription>Basic details about this success plan</CardDescription>
-        </CardHeader>
-        <CardContent className="pt-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <Label htmlFor="youthName">Youth Name</Label>
-              <Input
-                id="youthName"
-                value={successPlan.youthName}
-                onChange={(e) => handleBasicInfoChange("youthName", e.target.value)}
-              />
-            </div>
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList>
+          <TabsTrigger value="goals">Goals</TabsTrigger>
+          <TabsTrigger value="strengths">Strengths & Supports</TabsTrigger>
+          <TabsTrigger value="notes">Notes & Review</TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="goals" className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <Card className="md:col-span-1">
+              <CardHeader>
+                <CardTitle className="flex justify-between items-center">
+                  <span>Goals</span>
+                  <Button size="sm" variant="ghost" onClick={handleAddGoal}>
+                    <Plus size={16} />
+                  </Button>
+                </CardTitle>
+                <CardDescription>
+                  {plan.goals.length} goal{plan.goals.length !== 1 ? 's' : ''} defined
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {plan.goals.length === 0 ? (
+                    <p className="text-sm text-gray-500 italic">No goals defined yet. Click the + button to add a goal.</p>
+                  ) : (
+                    plan.goals.map(goal => (
+                      <div 
+                        key={goal.id}
+                        className={`p-3 border rounded-md cursor-pointer hover:bg-gray-50 ${activeGoalId === goal.id ? 'border-blue-500 bg-blue-50' : ''}`}
+                        onClick={() => setActiveGoalId(goal.id)}
+                      >
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <h4 className="font-medium">{goal.title}</h4>
+                            <p className="text-sm text-gray-500">{goal.category}</p>
+                          </div>
+                          <div className={`px-2 py-1 text-xs rounded-full text-white ${getStatusColor(goal.status)}`}>
+                            {goal.status.replace('-', ' ')}
+                          </div>
+                        </div>
+                        <Progress value={goal.progress} className="h-1 mt-2" />
+                      </div>
+                    ))
+                  )}
+                </div>
+              </CardContent>
+            </Card>
             
-            <div>
-              <Label htmlFor="createdDate">Plan Created</Label>
-              <Input
-                id="createdDate"
-                type="date"
-                value={formatDate(successPlan.createdDate)}
-                onChange={(e) => handleDateChange("createdDate", e.target.value)}
-              />
-            </div>
-            
-            <div>
-              <Label htmlFor="reviewDate">Review Date</Label>
-              <Input
-                id="reviewDate"
-                type="date"
-                value={formatDate(successPlan.reviewDate)}
-                onChange={(e) => handleDateChange("reviewDate", e.target.value)}
-              />
-            </div>
-            
-            <div className="md:col-span-2">
-              <Label htmlFor="createdBy">Plan Created By</Label>
-              <Input
-                id="createdBy"
-                value={successPlan.createdBy}
-                onChange={(e) => handleBasicInfoChange("createdBy", e.target.value)}
-                placeholder="Staff name"
-              />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="lg:col-span-1">
-          <CardHeader>
-            <CardTitle>Plan Framework</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <Label htmlFor="strengths">Youth Strengths</Label>
-              <Textarea
-                id="strengths"
-                value={successPlan.strengths}
-                onChange={(e) => handleBasicInfoChange("strengths", e.target.value)}
-                placeholder="What qualities, interests, or abilities can help in reaching goals?"
-                rows={3}
-              />
-            </div>
-            
-            <div>
-              <Label htmlFor="barriers">Potential Barriers</Label>
-              <Textarea
-                id="barriers"
-                value={successPlan.barriers}
-                onChange={(e) => handleBasicInfoChange("barriers", e.target.value)}
-                placeholder="What challenges might make these goals difficult?"
-                rows={3}
-              />
-            </div>
-            
-            <div>
-              <Label htmlFor="supports">Support Resources</Label>
-              <Textarea
-                id="supports"
-                value={successPlan.supports}
-                onChange={(e) => handleBasicInfoChange("supports", e.target.value)}
-                placeholder="What people or resources can help in reaching these goals?"
-                rows={3}
-              />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="lg:col-span-2">
-          <Tabs value={`goal-${activeGoalIndex}`} onValueChange={(value) => setActiveGoalIndex(parseInt(value.split('-')[1]))}>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle>Youth Goals</CardTitle>
-                <TabsList>
-                  <TabsTrigger value="goal-0">Goal 1</TabsTrigger>
-                  <TabsTrigger value="goal-1">Goal 2</TabsTrigger>
-                  <TabsTrigger value="goal-2">Goal 3</TabsTrigger>
-                </TabsList>
-              </div>
-              <CardDescription>
-                Set specific, measurable, achievable goals with clear objectives
-              </CardDescription>
-            </CardHeader>
-            
-            <CardContent>
-              {[0, 1, 2].map((index) => (
-                <TabsContent key={index} value={`goal-${index}`} className="space-y-4">
-                  <div>
-                    <Label htmlFor={`goal-${index}-title`}>Goal Title</Label>
-                    <Input
-                      id={`goal-${index}-title`}
-                      value={successPlan.goals[index].title}
-                      onChange={(e) => handleGoalChange(index, "title", e.target.value)}
-                      placeholder="Brief, specific goal statement"
-                    />
+            <Card className="md:col-span-2">
+              <CardHeader>
+                <CardTitle>Goal Details</CardTitle>
+                <CardDescription>
+                  {getActiveGoal() ? 'Edit goal details and steps' : 'Select or create a goal'}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {!getActiveGoal() ? (
+                  <div className="text-center py-8">
+                    <p className="text-gray-500 mb-4">No goal selected</p>
+                    <Button onClick={handleAddGoal}>
+                      <Plus size={16} className="mr-2" />
+                      Create New Goal
+                    </Button>
                   </div>
-                  
-                  <div>
-                    <Label htmlFor={`goal-${index}-description`}>Goal Description</Label>
-                    <Textarea
-                      id={`goal-${index}-description`}
-                      value={successPlan.goals[index].description}
-                      onChange={(e) => handleGoalChange(index, "description", e.target.value)}
-                      placeholder="Detailed description of the goal and why it's important"
-                      rows={3}
-                    />
-                  </div>
-                  
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor={`goal-${index}-start-date`}>Start Date</Label>
-                      <Input
-                        id={`goal-${index}-start-date`}
-                        type="date"
-                        value={formatDate(successPlan.goals[index].startDate)}
-                        onChange={(e) => handleGoalDateChange(index, "startDate", e.target.value)}
-                      />
-                    </div>
-                    
-                    <div>
-                      <Label htmlFor={`goal-${index}-target-date`}>Target Completion Date</Label>
-                      <Input
-                        id={`goal-${index}-target-date`}
-                        type="date"
-                        value={formatDate(successPlan.goals[index].targetDate)}
-                        onChange={(e) => handleGoalDateChange(index, "targetDate", e.target.value)}
-                      />
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <Label>Key Objectives</Label>
-                      <span className="text-sm text-gray-500">Mark completed items</span>
-                    </div>
-                    
-                    {successPlan.goals[index].objectives.map((objective, objIndex) => (
-                      <div key={objective.id} className="flex items-start space-x-2 mb-2">
-                        <Checkbox
-                          id={objective.id}
-                          checked={objective.completed}
-                          onCheckedChange={() => handleObjectiveToggle(index, objIndex)}
-                          className="mt-1"
+                ) : (
+                  <div className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="goalTitle">Goal Title</Label>
+                        <Input 
+                          id="goalTitle" 
+                          value={getActiveGoal()?.title || ''}
+                          onChange={(e) => handleUpdateGoal(activeGoalId!, 'title', e.target.value)}
                         />
-                        <div className="flex-1">
-                          <Input
-                            value={objective.text}
-                            onChange={(e) => handleObjectiveChange(index, objIndex, e.target.value)}
-                            placeholder={`Objective ${objIndex + 1}`}
-                            className={objective.completed ? "line-through text-gray-500" : ""}
-                          />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  
-                  <div>
-                    <Label className="mb-1 block">Target Skills</Label>
-                    <div className="p-2 bg-gray-50 rounded-md">
-                      <div className="flex flex-wrap gap-2 mb-2">
-                        {successPlan.goals[index].targetSkills.map((skill) => (
-                          <div key={skill} className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
-                            {skill}
-                          </div>
-                        ))}
-                        {successPlan.goals[index].targetSkills.length === 0 && (
-                          <span className="text-sm text-gray-500">No skills selected</span>
-                        )}
                       </div>
                       
-                      {assessmentData && getSuggestedSkills().length > 0 && (
-                        <div className="mt-2 mb-2">
-                          <p className="text-xs text-gray-500 mb-1">Suggested from assessment:</p>
-                          <div className="flex flex-wrap gap-1">
-                            {getSuggestedSkills().map((skill) => (
-                              <div 
-                                key={skill} 
-                                className="text-xs px-2 py-0.5 bg-amber-100 text-amber-800 rounded-full cursor-pointer"
-                                onClick={() => handleSkillToggle(index, skill)}
-                              >
-                                + {skill}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                      
-                      <div className="mt-2">
+                      <div>
+                        <Label htmlFor="goalCategory">Category</Label>
                         <Select 
-                          onValueChange={(value) => handleSkillToggle(index, value)}
+                          value={getActiveGoal()?.category || GOAL_CATEGORIES[0]}
+                          onValueChange={(value) => handleUpdateGoal(activeGoalId!, 'category', value)}
                         >
-                          <SelectTrigger className="w-full">
-                            <SelectValue placeholder="Select skills to develop" />
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select category" />
                           </SelectTrigger>
                           <SelectContent>
-                            {SKILL_OPTIONS.map((skill) => (
-                              <SelectItem key={skill} value={skill}>{skill}</SelectItem>
+                            {GOAL_CATEGORIES.map(category => (
+                              <SelectItem key={category} value={category}>
+                                {category}
+                              </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
                       </div>
                     </div>
-                  </div>
-                  
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <Label htmlFor={`goal-${index}-progress`}>Progress</Label>
-                      <span className="text-sm font-medium">{successPlan.goals[index].progress}%</span>
+                    
+                    <div>
+                      <Label htmlFor="goalDescription">Description</Label>
+                      <Textarea 
+                        id="goalDescription" 
+                        value={getActiveGoal()?.description || ''}
+                        onChange={(e) => handleUpdateGoal(activeGoalId!, 'description', e.target.value)}
+                        placeholder="Describe the goal in detail..."
+                        rows={3}
+                      />
                     </div>
-                    <Progress 
-                      value={successPlan.goals[index].progress} 
-                      className={getProgressColor(successPlan.goals[index].progress)} 
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="targetDate">Target Date</Label>
+                        <Input 
+                          id="targetDate" 
+                          type="date"
+                          value={formatDate(getActiveGoal()?.targetDate!)}
+                          onChange={(e) => handleUpdateGoal(activeGoalId!, 'targetDate', new Date(e.target.value))}
+                        />
+                      </div>
+                      
+                      <div>
+                        <Label htmlFor="status">Status</Label>
+                        <Select 
+                          value={getActiveGoal()?.status || 'not-started'}
+                          onValueChange={(value) => handleUpdateGoal(activeGoalId!, 'status', value)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select status" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="not-started">Not Started</SelectItem>
+                            <SelectItem value="in-progress">In Progress</SelectItem>
+                            <SelectItem value="on-hold">On Hold</SelectItem>
+                            <SelectItem value="completed">Completed</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <div className="flex justify-between items-center mb-2">
+                        <Label>Steps to Achieve Goal</Label>
+                        <Button 
+                          size="sm" 
+                          variant="outline"
+                          onClick={() => handleAddStep(activeGoalId!)}
+                        >
+                          <Plus size={14} className="mr-1" />
+                          Add Step
+                        </Button>
+                      </div>
+                      
+                      <div className="space-y-3">
+                        {getActiveGoal()?.steps.length === 0 ? (
+                          <p className="text-sm text-gray-500 italic">No steps defined yet. Add steps to track progress.</p>
+                        ) : (
+                          getActiveGoal()?.steps.map(step => (
+                            <div key={step.id} className="flex items-start space-x-2 p-2 border rounded-md">
+                              <Checkbox 
+                                id={`step-${step.id}`}
+                                checked={step.completed}
+                                onCheckedChange={(checked) => 
+                                  handleUpdateStep(activeGoalId!, step.id, 'completed', !!checked)
+                                }
+                                className="mt-1"
+                              />
+                              <div className="flex-1">
+                                <Input 
+                                  value={step.description}
+                                  onChange={(e) => 
+                                    handleUpdateStep(activeGoalId!, step.id, 'description', e.target.value)
+                                  }
+                                  placeholder="Describe this step..."
+                                  className={step.completed ? "line-through text-gray-500" : ""}
+                                />
+                              </div>
+                              <Button 
+                                size="sm" 
+                                variant="ghost"
+                                onClick={() => handleDeleteStep(activeGoalId!, step.id)}
+                              >
+                                <Trash2 size={14} className="text-red-500" />
+                              </Button>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+              <CardFooter className="flex justify-between">
+                {getActiveGoal() && (
+                  <>
+                    <Button 
+                      variant="destructive" 
+                      onClick={() => handleDeleteGoal(activeGoalId!)}
+                    >
+                      Delete Goal
+                    </Button>
+                    <Button onClick={handleSavePlan} disabled={isSaving}>
+                      {isSaving ? "Saving..." : "Save Goal"}
+                    </Button>
+                  </>
+                )}
+              </CardFooter>
+            </Card>
+          </div>
+        </TabsContent>
+        
+        <TabsContent value="strengths" className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Strengths & Abilities</CardTitle>
+                <CardDescription>
+                  Identify youth's strengths to build upon
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="flex space-x-2">
+                    <Input 
+                      value={newStrength}
+                      onChange={(e) => setNewStrength(e.target.value)}
+                      placeholder="Add a strength..."
+                      className="flex-1"
                     />
+                    <Button onClick={handleAddStrength}>Add</Button>
                   </div>
                   
-                  <div>
-                    <Label htmlFor={`goal-${index}-notes`}>Progress Notes</Label>
-                    <Textarea
-                      id={`goal-${index}-notes`}
-                      value={successPlan.goals[index].notes}
-                      onChange={(e) => handleGoalChange(index, "notes", e.target.value)}
-                      placeholder="Document progress, changes, or challenges with this goal"
-                      rows={3}
-                    />
+                  <div className="space-y-2">
+                    {plan.strengths.length === 0 ? (
+                      <p className="text-sm text-gray-500 italic">No strengths added yet.</p>
+                    ) : (
+                      plan.strengths.map((strength, index) => (
+                        <div key={index} className="flex justify-between items-center p-2 bg-gray-50 rounded-md">
+                          <span>{strength}</span>
+                          <Button 
+                            size="sm" 
+                            variant="ghost"
+                            onClick={() => handleRemoveStrength(index)}
+                          >
+                            <Trash2 size={14} className="text-red-500" />
+                          </Button>
+                        </div>
+                      ))
+                    )}
                   </div>
-                </TabsContent>
-              ))}
-            </CardContent>
-          </Tabs>
-        </Card>
-      </div>
-      
-      <Card>
-        <CardHeader>
-          <CardTitle>Plan Approval</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="bg-gray-50 p-4 rounded-md text-center">
-            <p className="mb-4">By saving this plan, you confirm that it has been reviewed with the youth and represents agreed-upon goals.</p>
-            <Button onClick={handleSavePlan} disabled={isSaving} size="lg">
-              {isSaving ? "Saving Plan..." : "Save and Finalize Plan"}
-            </Button>
+                </div>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardHeader>
+                <CardTitle>Support Network</CardTitle>
+                <CardDescription>
+                  People and resources that can help
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="flex space-x-2">
+                    <Input 
+                      value={newSupport}
+                      onChange={(e) => setNewSupport(e.target.value)}
+                      placeholder="Add support person/resource..."
+                      className="flex-1"
+                    />
+                    <Button onClick={handleAddSupport}>Add</Button>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    {plan.supportNetwork.length === 0 ? (
+                      <p className="text-sm text-gray-500 italic">No supports added yet.</p>
+                    ) : (
+                      plan.supportNetwork.map((support, index) => (
+                        <div key={index} className="flex justify-between items-center p-2 bg-gray-50 rounded-md">
+                          <span>{support}</span>
+                          <Button 
+                            size="sm" 
+                            variant="ghost"
+                            onClick={() => handleRemoveSupport(index)}
+                          >
+                            <Trash2 size={14} className="text-red-500" />
+                          </Button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardHeader>
+                <CardTitle>Barriers to Success</CardTitle>
+                <CardDescription>
+                  Challenges that need to be addressed
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="flex space-x-2">
+                    <Input 
+                      value={newBarrier}
+                      onChange={(e) => setNewBarrier(e.target.value)}
+                      placeholder="Add a barrier..."
+                      className="flex-1"
+                    />
+                    <Button onClick={handleAddBarrier}>Add</Button>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    {plan.barriers.length === 0 ? (
+                      <p className="text-sm text-gray-500 italic">No barriers added yet.</p>
+                    ) : (
+                      plan.barriers.map((barrier, index) => (
+                        <div key={index} className="flex justify-between items-center p-2 bg-gray-50 rounded-md">
+                          <span>{barrier}</span>
+                          <Button 
+                            size="sm" 
+                            variant="ghost"
+                            onClick={() => handleRemoveBarrier(index)}
+                          >
+                            <Trash2 size={14} className="text-red-500" />
+                          </Button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </div>
-        </CardContent>
-      </Card>
+        </TabsContent>
+        
+        <TabsContent value="notes" className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Plan Notes</CardTitle>
+                <CardDescription>
+                  Additional information about the success plan
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Textarea 
+                  value={plan.notes}
+                  onChange={handleNotesChange}
+                  placeholder="Enter any additional notes, observations, or context about this success plan..."
+                  rows={8}
+                />
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardHeader>
+                <CardTitle>Review Schedule</CardTitle>
+                <CardDescription>
+                  Track when the plan was last reviewed and when it should be reviewed next
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <Label htmlFor="lastReviewDate">Last Review Date</Label>
+                  <Input 
+                    id="lastReviewDate" 
+                    type="date"
+                    value={formatDate(plan.lastReviewDate)}
+                    onChange={(e) => handleDateChange('lastReviewDate', e.target.value)}
+                  />
+                </div>
+                
+                <div>
+                  <Label htmlFor="nextReviewDate">Next Review Date</Label>
+                  <Input 
+                    id="nextReviewDate" 
+                    type="date"
+                    value={formatDate(plan.nextReviewDate)}
+                    onChange={(e) => handleDateChange('nextReviewDate', e.target.value)}
+                  />
+                </div>
+                
+                <div className="pt-4">
+                  <Button onClick={handleSavePlan} className="w-full" disabled={isSaving}>
+                    {isSaving ? "Saving Plan..." : "Save Success Plan"}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };

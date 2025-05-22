@@ -48,7 +48,9 @@ export const YouthSelector = ({ onSelectYouth }: YouthSelectorProps) => {
   }, []);
 
   const handleYouthSelect = (youthId: string) => {
-    onSelectYouth(youthId);
+    if (youthId && youthId.trim() !== "") {
+      onSelectYouth(youthId);
+    }
   };
 
   const handleAddYouthDialogClose = () => {
@@ -88,8 +90,8 @@ export const YouthSelector = ({ onSelectYouth }: YouthSelectorProps) => {
               <div className="p-2 text-gray-500 text-center">No youth profiles found</div>
             ) : (
               youths.map((youth) => (
-                // Only render SelectItem if youth has a valid id
-                youth.id ? (
+                // Only render SelectItem for youths with valid IDs
+                youth.id && youth.id.trim() !== "" ? (
                   <SelectItem key={youth.id} value={youth.id}>
                     {youth.firstName} {youth.lastName} - Level {youth.level}
                   </SelectItem>

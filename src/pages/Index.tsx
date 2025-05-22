@@ -20,6 +20,16 @@ const Index = () => {
   // This is a placeholder for youth data until actual youth is selected
   const placeholderYouth = selectedYouthId ? { id: selectedYouthId } : null;
 
+  // Handle tab card click
+  const handleCardClick = (tabValue: string) => {
+    if (selectedYouthId) {
+      setSelectedTab(tabValue);
+    } else {
+      // If no youth is selected, show a message instead of changing tabs
+      alert("Please select a youth first before accessing this feature.");
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
@@ -103,8 +113,11 @@ const Index = () => {
             <h2 className="text-xl font-semibold text-gray-700 mb-4">Welcome to the Heartland Boys Home Platform</h2>
             <p className="text-gray-600 mb-6">Please select a youth to view their profile, track behavior, add progress notes, and generate reports.</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-              {/* Module Cards with Icons */}
-              <Card className="hover:shadow-md transition-shadow cursor-pointer">
+              {/* Module Cards with Icons - Now Actionable */}
+              <Card 
+                className="hover:shadow-md transition-shadow cursor-pointer border-blue-100 hover:border-blue-300" 
+                onClick={() => handleCardClick("profile")}
+              >
                 <CardHeader className="pb-2">
                   <div className="flex items-center gap-2">
                     <User className="h-5 w-5 text-blue-600" />
@@ -116,7 +129,10 @@ const Index = () => {
                 </CardContent>
               </Card>
               
-              <Card className="hover:shadow-md transition-shadow cursor-pointer">
+              <Card 
+                className="hover:shadow-md transition-shadow cursor-pointer border-blue-100 hover:border-blue-300" 
+                onClick={() => handleCardClick("behavior")}
+              >
                 <CardHeader className="pb-2">
                   <div className="flex items-center gap-2">
                     <CheckSquare className="h-5 w-5 text-blue-600" />
@@ -128,7 +144,10 @@ const Index = () => {
                 </CardContent>
               </Card>
               
-              <Card className="hover:shadow-md transition-shadow cursor-pointer">
+              <Card 
+                className="hover:shadow-md transition-shadow cursor-pointer border-blue-100 hover:border-blue-300" 
+                onClick={() => handleCardClick("notes")}
+              >
                 <CardHeader className="pb-2">
                   <div className="flex items-center gap-2">
                     <FileText className="h-5 w-5 text-blue-600" />
@@ -140,7 +159,10 @@ const Index = () => {
                 </CardContent>
               </Card>
               
-              <Card className="hover:shadow-md transition-shadow cursor-pointer">
+              <Card 
+                className="hover:shadow-md transition-shadow cursor-pointer border-blue-100 hover:border-blue-300" 
+                onClick={() => handleCardClick("analysis")}
+              >
                 <CardHeader className="pb-2">
                   <div className="flex items-center gap-2">
                     <BarChart2 className="h-5 w-5 text-blue-600" />
@@ -152,7 +174,10 @@ const Index = () => {
                 </CardContent>
               </Card>
               
-              <Card className="hover:shadow-md transition-shadow cursor-pointer">
+              <Card 
+                className="hover:shadow-md transition-shadow cursor-pointer border-blue-100 hover:border-blue-300" 
+                onClick={() => handleCardClick("assessment")}
+              >
                 <CardHeader className="pb-2">
                   <div className="flex items-center gap-2">
                     <Shield className="h-5 w-5 text-blue-600" />
@@ -164,7 +189,10 @@ const Index = () => {
                 </CardContent>
               </Card>
               
-              <Card className="hover:shadow-md transition-shadow cursor-pointer">
+              <Card 
+                className="hover:shadow-md transition-shadow cursor-pointer border-blue-100 hover:border-blue-300" 
+                onClick={() => handleCardClick("reports")}
+              >
                 <CardHeader className="pb-2">
                   <div className="flex items-center gap-2">
                     <FileChartPie className="h-5 w-5 text-blue-600" />

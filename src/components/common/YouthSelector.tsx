@@ -29,9 +29,9 @@ export const YouthSelector = ({ onSelectYouth }: YouthSelectorProps) => {
         throw youthsError;
       }
 
+      // Map and filter out youths with invalid IDs to prevent Select.Item errors
       const mappedYouths = youthsData
         .map(mapYouthFromSupabase)
-        // Filter out any youths that don't have an id
         .filter(youth => youth.id && youth.id.trim() !== "");
         
       setYouths(mappedYouths);

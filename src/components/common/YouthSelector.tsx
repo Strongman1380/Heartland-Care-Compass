@@ -90,12 +90,9 @@ export const YouthSelector = ({ onSelectYouth }: YouthSelectorProps) => {
               <div className="p-2 text-gray-500 text-center">No youth profiles found</div>
             ) : (
               youths.map((youth) => (
-                // Only render SelectItem for youths with valid IDs
-                youth.id && youth.id.trim() !== "" ? (
-                  <SelectItem key={youth.id} value={youth.id}>
-                    {youth.firstName} {youth.lastName} - Level {youth.level}
-                  </SelectItem>
-                ) : null
+                <SelectItem key={youth.id} value={youth.id}>
+                  {youth.firstName} {youth.lastName} - Level {youth.level}
+                </SelectItem>
               ))
             )}
           </SelectContent>

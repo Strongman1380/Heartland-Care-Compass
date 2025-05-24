@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -26,6 +27,7 @@ export const YouthDashboard = ({ youthId }: YouthDashboardProps) => {
   useEffect(() => {
     const fetchYouthData = async () => {
       try {
+        console.log("Fetching youth data for ID:", youthId);
         setIsLoading(true);
         setError(null);
         
@@ -40,7 +42,9 @@ export const YouthDashboard = ({ youthId }: YouthDashboardProps) => {
         }
         
         if (youthData) {
-          setYouth(mapYouthFromSupabase(youthData));
+          const mappedYouth = mapYouthFromSupabase(youthData);
+          console.log("Mapped youth data:", mappedYouth);
+          setYouth(mappedYouth);
         } else {
           setError("Youth profile not found");
         }
@@ -125,35 +129,59 @@ export const YouthDashboard = ({ youthId }: YouthDashboardProps) => {
         </TabsList>
 
         <TabsContent value="profile">
-          <YouthProfile youth={youth} />
+          {(() => {
+            console.log("Rendering YouthProfile tab");
+            return <YouthProfile youth={youth} />;
+          })()}
         </TabsContent>
         
         <TabsContent value="behavior">
-          <BehaviorCard youthId={youth.id} youth={youth} />
+          {(() => {
+            console.log("Rendering BehaviorCard tab");
+            return <BehaviorCard youthId={youth.id} youth={youth} />;
+          })()}
         </TabsContent>
         
         <TabsContent value="notes">
-          <ProgressNotes youthId={youth.id} youth={youth} />
+          {(() => {
+            console.log("Rendering ProgressNotes tab");
+            return <ProgressNotes youthId={youth.id} youth={youth} />;
+          })()}
         </TabsContent>
         
         <TabsContent value="analysis">
-          <BehaviorAnalysis youthId={youth.id} youth={youth} />
+          {(() => {
+            console.log("Rendering BehaviorAnalysis tab");
+            return <BehaviorAnalysis youthId={youth.id} youth={youth} />;
+          })()}
         </TabsContent>
         
         <TabsContent value="assessment">
-          <RiskAssessment youthId={youth.id} youth={youth} />
+          {(() => {
+            console.log("Rendering RiskAssessment tab");
+            return <RiskAssessment youthId={youth.id} youth={youth} />;
+          })()}
         </TabsContent>
         
         <TabsContent value="success">
-          <SuccessPlan youthId={youth.id} youth={youth} />
+          {(() => {
+            console.log("Rendering SuccessPlan tab");
+            return <SuccessPlan youthId={youth.id} youth={youth} />;
+          })()}
         </TabsContent>
         
         <TabsContent value="kpi">
-          <KpiDashboard youthId={youth.id} youth={youth} />
+          {(() => {
+            console.log("Rendering KpiDashboard tab");
+            return <KpiDashboard youthId={youth.id} youth={youth} />;
+          })()}
         </TabsContent>
         
         <TabsContent value="reports">
-          <ReportCenter youthId={youth.id} youth={youth} />
+          {(() => {
+            console.log("Rendering ReportCenter tab");
+            return <ReportCenter youthId={youth.id} youth={youth} />;
+          })()}
         </TabsContent>
       </Tabs>
     </div>

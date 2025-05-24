@@ -3,32 +3,23 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { YouthFormData } from "@/hooks/useYouthForm";
 
 interface MentalHealthTabProps {
   formData: YouthFormData;
   handleChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
-  handleSelectChange: (name: string, value: string) => void;
   handleCheckboxChange: (name: string, checked: boolean) => void;
-  setFormData: React.Dispatch<React.SetStateAction<YouthFormData>>;
 }
 
-export const MentalHealthTab = ({ 
-  formData, 
-  handleChange, 
-  handleSelectChange, 
-  handleCheckboxChange, 
-  setFormData 
-}: MentalHealthTabProps) => {
+export const MentalHealthTab = ({ formData, handleChange, handleCheckboxChange }: MentalHealthTabProps) => {
   return (
     <div className="space-y-4">
       <div className="space-y-2">
-        <Label htmlFor="diagnoses">Current Diagnoses</Label>
+        <Label htmlFor="currentDiagnoses">Current Diagnoses</Label>
         <Textarea 
-          id="diagnoses" 
-          name="diagnoses" 
-          value={formData.diagnoses} 
+          id="currentDiagnoses" 
+          name="currentDiagnoses" 
+          value={formData.currentDiagnoses} 
           onChange={handleChange} 
           rows={2}
         />
@@ -44,15 +35,19 @@ export const MentalHealthTab = ({
                 checked={formData.traumaHistory.includes(trauma)}
                 onCheckedChange={(checked) => {
                   if (checked) {
-                    setFormData(prev => ({
-                      ...prev, 
-                      traumaHistory: [...prev.traumaHistory, trauma]
-                    }));
+                    handleChange({
+                      target: {
+                        name: "traumaHistory",
+                        value: [...formData.traumaHistory, trauma].join(",")
+                      }
+                    } as any);
                   } else {
-                    setFormData(prev => ({
-                      ...prev, 
-                      traumaHistory: prev.traumaHistory.filter(t => t !== trauma)
-                    }));
+                    handleChange({
+                      target: {
+                        name: "traumaHistory",
+                        value: formData.traumaHistory.filter(t => t !== trauma).join(",")
+                      }
+                    } as any);
                   }
                 }}
               />
@@ -76,26 +71,30 @@ export const MentalHealthTab = ({
       <div className="space-y-2">
         <Label>Current Counseling</Label>
         <div className="flex flex-wrap gap-4">
-          {["Individual", "Group", "Family", "None"].map((therapy) => (
-            <div key={therapy} className="flex items-center space-x-2">
+          {["Individual", "Group", "Family", "None"].map((counseling) => (
+            <div key={counseling} className="flex items-center space-x-2">
               <Checkbox 
-                id={`therapy-${therapy}`}
-                checked={formData.currentCounseling.includes(therapy)}
+                id={`counseling-${counseling}`}
+                checked={formData.currentCounseling.includes(counseling)}
                 onCheckedChange={(checked) => {
                   if (checked) {
-                    setFormData(prev => ({
-                      ...prev, 
-                      currentCounseling: [...prev.currentCounseling, therapy]
-                    }));
+                    handleChange({
+                      target: {
+                        name: "currentCounseling",
+                        value: [...formData.currentCounseling, counseling].join(",")
+                      }
+                    } as any);
                   } else {
-                    setFormData(prev => ({
-                      ...prev, 
-                      currentCounseling: prev.currentCounseling.filter(t => t !== therapy)
-                    }));
+                    handleChange({
+                      target: {
+                        name: "currentCounseling",
+                        value: formData.currentCounseling.filter(c => c !== counseling).join(",")
+                      }
+                    } as any);
                   }
                 }}
               />
-              <Label htmlFor={`therapy-${therapy}`}>{therapy}</Label>
+              <Label htmlFor={`counseling-${counseling}`}>{counseling}</Label>
             </div>
           ))}
         </div>
@@ -125,17 +124,13 @@ export const MentalHealthTab = ({
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-2">
-          <Label>Session Frequency</Label>
-          <Select name="sessionFrequency" defaultValue={formData.sessionFrequency} onValueChange={value => handleSelectChange("sessionFrequency", value)}>
-            <SelectTrigger>
-              <SelectValue placeholder="Select frequency" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="Weekly">Weekly</SelectItem>
-              <SelectItem value="Bi-weekly">Bi-weekly</SelectItem>
-              <SelectItem value="Monthly">Monthly</SelectItem>
-            </SelectContent>
-          </Select>
+          <Label htmlFor="sessionFrequency">Session Frequency</Label>
+          <Input 
+            id="sessionFrequency" 
+            name="sessionFrequency" 
+            value={formData.sessionFrequency} 
+            onChange={handleChange} 
+          />
         </div>
         
         <div className="space-y-2">
@@ -151,40 +146,75 @@ export const MentalHealthTab = ({
       
       <div className="space-y-2">
         <Label>Self-Harm History</Label>
-        <Select name="selfHarmHistory" defaultValue={formData.selfHarmHistory} onValueChange={value => handleSelectChange("selfHarmHistory", value)}>
-          <SelectTrigger>
-            <SelectValue placeholder="Select history" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="None">None</SelectItem>
-            <SelectItem value="Ideation">Ideation</SelectItem>
-            <SelectItem value="Attempts">Attempts</SelectItem>
-          </SelectContent>
-        </Select>
-        
-        {formData.selfHarmHistory !== "None" && (
-          <div className="mt-2">
-            <Label htmlFor="selfHarmDate">Date of Last Incident</Label>
-            <Input 
-              id="selfHarmDate" 
-              name="selfHarmDate" 
-              type="date"
-              value={formData.selfHarmDate} 
-              onChange={handleChange} 
-            />
-          </div>
-        )}
+        <div className="flex flex-wrap gap-4">
+          {["None", "Ideation", "Attempts"].map((selfHarm) => (
+            <div key={selfHarm} className="flex items-center space-x-2">
+              <Checkbox 
+                id={`selfharm-${selfHarm}`}
+                checked={formData.selfHarmHistory.includes(selfHarm)}
+                onCheckedChange={(checked) => {
+                  if (checked) {
+                    handleChange({
+                      target: {
+                        name: "selfHarmHistory",
+                        value: [...formData.selfHarmHistory, selfHarm].join(",")
+                      }
+                    } as any);
+                  } else {
+                    handleChange({
+                      target: {
+                        name: "selfHarmHistory",
+                        value: formData.selfHarmHistory.filter(s => s !== selfHarm).join(",")
+                      }
+                    } as any);
+                  }
+                }}
+              />
+              <Label htmlFor={`selfharm-${selfHarm}`}>{selfHarm}</Label>
+            </div>
+          ))}
+        </div>
       </div>
       
-      <div className="flex items-center space-x-2">
-        <Checkbox 
-          id="safetyPlan" 
-          checked={formData.safetyPlan}
-          onCheckedChange={(checked) => {
-            handleCheckboxChange("safetyPlan", checked === true);
-          }}
-        />
-        <Label htmlFor="safetyPlan">Safety Plan in Place</Label>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="lastIncidentDate">Date of Last Incident</Label>
+          <Input 
+            id="lastIncidentDate" 
+            name="lastIncidentDate" 
+            type="date"
+            value={formData.lastIncidentDate} 
+            onChange={handleChange} 
+          />
+        </div>
+        
+        <div className="flex items-center space-x-2 mt-6">
+          <Checkbox 
+            id="hasSafetyPlan" 
+            checked={formData.hasSafetyPlan}
+            onCheckedChange={(checked) => {
+              handleCheckboxChange("hasSafetyPlan", checked === true);
+            }}
+          />
+          <Label htmlFor="hasSafetyPlan">Safety Plan in Place</Label>
+        </div>
+      </div>
+
+      {/* Subsystem Status */}
+      <div className="border-t pt-4">
+        <div className="flex items-center space-x-2">
+          <Checkbox 
+            id="onSubsystem" 
+            checked={formData.onSubsystem}
+            onCheckedChange={(checked) => {
+              handleCheckboxChange("onSubsystem", checked === true);
+            }}
+          />
+          <Label htmlFor="onSubsystem" className="font-semibold">On Subsystem</Label>
+        </div>
+        <p className="text-sm text-gray-600 mt-1">
+          Check if youth is currently on subsystem status for behavioral monitoring
+        </p>
       </div>
     </div>
   );

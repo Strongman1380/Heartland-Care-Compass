@@ -1,17 +1,18 @@
 
 import { useState, useEffect } from "react";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { PlusCircle } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { PlusCircle, User } from "lucide-react";
 import { AddYouthDialog } from "@/components/youth/AddYouthDialog";
 import { supabase } from "@/integrations/supabase/client";
 import { mapYouthFromSupabase, type Youth } from "@/types/app-types";
 
 interface YouthSelectorProps {
   onSelectYouth: (youthId: string) => void;
+  selectedYouthId?: string;
 }
 
-export const YouthSelector = ({ onSelectYouth }: YouthSelectorProps) => {
+export const YouthSelector = ({ onSelectYouth, selectedYouthId }: YouthSelectorProps) => {
   const [youths, setYouths] = useState<Youth[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -29,11 +30,9 @@ export const YouthSelector = ({ onSelectYouth }: YouthSelectorProps) => {
         throw youthsError;
       }
 
-      // Map and filter out youths with invalid data more strictly
       const mappedYouths = youthsData
         .map(mapYouthFromSupabase)
         .filter(youth => {
-          // Strict validation to ensure all required fields are valid
           const hasValidId = youth.id && 
                            typeof youth.id === 'string' && 
                            youth.id.trim() !== "" && 
@@ -75,7 +74,6 @@ export const YouthSelector = ({ onSelectYouth }: YouthSelectorProps) => {
 
   const handleYouthSelect = (youthId: string) => {
     console.log("Selected youth ID:", youthId);
-    // Additional validation to ensure we don't pass empty strings
     if (youthId && typeof youthId === 'string' && youthId.trim() !== "" && youthId.length > 0) {
       onSelectYouth(youthId);
     } else {
@@ -85,7 +83,6 @@ export const YouthSelector = ({ onSelectYouth }: YouthSelectorProps) => {
 
   const handleAddYouthDialogClose = () => {
     setIsAddYouthDialogOpen(false);
-    // Refresh the list after adding a new youth
     fetchYouths();
   };
 
@@ -109,51 +106,54 @@ export const YouthSelector = ({ onSelectYouth }: YouthSelectorProps) => {
   }
 
   return (
-    <div className="flex flex-col md:flex-row gap-3 items-center">
-      <div className="relative w-full md:w-96">
-        <Select onValueChange={handleYouthSelect}>
-          <SelectTrigger className="w-full">
-            <SelectValue placeholder="Select a youth..." />
-          </SelectTrigger>
-          <SelectContent>
-            {youths.length === 0 ? (
-              <div className="p-2 text-gray-500 text-center">No youth profiles found</div>
-            ) : (
-              youths.map((youth) => {
-                // Triple check before rendering SelectItem to prevent the error
-                if (!youth.id || 
-                    typeof youth.id !== 'string' || 
-                    youth.id.trim() === "" || 
-                    youth.id.length === 0 ||
-                    !youth.firstName || 
-                    !youth.lastName || 
-                    typeof youth.firstName !== 'string' ||
-                    typeof youth.lastName !== 'string' ||
-                    youth.firstName.trim() === "" || 
-                    youth.lastName.trim() === "") {
-                  
-                  console.error("Skipping invalid youth data in SelectItem render:", youth);
-                  return null;
-                }
-                
-                return (
-                  <SelectItem key={youth.id} value={youth.id}>
-                    {youth.firstName} {youth.lastName} - Level {youth.level}
-                  </SelectItem>
-                );
-              }).filter(Boolean) // Remove any null entries
-            )}
-          </SelectContent>
-        </Select>
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        <h3 className="text-lg font-medium">Select a Youth</h3>
+        <Button 
+          onClick={() => setIsAddYouthDialogOpen(true)} 
+          variant="outline" 
+          size="sm"
+          className="whitespace-nowrap"
+        >
+          <PlusCircle size={16} className="mr-2" /> Add New Youth
+        </Button>
       </div>
-      
-      <Button 
-        onClick={() => setIsAddYouthDialogOpen(true)} 
-        variant="outline" 
-        className="whitespace-nowrap"
-      >
-        <PlusCircle size={16} className="mr-2" /> Add New Youth
-      </Button>
+
+      {youths.length === 0 ? (
+        <Card className="border-dashed border-2">
+          <CardContent className="flex flex-col items-center justify-center p-6">
+            <User className="h-12 w-12 text-gray-400 mb-4" />
+            <p className="text-gray-500 text-center">No youth profiles found</p>
+            <p className="text-sm text-gray-400 text-center mt-2">
+              Click "Add New Youth" to create the first profile
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          {youths.map((youth) => (
+            <Card 
+              key={youth.id} 
+              className={`cursor-pointer transition-all hover:shadow-md ${
+                selectedYouthId === youth.id 
+                  ? 'ring-2 ring-blue-500 bg-blue-50' 
+                  : 'hover:bg-gray-50'
+              }`}
+              onClick={() => handleYouthSelect(youth.id)}
+            >
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">
+                  {youth.firstName} {youth.lastName}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <p className="text-xs text-gray-500">Level {youth.level}</p>
+                <p className="text-xs text-gray-500">{youth.pointTotal || 0} points</p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
       
       {isAddYouthDialogOpen && (
         <AddYouthDialog onClose={handleAddYouthDialogClose} />

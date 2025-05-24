@@ -29,24 +29,37 @@ export const YouthSelector = ({ onSelectYouth }: YouthSelectorProps) => {
         throw youthsError;
       }
 
-      // Map and filter out youths with invalid IDs to prevent Select.Item errors
+      // Map and filter out youths with invalid data more strictly
       const mappedYouths = youthsData
         .map(mapYouthFromSupabase)
         .filter(youth => {
-          // Ensure we have a valid, non-empty ID and names
-          const hasValidId = youth.id && typeof youth.id === 'string' && youth.id.trim() !== "";
-          const hasValidNames = youth.firstName && youth.lastName && 
-                               youth.firstName.trim() !== "" && youth.lastName.trim() !== "";
+          // Strict validation to ensure all required fields are valid
+          const hasValidId = youth.id && 
+                           typeof youth.id === 'string' && 
+                           youth.id.trim() !== "" && 
+                           youth.id.length > 0;
           
-          if (!hasValidId || !hasValidNames) {
-            console.warn("Filtering out youth with invalid data:", youth);
+          const hasValidNames = youth.firstName && 
+                               youth.lastName && 
+                               typeof youth.firstName === 'string' &&
+                               typeof youth.lastName === 'string' &&
+                               youth.firstName.trim() !== "" && 
+                               youth.lastName.trim() !== "";
+          
+          if (!hasValidId) {
+            console.warn("Filtering out youth with invalid ID:", youth);
+            return false;
+          }
+          
+          if (!hasValidNames) {
+            console.warn("Filtering out youth with invalid names:", youth);
             return false;
           }
           
           return true;
         });
         
-      console.log("Fetched valid youths:", mappedYouths);
+      console.log("Fetched and validated youths:", mappedYouths);
       setYouths(mappedYouths);
     } catch (err) {
       console.error("Error fetching youths:", err);
@@ -63,7 +76,7 @@ export const YouthSelector = ({ onSelectYouth }: YouthSelectorProps) => {
   const handleYouthSelect = (youthId: string) => {
     console.log("Selected youth ID:", youthId);
     // Additional validation to ensure we don't pass empty strings
-    if (youthId && typeof youthId === 'string' && youthId.trim() !== "") {
+    if (youthId && typeof youthId === 'string' && youthId.trim() !== "" && youthId.length > 0) {
       onSelectYouth(youthId);
     } else {
       console.warn("Invalid youth ID selected:", youthId);
@@ -107,11 +120,19 @@ export const YouthSelector = ({ onSelectYouth }: YouthSelectorProps) => {
               <div className="p-2 text-gray-500 text-center">No youth profiles found</div>
             ) : (
               youths.map((youth) => {
-                // Final safety check before rendering SelectItem
-                if (!youth.id || typeof youth.id !== 'string' || youth.id.trim() === "" || 
-                    !youth.firstName || !youth.lastName || 
-                    youth.firstName.trim() === "" || youth.lastName.trim() === "") {
-                  console.error("Attempted to render SelectItem with invalid youth data:", youth);
+                // Triple check before rendering SelectItem to prevent the error
+                if (!youth.id || 
+                    typeof youth.id !== 'string' || 
+                    youth.id.trim() === "" || 
+                    youth.id.length === 0 ||
+                    !youth.firstName || 
+                    !youth.lastName || 
+                    typeof youth.firstName !== 'string' ||
+                    typeof youth.lastName !== 'string' ||
+                    youth.firstName.trim() === "" || 
+                    youth.lastName.trim() === "") {
+                  
+                  console.error("Skipping invalid youth data in SelectItem render:", youth);
                   return null;
                 }
                 
@@ -120,7 +141,7 @@ export const YouthSelector = ({ onSelectYouth }: YouthSelectorProps) => {
                     {youth.firstName} {youth.lastName} - Level {youth.level}
                   </SelectItem>
                 );
-              })
+              }).filter(Boolean) // Remove any null entries
             )}
           </SelectContent>
         </Select>

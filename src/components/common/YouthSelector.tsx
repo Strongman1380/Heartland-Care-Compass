@@ -32,8 +32,9 @@ export const YouthSelector = ({ onSelectYouth }: YouthSelectorProps) => {
       // Map and filter out youths with invalid IDs to prevent Select.Item errors
       const mappedYouths = youthsData
         .map(mapYouthFromSupabase)
-        .filter(youth => youth.id && youth.id.trim() !== "");
+        .filter(youth => youth.id && youth.id.trim() !== "" && youth.firstName && youth.lastName);
         
+      console.log("Fetched youths:", mappedYouths);
       setYouths(mappedYouths);
     } catch (err) {
       console.error("Error fetching youths:", err);
@@ -48,6 +49,7 @@ export const YouthSelector = ({ onSelectYouth }: YouthSelectorProps) => {
   }, []);
 
   const handleYouthSelect = (youthId: string) => {
+    console.log("Selected youth ID:", youthId);
     if (youthId && youthId.trim() !== "") {
       onSelectYouth(youthId);
     }
@@ -89,11 +91,19 @@ export const YouthSelector = ({ onSelectYouth }: YouthSelectorProps) => {
             {youths.length === 0 ? (
               <div className="p-2 text-gray-500 text-center">No youth profiles found</div>
             ) : (
-              youths.map((youth) => (
-                <SelectItem key={youth.id} value={youth.id}>
-                  {youth.firstName} {youth.lastName} - Level {youth.level}
-                </SelectItem>
-              ))
+              youths.map((youth) => {
+                // Double-check that we have valid data before rendering SelectItem
+                if (!youth.id || youth.id.trim() === "" || !youth.firstName || !youth.lastName) {
+                  console.warn("Skipping youth with invalid data:", youth);
+                  return null;
+                }
+                
+                return (
+                  <SelectItem key={youth.id} value={youth.id}>
+                    {youth.firstName} {youth.lastName} - Level {youth.level}
+                  </SelectItem>
+                );
+              }).filter(Boolean)
             )}
           </SelectContent>
         </Select>

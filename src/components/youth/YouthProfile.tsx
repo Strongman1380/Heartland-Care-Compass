@@ -1,16 +1,17 @@
-
 import { useState } from "react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { FileText, Upload, Download, Users } from "lucide-react";
+import { FileText, Upload, Download, Users, ArrowLeft } from "lucide-react";
 import { format } from "date-fns";
 
 interface YouthProfileProps {
   youth: any;
+  onBack?: () => void;
+  onYouthUpdated?: () => void;
 }
 
-export const YouthProfile = ({ youth }: YouthProfileProps) => {
+export const YouthProfile = ({ youth, onBack, onYouthUpdated }: YouthProfileProps) => {
   const [activeTab, setActiveTab] = useState("demographics");
 
   // Handle case where youth is null or undefined
@@ -70,9 +71,17 @@ export const YouthProfile = ({ youth }: YouthProfileProps) => {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-start flex-col sm:flex-row">
-        <div>
-          <h2 className="text-2xl font-bold mb-2">Youth Profile</h2>
-          <p className="text-gray-600 mb-4">View complete demographic and personal information.</p>
+        <div className="flex items-center gap-4 mb-4 sm:mb-0">
+          {onBack && (
+            <Button variant="outline" onClick={onBack}>
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to List
+            </Button>
+          )}
+          <div>
+            <h2 className="text-2xl font-bold mb-2">Youth Profile</h2>
+            <p className="text-gray-600 mb-4">View complete demographic and personal information.</p>
+          </div>
         </div>
         
         <div className="flex space-x-2 mb-4 sm:mb-0">

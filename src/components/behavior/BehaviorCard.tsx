@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,7 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { format, startOfWeek, endOfWeek, eachDayOfInterval } from "date-fns";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, ArrowRight, Calendar, Download, FileText, TrendingUp, TrendingDown } from "lucide-react";
+import { AlertCircle, ArrowRight, Calendar, Download, FileText, TrendingUp, TrendingDown, Users } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { fetchBehaviorPoints, saveBehaviorPoints } from "@/utils/supabase-utils";
 import { BehaviorPoints } from "@/types/app-types";
@@ -52,6 +51,31 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Handle case where youth is null or undefined
+  if (!youth) {
+    return (
+      <div className="space-y-6">
+        <Card className="border-2 border-yellow-300">
+          <CardHeader className="text-center">
+            <div className="flex justify-center mb-4">
+              <Users className="h-16 w-16 text-red-600" />
+            </div>
+            <CardTitle className="text-2xl text-red-800">No Youth Selected</CardTitle>
+            <CardDescription className="text-red-600 text-lg">
+              Please select a youth from the system to record behavior points.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="text-center">
+            <p className="text-red-700 mb-4">
+              Use the "Add Youth" button in the header to create a new youth profile, 
+              or select an existing youth to begin tracking their daily points.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   // Get current level data
   const getCurrentLevel = () => {
     return levelsData.find(level => level.level === youth.level) || levelsData[0];
@@ -66,7 +90,9 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
   const nextLevel = getNextLevel();
 
   useEffect(() => {
-    fetchPointEntries();
+    if (youthId) {
+      fetchPointEntries();
+    }
   }, [youthId]);
 
   const fetchPointEntries = async () => {

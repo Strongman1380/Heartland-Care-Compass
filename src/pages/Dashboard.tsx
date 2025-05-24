@@ -1,8 +1,16 @@
 
+import { useState } from "react";
 import { Header } from "@/components/layout/Header";
 import { YouthDashboard } from "@/components/dashboard/YouthDashboard";
+import { YouthSelector } from "@/components/common/YouthSelector";
 
 const Dashboard = () => {
+  const [selectedYouthId, setSelectedYouthId] = useState<string | undefined>(undefined);
+
+  const handleYouthSelect = (youthId: string) => {
+    setSelectedYouthId(youthId);
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-red-50 via-yellow-50 to-red-100">
       <Header />
@@ -14,7 +22,14 @@ const Dashboard = () => {
           <p className="text-red-700 text-lg">Overview of youth performance and analytics</p>
         </div>
         
-        <YouthDashboard youthId={null} />
+        {!selectedYouthId ? (
+          <YouthSelector 
+            onSelectYouth={handleYouthSelect}
+            selectedYouthId={selectedYouthId}
+          />
+        ) : (
+          <YouthDashboard youthId={selectedYouthId} />
+        )}
       </main>
     </div>
   );

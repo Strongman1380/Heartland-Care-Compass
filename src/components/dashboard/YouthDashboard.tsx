@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -53,7 +52,9 @@ export const YouthDashboard = ({ youthId }: YouthDashboardProps) => {
       }
     };
 
-    fetchYouthData();
+    if (youthId) {
+      fetchYouthData();
+    }
   }, [youthId]);
 
   if (isLoading) {

@@ -10,7 +10,6 @@ import { ProgressNotes } from "@/components/notes/ProgressNotes";
 import { BehaviorAnalysis } from "@/components/analysis/BehaviorAnalysis";
 import { RiskAssessment } from "@/components/assessment/RiskAssessment";
 import { ReportCenter } from "@/components/reports/ReportCenter";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { User, CheckSquare, FileText, BarChart2, Shield, FileChartPie } from "lucide-react";
 
 const Index = () => {
@@ -19,16 +18,6 @@ const Index = () => {
 
   // This is a placeholder for youth data until actual youth is selected
   const placeholderYouth = selectedYouthId ? { id: selectedYouthId } : null;
-
-  // Handle tab card click
-  const handleCardClick = (tabValue: string) => {
-    if (selectedYouthId) {
-      setSelectedTab(tabValue);
-    } else {
-      // If no youth is selected, show a message instead of changing tabs
-      alert("Please select a youth first before accessing this feature.");
-    }
-  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -111,99 +100,7 @@ const Index = () => {
         ) : (
           <div className="bg-white p-8 rounded-lg shadow-md text-center">
             <h2 className="text-xl font-semibold text-gray-700 mb-4">Welcome to the Heartland Boys Home Platform</h2>
-            <p className="text-gray-600 mb-6">Please select a youth to view their profile, track behavior, add progress notes, and generate reports.</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-              {/* Module Cards with Icons - Now Actionable */}
-              <Card 
-                className="hover:shadow-md transition-shadow cursor-pointer border-blue-100 hover:border-blue-300" 
-                onClick={() => handleCardClick("profile")}
-              >
-                <CardHeader className="pb-2">
-                  <div className="flex items-center gap-2">
-                    <User className="h-5 w-5 text-blue-600" />
-                    <CardTitle className="text-lg">Youth Profile</CardTitle>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <CardDescription>View and manage youth information</CardDescription>
-                </CardContent>
-              </Card>
-              
-              <Card 
-                className="hover:shadow-md transition-shadow cursor-pointer border-blue-100 hover:border-blue-300" 
-                onClick={() => handleCardClick("behavior")}
-              >
-                <CardHeader className="pb-2">
-                  <div className="flex items-center gap-2">
-                    <CheckSquare className="h-5 w-5 text-blue-600" />
-                    <CardTitle className="text-lg">Behavior Cards</CardTitle>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <CardDescription>Track daily behavior and points</CardDescription>
-                </CardContent>
-              </Card>
-              
-              <Card 
-                className="hover:shadow-md transition-shadow cursor-pointer border-blue-100 hover:border-blue-300" 
-                onClick={() => handleCardClick("notes")}
-              >
-                <CardHeader className="pb-2">
-                  <div className="flex items-center gap-2">
-                    <FileText className="h-5 w-5 text-blue-600" />
-                    <CardTitle className="text-lg">Progress Notes</CardTitle>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <CardDescription>Record and view progress observations</CardDescription>
-                </CardContent>
-              </Card>
-              
-              <Card 
-                className="hover:shadow-md transition-shadow cursor-pointer border-blue-100 hover:border-blue-300" 
-                onClick={() => handleCardClick("analysis")}
-              >
-                <CardHeader className="pb-2">
-                  <div className="flex items-center gap-2">
-                    <BarChart2 className="h-5 w-5 text-blue-600" />
-                    <CardTitle className="text-lg">Behavior Analysis</CardTitle>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <CardDescription>Analyze behavior patterns and progress</CardDescription>
-                </CardContent>
-              </Card>
-              
-              <Card 
-                className="hover:shadow-md transition-shadow cursor-pointer border-blue-100 hover:border-blue-300" 
-                onClick={() => handleCardClick("assessment")}
-              >
-                <CardHeader className="pb-2">
-                  <div className="flex items-center gap-2">
-                    <Shield className="h-5 w-5 text-blue-600" />
-                    <CardTitle className="text-lg">Risk Assessment</CardTitle>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <CardDescription>Evaluate and manage risk factors</CardDescription>
-                </CardContent>
-              </Card>
-              
-              <Card 
-                className="hover:shadow-md transition-shadow cursor-pointer border-blue-100 hover:border-blue-300" 
-                onClick={() => handleCardClick("reports")}
-              >
-                <CardHeader className="pb-2">
-                  <div className="flex items-center gap-2">
-                    <FileChartPie className="h-5 w-5 text-blue-600" />
-                    <CardTitle className="text-lg">Report Center</CardTitle>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <CardDescription>Generate comprehensive reports</CardDescription>
-                </CardContent>
-              </Card>
-            </div>
+            <p className="text-gray-600">Please select a youth from the dropdown above to begin managing their profile, tracking behavior, adding progress notes, and generating reports.</p>
           </div>
         )}
       </main>

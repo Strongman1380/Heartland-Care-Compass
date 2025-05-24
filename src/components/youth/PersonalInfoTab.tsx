@@ -13,6 +13,10 @@ interface PersonalInfoTabProps {
 export const PersonalInfoTab = ({ formData, handleChange, handleSelectChange }: PersonalInfoTabProps) => {
   // Get the placement authority value, ensuring it's never an empty string
   const placementAuthorityValue = formData.placementAuthority[0] || undefined;
+  // Get the level value, ensuring it's never an empty string
+  const levelValue = formData.level || undefined;
+  // Get the estimated stay value, ensuring it's never an empty string
+  const estimatedStayValue = formData.estimatedStay || undefined;
   
   return (
     <div className="space-y-4">
@@ -65,7 +69,7 @@ export const PersonalInfoTab = ({ formData, handleChange, handleSelectChange }: 
         
         <div className="space-y-2">
           <Label htmlFor="level">Initial Level</Label>
-          <Select name="level" value={formData.level} onValueChange={value => handleSelectChange("level", value)}>
+          <Select name="level" value={levelValue} onValueChange={value => handleSelectChange("level", value)}>
             <SelectTrigger>
               <SelectValue placeholder="Select level" />
             </SelectTrigger>
@@ -168,7 +172,7 @@ export const PersonalInfoTab = ({ formData, handleChange, handleSelectChange }: 
         
         <div className="space-y-2">
           <Label>Estimated Length of Stay</Label>
-          <Select name="estimatedStay" value={formData.estimatedStay} onValueChange={value => handleSelectChange("estimatedStay", value)}>
+          <Select name="estimatedStay" value={estimatedStayValue} onValueChange={value => handleSelectChange("estimatedStay", value)}>
             <SelectTrigger>
               <SelectValue placeholder="Select length" />
             </SelectTrigger>

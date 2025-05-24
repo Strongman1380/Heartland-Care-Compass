@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -71,20 +70,20 @@ Restrictions: ${formData.medicalRestrictions}
       `.trim();
       
       const mentalHealthInfo = `
-Diagnoses: ${formData.diagnoses}
+Diagnoses: ${formData.currentDiagnoses}
 Trauma History: ${formData.traumaHistory.join(', ')}
 Previous Treatment: ${formData.previousTreatment}
 Current Counseling: ${formData.currentCounseling.join(', ')}
 Therapist: ${formData.therapistName} (${formData.therapistContact})
-Self-Harm History: ${formData.selfHarmHistory}
+Self-Harm History: ${formData.selfHarmHistory.join(', ')}
       `.trim();
       
       const legalStatus = `
-Placement Authority: ${formData.placementAuthority}
+Placement Authority: ${formData.placementAuthority.join(', ')}
 Court Involvement: ${formData.courtInvolvement.join(', ')}
-Probation Officer: ${formData.probationOfficer} (${formData.probationPhone})
+Probation Officer: ${formData.probationOfficer} (${formData.probationContact})
 Guardian: ${formData.legalGuardian} (${formData.guardianRelationship})
-Guardian Contact: ${formData.guardianPhone}, ${formData.guardianEmail}
+Guardian Contact: ${formData.guardianContact}, ${formData.guardianEmail}
       `.trim();
       
       const youthData = {
@@ -93,7 +92,7 @@ Guardian Contact: ${formData.guardianPhone}, ${formData.guardianEmail}
         dob: formData.dob ? new Date(formData.dob).toISOString() : null,
         age: age,
         admissiondate: formData.admissionDate ? new Date(formData.admissionDate).toISOString() : new Date().toISOString(),
-        level: parseInt(formData.level, 10),
+        level: parseInt(formData.level, 10) || 1,
         pointtotal: 0,
         referralsource: formData.referralSource || formData.referralReason,
         referralreason: formData.referralReason,
@@ -183,9 +182,7 @@ Guardian Contact: ${formData.guardianPhone}, ${formData.guardianEmail}
               <MentalHealthTab 
                 formData={formData}
                 handleChange={handleChange}
-                handleSelectChange={handleSelectChange}
                 handleCheckboxChange={handleCheckboxChange}
-                setFormData={setFormData}
               />
             </TabsContent>
           </Tabs>

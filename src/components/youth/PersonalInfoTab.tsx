@@ -1,4 +1,3 @@
-
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -62,7 +61,7 @@ export const PersonalInfoTab = ({ formData, handleChange, handleSelectChange }: 
         
         <div className="space-y-2">
           <Label htmlFor="level">Initial Level</Label>
-          <Select name="level" defaultValue={formData.level} onValueChange={value => handleSelectChange("level", value)}>
+          <Select name="level" value={formData.level} onValueChange={value => handleSelectChange("level", value)}>
             <SelectTrigger>
               <SelectValue placeholder="Select level" />
             </SelectTrigger>
@@ -100,11 +99,11 @@ export const PersonalInfoTab = ({ formData, handleChange, handleSelectChange }: 
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-2">
-          <Label htmlFor="guardianPhone">Guardian Contact Phone</Label>
+          <Label htmlFor="guardianContact">Guardian Contact Phone</Label>
           <Input 
-            id="guardianPhone" 
-            name="guardianPhone" 
-            value={formData.guardianPhone} 
+            id="guardianContact" 
+            name="guardianContact" 
+            value={formData.guardianContact} 
             onChange={handleChange} 
           />
         </div>
@@ -133,11 +132,11 @@ export const PersonalInfoTab = ({ formData, handleChange, handleSelectChange }: 
         </div>
         
         <div className="space-y-2">
-          <Label htmlFor="probationPhone">Probation Officer Contact</Label>
+          <Label htmlFor="probationContact">Probation Officer Contact</Label>
           <Input 
-            id="probationPhone" 
-            name="probationPhone" 
-            value={formData.probationPhone} 
+            id="probationContact" 
+            name="probationContact" 
+            value={formData.probationContact} 
             onChange={handleChange} 
           />
         </div>
@@ -146,7 +145,11 @@ export const PersonalInfoTab = ({ formData, handleChange, handleSelectChange }: 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label>Placement Authority</Label>
-          <Select name="placementAuthority" defaultValue={formData.placementAuthority} onValueChange={value => handleSelectChange("placementAuthority", value)}>
+          <Select 
+            name="placementAuthority" 
+            value={formData.placementAuthority[0] || ""} 
+            onValueChange={value => handleSelectChange("placementAuthority", value)}
+          >
             <SelectTrigger>
               <SelectValue placeholder="Select authority" />
             </SelectTrigger>
@@ -161,7 +164,7 @@ export const PersonalInfoTab = ({ formData, handleChange, handleSelectChange }: 
         
         <div className="space-y-2">
           <Label>Estimated Length of Stay</Label>
-          <Select name="estimatedStay" defaultValue={formData.estimatedStay} onValueChange={value => handleSelectChange("estimatedStay", value)}>
+          <Select name="estimatedStay" value={formData.estimatedStay} onValueChange={value => handleSelectChange("estimatedStay", value)}>
             <SelectTrigger>
               <SelectValue placeholder="Select length" />
             </SelectTrigger>

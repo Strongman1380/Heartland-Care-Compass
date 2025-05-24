@@ -10,14 +10,18 @@ export interface YouthFormData {
   idNumber: string;
   admissionDate: string;
   currentLevel: number;
+  level: string; // Added for form compatibility
   legalGuardian: string;
   guardianRelationship: string;
   guardianContact: string;
+  guardianPhone: string; // Added missing property
   guardianEmail: string;
   probationOfficer: string;
   probationContact: string;
-  placementAuthority: string[];
+  probationPhone: string; // Added missing property
+  placementAuthority: string[]; // Keep as array
   estimatedStay: string;
+  referralSource: string; // Added missing property
   
   // Background Information
   referralReason: string;
@@ -47,6 +51,7 @@ export interface YouthFormData {
   
   // Mental Health Information
   currentDiagnoses: string;
+  diagnoses: string; // Added for compatibility
   traumaHistory: string[];
   previousTreatment: string;
   currentCounseling: string[];
@@ -73,15 +78,19 @@ export const useYouthForm = () => {
     age: "",
     idNumber: "",
     admissionDate: "",
-    currentLevel: 0, // Start at Orientation
+    currentLevel: 0,
+    level: "1", // Default to Level 1
     legalGuardian: "",
     guardianRelationship: "",
     guardianContact: "",
+    guardianPhone: "", // Added
     guardianEmail: "",
     probationOfficer: "",
     probationContact: "",
+    probationPhone: "", // Added
     placementAuthority: [],
     estimatedStay: "",
+    referralSource: "", // Added
     
     // Background Information
     referralReason: "",
@@ -111,6 +120,7 @@ export const useYouthForm = () => {
     
     // Mental Health Information
     currentDiagnoses: "",
+    diagnoses: "", // Added
     traumaHistory: [],
     previousTreatment: "",
     currentCounseling: [],
@@ -125,7 +135,7 @@ export const useYouthForm = () => {
     // New behavior tracking fields
     onSubsystem: false,
     pointsInCurrentLevel: 0,
-    dailyPointsForPrivileges: 10, // Default for Orientation level
+    dailyPointsForPrivileges: 10,
   });
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -139,14 +149,32 @@ export const useYouthForm = () => {
     }
   };
 
+  const handleSelectChange = (name: string, value: string) => {
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
   const handleCheckboxChange = (name: string, checked: boolean) => {
     setFormData(prev => ({ ...prev, [name]: checked }));
+  };
+
+  const handleArrayItemChange = (name: string, items: string[]) => {
+    setFormData(prev => ({ ...prev, [name]: items }));
+  };
+
+  const addArrayItem = (name: string, item: string) => {
+    setFormData(prev => ({
+      ...prev,
+      [name]: [...(prev[name as keyof YouthFormData] as string[]), item]
+    }));
   };
 
   return {
     formData,
     setFormData,
     handleChange,
+    handleSelectChange,
     handleCheckboxChange,
+    handleArrayItemChange,
+    addArrayItem,
   };
 };

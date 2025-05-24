@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { FileText, Upload, Download } from "lucide-react";
+import { FileText, Upload, Download, Users } from "lucide-react";
 import { format } from "date-fns";
 
 interface YouthProfileProps {
@@ -12,6 +12,31 @@ interface YouthProfileProps {
 
 export const YouthProfile = ({ youth }: YouthProfileProps) => {
   const [activeTab, setActiveTab] = useState("demographics");
+
+  // Handle case where youth is null or undefined
+  if (!youth) {
+    return (
+      <div className="space-y-6">
+        <Card className="border-2 border-yellow-300">
+          <CardHeader className="text-center">
+            <div className="flex justify-center mb-4">
+              <Users className="h-16 w-16 text-red-600" />
+            </div>
+            <CardTitle className="text-2xl text-red-800">No Youth Selected</CardTitle>
+            <CardDescription className="text-red-600 text-lg">
+              Please select a youth from the system to view their profile information.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="text-center">
+            <p className="text-red-700 mb-4">
+              Use the "Add Youth" button in the header to create a new youth profile, 
+              or select an existing youth to view their information.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   const formatDate = (timestamp: any) => {
     if (!timestamp) return "Not specified";

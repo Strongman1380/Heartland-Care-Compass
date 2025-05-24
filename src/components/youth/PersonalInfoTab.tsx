@@ -1,3 +1,4 @@
+
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -10,6 +11,9 @@ interface PersonalInfoTabProps {
 }
 
 export const PersonalInfoTab = ({ formData, handleChange, handleSelectChange }: PersonalInfoTabProps) => {
+  // Get the placement authority value, ensuring it's never an empty string
+  const placementAuthorityValue = formData.placementAuthority[0] || undefined;
+  
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -147,7 +151,7 @@ export const PersonalInfoTab = ({ formData, handleChange, handleSelectChange }: 
           <Label>Placement Authority</Label>
           <Select 
             name="placementAuthority" 
-            value={formData.placementAuthority[0] || ""} 
+            value={placementAuthorityValue} 
             onValueChange={value => handleSelectChange("placementAuthority", value)}
           >
             <SelectTrigger>

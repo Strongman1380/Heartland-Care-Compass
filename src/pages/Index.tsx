@@ -20,10 +20,15 @@ const Index = () => {
   const placeholderYouth = selectedYouthId ? { id: selectedYouthId } : null;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gradient-to-br from-red-50 via-yellow-50 to-red-100">
       <Header />
       <main className="container mx-auto px-4 py-8">
-        <h1 className="text-3xl font-bold text-blue-800 mb-6">Heartland Boys Home Platform</h1>
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-bold bg-gradient-to-r from-red-800 via-red-700 to-yellow-600 bg-clip-text text-transparent mb-4">
+            Heartland Boys Home Platform
+          </h1>
+          <p className="text-red-700 text-lg">Empowering Youth Through Structure and Support</p>
+        </div>
         
         <div className="mb-6">
           <YouthSelector onSelectYouth={setSelectedYouthId} />
@@ -31,11 +36,11 @@ const Index = () => {
         
         {selectedYouthId ? (
           <div>
-            <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+            <div className="bg-white rounded-lg shadow-lg border-2 border-yellow-300 p-6 mb-6">
               <div className="flex flex-col md:flex-row md:items-center justify-between">
                 <div>
-                  <h2 className="text-2xl font-bold text-blue-800">Selected Youth</h2>
-                  <p className="text-gray-600">ID: {selectedYouthId}</p>
+                  <h2 className="text-2xl font-bold text-red-800">Selected Youth</h2>
+                  <p className="text-red-600">ID: {selectedYouthId}</p>
                 </div>
               </div>
             </div>
@@ -45,28 +50,28 @@ const Index = () => {
               onValueChange={setSelectedTab}
               className="space-y-6"
             >
-              <TabsList className="bg-white p-1 shadow-sm rounded-lg overflow-x-auto flex w-full justify-start md:justify-center">
-                <TabsTrigger value="profile" className="flex items-center gap-2">
+              <TabsList className="bg-white p-1 shadow-lg rounded-lg overflow-x-auto flex w-full justify-start md:justify-center border-2 border-yellow-300">
+                <TabsTrigger value="profile" className="flex items-center gap-2 data-[state=active]:bg-yellow-400 data-[state=active]:text-red-900">
                   <User size={16} />
                   <span>Profile</span>
                 </TabsTrigger>
-                <TabsTrigger value="behavior" className="flex items-center gap-2">
+                <TabsTrigger value="behavior" className="flex items-center gap-2 data-[state=active]:bg-yellow-400 data-[state=active]:text-red-900">
                   <CheckSquare size={16} />
                   <span>Daily Points</span>
                 </TabsTrigger>
-                <TabsTrigger value="notes" className="flex items-center gap-2">
+                <TabsTrigger value="notes" className="flex items-center gap-2 data-[state=active]:bg-yellow-400 data-[state=active]:text-red-900">
                   <FileText size={16} />
                   <span>Progress Notes</span>
                 </TabsTrigger>
-                <TabsTrigger value="analysis" className="flex items-center gap-2">
+                <TabsTrigger value="analysis" className="flex items-center gap-2 data-[state=active]:bg-yellow-400 data-[state=active]:text-red-900">
                   <BarChart2 size={16} />
                   <span>Behavior Analysis</span>
                 </TabsTrigger>
-                <TabsTrigger value="assessment" className="flex items-center gap-2">
+                <TabsTrigger value="assessment" className="flex items-center gap-2 data-[state=active]:bg-yellow-400 data-[state=active]:text-red-900">
                   <Shield size={16} />
                   <span>Risk Assessment</span>
                 </TabsTrigger>
-                <TabsTrigger value="reports" className="flex items-center gap-2">
+                <TabsTrigger value="reports" className="flex items-center gap-2 data-[state=active]:bg-yellow-400 data-[state=active]:text-red-900">
                   <FileChartPie size={16} />
                   <span>Reports</span>
                 </TabsTrigger>
@@ -98,14 +103,27 @@ const Index = () => {
             </Tabs>
           </div>
         ) : (
-          <div className="bg-white p-8 rounded-lg shadow-md text-center">
-            <h2 className="text-xl font-semibold text-gray-700 mb-4">Welcome to the Heartland Boys Home Platform</h2>
-            <p className="text-gray-600">Please select a youth from the dropdown above to begin managing their profile, tracking behavior, adding progress notes, and generating reports.</p>
+          <div className="bg-white p-8 rounded-lg shadow-lg text-center border-2 border-yellow-300">
+            <div className="mb-6">
+              <img 
+                src="/lovable-uploads/983078ec-ca85-495c-8d9a-65acb6523081.png" 
+                alt="Heartland Boys Home Logo" 
+                className="w-24 h-24 mx-auto mb-4 rounded-full bg-gradient-to-br from-red-100 to-yellow-100 p-2"
+              />
+            </div>
+            <h2 className="text-2xl font-bold text-red-800 mb-4">Welcome to the Heartland Boys Home Platform</h2>
+            <p className="text-red-600 text-lg">Please select a youth from the dropdown above to begin managing their profile, tracking behavior, adding progress notes, and generating reports.</p>
+            <div className="mt-6 p-4 bg-gradient-to-r from-red-100 to-yellow-100 rounded-lg border border-yellow-300">
+              <p className="text-red-700 font-medium">Building character, one day at a time.</p>
+            </div>
           </div>
         )}
       </main>
-      <footer className="bg-gray-100 py-4 text-center text-gray-600 text-sm">
-        <p>Heartland Boys Home Platform &copy; {new Date().getFullYear()}</p>
+      <footer className="heartland-gradient py-6 text-center text-yellow-100 text-sm mt-12">
+        <div className="container mx-auto px-4">
+          <p className="font-medium">Heartland Boys Home Platform &copy; {new Date().getFullYear()}</p>
+          <p className="text-yellow-200 text-xs mt-1">Empowering Youth Through Structure and Support</p>
+        </div>
       </footer>
     </div>
   );

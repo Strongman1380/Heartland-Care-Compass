@@ -12,11 +12,11 @@ interface PersonalInfoTabProps {
 
 export const PersonalInfoTab = ({ formData, handleChange, handleSelectChange }: PersonalInfoTabProps) => {
   // Get the placement authority value, ensuring it's never an empty string
-  const placementAuthorityValue = formData.placementAuthority[0] || undefined;
+  const placementAuthorityValue = formData.placementAuthority[0] && formData.placementAuthority[0].trim() !== "" ? formData.placementAuthority[0] : undefined;
   // Get the level value, ensuring it's never an empty string
-  const levelValue = formData.level || undefined;
+  const levelValue = formData.level && formData.level.trim() !== "" ? formData.level : undefined;
   // Get the estimated stay value, ensuring it's never an empty string
-  const estimatedStayValue = formData.estimatedStay || undefined;
+  const estimatedStayValue = formData.estimatedStay && formData.estimatedStay.trim() !== "" ? formData.estimatedStay : undefined;
   
   return (
     <div className="space-y-4">

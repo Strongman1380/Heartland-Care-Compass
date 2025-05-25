@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -302,12 +303,12 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
                     onChange={(e) => setSearchTerm(e.target.value)}
                   />
                 </div>
-                <Select value={selectedCategory || ""} onValueChange={(value) => handleCategoryFilter(value || null)}>
+                <Select value={selectedCategory || "all"} onValueChange={(value) => handleCategoryFilter(value === "all" ? null : value)}>
                   <SelectTrigger className="h-9 w-[130px]">
                     <SelectValue placeholder="All Categories" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All Categories</SelectItem>
+                    <SelectItem value="all">All Categories</SelectItem>
                     {NOTE_CATEGORIES.map((category) => (
                       <SelectItem key={category.value} value={category.value}>{category.label}</SelectItem>
                     ))}

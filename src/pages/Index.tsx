@@ -10,15 +10,31 @@ import { ProgressNotes } from "@/components/notes/ProgressNotes";
 import { BehaviorAnalysis } from "@/components/analysis/BehaviorAnalysis";
 import { RiskAssessment } from "@/components/assessment/RiskAssessment";
 import { ReportCenter } from "@/components/reports/ReportCenter";
-import { User, CheckSquare, FileText, BarChart2, Shield, FileChartPie, Users, ArrowLeft } from "lucide-react";
+import { EditYouthDialog } from "@/components/youth/EditYouthDialog";
+import { User, CheckSquare, FileText, BarChart2, Shield, FileChartPie, Users, ArrowLeft, Edit, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { mapYouthFromSupabase, type Youth } from "@/types/app-types";
+import { useToast } from "@/hooks/use-toast";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const Index = () => {
   const [selectedYouth, setSelectedYouth] = useState<Youth | null>(null);
   const [youths, setYouths] = useState<Youth[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("profile");
+  const [editingYouth, setEditingYouth] = useState<Youth | null>(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [youthToDelete, setYouthToDelete] = useState<Youth | null>(null);
+  const { toast } = useToast();
 
   const fetchYouths = async () => {
     try {
@@ -60,6 +76,56 @@ const Index = () => {
   const handleBackToHome = () => {
     setSelectedYouth(null);
     setActiveTab("profile");
+  };
+
+  const handleEditYouth = (youth: Youth, event: React.MouseEvent) => {
+    event.stopPropagation();
+    setEditingYouth(youth);
+  };
+
+  const handleDeleteYouth = (youth: Youth, event: React.MouseEvent) => {
+    event.stopPropagation();
+    setYouthToDelete(youth);
+    setDeleteConfirmOpen(true);
+  };
+
+  const confirmDeleteYouth = async () => {
+    if (!youthToDelete) return;
+
+    try {
+      const { error } = await supabase
+        .from('youths')
+        .delete()
+        .eq('id', youthToDelete.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Profile Deleted",
+        description: `${youthToDelete.firstName} ${youthToDelete.lastName}'s profile has been removed. 🗑️`,
+      });
+
+      // If the deleted youth was selected, go back to home
+      if (selectedYouth && selectedYouth.id === youthToDelete.id) {
+        setSelectedYouth(null);
+      }
+
+      fetchYouths();
+    } catch (error) {
+      console.error("Error deleting youth profile:", error);
+      toast({
+        title: "Error",
+        description: "Failed to delete youth profile.",
+        variant: "destructive",
+      });
+    } finally {
+      setDeleteConfirmOpen(false);
+      setYouthToDelete(null);
+    }
+  };
+
+  const formatPoints = (points: number) => {
+    return points.toLocaleString();
   };
 
   const formatDate = (date: Date | null) => {
@@ -131,7 +197,7 @@ const Index = () => {
                 {youths.map((youth) => (
                   <Card 
                     key={youth.id} 
-                    className="border-2 border-yellow-300 hover:shadow-lg transition-all duration-200 cursor-pointer hover:scale-105"
+                    className="border-2 border-yellow-300 hover:shadow-lg transition-all duration-200 cursor-pointer hover:scale-105 relative group"
                     onClick={() => handleYouthSelect(youth)}
                   >
                     <CardHeader className="text-center pb-3">
@@ -141,6 +207,28 @@ const Index = () => {
                       <CardTitle className="text-lg text-red-800">
                         {youth.firstName} {youth.lastName}
                       </CardTitle>
+                      
+                      {/* Action buttons - positioned absolutely in top right */}
+                      <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0 bg-white/80 hover:bg-yellow-100 border border-yellow-300"
+                          onClick={(e) => handleEditYouth(youth, e)}
+                          title={`Edit ${youth.firstName}'s Profile`}
+                        >
+                          <Edit className="h-4 w-4 text-amber-600" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0 bg-white/80 hover:bg-red-100 border border-red-300"
+                          onClick={(e) => handleDeleteYouth(youth, e)}
+                          title={`Delete ${youth.firstName}'s Profile`}
+                        >
+                          <Trash2 className="h-4 w-4 text-red-600" />
+                        </Button>
+                      </div>
                     </CardHeader>
                     <CardContent className="pt-0">
                       <div className="space-y-2 text-sm">
@@ -154,7 +242,7 @@ const Index = () => {
                         </div>
                         <div className="flex justify-between">
                           <span className="text-gray-600">Points:</span>
-                          <span className="font-medium">{youth.pointTotal || 0}</span>
+                          <span className="font-medium">{formatPoints(youth.pointTotal || 0)}</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-gray-600">Admission:</span>
@@ -177,6 +265,52 @@ const Index = () => {
             )}
           </div>
         </main>
+        
+        {/* Edit Youth Dialog */}
+        {editingYouth && (
+          <EditYouthDialog
+            youth={editingYouth}
+            open={!!editingYouth}
+            onClose={() => setEditingYouth(null)}
+            onSuccess={() => {
+              fetchYouths();
+              setEditingYouth(null);
+              toast({
+                title: "Success",
+                description: `Profile for ${editingYouth.firstName} ${editingYouth.lastName} updated successfully! ✨`,
+              });
+            }}
+          />
+        )}
+
+        {/* Delete Confirmation Dialog */}
+        <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will permanently delete {youthToDelete?.firstName} {youthToDelete?.lastName}'s profile and all associated data. This action cannot be undone. 😢
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => {
+                toast({
+                  title: "Delete Cancelled",
+                  description: "Delete action cancelled. Phew! 😅",
+                });
+              }}>
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={confirmDeleteYouth}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                Delete Profile
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
         <footer className="heartland-gradient py-6 text-center text-yellow-100 text-sm mt-12">
           <div className="container mx-auto px-4">
             <p className="font-medium">Heartland Boys Home Platform &copy; {new Date().getFullYear()}</p>

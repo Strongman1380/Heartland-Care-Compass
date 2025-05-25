@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,30 +10,37 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { format, startOfWeek, endOfWeek, eachDayOfInterval } from "date-fns";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, ArrowRight, Calendar, Download, FileText, TrendingUp, TrendingDown, Users } from "lucide-react";
+import { AlertCircle, ArrowRight, Calendar, Download, FileText, TrendingUp, TrendingDown, Users, History } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { fetchBehaviorPoints, saveBehaviorPoints } from "@/utils/supabase-utils";
 import { BehaviorPoints } from "@/types/app-types";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
 interface BehaviorCardProps {
   youthId: string;
   youth: any;
 }
 
-// Level system data - dividing table values by 1000 for actual functional points
+// Level system data - using full thousands for internal calculations
 const levelsData = [
-  { name: "Orientation", level: 0, cumulativePointsRequired: 120, dailyPointsForPrivileges: 10 }, // 120,000/1000, 10,000/1000
-  { name: "Level 1", level: 1, cumulativePointsRequired: 840, dailyPointsForPrivileges: 20 }, // 840,000/1000, 20,000/1000
-  { name: "Level 2", level: 2, cumulativePointsRequired: 2000, dailyPointsForPrivileges: 20 }, // 2,000,000/1000, 20,000/1000
-  { name: "Level 3", level: 3, cumulativePointsRequired: 3060, dailyPointsForPrivileges: 30 }, // 3,060,000/1000, 30,000/1000
-  { name: "Level 4", level: 4, cumulativePointsRequired: 4740, dailyPointsForPrivileges: 40 }, // 4,740,000/1000, 40,000/1000
-  { name: "Level 5", level: 5, cumulativePointsRequired: 6840, dailyPointsForPrivileges: 50 }, // 6,840,000/1000, 50,000/1000
-  { name: "Level 6", level: 6, cumulativePointsRequired: 9360, dailyPointsForPrivileges: 60 }, // 9,360,000/1000, 60,000/1000
-  { name: "Level 7", level: 7, cumulativePointsRequired: 12300, dailyPointsForPrivileges: 70 }, // 12,300,000/1000, 70,000/1000
-  { name: "Level 8", level: 8, cumulativePointsRequired: 15660, dailyPointsForPrivileges: 80 }, // 15,660,000/1000, 80,000/1000
-  { name: "Level 9", level: 9, cumulativePointsRequired: 19440, dailyPointsForPrivileges: 90 }, // 19,440,000/1000, 90,000/1000
-  { name: "Level 10", level: 10, cumulativePointsRequired: Infinity, dailyPointsForPrivileges: Infinity } // Final level
+  { name: "Orientation", level: 0, cumulativePointsRequired: 120000, dailyPointsForPrivileges: 10000 },
+  { name: "Level 1", level: 1, cumulativePointsRequired: 840000, dailyPointsForPrivileges: 20000 },
+  { name: "Level 2", level: 2, cumulativePointsRequired: 2000000, dailyPointsForPrivileges: 20000 },
+  { name: "Level 3", level: 3, cumulativePointsRequired: 3060000, dailyPointsForPrivileges: 30000 },
+  { name: "Level 4", level: 4, cumulativePointsRequired: 4740000, dailyPointsForPrivileges: 40000 },
+  { name: "Level 5", level: 5, cumulativePointsRequired: 6840000, dailyPointsForPrivileges: 50000 },
+  { name: "Level 6", level: 6, cumulativePointsRequired: 9360000, dailyPointsForPrivileges: 60000 },
+  { name: "Level 7", level: 7, cumulativePointsRequired: 12300000, dailyPointsForPrivileges: 70000 },
+  { name: "Level 8", level: 8, cumulativePointsRequired: 15660000, dailyPointsForPrivileges: 80000 },
+  { name: "Level 9", level: 9, cumulativePointsRequired: 19440000, dailyPointsForPrivileges: 90000 },
+  { name: "Level 10", level: 10, cumulativePointsRequired: Infinity, dailyPointsForPrivileges: Infinity }
 ];
+
+interface SubsystemHistoryEntry {
+  status: 'on' | 'off';
+  date: string;
+  recordedBy: string;
+}
 
 export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
   const [activeTab, setActiveTab] = useState("daily");
@@ -40,7 +48,7 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
   const [pointEntries, setPointEntries] = useState<BehaviorPoints[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [formData, setFormData] = useState({
-    dailyPoints: 0, // Single field for daily points (0-105)
+    dailyPoints: 0, // This remains 0-105 for user input
     comments: "",
     onSubsystem: false,
   });
@@ -50,6 +58,10 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
     daysRecorded: 0,
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [subsystemHistory, setSubsystemHistory] = useState<SubsystemHistoryEntry[]>([
+    { status: 'off', date: new Date().toLocaleString(), recordedBy: 'System' }
+  ]);
+  const [showSubsystemLog, setShowSubsystemLog] = useState(false);
 
   // Handle case where youth is null or undefined
   if (!youth) {
@@ -89,11 +101,29 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
   const currentLevel = getCurrentLevel();
   const nextLevel = getNextLevel();
 
+  // Format points for display (with commas)
+  const formatPoints = (points: number) => {
+    if (points === Infinity) return "N/A";
+    return points.toLocaleString();
+  };
+
+  // Convert display points (0-105) to actual points (multiply by 1000)
+  const convertToActualPoints = (displayPoints: number) => {
+    return displayPoints * 1000;
+  };
+
+  // Convert actual points to display points (divide by 1000)
+  const convertToDisplayPoints = (actualPoints: number) => {
+    return Math.round(actualPoints / 1000);
+  };
+
   useEffect(() => {
     if (youthId) {
       fetchPointEntries();
+      // Initialize subsystem status from youth data
+      setFormData(prev => ({ ...prev, onSubsystem: youth.onSubsystem || false }));
     }
-  }, [youthId]);
+  }, [youthId, youth]);
 
   const fetchPointEntries = async () => {
     try {
@@ -123,8 +153,8 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
     const averagePointsPerDay = daysRecorded > 0 ? totalPoints / daysRecorded : 0;
     
     setWeeklyAverages({
-      averagePointsPerDay,
-      totalPointsThisWeek: totalPoints,
+      averagePointsPerDay: convertToDisplayPoints(averagePointsPerDay),
+      totalPointsThisWeek: convertToDisplayPoints(totalPoints),
       daysRecorded,
     });
   };
@@ -143,7 +173,23 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
   };
 
   const handleSubsystemChange = (checked: boolean) => {
-    setFormData(prev => ({ ...prev, onSubsystem: checked }));
+    const newStatusText = checked ? 'ON' : 'OFF';
+    const confirmationMessage = `You are about to change ${youth.firstName} ${youth.lastName}'s subsystem status to '${newStatusText}' as of ${new Date().toLocaleString()}. This will be recorded. Proceed?`;
+    
+    if (confirm(confirmationMessage)) {
+      setFormData(prev => ({ ...prev, onSubsystem: checked }));
+      
+      // Add to subsystem history
+      const historyEntry: SubsystemHistoryEntry = {
+        status: checked ? 'on' : 'off',
+        date: new Date().toLocaleString(),
+        recordedBy: 'System User'
+      };
+      
+      setSubsystemHistory(prev => [...prev, historyEntry]);
+      
+      toast.success(`Subsystem status for ${youth.firstName} ${youth.lastName} changed to ${newStatusText} and recorded.`);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -151,23 +197,26 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
     try {
       setIsSubmitting(true);
       
+      // Convert display points (0-105) to actual points (multiply by 1000)
+      const actualPoints = convertToActualPoints(formData.dailyPoints);
+      
       const pointEntry = {
         youth_id: youthId,
         date: selectedDate,
-        morningPoints: 0, // Keep for compatibility but not used
-        afternoonPoints: 0, // Keep for compatibility but not used  
-        eveningPoints: 0, // Keep for compatibility but not used
-        totalPoints: formData.dailyPoints,
+        morningPoints: 0, // Keep for compatibility
+        afternoonPoints: 0, // Keep for compatibility  
+        eveningPoints: 0, // Keep for compatibility
+        totalPoints: actualPoints, // Store the actual points (in thousands)
         comments: formData.comments,
       };
       
       await saveBehaviorPoints(youthId, pointEntry);
       
       // Check if points meet privilege requirement
-      if (formData.dailyPoints >= currentLevel.dailyPointsForPrivileges) {
-        toast.success(`Great job! Points saved successfully. Privileges earned for tomorrow.`);
+      if (actualPoints >= currentLevel.dailyPointsForPrivileges) {
+        toast.success(`Great job! ${formatPoints(actualPoints)} points saved successfully. Privileges earned for tomorrow.`);
       } else {
-        toast.warning(`Points saved, but below privilege requirement of ${currentLevel.dailyPointsForPrivileges} points.`);
+        toast.warning(`Points saved (${formatPoints(actualPoints)}), but below privilege requirement of ${formatPoints(currentLevel.dailyPointsForPrivileges)} points.`);
       }
       
       // Reset form
@@ -187,12 +236,10 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
   };
 
   const handleLevelUp = () => {
-    // This would trigger level up logic
     toast.success(`Congratulations! Ready to advance to ${nextLevel?.name || 'next level'}!`);
   };
 
   const handleLevelDemotion = () => {
-    // This would trigger level demotion logic
     toast.warning("Level demotion recorded. Points for current level reset to 0.");
   };
 
@@ -202,7 +249,7 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
 
   const getPointsByDate = (dateString: string) => {
     const entry = pointEntries.find(entry => format(entry.date as Date, 'yyyy-MM-dd') === dateString);
-    return entry?.totalPoints || 0;
+    return entry ? convertToDisplayPoints(entry.totalPoints) : 0;
   };
 
   // Chart data for the weekly view
@@ -220,15 +267,62 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
         day: format(day, 'EEE'),
         fullDate: format(day, 'MMM d'),
         points,
-        threshold: currentLevel.dailyPointsForPrivileges,
+        threshold: convertToDisplayPoints(currentLevel.dailyPointsForPrivileges),
       };
     });
   };
 
   const isEligibleForLevelUp = () => {
-    // This would check if user has enough cumulative points for next level
-    // For now, we'll simulate this
-    return youth.pointTotal >= currentLevel.cumulativePointsRequired;
+    // Convert youth total points to thousands for comparison
+    const youthTotalInThousands = (youth.pointTotal || 0) * 1000;
+    return youthTotalInThousands >= currentLevel.cumulativePointsRequired;
+  };
+
+  const renderSubsystemLog = () => {
+    return (
+      <Dialog open={showSubsystemLog} onOpenChange={setShowSubsystemLog}>
+        <DialogTrigger asChild>
+          <Button variant="outline" size="sm">
+            <History size={16} className="mr-2" />
+            Subsystem Log
+          </Button>
+        </DialogTrigger>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Subsystem Change Log</DialogTitle>
+            <DialogDescription>
+              Review the history of subsystem status changes for {youth.firstName} {youth.lastName}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-96 overflow-y-auto">
+            {subsystemHistory.length > 0 ? (
+              <ul className="space-y-2">
+                {[...subsystemHistory].reverse().map((entry, index) => (
+                  <li key={index} className="flex justify-between items-center p-3 bg-gray-50 rounded-md">
+                    <span className={`font-medium ${entry.status === 'on' ? 'text-green-600' : 'text-red-600'}`}>
+                      {entry.status.toUpperCase()}
+                    </span>
+                    <span className="text-sm text-gray-600">
+                      {entry.date} - by {entry.recordedBy}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-gray-500 text-center">No subsystem changes recorded yet.</p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  };
+
+  const getLastSubsystemChange = () => {
+    if (subsystemHistory.length === 0) return "(No subsystem history)";
+    const lastEntry = subsystemHistory[subsystemHistory.length - 1];
+    const statusText = lastEntry.status === 'on' ? 'On Subsystem' : 'Off Subsystem';
+    const datePart = lastEntry.date.split(',')[0];
+    return `(${statusText} since ${datePart})`;
   };
 
   return (
@@ -248,6 +342,7 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
             <Download size={16} className="mr-2" />
             Export Data
           </Button>
+          {renderSubsystemLog()}
         </div>
       </div>
 
@@ -265,24 +360,26 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
                   {currentLevel.name}
                   {formData.onSubsystem && <span className="text-sm text-orange-600 ml-2">(Subsystem)</span>}
                 </p>
+                <p className="text-xs text-gray-500 mt-1">{getLastSubsystemChange()}</p>
               </div>
               
               <div>
                 <Label className="text-sm font-medium text-gray-500">Required Daily Points for Privileges</Label>
-                <p className="text-lg font-semibold">{currentLevel.dailyPointsForPrivileges} points</p>
+                <p className="text-lg font-semibold">{formatPoints(currentLevel.dailyPointsForPrivileges)} points</p>
+                <p className="text-xs text-gray-500">({convertToDisplayPoints(currentLevel.dailyPointsForPrivileges)} on 0-105 scale)</p>
               </div>
               
               {nextLevel && (
                 <div>
                   <Label className="text-sm font-medium text-gray-500">Points for Next Level</Label>
                   <p className="text-lg font-semibold">
-                    {youth.pointTotal || 0} / {currentLevel.cumulativePointsRequired}
+                    {formatPoints((youth.pointTotal || 0) * 1000)} / {formatPoints(currentLevel.cumulativePointsRequired)}
                   </p>
                   <div className="w-full bg-gray-200 rounded-full h-2 mt-1">
                     <div 
                       className="bg-blue-500 h-2 rounded-full" 
                       style={{ 
-                        width: `${Math.min(100, ((youth.pointTotal || 0) / currentLevel.cumulativePointsRequired) * 100)}%` 
+                        width: `${Math.min(100, (((youth.pointTotal || 0) * 1000) / currentLevel.cumulativePointsRequired) * 100)}%` 
                       }}
                     ></div>
                   </div>
@@ -367,20 +464,23 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
                         onChange={handleInputChange}
                         className="max-w-xs"
                       />
+                      <small className="block text-xs text-gray-500 mt-1 italic">
+                        Friendly Tip: Each point (0-105) adds 1,000 points to level goals!
+                      </small>
                     </div>
                     
                     <div>
                       <div className="flex items-center justify-between mb-2">
                         <Label htmlFor="totalPoints">Total Daily Points</Label>
                         <span className="text-xl font-bold">
-                          {formData.dailyPoints}/105
+                          {formData.dailyPoints}/105 ({formatPoints(convertToActualPoints(formData.dailyPoints))})
                         </span>
                       </div>
                       
                       <div className="w-full bg-gray-200 rounded-full h-4">
                         <div 
                           className={`h-4 rounded-full ${
-                            formData.dailyPoints >= currentLevel.dailyPointsForPrivileges 
+                            convertToActualPoints(formData.dailyPoints) >= currentLevel.dailyPointsForPrivileges 
                               ? "bg-green-500" 
                               : "bg-red-500"
                           }`}
@@ -391,7 +491,8 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
                       </div>
                       
                       <p className="text-sm text-gray-500 mt-1">
-                        Required for privileges: {currentLevel.dailyPointsForPrivileges} points
+                        Required for privileges: {formatPoints(currentLevel.dailyPointsForPrivileges)} points 
+                        ({convertToDisplayPoints(currentLevel.dailyPointsForPrivileges)} on 0-105 scale)
                       </p>
                     </div>
                     
@@ -418,12 +519,12 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
                       </Label>
                     </div>
                     
-                    {formData.dailyPoints < currentLevel.dailyPointsForPrivileges && formData.dailyPoints > 0 && (
+                    {convertToActualPoints(formData.dailyPoints) < currentLevel.dailyPointsForPrivileges && formData.dailyPoints > 0 && (
                       <Alert className="bg-amber-50 border-amber-200">
                         <AlertCircle className="h-4 w-4 text-amber-600" />
                         <AlertTitle className="text-amber-800">Below Privilege Requirement</AlertTitle>
                         <AlertDescription className="text-amber-700">
-                          Current points ({formData.dailyPoints}) are below the minimum required for privileges ({currentLevel.dailyPointsForPrivileges} points). 
+                          Current points ({formatPoints(convertToActualPoints(formData.dailyPoints))}) are below the minimum required for privileges ({formatPoints(currentLevel.dailyPointsForPrivileges)} points). 
                           This may affect tomorrow's privileges.
                         </AlertDescription>
                       </Alert>
@@ -499,12 +600,12 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
                             <div>
                               <p className="font-medium">{format(entry.date as Date, 'MMM d, yyyy')}</p>
                               <p className="text-sm text-gray-500">
-                                Daily Points: {entry.totalPoints}
+                                Display Points: {convertToDisplayPoints(entry.totalPoints)} | Actual: {formatPoints(entry.totalPoints)}
                               </p>
                             </div>
                             <div className="text-right">
                               <p className={`text-lg font-bold ${entry.totalPoints >= currentLevel.dailyPointsForPrivileges ? 'text-green-600' : 'text-red-600'}`}>
-                                {entry.totalPoints}/105
+                                {convertToDisplayPoints(entry.totalPoints)}/105
                               </p>
                             </div>
                           </div>

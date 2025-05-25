@@ -9,6 +9,17 @@ import { format } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { Youth } from "@/types/app-types";
 import { useToast } from "@/hooks/use-toast";
+import { EditYouthDialog } from "./EditYouthDialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface YouthProfilesTableProps {
   youths: Youth[];
@@ -19,6 +30,9 @@ interface YouthProfilesTableProps {
 
 export const YouthProfilesTable = ({ youths, loading, onYouthSelect, onYouthUpdated }: YouthProfilesTableProps) => {
   const [selectedYouthIds, setSelectedYouthIds] = useState<string[]>([]);
+  const [editingYouth, setEditingYouth] = useState<Youth | null>(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [youthToDelete, setYouthToDelete] = useState<Youth | null>(null);
   const { toast } = useToast();
 
   const handleSelectAll = (checked: boolean) => {
@@ -34,6 +48,45 @@ export const YouthProfilesTable = ({ youths, loading, onYouthSelect, onYouthUpda
       setSelectedYouthIds(prev => [...prev, youthId]);
     } else {
       setSelectedYouthIds(prev => prev.filter(id => id !== youthId));
+    }
+  };
+
+  const handleEditYouth = (youth: Youth) => {
+    setEditingYouth(youth);
+  };
+
+  const handleDeleteYouth = (youth: Youth) => {
+    setYouthToDelete(youth);
+    setDeleteConfirmOpen(true);
+  };
+
+  const confirmDeleteYouth = async () => {
+    if (!youthToDelete) return;
+
+    try {
+      const { error } = await supabase
+        .from('youths')
+        .delete()
+        .eq('id', youthToDelete.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: `${youthToDelete.firstName} ${youthToDelete.lastName}'s profile has been deleted.`,
+      });
+
+      onYouthUpdated();
+    } catch (error) {
+      console.error("Error deleting youth profile:", error);
+      toast({
+        title: "Error",
+        description: "Failed to delete youth profile.",
+        variant: "destructive",
+      });
+    } finally {
+      setDeleteConfirmOpen(false);
+      setYouthToDelete(null);
     }
   };
 
@@ -134,105 +187,133 @@ export const YouthProfilesTable = ({ youths, loading, onYouthSelect, onYouthUpda
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex justify-between items-center">
-          <div>
-            <CardTitle>Youth Profiles ({youths.length})</CardTitle>
-            <CardDescription>
-              {selectedYouthIds.length > 0 && `${selectedYouthIds.length} selected`}
-            </CardDescription>
+    <>
+      <Card>
+        <CardHeader>
+          <div className="flex justify-between items-center">
+            <div>
+              <CardTitle>Youth Profiles ({youths.length})</CardTitle>
+              <CardDescription>
+                {selectedYouthIds.length > 0 && `${selectedYouthIds.length} selected`}
+              </CardDescription>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleArchiveSelected}
+                disabled={selectedYouthIds.length === 0}
+              >
+                <Archive className="h-4 w-4 mr-2" />
+                Archive Selected
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={handleDeleteSelected}
+                disabled={selectedYouthIds.length === 0}
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Delete Selected
+              </Button>
+            </div>
           </div>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleArchiveSelected}
-              disabled={selectedYouthIds.length === 0}
-            >
-              <Archive className="h-4 w-4 mr-2" />
-              Archive Selected
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                if (selectedYouthIds.length === 1) {
-                  const youth = youths.find(y => y.id === selectedYouthIds[0]);
-                  if (youth) onYouthSelect(youth);
-                } else {
-                  toast({
-                    title: "Single selection required",
-                    description: "Please select exactly one youth profile to edit.",
-                    variant: "destructive",
-                  });
-                }
-              }}
-              disabled={selectedYouthIds.length !== 1}
-            >
-              <Edit className="h-4 w-4 mr-2" />
-              Edit Profile
-            </Button>
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={handleDeleteSelected}
-              disabled={selectedYouthIds.length === 0}
-            >
-              <Trash2 className="h-4 w-4 mr-2" />
-              Delete Selected
-            </Button>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-12">
-                <Checkbox
-                  checked={selectedYouthIds.length === youths.length && youths.length > 0}
-                  onCheckedChange={handleSelectAll}
-                />
-              </TableHead>
-              <TableHead>Name</TableHead>
-              <TableHead>Age</TableHead>
-              <TableHead>Level</TableHead>
-              <TableHead>Points</TableHead>
-              <TableHead>Admission Date</TableHead>
-              <TableHead>Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {youths.map((youth) => (
-              <TableRow key={youth.id}>
-                <TableCell>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-12">
                   <Checkbox
-                    checked={selectedYouthIds.includes(youth.id)}
-                    onCheckedChange={(checked) => handleSelectYouth(youth.id, checked as boolean)}
+                    checked={selectedYouthIds.length === youths.length && youths.length > 0}
+                    onCheckedChange={handleSelectAll}
                   />
-                </TableCell>
-                <TableCell className="font-medium">
-                  {youth.firstName} {youth.lastName}
-                </TableCell>
-                <TableCell>{youth.age || "N/A"}</TableCell>
-                <TableCell>Level {youth.level}</TableCell>
-                <TableCell>{youth.pointTotal || 0}</TableCell>
-                <TableCell>{formatDate(youth.admissionDate)}</TableCell>
-                <TableCell>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => onYouthSelect(youth)}
-                  >
-                    View Profile
-                  </Button>
-                </TableCell>
+                </TableHead>
+                <TableHead>Name</TableHead>
+                <TableHead>Age</TableHead>
+                <TableHead>Level</TableHead>
+                <TableHead>Points</TableHead>
+                <TableHead>Admission Date</TableHead>
+                <TableHead>Actions</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </CardContent>
-    </Card>
+            </TableHeader>
+            <TableBody>
+              {youths.map((youth) => (
+                <TableRow key={youth.id}>
+                  <TableCell>
+                    <Checkbox
+                      checked={selectedYouthIds.includes(youth.id)}
+                      onCheckedChange={(checked) => handleSelectYouth(youth.id, checked as boolean)}
+                    />
+                  </TableCell>
+                  <TableCell className="font-medium">
+                    {youth.firstName} {youth.lastName}
+                  </TableCell>
+                  <TableCell>{youth.age || "N/A"}</TableCell>
+                  <TableCell>Level {youth.level}</TableCell>
+                  <TableCell>{youth.pointTotal || 0}</TableCell>
+                  <TableCell>{formatDate(youth.admissionDate)}</TableCell>
+                  <TableCell>
+                    <div className="flex space-x-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => onYouthSelect(youth)}
+                      >
+                        View Profile
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleEditYouth(youth)}
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDeleteYouth(youth)}
+                        className="text-red-600 hover:text-red-800"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      {editingYouth && (
+        <EditYouthDialog
+          youth={editingYouth}
+          open={!!editingYouth}
+          onClose={() => setEditingYouth(null)}
+          onSuccess={onYouthUpdated}
+        />
+      )}
+
+      <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete {youthToDelete?.firstName} {youthToDelete?.lastName}'s profile and all associated data. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDeleteYouth}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Delete Profile
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 };

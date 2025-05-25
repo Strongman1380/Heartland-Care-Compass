@@ -278,7 +278,7 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
 
   const getPointsByDate = (dateString: string) => {
     const entry = pointEntries.find(entry => format(entry.date as Date, 'yyyy-MM-dd') === dateString);
-    return entry ? convertToDisplayPoints(entry.totalPoints) : 0;
+    return entry ? entry.totalPoints : 0;
   };
 
   // Chart data for the weekly view

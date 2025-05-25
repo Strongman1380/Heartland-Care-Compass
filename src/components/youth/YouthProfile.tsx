@@ -6,11 +6,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowLeft, Edit } from "lucide-react";
 import { format } from "date-fns";
 import { Youth } from "@/types/app-types";
-import { PersonalInfoTab } from "./PersonalInfoTab";
-import { BackgroundTab } from "./BackgroundTab";
-import { EducationTab } from "./EducationTab";
-import { MedicalTab } from "./MedicalTab";
-import { MentalHealthTab } from "./MentalHealthTab";
+import { PersonalInfoProfileTab } from "./PersonalInfoProfileTab";
+import { BackgroundProfileTab } from "./BackgroundProfileTab";
+import { EducationProfileTab } from "./EducationProfileTab";
+import { MedicalProfileTab } from "./MedicalProfileTab";
+import { MentalHealthProfileTab } from "./MentalHealthProfileTab";
 import { EditYouthDialog } from "./EditYouthDialog";
 
 interface YouthProfileProps {
@@ -92,23 +92,23 @@ export const YouthProfile = ({ youth, onBack, onYouthUpdated }: YouthProfileProp
             </TabsList>
 
             <TabsContent value="personal">
-              <PersonalInfoTab youth={youth} />
+              <PersonalInfoProfileTab youth={youth} />
             </TabsContent>
 
             <TabsContent value="background">
-              <BackgroundTab youth={youth} />
+              <BackgroundProfileTab youth={youth} />
             </TabsContent>
 
             <TabsContent value="education">
-              <EducationTab youth={youth} />
+              <EducationProfileTab youth={youth} />
             </TabsContent>
 
             <TabsContent value="medical">
-              <MedicalTab youth={youth} />
+              <MedicalProfileTab youth={youth} />
             </TabsContent>
 
             <TabsContent value="mental-health">
-              <MentalHealthTab youth={youth} />
+              <MentalHealthProfileTab youth={youth} />
             </TabsContent>
           </Tabs>
         </CardContent>

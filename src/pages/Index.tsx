@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Header } from "@/components/layout/Header";
 import { EditYouthDialog } from "@/components/youth/EditYouthDialog";
@@ -7,6 +6,7 @@ import { YouthDetailView } from "@/components/home/YouthDetailView";
 import { supabase } from "@/integrations/supabase/client";
 import { mapYouthFromSupabase, type Youth } from "@/types/app-types";
 import { useToast } from "@/hooks/use-toast";
+import { populateMockData } from "@/utils/populateMockData";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -60,6 +60,13 @@ const Index = () => {
   useEffect(() => {
     fetchYouths();
   }, []);
+
+  const handleLoadMockData = async () => {
+    const success = await populateMockData();
+    if (success) {
+      fetchYouths();
+    }
+  };
 
   const handleYouthSelect = (youth: Youth) => {
     setSelectedYouth(youth);
@@ -138,15 +145,32 @@ const Index = () => {
       <Header />
       <main className="container mx-auto px-4 py-8">
         {!selectedYouth ? (
-          <YouthSelectionView
-            youths={youths}
-            loading={loading}
-            onYouthSelect={handleYouthSelect}
-            onEditYouth={handleEditYouth}
-            onDeleteYouth={handleDeleteYouth}
-            formatPoints={formatPoints}
-            formatDate={formatDate}
-          />
+          <>
+            <YouthSelectionView
+              youths={youths}
+              loading={loading}
+              onYouthSelect={handleYouthSelect}
+              onEditYouth={handleEditYouth}
+              onDeleteYouth={handleDeleteYouth}
+              formatPoints={formatPoints}
+              formatDate={formatDate}
+            />
+            
+            {/* Show Load Mock Data button only when there are no youths */}
+            {!loading && youths.length === 0 && (
+              <div className="text-center mt-8">
+                <button
+                  onClick={handleLoadMockData}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
+                >
+                  Load Sample Data
+                </button>
+                <p className="text-gray-600 text-sm mt-2">
+                  Click to populate the system with sample youth profiles for testing
+                </p>
+              </div>
+            )}
+          </>
         ) : (
           <YouthDetailView
             selectedYouth={selectedYouth}

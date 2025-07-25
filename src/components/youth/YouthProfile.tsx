@@ -13,6 +13,7 @@ import { MedicalProfileTab } from "./MedicalProfileTab";
 import { MentalHealthProfileTab } from "./MentalHealthProfileTab";
 import { RatingsProfileTab } from "./RatingsProfileTab";
 import { DailyRatingsTab } from "./DailyRatingsTab";
+import { ProgressEvaluationReport } from "../reports/ProgressEvaluationReport";
 import { EditYouthDialog } from "./EditYouthDialog";
 
 interface YouthProfileProps {
@@ -85,7 +86,7 @@ export const YouthProfile = ({ youth, onBack, onYouthUpdated }: YouthProfileProp
 
         <CardContent className="p-6">
           <Tabs defaultValue="personal" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-7">
+            <TabsList className="grid w-full grid-cols-8">
               <TabsTrigger value="personal">Personal</TabsTrigger>
               <TabsTrigger value="background">Background</TabsTrigger>
               <TabsTrigger value="education">Education</TabsTrigger>
@@ -93,6 +94,7 @@ export const YouthProfile = ({ youth, onBack, onYouthUpdated }: YouthProfileProp
               <TabsTrigger value="mental-health">Mental Health</TabsTrigger>
               <TabsTrigger value="ratings">Ratings</TabsTrigger>
               <TabsTrigger value="daily-ratings">Daily Scoring</TabsTrigger>
+              <TabsTrigger value="progress-reports">Progress Reports</TabsTrigger>
             </TabsList>
 
             <TabsContent value="personal">
@@ -121,6 +123,10 @@ export const YouthProfile = ({ youth, onBack, onYouthUpdated }: YouthProfileProp
 
             <TabsContent value="daily-ratings">
               <DailyRatingsTab youth={youth} />
+            </TabsContent>
+
+            <TabsContent value="progress-reports">
+              <ProgressEvaluationReport youth={youth} />
             </TabsContent>
           </Tabs>
         </CardContent>

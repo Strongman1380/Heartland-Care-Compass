@@ -241,8 +241,9 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
       
       await saveBehaviorPoints(youthId, pointEntry);
       
-      // Update youth's total points
-      const newTotal = (youth.pointtotal || 0) + (formData.dailyPoints / 1000);
+      // Update youth's total points - add the daily points directly (already in thousands)
+      const currentTotal = youth.pointtotal || 0;
+      const newTotal = currentTotal + formData.dailyPoints;
       const { error: updateError } = await supabase
         .from("youths")
         .update({ pointtotal: newTotal })
@@ -250,6 +251,9 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
         
       if (!updateError) {
         youth.pointtotal = newTotal; // Update local state
+        console.log(`Updated youth total points: ${currentTotal} + ${formData.dailyPoints} = ${newTotal}`);
+      } else {
+        console.error("Error updating youth total:", updateError);
       }
       
       // Check if points meet privilege requirement
@@ -359,8 +363,9 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
   };
 
   const isEligibleForLevelUp = () => {
-    const youthTotalInThousands = (youth.pointtotal || youth.pointTotal || 0) * 1000;
-    return youthTotalInThousands >= currentLevel.cumulativePointsRequired;
+    // Points are already stored in thousands in the database
+    const youthTotal = youth.pointtotal || 0;
+    return youthTotal >= currentLevel.cumulativePointsRequired;
   };
 
   const renderSubsystemLog = () => {
@@ -457,7 +462,7 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
                 <div>
                   <Label className="text-sm font-medium text-gray-500">Points for Next Level</Label>
                   <p className="text-lg font-semibold">
-                    {formatPoints((youth.pointtotal || youth.pointTotal || 0) * 1000)} / {formatPoints(currentLevel.cumulativePointsRequired)}
+                    {formatPoints(youth.pointtotal || 0)} / {formatPoints(currentLevel.cumulativePointsRequired)}
                   </p>
                   <div className="w-full bg-gray-200 rounded-full h-2 mt-1">
                     <div 
@@ -465,7 +470,7 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
                         isEligibleForLevelUp() ? 'bg-green-500 animate-pulse' : 'bg-blue-500'
                       }`}
                       style={{ 
-                        width: `${Math.min(100, (((youth.pointtotal || youth.pointTotal || 0) * 1000) / currentLevel.cumulativePointsRequired) * 100)}%` 
+                        width: `${Math.min(100, ((youth.pointtotal || 0) / currentLevel.cumulativePointsRequired) * 100)}%` 
                       }}
                     ></div>
                   </div>

@@ -47,6 +47,20 @@ export interface ProgressNote {
   createdAt?: Date | null;
 }
 
+export interface DailyRating {
+  id: string;
+  youth_id: string;
+  date?: Date | null;
+  peerInteraction?: number | null; // 0-5 rating
+  adultInteraction?: number | null; // 0-5 rating
+  investmentLevel?: number | null; // 0-5 rating
+  dealAuthority?: number | null; // 0-5 rating
+  staff?: string | null;
+  comments?: string | null;
+  createdAt?: Date | null;
+  updatedAt?: Date | null;
+}
+
 // Helper functions to convert between Supabase and app types
 export const mapYouthFromSupabase = (data: any): Youth => {
   return {
@@ -97,5 +111,21 @@ export const mapNoteFromSupabase = (data: any): ProgressNote => {
     rating: data.rating,
     staff: data.staff,
     createdAt: data.createdat ? new Date(data.createdat) : null
+  };
+};
+
+export const mapDailyRatingFromSupabase = (data: any): DailyRating => {
+  return {
+    id: data.id,
+    youth_id: data.youth_id,
+    date: data.date ? new Date(data.date) : null,
+    peerInteraction: data.peer_interaction,
+    adultInteraction: data.adult_interaction,
+    investmentLevel: data.investment_level,
+    dealAuthority: data.deal_authority,
+    staff: data.staff,
+    comments: data.comments,
+    createdAt: data.created_at ? new Date(data.created_at) : null,
+    updatedAt: data.updated_at ? new Date(data.updated_at) : null
   };
 };

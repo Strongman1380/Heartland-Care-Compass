@@ -1,0 +1,406 @@
+import React, { useState, useEffect } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { supabase } from '@/integrations/supabase/client';
+import { TrendingUp, TrendingDown, Users, FileText, AlertTriangle, CheckCircle } from 'lucide-react';
+import { Header } from '@/components/layout/Header';
+
+interface AssessmentData {
+  worksheets: any[];
+  riskassessments: any[];
+  notes: any[];
+  points: any[];
+  daily_ratings: any[];
+  youths: any[];
+}
+
+interface KPIMetrics {
+  totalAssessments: number;
+  totalYouth: number;
+  averageRiskLevel: string;
+  completionRate: number;
+  improvementTrend: number;
+  lastMonthAssessments: number;
+}
+
+const AssessmentKPIDashboard = () => {
+  const [data, setData] = useState<AssessmentData>({
+    worksheets: [],
+    riskassessments: [],
+    notes: [],
+    points: [],
+    daily_ratings: [],
+    youths: []
+  });
+  const [kpiMetrics, setKpiMetrics] = useState<KPIMetrics>({
+    totalAssessments: 0,
+    totalYouth: 0,
+    averageRiskLevel: 'Low',
+    completionRate: 0,
+    improvementTrend: 0,
+    lastMonthAssessments: 0
+  });
+  const [timeframe, setTimeframe] = useState('month');
+  const [isLoading, setIsLoading] = useState(true);
+  const [chartData, setChartData] = useState({
+    assessmentTrends: [],
+    riskLevelDistribution: [],
+    pointTrends: [],
+    completionStats: []
+  });
+
+  useEffect(() => {
+    fetchAllAssessmentData();
+  }, []);
+
+  useEffect(() => {
+    if (data.youths.length > 0) {
+      processKPIData();
+    }
+  }, [data, timeframe]);
+
+  const fetchAllAssessmentData = async () => {
+    setIsLoading(true);
+    try {
+      const [worksheetsRes, riskRes, notesRes, pointsRes, ratingsRes, youthsRes] = await Promise.all([
+        supabase.from('worksheets' as any).select('*').order('createdat', { ascending: false }),
+        supabase.from('riskassessments' as any).select('*').order('createdat', { ascending: false }),
+        supabase.from('notes').select('*').order('createdat', { ascending: false }),
+        supabase.from('points').select('*').order('createdat', { ascending: false }),
+        supabase.from('daily_ratings').select('*').order('created_at', { ascending: false }),
+        supabase.from('youths').select('*').order('createdat', { ascending: false })
+      ]);
+
+      setData({
+        worksheets: worksheetsRes.data || [],
+        riskassessments: riskRes.data || [],
+        notes: notesRes.data || [],
+        points: pointsRes.data || [],
+        daily_ratings: ratingsRes.data || [],
+        youths: youthsRes.data || []
+      });
+    } catch (error) {
+      console.error('Error fetching assessment data:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const processKPIData = () => {
+    const now = new Date();
+    const getTimeframeDate = () => {
+      const date = new Date();
+      switch (timeframe) {
+        case 'week': return new Date(date.setDate(date.getDate() - 7));
+        case 'month': return new Date(date.setMonth(date.getMonth() - 1));
+        case 'quarter': return new Date(date.setMonth(date.getMonth() - 3));
+        default: return new Date(date.setMonth(date.getMonth() - 1));
+      }
+    };
+
+    const timeframeDate = getTimeframeDate();
+    
+    // Calculate KPI metrics
+    const totalAssessments = data.worksheets.length + data.riskassessments.length;
+    const totalYouth = data.youths.length;
+    
+    // Risk level distribution
+    const riskLevels = data.riskassessments.map(assessment => assessment.overallrisklevel || 'Unknown');
+    const riskCounts = riskLevels.reduce((acc, level) => {
+      acc[level] = (acc[level] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+
+    const riskLevelDistribution = Object.entries(riskCounts).map(([level, count]) => ({
+      name: level,
+      value: count,
+      percentage: data.riskassessments.length > 0 ? (((count as number) / data.riskassessments.length) * 100).toFixed(1) : '0'
+    }));
+
+    // Assessment trends over time
+    const assessmentsByMonth = {};
+    [...data.worksheets, ...data.riskassessments].forEach(assessment => {
+      const date = new Date(assessment.createdat || assessment.assessmentdate);
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      assessmentsByMonth[monthKey] = (assessmentsByMonth[monthKey] || 0) + 1;
+    });
+
+    const assessmentTrends = Object.entries(assessmentsByMonth)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .slice(-6)
+      .map(([month, count]) => ({
+        month,
+        assessments: count
+      }));
+
+    // Point trends for improvement tracking
+    const pointsByMonth = {};
+    data.points.forEach(point => {
+      const date = new Date(point.createdat);
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      if (!pointsByMonth[monthKey]) {
+        pointsByMonth[monthKey] = { total: 0, count: 0 };
+      }
+      pointsByMonth[monthKey].total += (point.totalpoints as number) || 0;
+      pointsByMonth[monthKey].count += 1;
+    });
+
+    const pointTrends = Object.entries(pointsByMonth)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .slice(-6)
+      .map(([month, data]: [string, any]) => ({
+        month,
+        averagePoints: data.count > 0 ? (data.total / data.count).toFixed(1) : '0'
+      }));
+
+    // Completion stats
+    const youthWithAssessments = new Set([
+      ...data.worksheets.map(w => w.youth_id),
+      ...data.riskassessments.map(r => r.youth_id)
+    ]);
+    
+    const completionRate = totalYouth > 0 ? (youthWithAssessments.size / totalYouth) * 100 : 0;
+
+    // Recent assessments (last month)
+    const lastMonth = new Date();
+    lastMonth.setMonth(lastMonth.getMonth() - 1);
+    const lastMonthAssessments = [...data.worksheets, ...data.riskassessments]
+      .filter(assessment => new Date(assessment.createdat || assessment.assessmentdate) >= lastMonth).length;
+
+    // Calculate improvement trend
+    const recentPoints = pointTrends.slice(-2);
+    const improvementTrend = recentPoints.length === 2 
+      ? ((parseFloat(String(recentPoints[1].averagePoints)) - parseFloat(String(recentPoints[0].averagePoints))) / parseFloat(String(recentPoints[0].averagePoints))) * 100
+      : 0;
+
+    setKpiMetrics({
+      totalAssessments,
+      totalYouth,
+      averageRiskLevel: Object.keys(riskCounts).reduce((a, b) => riskCounts[a] > riskCounts[b] ? a : b, 'Low'),
+      completionRate,
+      improvementTrend,
+      lastMonthAssessments
+    });
+
+    setChartData({
+      assessmentTrends: assessmentTrends as any,
+      riskLevelDistribution: riskLevelDistribution as any,
+      pointTrends: pointTrends as any,
+      completionStats: [
+        { name: 'Completed Assessments', value: youthWithAssessments.size },
+        { name: 'Pending Assessments', value: totalYouth - youthWithAssessments.size }
+      ] as any
+    });
+  };
+
+  const getRiskLevelColor = (level: string) => {
+    switch (level.toLowerCase()) {
+      case 'low': return '#10b981';
+      case 'moderate': return '#f59e0b';
+      case 'high': return '#ef4444';
+      case 'very high': return '#dc2626';
+      default: return '#6b7280';
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <div className="container mx-auto px-4 py-8">
+          <div className="flex items-center justify-center h-64">
+            <div className="text-lg">Loading assessment data...</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-background">
+      <Header />
+      <div className="container mx-auto px-4 py-8">
+        <div className="flex justify-between items-center mb-8">
+          <div>
+            <h1 className="text-3xl font-bold text-foreground">Assessment KPI Dashboard</h1>
+            <p className="text-muted-foreground mt-2">Track assessment progress and youth improvements</p>
+          </div>
+          <Select value={timeframe} onValueChange={setTimeframe}>
+            <SelectTrigger className="w-40">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="week">Past Week</SelectItem>
+              <SelectItem value="month">Past Month</SelectItem>
+              <SelectItem value="quarter">Past Quarter</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* KPI Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Assessments</CardTitle>
+              <FileText className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{kpiMetrics.totalAssessments}</div>
+              <p className="text-xs text-muted-foreground">
+                {kpiMetrics.lastMonthAssessments} this month
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Active Youth</CardTitle>
+              <Users className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{kpiMetrics.totalYouth}</div>
+              <p className="text-xs text-muted-foreground">
+                {kpiMetrics.completionRate.toFixed(1)}% assessed
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Improvement Trend</CardTitle>
+              {kpiMetrics.improvementTrend >= 0 ? (
+                <TrendingUp className="h-4 w-4 text-green-600" />
+              ) : (
+                <TrendingDown className="h-4 w-4 text-red-600" />
+              )}
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {kpiMetrics.improvementTrend >= 0 ? '+' : ''}
+                {kpiMetrics.improvementTrend.toFixed(1)}%
+              </div>
+              <p className="text-xs text-muted-foreground">Point average change</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Avg Risk Level</CardTitle>
+              <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{kpiMetrics.averageRiskLevel}</div>
+              <Badge variant="outline" className="text-xs">
+                Most Common
+              </Badge>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Charts */}
+        <Tabs defaultValue="trends" className="space-y-6">
+          <TabsList>
+            <TabsTrigger value="trends">Assessment Trends</TabsTrigger>
+            <TabsTrigger value="risk">Risk Distribution</TabsTrigger>
+            <TabsTrigger value="progress">Progress Tracking</TabsTrigger>
+            <TabsTrigger value="completion">Completion Stats</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="trends">
+            <Card>
+              <CardHeader>
+                <CardTitle>Assessment Completion Trends</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={400}>
+                  <LineChart data={chartData.assessmentTrends}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="month" />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Line type="monotone" dataKey="assessments" stroke="hsl(var(--primary))" strokeWidth={2} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="risk">
+            <Card>
+              <CardHeader>
+                <CardTitle>Risk Level Distribution</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={400}>
+                  <PieChart>
+                    <Pie
+                      data={chartData.riskLevelDistribution}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={({ name, percentage }) => `${name}: ${percentage}%`}
+                      outerRadius={80}
+                      fill="#8884d8"
+                      dataKey="value"
+                    >
+                      {chartData.riskLevelDistribution.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={getRiskLevelColor(entry.name)} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                  </PieChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="progress">
+            <Card>
+              <CardHeader>
+                <CardTitle>Average Point Trends</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={400}>
+                  <LineChart data={chartData.pointTrends}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="month" />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Line type="monotone" dataKey="averagePoints" stroke="hsl(var(--chart-2))" strokeWidth={2} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="completion">
+            <Card>
+              <CardHeader>
+                <CardTitle>Assessment Completion Status</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={400}>
+                  <BarChart data={chartData.completionStats}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Bar dataKey="value" fill="hsl(var(--primary))" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+      </div>
+    </div>
+  );
+};
+
+export default AssessmentKPIDashboard;

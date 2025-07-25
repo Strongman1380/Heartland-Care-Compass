@@ -11,6 +11,7 @@ import ProgressNotesPage from "./pages/ProgressNotesPage";
 import Dashboard from "./pages/Dashboard";
 import Alerts from "./pages/Alerts";
 import Reports from "./pages/Reports";
+import AssessmentKPIDashboard from "./pages/AssessmentKPIDashboard";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -29,6 +30,7 @@ const App = () => (
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/alerts" element={<Alerts />} />
           <Route path="/reports" element={<Reports />} />
+          <Route path="/assessment-kpi" element={<AssessmentKPIDashboard />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

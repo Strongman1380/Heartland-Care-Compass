@@ -32,17 +32,8 @@ export const ConsolidatedScoringTab = ({ youth }: ConsolidatedScoringTabProps) =
 
   // Daily Points State
   const [dailyPoints, setDailyPoints] = useState({
-    morningPoints: 0,
-    afternoonPoints: 0,
-    eveningPoints: 0,
+    totalPoints: 0,
     comments: ""
-  });
-
-  // Progress Note State
-  const [progressNote, setProgressNote] = useState({
-    category: "",
-    note: "",
-    rating: 0
   });
 
   const fetchExistingData = async () => {
@@ -77,9 +68,7 @@ export const ConsolidatedScoringTab = ({ youth }: ConsolidatedScoringTabProps) =
 
       if (pointsData) {
         setDailyPoints({
-          morningPoints: pointsData.morningpoints || 0,
-          afternoonPoints: pointsData.afternoonpoints || 0,
-          eveningPoints: pointsData.eveningpoints || 0,
+          totalPoints: pointsData.totalpoints || 0,
           comments: pointsData.comments || ""
         });
       }
@@ -118,8 +107,6 @@ export const ConsolidatedScoringTab = ({ youth }: ConsolidatedScoringTabProps) =
   const handleSaveAll = async () => {
     setLoading(true);
     try {
-      const totalPoints = dailyPoints.morningPoints + dailyPoints.afternoonPoints + dailyPoints.eveningPoints;
-
       // Save daily ratings
       const { error: ratingError } = await supabase
         .from("daily_ratings")
@@ -142,10 +129,10 @@ export const ConsolidatedScoringTab = ({ youth }: ConsolidatedScoringTabProps) =
         .upsert({
           youth_id: youth.id,
           date: selectedDate,
-          morningpoints: dailyPoints.morningPoints,
-          afternoonpoints: dailyPoints.afternoonPoints,
-          eveningpoints: dailyPoints.eveningPoints,
-          totalpoints: totalPoints,
+          morningpoints: 0,
+          afternoonpoints: 0,
+          eveningpoints: 0,
+          totalpoints: dailyPoints.totalPoints,
           comments: dailyPoints.comments
         });
 
@@ -154,26 +141,10 @@ export const ConsolidatedScoringTab = ({ youth }: ConsolidatedScoringTabProps) =
       // Update youth's total points
       const { error: updateError } = await supabase
         .from("youths")
-        .update({ pointtotal: (youth.pointTotal || 0) + totalPoints })
+        .update({ pointtotal: (youth.pointTotal || 0) + dailyPoints.totalPoints })
         .eq("id", youth.id);
 
       if (updateError) throw updateError;
-
-      // Save progress note if provided
-      if (progressNote.note.trim() && progressNote.category) {
-        const { error: noteError } = await supabase
-          .from("notes")
-          .insert({
-            youth_id: youth.id,
-            date: selectedDate,
-            category: progressNote.category,
-            note: progressNote.note,
-            rating: progressNote.rating,
-            staff: staffName
-          });
-
-        if (noteError) throw noteError;
-      }
 
       toast({
         title: "Success",
@@ -189,15 +160,8 @@ export const ConsolidatedScoringTab = ({ youth }: ConsolidatedScoringTabProps) =
         comments: ""
       });
       setDailyPoints({
-        morningPoints: 0,
-        afternoonPoints: 0,
-        eveningPoints: 0,
+        totalPoints: 0,
         comments: ""
-      });
-      setProgressNote({
-        category: "",
-        note: "",
-        rating: 0
       });
 
     } catch (error) {
@@ -281,45 +245,17 @@ export const ConsolidatedScoringTab = ({ youth }: ConsolidatedScoringTabProps) =
           <CardTitle className="text-lg text-primary">Daily Points</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="morning">Morning Points</Label>
-              <Input
-                id="morning"
-                type="number"
-                min="0"
-                max="100"
-                value={dailyPoints.morningPoints}
-                onChange={(e) => setDailyPoints({...dailyPoints, morningPoints: parseInt(e.target.value) || 0})}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="afternoon">Afternoon Points</Label>
-              <Input
-                id="afternoon"
-                type="number"
-                min="0"
-                max="100"
-                value={dailyPoints.afternoonPoints}
-                onChange={(e) => setDailyPoints({...dailyPoints, afternoonPoints: parseInt(e.target.value) || 0})}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="evening">Evening Points</Label>
-              <Input
-                id="evening"
-                type="number"
-                min="0"
-                max="100"
-                value={dailyPoints.eveningPoints}
-                onChange={(e) => setDailyPoints({...dailyPoints, eveningPoints: parseInt(e.target.value) || 0})}
-              />
-            </div>
-          </div>
-          <div className="bg-primary/10 p-3 rounded-lg">
-            <p className="text-sm font-medium">
-              Total Daily Points: {dailyPoints.morningPoints + dailyPoints.afternoonPoints + dailyPoints.eveningPoints}
-            </p>
+          <div className="space-y-2">
+            <Label htmlFor="total-points">Total Day Points</Label>
+            <Input
+              id="total-points"
+              type="number"
+              min="0"
+              max="300"
+              value={dailyPoints.totalPoints}
+              onChange={(e) => setDailyPoints({...dailyPoints, totalPoints: parseInt(e.target.value) || 0})}
+              className="text-lg font-medium"
+            />
           </div>
           <div className="space-y-2">
             <Label htmlFor="points-comments">Points Comments</Label>
@@ -329,61 +265,6 @@ export const ConsolidatedScoringTab = ({ youth }: ConsolidatedScoringTabProps) =
               onChange={(e) => setDailyPoints({...dailyPoints, comments: e.target.value})}
               placeholder="Comments about daily points..."
               rows={2}
-            />
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Progress Note */}
-      <Card className="border-2 border-primary/20">
-        <CardHeader>
-          <CardTitle className="text-lg text-primary">Progress Note (Optional)</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="category">Category</Label>
-              <Select value={progressNote.category} onValueChange={(value) => setProgressNote({...progressNote, category: value})}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select category" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Behavioral">Behavioral</SelectItem>
-                  <SelectItem value="Academic">Academic</SelectItem>
-                  <SelectItem value="Social">Social</SelectItem>
-                  <SelectItem value="Medical">Medical</SelectItem>
-                  <SelectItem value="Family">Family</SelectItem>
-                  <SelectItem value="Goals">Goals</SelectItem>
-                  <SelectItem value="Incident">Incident</SelectItem>
-                  <SelectItem value="General">General</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="note-rating">Overall Rating (0-5)</Label>
-              <Select value={progressNote.rating.toString()} onValueChange={(value) => setProgressNote({...progressNote, rating: parseInt(value)})}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select rating" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="0">0 - Poor</SelectItem>
-                  <SelectItem value="1">1 - Below Average</SelectItem>
-                  <SelectItem value="2">2 - Average</SelectItem>
-                  <SelectItem value="3">3 - Good</SelectItem>
-                  <SelectItem value="4">4 - Very Good</SelectItem>
-                  <SelectItem value="5">5 - Excellent</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="note">Progress Note</Label>
-            <Textarea
-              id="note"
-              value={progressNote.note}
-              onChange={(e) => setProgressNote({...progressNote, note: e.target.value})}
-              placeholder="Enter detailed progress note..."
-              rows={4}
             />
           </div>
         </CardContent>

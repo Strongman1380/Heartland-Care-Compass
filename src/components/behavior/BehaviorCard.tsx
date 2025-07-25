@@ -14,6 +14,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { fetchBehaviorPoints, saveBehaviorPoints } from "@/utils/supabase-utils";
 import { BehaviorPoints } from "@/types/app-types";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { supabase } from "@/integrations/supabase/client";
 
 interface BehaviorCardProps {
   youthId: string;
@@ -264,12 +265,55 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
     }
   };
 
-  const handleLevelUp = () => {
-    toast.success(`Congratulations! Ready to advance to ${nextLevel?.name || 'next level'}!`);
+  const handleLevelUp = async () => {
+    if (isEligibleForLevelUp() && nextLevel) {
+      try {
+        // Update youth level and reset points
+        const { error } = await supabase
+          .from("youths")
+          .update({ 
+            level: youth.level + 1,
+            pointtotal: 0  // Reset points to 0 when leveling up
+          })
+          .eq("id", youth.id);
+
+        if (error) throw error;
+
+        toast.success(`Congratulations! Advanced to ${nextLevel.name}! Points reset to 0.`);
+        
+        // Refresh the page to show updated data
+        window.location.reload();
+      } catch (error) {
+        console.error("Error updating level:", error);
+        toast.error("Failed to update level");
+      }
+    }
   };
 
-  const handleLevelDemotion = () => {
-    toast.warning("Level demotion recorded. Points for current level reset to 0.");
+  const handleLevelDemotion = async () => {
+    if (youth.level > 1) {
+      try {
+        // Update youth level and reset points
+        const { error } = await supabase
+          .from("youths")
+          .update({ 
+            level: youth.level - 1,
+            pointtotal: 0  // Reset points to 0 when demoting
+          })
+          .eq("id", youth.id);
+
+        if (error) throw error;
+
+        const previousLevel = levelsData.find(level => level.level === youth.level - 1);
+        toast.warning(`Demoted to ${previousLevel?.name || `Level ${youth.level - 1}`}. Points reset to 0.`);
+        
+        // Refresh the page to show updated data
+        window.location.reload();
+      } catch (error) {
+        console.error("Error updating level:", error);
+        toast.error("Failed to update level");
+      }
+    }
   };
 
   const handlePrintCard = () => {
@@ -404,12 +448,19 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
                   </p>
                   <div className="w-full bg-gray-200 rounded-full h-2 mt-1">
                     <div 
-                      className="bg-blue-500 h-2 rounded-full" 
+                      className={`h-2 rounded-full transition-all duration-300 ${
+                        isEligibleForLevelUp() ? 'bg-green-500 animate-pulse' : 'bg-blue-500'
+                      }`}
                       style={{ 
                         width: `${Math.min(100, (((youth.pointTotal || 0) * 1000) / currentLevel.cumulativePointsRequired) * 100)}%` 
                       }}
                     ></div>
                   </div>
+                  {isEligibleForLevelUp() && (
+                    <p className="text-xs text-green-600 font-medium mt-1 animate-pulse">
+                      🎉 Ready to level up!
+                    </p>
+                  )}
                 </div>
               )}
               
@@ -426,9 +477,9 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
               <div className="flex gap-2 pt-2">
                 <Button 
                   size="sm" 
-                  onClick={() => toast.success(`Congratulations! Ready to advance to ${nextLevel?.name || 'next level'}!`)}
+                  onClick={handleLevelUp}
                   disabled={!isEligibleForLevelUp() || !nextLevel}
-                  className="flex-1"
+                  className={`flex-1 ${isEligibleForLevelUp() && nextLevel ? 'bg-green-600 hover:bg-green-700 text-white animate-pulse' : ''}`}
                 >
                   <TrendingUp size={14} className="mr-1" />
                   Level Up
@@ -436,7 +487,7 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
                 <Button 
                   size="sm" 
                   variant="destructive"
-                  onClick={() => toast.warning("Level demotion recorded. Points for current level reset to 0.")}
+                  onClick={handleLevelDemotion}
                   className="flex-1"
                 >
                   <TrendingDown size={14} className="mr-1" />

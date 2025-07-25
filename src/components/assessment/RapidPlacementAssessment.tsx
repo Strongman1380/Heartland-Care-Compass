@@ -11,6 +11,7 @@ import { Printer, Save, Calculator, FileText, ClipboardCheck } from 'lucide-reac
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Youth } from '@/types/app-types';
+import QuickISPAssessment from './QuickISPAssessment';
 
 interface AssessmentData {
   youthName: string;
@@ -421,6 +422,12 @@ export const RapidPlacementAssessment = () => {
                           Comprehensive Placement Assessment Tool (CPAT)
                         </div>
                       </SelectItem>
+                      <SelectItem value="isp">
+                        <div className="flex items-center gap-2">
+                          <FileText className="h-4 w-4" />
+                          Quick Individualized Service Plan (ISP)
+                        </div>
+                      </SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -470,15 +477,31 @@ export const RapidPlacementAssessment = () => {
           </div>
         ) : (
           <div className="print:block">
-            <div className="text-center mb-8 print:mb-4">
-              <div className="flex items-center justify-between mb-4 print:hidden">
-                <Button variant="outline" onClick={resetSelection}>
-                  ← Back to Assessment Selection
-                </Button>
-                <Badge variant="secondary">
-                  {assessmentType === 'rapid' ? 'RPAT' : 'CPAT'} - {youthSelection === 'new' ? 'New Youth' : 'Existing Youth'}
-                </Badge>
+            {assessmentType === 'isp' ? (
+              <div>
+                <div className="flex items-center justify-between mb-4 print:hidden">
+                  <Button variant="outline" onClick={resetSelection}>
+                    ← Back to Assessment Selection
+                  </Button>
+                  <Badge variant="secondary">
+                    ISP - {youthSelection === 'new' ? 'New Youth' : 'Existing Youth'}
+                  </Badge>
+                </div>
+                <QuickISPAssessment 
+                  selectedYouth={youthSelection === 'existing' && selectedYouthId ? youths.find(y => y.id === selectedYouthId) : undefined}
+                />
               </div>
+            ) : (
+              <>
+                <div className="text-center mb-8 print:mb-4">
+                  <div className="flex items-center justify-between mb-4 print:hidden">
+                    <Button variant="outline" onClick={resetSelection}>
+                      ← Back to Assessment Selection
+                    </Button>
+                    <Badge variant="secondary">
+                      {assessmentType === 'rapid' ? 'RPAT' : 'CPAT'} - {youthSelection === 'new' ? 'New Youth' : 'Existing Youth'}
+                    </Badge>
+                  </div>
               <h1 className="text-3xl font-bold text-red-800 mb-2 print:text-black print:text-2xl">
                 HEARTLAND BOYS HOME
               </h1>
@@ -847,6 +870,8 @@ export const RapidPlacementAssessment = () => {
                 </div>
               </CardContent>
             </Card>
+              </>
+            )}
           </div>
         )}
       </div>

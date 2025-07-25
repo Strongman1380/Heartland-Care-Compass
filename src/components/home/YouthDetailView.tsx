@@ -70,10 +70,6 @@ export const YouthDetailView = ({
             <Shield size={16} />
             <span>Risk Assessment</span>
           </TabsTrigger>
-          <TabsTrigger value="cpat" className="flex items-center gap-2 data-[state=active]:bg-yellow-400 data-[state=active]:text-red-900">
-            <ClipboardCheck size={16} />
-            <span>CPAT</span>
-          </TabsTrigger>
           <TabsTrigger value="reports" className="flex items-center gap-2 data-[state=active]:bg-yellow-400 data-[state=active]:text-red-900">
             <FileChartPie size={16} />
             <span>Reports</span>
@@ -102,10 +98,6 @@ export const YouthDetailView = ({
         
         <TabsContent value="assessment">
           <RiskAssessment youthId={selectedYouth.id} youth={selectedYouth} />
-        </TabsContent>
-        
-        <TabsContent value="cpat">
-          <ComprehensivePlacementAssessment youthId={selectedYouth.id} youth={selectedYouth} />
         </TabsContent>
         
         <TabsContent value="reports">

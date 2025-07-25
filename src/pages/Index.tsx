@@ -3,6 +3,7 @@ import { Header } from "@/components/layout/Header";
 import { EditYouthDialog } from "@/components/youth/EditYouthDialog";
 import { YouthSelectionView } from "@/components/home/YouthSelectionView";
 import { YouthDetailView } from "@/components/home/YouthDetailView";
+import { RapidPlacementAssessment } from "@/components/assessment/RapidPlacementAssessment";
 import { supabase } from "@/integrations/supabase/client";
 import { mapYouthFromSupabase, type Youth } from "@/types/app-types";
 import { useToast } from "@/hooks/use-toast";
@@ -26,6 +27,7 @@ const Index = () => {
   const [editingYouth, setEditingYouth] = useState<Youth | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [youthToDelete, setYouthToDelete] = useState<Youth | null>(null);
+  const [showAdmin, setShowAdmin] = useState(false);
   const { toast } = useToast();
 
   const fetchYouths = async () => {
@@ -142,9 +144,17 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-red-50 via-yellow-50 to-red-100">
-      <Header />
+      <Header 
+        showAdmin={showAdmin}
+        onAdminToggle={() => {
+          setShowAdmin(!showAdmin);
+          setSelectedYouth(null);
+        }}
+      />
       <main className="container mx-auto px-4 py-8">
-        {!selectedYouth ? (
+        {showAdmin ? (
+          <RapidPlacementAssessment />
+        ) : !selectedYouth ? (
           <>
             <YouthSelectionView
               youths={youths}

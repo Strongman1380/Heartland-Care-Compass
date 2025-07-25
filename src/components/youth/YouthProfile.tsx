@@ -13,6 +13,7 @@ import { MedicalProfileTab } from "./MedicalProfileTab";
 import { MentalHealthProfileTab } from "./MentalHealthProfileTab";
 import { RatingsProfileTab } from "./RatingsProfileTab";
 import { DailyRatingsTab } from "./DailyRatingsTab";
+import { ConsolidatedScoringTab } from "./ConsolidatedScoringTab";
 import { ProgressEvaluationReport } from "../reports/ProgressEvaluationReport";
 import { EditYouthDialog } from "./EditYouthDialog";
 
@@ -85,8 +86,9 @@ export const YouthProfile = ({ youth, onBack, onYouthUpdated }: YouthProfileProp
         </CardHeader>
 
         <CardContent className="p-6">
-          <Tabs defaultValue="personal" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-8">
+          <Tabs defaultValue="scoring" className="space-y-6">
+            <TabsList className="grid w-full grid-cols-9">
+              <TabsTrigger value="scoring" className="bg-primary/10 text-primary font-medium">Quick Scoring</TabsTrigger>
               <TabsTrigger value="personal">Personal</TabsTrigger>
               <TabsTrigger value="background">Background</TabsTrigger>
               <TabsTrigger value="education">Education</TabsTrigger>
@@ -96,6 +98,10 @@ export const YouthProfile = ({ youth, onBack, onYouthUpdated }: YouthProfileProp
               <TabsTrigger value="daily-ratings">Daily Scoring</TabsTrigger>
               <TabsTrigger value="progress-reports">Progress Reports</TabsTrigger>
             </TabsList>
+
+            <TabsContent value="scoring">
+              <ConsolidatedScoringTab youth={youth} />
+            </TabsContent>
 
             <TabsContent value="personal">
               <PersonalInfoProfileTab youth={youth} />

@@ -14,6 +14,48 @@ export type Database = {
   }
   public: {
     Tables: {
+      daily_ratings: {
+        Row: {
+          adult_interaction: number | null
+          comments: string | null
+          created_at: string
+          date: string
+          deal_authority: number | null
+          id: string
+          investment_level: number | null
+          peer_interaction: number | null
+          staff: string | null
+          updated_at: string
+          youth_id: string
+        }
+        Insert: {
+          adult_interaction?: number | null
+          comments?: string | null
+          created_at?: string
+          date?: string
+          deal_authority?: number | null
+          id?: string
+          investment_level?: number | null
+          peer_interaction?: number | null
+          staff?: string | null
+          updated_at?: string
+          youth_id: string
+        }
+        Update: {
+          adult_interaction?: number | null
+          comments?: string | null
+          created_at?: string
+          date?: string
+          deal_authority?: number | null
+          id?: string
+          investment_level?: number | null
+          peer_interaction?: number | null
+          staff?: string | null
+          updated_at?: string
+          youth_id?: string
+        }
+        Relationships: []
+      }
       notes: {
         Row: {
           category: string | null

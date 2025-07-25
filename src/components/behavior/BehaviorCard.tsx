@@ -241,6 +241,17 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
       
       await saveBehaviorPoints(youthId, pointEntry);
       
+      // Update youth's total points
+      const newTotal = (youth.pointtotal || 0) + (formData.dailyPoints / 1000);
+      const { error: updateError } = await supabase
+        .from("youths")
+        .update({ pointtotal: newTotal })
+        .eq("id", youthId);
+        
+      if (!updateError) {
+        youth.pointtotal = newTotal; // Update local state
+      }
+      
       // Check if points meet privilege requirement
       if (formData.dailyPoints >= currentLevel.dailyPointsForPrivileges) {
         toast.success(`Great job! ${formatPoints(formData.dailyPoints)} points saved successfully. Privileges earned for tomorrow. 🎉`);
@@ -269,20 +280,21 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
     if (isEligibleForLevelUp() && nextLevel) {
       try {
         // Update youth level and reset points
-        const { error } = await supabase
-          .from("youths")
-          .update({ 
-            level: youth.level + 1,
-            pointtotal: 0  // Reset points to 0 when leveling up
-          })
-          .eq("id", youth.id);
+      const { error } = await supabase
+        .from("youths")
+        .update({ 
+          level: youth.level + 1,
+          pointtotal: 0  // Reset points to 0 when leveling up
+        })
+        .eq("id", youthId);
 
         if (error) throw error;
 
         toast.success(`Congratulations! Advanced to ${nextLevel.name}! Points reset to 0.`);
         
-        // Refresh the page to show updated data
-        window.location.reload();
+        // Update the local youth object to reflect the changes
+        youth.level = youth.level + 1;
+        youth.pointtotal = 0;
       } catch (error) {
         console.error("Error updating level:", error);
         toast.error("Failed to update level");
@@ -294,21 +306,22 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
     if (youth.level > 1) {
       try {
         // Update youth level and reset points
-        const { error } = await supabase
-          .from("youths")
-          .update({ 
-            level: youth.level - 1,
-            pointtotal: 0  // Reset points to 0 when demoting
-          })
-          .eq("id", youth.id);
+      const { error } = await supabase
+        .from("youths")
+        .update({ 
+          level: youth.level - 1,
+          pointtotal: 0  // Reset points to 0 when demoting
+        })
+        .eq("id", youthId);
 
         if (error) throw error;
 
         const previousLevel = levelsData.find(level => level.level === youth.level - 1);
         toast.warning(`Demoted to ${previousLevel?.name || `Level ${youth.level - 1}`}. Points reset to 0.`);
         
-        // Refresh the page to show updated data
-        window.location.reload();
+        // Update the local youth object to reflect the changes
+        youth.level = youth.level - 1;
+        youth.pointtotal = 0;
       } catch (error) {
         console.error("Error updating level:", error);
         toast.error("Failed to update level");
@@ -346,7 +359,7 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
   };
 
   const isEligibleForLevelUp = () => {
-    const youthTotalInThousands = (youth.pointTotal || 0) * 1000;
+    const youthTotalInThousands = (youth.pointtotal || youth.pointTotal || 0) * 1000;
     return youthTotalInThousands >= currentLevel.cumulativePointsRequired;
   };
 
@@ -444,7 +457,7 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
                 <div>
                   <Label className="text-sm font-medium text-gray-500">Points for Next Level</Label>
                   <p className="text-lg font-semibold">
-                    {formatPoints((youth.pointTotal || 0) * 1000)} / {formatPoints(currentLevel.cumulativePointsRequired)}
+                    {formatPoints((youth.pointtotal || youth.pointTotal || 0) * 1000)} / {formatPoints(currentLevel.cumulativePointsRequired)}
                   </p>
                   <div className="w-full bg-gray-200 rounded-full h-2 mt-1">
                     <div 
@@ -452,7 +465,7 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
                         isEligibleForLevelUp() ? 'bg-green-500 animate-pulse' : 'bg-blue-500'
                       }`}
                       style={{ 
-                        width: `${Math.min(100, (((youth.pointTotal || 0) * 1000) / currentLevel.cumulativePointsRequired) * 100)}%` 
+                        width: `${Math.min(100, (((youth.pointtotal || youth.pointTotal || 0) * 1000) / currentLevel.cumulativePointsRequired) * 100)}%` 
                       }}
                     ></div>
                   </div>

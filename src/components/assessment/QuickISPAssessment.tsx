@@ -121,19 +121,83 @@ const QuickISPAssessment: React.FC<QuickISPAssessmentProps> = ({ selectedYouth, 
     }
   };
 
-  return (
-    <div className="max-w-4xl mx-auto p-6 print:p-0 print:max-w-none">
-      <div className="flex justify-between items-center mb-6 print:hidden">
-        <h1 className="text-2xl font-bold">Quick Individualized Service Plan (ISP)</h1>
-        <div className="space-x-2">
-          <Button onClick={handleSave} variant="outline">Save</Button>
-          <Button onClick={handlePrint} className="flex items-center gap-2">
-            <Printer className="h-4 w-4" />
-            Print
-          </Button>
+  const renderPrintView = () => {
+    return (
+      <div className="max-w-4xl mx-auto p-6 space-y-4">
+        <div className="text-center mb-6">
+          <h1 className="text-xl font-bold">HEARTLAND BOYS HOME</h1>
+          <h2 className="text-lg font-semibold">Quick Individualized Service Plan (ISP)</h2>
+        </div>
+
+        <div className="space-y-4 text-sm leading-relaxed">
+          <p><strong>Youth Information:</strong> {ispData.youthName} (ID: {ispData.youthId}) is a {ispData.age}-year-old resident born on {ispData.dob}. Admission date was {ispData.admissionDate}, currently at Level {ispData.level} with an estimated stay of {ispData.estStay}.</p>
+
+          {ispData.teamMembers.length > 0 && (
+            <p><strong>Treatment Team:</strong> The treatment team consists of {ispData.teamMembers.join(', ')}.</p>
+          )}
+
+          <p><strong>Risk Assessment:</strong> The youth presents with a {ispData.riskLevel.toLowerCase()} risk level.</p>
+
+          {ispData.topConcerns.length > 0 && (
+            <p><strong>Primary Concerns:</strong> Areas of concern include {ispData.topConcerns.join(', ')}{ispData.otherConcern && `, and ${ispData.otherConcern}`}.</p>
+          )}
+
+          {ispData.strengths.length > 0 && (
+            <p><strong>Identified Strengths:</strong> The youth demonstrates strengths in {ispData.strengths.join(', ')}{ispData.otherStrength && `, and ${ispData.otherStrength}`}.</p>
+          )}
+
+          <div className="space-y-3">
+            <h3 className="font-semibold">Treatment Goals:</h3>
+            {ispData.goal1 && (
+              <div>
+                <p><strong>Goal 1:</strong> {ispData.goal1} (Type: {ispData.goal1Type})</p>
+                {ispData.goal1Strategies && <p><strong>Key Strategies:</strong> {ispData.goal1Strategies}</p>}
+                {ispData.goal1Skill && <p><strong>Main Skill to Develop:</strong> {ispData.goal1Skill}</p>}
+              </div>
+            )}
+            {ispData.goal2 && (
+              <div>
+                <p><strong>Goal 2:</strong> {ispData.goal2} (Type: {ispData.goal2Type})</p>
+                {ispData.goal2Strategies && <p><strong>Key Strategies:</strong> {ispData.goal2Strategies}</p>}
+                {ispData.goal2Skill && <p><strong>Main Skill to Develop:</strong> {ispData.goal2Skill}</p>}
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <h3 className="font-semibold">Support Plan:</h3>
+            {ispData.earlyWarningSigns.length > 0 && (
+              <p><strong>Early Warning Signs:</strong> Staff should watch for {ispData.earlyWarningSigns.join(', ')}{ispData.otherWarningSign && `, and ${ispData.otherWarningSign}`}.</p>
+            )}
+            {ispData.whatHelps.length > 0 && (
+              <p><strong>Interventions that Help:</strong> Effective interventions include {ispData.whatHelps.join(', ')}{ispData.otherWhatHelps && `, and ${ispData.otherWhatHelps}`}.</p>
+            )}
+            {ispData.staffApproach.length > 0 && (
+              <p><strong>Recommended Staff Approach:</strong> Staff should utilize {ispData.staffApproach.join(', ')}{ispData.otherStaffApproach && `, and ${ispData.otherStaffApproach}`} approaches.</p>
+            )}
+          </div>
+
+          {ispData.dailyMeasure.length > 0 && (
+            <p><strong>Progress Tracking:</strong> Daily progress will be monitored using {ispData.dailyMeasure.join(', ')}{ispData.otherDailyMeasure && `, and ${ispData.otherDailyMeasure}`}.</p>
+          )}
+
+          {ispData.reviewDate && (
+            <p><strong>Review Schedule:</strong> This plan will be reviewed on {ispData.reviewDate}.</p>
+          )}
+
+          <div className="mt-8 space-y-2">
+            <p><strong>Signatures:</strong></p>
+            {ispData.youthSignature && <p>Youth: {ispData.youthSignature}</p>}
+            {ispData.staffSignature && <p>Staff: {ispData.staffSignature}</p>}
+            {ispData.signatureDate && <p>Date: {ispData.signatureDate}</p>}
+          </div>
         </div>
       </div>
+    );
+  };
 
+  const renderFormView = () => {
+    return (
       <Card className="print:shadow-none print:border-none">
         <CardHeader className="text-center">
           <CardTitle className="text-xl font-bold">HEARTLAND BOYS HOME</CardTitle>
@@ -629,6 +693,29 @@ const QuickISPAssessment: React.FC<QuickISPAssessmentProps> = ({ selectedYouth, 
           </div>
         </CardContent>
       </Card>
+    );
+  };
+
+  return (
+    <div className="max-w-4xl mx-auto p-6 print:p-0 print:max-w-none">
+      <div className="flex justify-between items-center mb-6 print:hidden">
+        <h1 className="text-2xl font-bold">Quick Individualized Service Plan (ISP)</h1>
+        <div className="space-x-2">
+          <Button onClick={handleSave} variant="outline">Save</Button>
+          <Button onClick={handlePrint} className="flex items-center gap-2">
+            <Printer className="h-4 w-4" />
+            Print
+          </Button>
+        </div>
+      </div>
+
+      <div className="print:hidden">
+        {renderFormView()}
+      </div>
+      
+      <div className="hidden print:block">
+        {renderPrintView()}
+      </div>
     </div>
   );
 };

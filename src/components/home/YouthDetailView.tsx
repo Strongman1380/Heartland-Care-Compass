@@ -6,8 +6,9 @@ import { BehaviorCard } from "@/components/behavior/BehaviorCard";
 import { ProgressNotes } from "@/components/notes/ProgressNotes";
 import { BehaviorAnalysis } from "@/components/analysis/BehaviorAnalysis";
 import { RiskAssessment } from "@/components/assessment/RiskAssessment";
+import { ComprehensivePlacementAssessment } from "@/components/assessment/ComprehensivePlacementAssessment";
 import { ReportCenter } from "@/components/reports/ReportCenter";
-import { User, CheckSquare, FileText, BarChart2, Shield, FileChartPie, ArrowLeft } from "lucide-react";
+import { User, CheckSquare, FileText, BarChart2, Shield, FileChartPie, ArrowLeft, ClipboardCheck } from "lucide-react";
 import { Youth } from "@/types/app-types";
 
 interface YouthDetailViewProps {
@@ -69,6 +70,10 @@ export const YouthDetailView = ({
             <Shield size={16} />
             <span>Risk Assessment</span>
           </TabsTrigger>
+          <TabsTrigger value="cpat" className="flex items-center gap-2 data-[state=active]:bg-yellow-400 data-[state=active]:text-red-900">
+            <ClipboardCheck size={16} />
+            <span>CPAT</span>
+          </TabsTrigger>
           <TabsTrigger value="reports" className="flex items-center gap-2 data-[state=active]:bg-yellow-400 data-[state=active]:text-red-900">
             <FileChartPie size={16} />
             <span>Reports</span>
@@ -97,6 +102,10 @@ export const YouthDetailView = ({
         
         <TabsContent value="assessment">
           <RiskAssessment youthId={selectedYouth.id} youth={selectedYouth} />
+        </TabsContent>
+        
+        <TabsContent value="cpat">
+          <ComprehensivePlacementAssessment youthId={selectedYouth.id} youth={selectedYouth} />
         </TabsContent>
         
         <TabsContent value="reports">

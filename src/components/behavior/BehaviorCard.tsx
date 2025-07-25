@@ -281,16 +281,16 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
   };
 
   const handleLevelUp = async () => {
-    if (isEligibleForLevelUp() && nextLevel) {
+    if (nextLevel) {
       try {
         // Update youth level and reset points
-      const { error } = await supabase
-        .from("youths")
-        .update({ 
-          level: youth.level + 1,
-          pointtotal: 0  // Reset points to 0 when leveling up
-        })
-        .eq("id", youthId);
+        const { error } = await supabase
+          .from("youths")
+          .update({ 
+            level: youth.level + 1,
+            pointtotal: 0  // Reset points to 0 when leveling up
+          })
+          .eq("id", youthId);
 
         if (error) throw error;
 
@@ -299,6 +299,9 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
         // Update the local youth object to reflect the changes
         youth.level = youth.level + 1;
         youth.pointtotal = 0;
+        
+        // Refresh the component to show updated level information
+        window.location.reload();
       } catch (error) {
         console.error("Error updating level:", error);
         toast.error("Failed to update level");
@@ -310,13 +313,13 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
     if (youth.level > 1) {
       try {
         // Update youth level and reset points
-      const { error } = await supabase
-        .from("youths")
-        .update({ 
-          level: youth.level - 1,
-          pointtotal: 0  // Reset points to 0 when demoting
-        })
-        .eq("id", youthId);
+        const { error } = await supabase
+          .from("youths")
+          .update({ 
+            level: youth.level - 1,
+            pointtotal: 0  // Reset points to 0 when demoting
+          })
+          .eq("id", youthId);
 
         if (error) throw error;
 
@@ -326,6 +329,9 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
         // Update the local youth object to reflect the changes
         youth.level = youth.level - 1;
         youth.pointtotal = 0;
+        
+        // Refresh the component to show updated level information
+        window.location.reload();
       } catch (error) {
         console.error("Error updating level:", error);
         toast.error("Failed to update level");

@@ -1,4 +1,5 @@
 
+import { supabase } from "@/integrations/supabase/client";
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -83,25 +84,51 @@ export const EnhancedBehaviorCard = ({
     }
   };
 
-  const handleLevelUp = () => {
+  const handleLevelUp = async () => {
     const result = processLevelUp(currentLevelIndex, pointsInCurrentLevel);
     if (result) {
-      setCurrentLevelIndex(result.newLevelIndex);
-      setPointsInCurrentLevel(result.pointsInNewLevel);
-      
-      const newLevel = getCurrentLevel(result.newLevelIndex);
-      toast.success(`Congratulations! Advanced to ${newLevel.name}!`);
+      try {
+        // Update level in database
+        const { error } = await supabase
+          .from("youths")
+          .update({ level: result.newLevelIndex })
+          .eq("id", youthId);
+
+        if (error) throw error;
+
+        setCurrentLevelIndex(result.newLevelIndex);
+        setPointsInCurrentLevel(result.pointsInNewLevel);
+        
+        const newLevel = getCurrentLevel(result.newLevelIndex);
+        toast.success(`Congratulations! Advanced to ${newLevel.name}!`);
+      } catch (error) {
+        console.error("Error updating level:", error);
+        toast.error("Failed to update level in database");
+      }
     }
   };
 
-  const handleLevelDemotion = () => {
+  const handleLevelDemotion = async () => {
     const result = processLevelDemotion(currentLevelIndex);
     if (result) {
-      setCurrentLevelIndex(result.newLevelIndex);
-      setPointsInCurrentLevel(result.pointsInNewLevel);
-      
-      const newLevel = getCurrentLevel(result.newLevelIndex);
-      toast.error(`Demoted to ${newLevel.name}`);
+      try {
+        // Update level in database
+        const { error } = await supabase
+          .from("youths")
+          .update({ level: result.newLevelIndex })
+          .eq("id", youthId);
+
+        if (error) throw error;
+
+        setCurrentLevelIndex(result.newLevelIndex);
+        setPointsInCurrentLevel(result.pointsInNewLevel);
+        
+        const newLevel = getCurrentLevel(result.newLevelIndex);
+        toast.error(`Demoted to ${newLevel.name}`);
+      } catch (error) {
+        console.error("Error updating level:", error);
+        toast.error("Failed to update level in database");
+      }
     }
   };
 

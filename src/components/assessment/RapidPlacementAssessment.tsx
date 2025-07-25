@@ -290,6 +290,14 @@ export const RapidPlacementAssessment = () => {
     });
   };
 
+  const familyTotal = calculateSectionTotal(assessmentData.family);
+  const educationTotal = calculateSectionTotal(assessmentData.education);
+  const behavioralTotal = calculateSectionTotal(assessmentData.behavioral);
+  const riskTotal = calculateSectionTotal(assessmentData.risk);
+  const mentalHealthTotal = calculateSectionTotal(assessmentData.mentalHealth);
+  const motivationTotal = calculateSectionTotal(assessmentData.motivation);
+  const socialSkillsTotal = calculateSectionTotal(assessmentData.socialSkills);
+
   const totalScore = calculateTotalScore();
   const percentage = Math.round((totalScore / 108) * 100);
   const overallRisk = getRiskLevel(percentage);
@@ -562,6 +570,122 @@ export const RapidPlacementAssessment = () => {
                 <Calculator className="h-4 w-4" />
                 Total: {totalScore}/108 ({percentage}%)
               </Button>
+            </div>
+
+            {/* Assessment Summary - Hidden on screen, shown on print */}
+            <div className="hidden print:block print:break-before-page">
+              <div className="text-center mb-6">
+                <h2 className="text-2xl font-bold mb-4">ASSESSMENT SUMMARY REPORT</h2>
+                <div className="border-b-2 border-gray-300 pb-2 mb-4">
+                  <p><strong>Youth:</strong> {assessmentData.youthName}</p>
+                  <p><strong>Date of Assessment:</strong> {assessmentData.date}</p>
+                  <p><strong>Interviewer:</strong> {assessmentData.interviewer}</p>
+                </div>
+              </div>
+
+              {/* Score Summary */}
+              <Card className="mb-6">
+                <CardContent className="pt-6">
+                  <h3 className="text-xl font-semibold mb-4">ASSESSMENT TOTALS</h3>
+                  <div className="grid grid-cols-2 gap-4 mb-4">
+                    <div className="space-y-2">
+                      <p><strong>Family & Living:</strong> {familyTotal}/16 ({Math.round((familyTotal/16)*100)}%)</p>
+                      <p><strong>Education:</strong> {educationTotal}/12 ({Math.round((educationTotal/12)*100)}%)</p>
+                      <p><strong>Behavioral:</strong> {behavioralTotal}/16 ({Math.round((behavioralTotal/16)*100)}%)</p>
+                      <p><strong>Risk Factors:</strong> {riskTotal}/16 ({Math.round((riskTotal/16)*100)}%)</p>
+                    </div>
+                    <div className="space-y-2">
+                      <p><strong>Mental Health:</strong> {mentalHealthTotal}/16 ({Math.round((mentalHealthTotal/16)*100)}%)</p>
+                      <p><strong>Motivation:</strong> {motivationTotal}/16 ({Math.round((motivationTotal/16)*100)}%)</p>
+                      <p><strong>Social Skills:</strong> {socialSkillsTotal}/16 ({Math.round((socialSkillsTotal/16)*100)}%)</p>
+                      <p className="text-lg font-bold border-t pt-2"><strong>TOTAL SCORE:</strong> {totalScore}/108 ({percentage}%)</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Risk Interpretation */}
+              <Card className="mb-6">
+                <CardContent className="pt-6">
+                  <h3 className="text-xl font-semibold mb-4">RISK INTERPRETATION</h3>
+                  <div className="bg-gray-50 p-4 rounded">
+                    <p className="font-semibold mb-2">
+                      Overall Risk Level: <span className={`${
+                        percentage <= 25 ? 'text-green-600' :
+                        percentage <= 50 ? 'text-yellow-600' :
+                        percentage <= 75 ? 'text-orange-600' : 'text-red-600'
+                      }`}>
+                        {percentage <= 25 ? 'LOW RISK' :
+                         percentage <= 50 ? 'MODERATE RISK' :
+                         percentage <= 75 ? 'HIGH RISK' : 'CRITICAL RISK'}
+                      </span>
+                    </p>
+                    <p className="text-sm">
+                      {percentage <= 25 ? 'Excellent candidate for Group Home A placement. Youth demonstrates strong adaptive functioning across most domains.' :
+                       percentage <= 50 ? 'Good candidate with support needs. Youth shows manageable risk factors that can be addressed with appropriate interventions.' :
+                       percentage <= 75 ? 'Requires intensive services. Youth presents significant challenges that will need comprehensive treatment planning.' :
+                       'May need higher level of care. Youth demonstrates critical risk factors that may exceed Group Home A capacity.'}
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Key Assessment Notes */}
+              <Card className="mb-6">
+                <CardContent className="pt-6">
+                  <h3 className="text-xl font-semibold mb-4">KEY ASSESSMENT NOTES</h3>
+                  <div className="grid grid-cols-1 gap-4">
+                    {[
+                      { title: 'Family & Living Situation', notes: assessmentData.family },
+                      { title: 'Education & Learning', notes: assessmentData.education },
+                      { title: 'Behavioral Assessment', notes: assessmentData.behavioral },
+                      { title: 'Risk Factors', notes: assessmentData.risk },
+                      { title: 'Trauma & Mental Health', notes: assessmentData.mentalHealth },
+                      { title: 'Motivation & Readiness', notes: assessmentData.motivation },
+                      { title: 'Social Skills', notes: assessmentData.socialSkills }
+                    ].map((section, index) => {
+                      const hasNotes = Object.values(section.notes).some((item: any) => item.notes?.trim());
+                      if (!hasNotes) return null;
+                      
+                      return (
+                        <div key={index} className="border-l-4 border-blue-200 pl-4 mb-3">
+                          <h4 className="font-semibold text-sm mb-2">{section.title}</h4>
+                          <div className="space-y-1">
+                            {Object.entries(section.notes).map(([key, item], noteIndex) => {
+                              const note = (item as any).notes;
+                              return note?.trim() && (
+                                <p key={noteIndex} className="text-sm">
+                                  <span className="font-medium">{key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}:</span> {note}
+                                </p>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Placement Recommendation Summary */}
+              <Card>
+                <CardContent className="pt-6">
+                  <h3 className="text-xl font-semibold mb-4">PLACEMENT RECOMMENDATION</h3>
+                  <div className="space-y-2">
+                    <p><strong>Recommendation:</strong> {assessmentData.placementRecommendation.decision || 'Not specified'}</p>
+                    <p><strong>Placement Level:</strong> {assessmentData.placementRecommendation.placementLevel || 'Not specified'}</p>
+                    {assessmentData.placementRecommendation.priorityTreatment.length > 0 && (
+                      <p><strong>Priority Treatment Areas:</strong> {assessmentData.placementRecommendation.priorityTreatment.join(', ')}</p>
+                    )}
+                    {assessmentData.placementRecommendation.safetyProtocols.length > 0 && (
+                      <p><strong>Safety Protocols Required:</strong> {assessmentData.placementRecommendation.safetyProtocols.join(', ')}</p>
+                    )}
+                    {assessmentData.placementRecommendation.estimatedStay && (
+                      <p><strong>Estimated Length of Stay:</strong> {assessmentData.placementRecommendation.estimatedStay} months</p>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
             </div>
 
             {/* Assessment Sections */}

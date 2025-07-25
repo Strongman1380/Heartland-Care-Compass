@@ -160,7 +160,7 @@ export const DailyRatingsTab = ({ youth }: DailyRatingsTabProps) => {
     <div className="space-y-2">
       <Label className="text-sm font-medium text-primary">{label}</Label>
       <div className="flex gap-2">
-        {[0, 1, 2, 3, 4, 5].map(num => (
+        {[0, 1, 2, 3, 4].map(num => (
           <button
             key={num}
             type="button"

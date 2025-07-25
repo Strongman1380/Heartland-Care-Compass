@@ -300,8 +300,8 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
         youth.level = youth.level + 1;
         youth.pointtotal = 0;
         
-        // Refresh the component to show updated level information
-        window.location.reload();
+        // Force component re-render by updating form data
+        setFormData(prev => ({ ...prev, dailyPoints: 0 }));
       } catch (error) {
         console.error("Error updating level:", error);
         toast.error("Failed to update level");
@@ -330,8 +330,8 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
         youth.level = youth.level - 1;
         youth.pointtotal = 0;
         
-        // Refresh the component to show updated level information
-        window.location.reload();
+        // Force component re-render by updating form data
+        setFormData(prev => ({ ...prev, dailyPoints: 0 }));
       } catch (error) {
         console.error("Error updating level:", error);
         toast.error("Failed to update level");

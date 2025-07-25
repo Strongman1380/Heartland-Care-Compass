@@ -11,6 +11,7 @@ import { BackgroundProfileTab } from "./BackgroundProfileTab";
 import { EducationProfileTab } from "./EducationProfileTab";
 import { MedicalProfileTab } from "./MedicalProfileTab";
 import { MentalHealthProfileTab } from "./MentalHealthProfileTab";
+import { RatingsProfileTab } from "./RatingsProfileTab";
 import { EditYouthDialog } from "./EditYouthDialog";
 
 interface YouthProfileProps {
@@ -83,12 +84,13 @@ export const YouthProfile = ({ youth, onBack, onYouthUpdated }: YouthProfileProp
 
         <CardContent className="p-6">
           <Tabs defaultValue="personal" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-5">
+            <TabsList className="grid w-full grid-cols-6">
               <TabsTrigger value="personal">Personal</TabsTrigger>
               <TabsTrigger value="background">Background</TabsTrigger>
               <TabsTrigger value="education">Education</TabsTrigger>
               <TabsTrigger value="medical">Medical</TabsTrigger>
               <TabsTrigger value="mental-health">Mental Health</TabsTrigger>
+              <TabsTrigger value="ratings">Ratings</TabsTrigger>
             </TabsList>
 
             <TabsContent value="personal">
@@ -109,6 +111,10 @@ export const YouthProfile = ({ youth, onBack, onYouthUpdated }: YouthProfileProp
 
             <TabsContent value="mental-health">
               <MentalHealthProfileTab youth={youth} />
+            </TabsContent>
+
+            <TabsContent value="ratings">
+              <RatingsProfileTab youth={youth} />
             </TabsContent>
           </Tabs>
         </CardContent>

@@ -16,6 +16,10 @@ export interface Youth {
   medicalInfo?: string | null;
   mentalHealthInfo?: string | null;
   legalStatus?: string | null;
+  peerInteraction?: number | null; // 0-5 rating
+  adultInteraction?: number | null; // 0-5 rating
+  investmentLevel?: number | null; // 0-5 rating
+  dealAuthority?: number | null; // 0-5 rating
   createdAt?: Date | null;
   updatedAt?: Date | null;
 }
@@ -60,6 +64,10 @@ export const mapYouthFromSupabase = (data: any): Youth => {
     medicalInfo: data.medicalinfo,
     mentalHealthInfo: data.mentalhealthinfo,
     legalStatus: data.legalstatus,
+    peerInteraction: data.peerinteraction,
+    adultInteraction: data.adultinteraction,
+    investmentLevel: data.investmentlevel,
+    dealAuthority: data.dealauthority,
     createdAt: data.createdat ? new Date(data.createdat) : null,
     updatedAt: data.updatedat ? new Date(data.updatedat) : null
   };

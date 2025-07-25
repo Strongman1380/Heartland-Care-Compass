@@ -16,6 +16,10 @@ export const mockYouthData: Omit<Youth, 'id'>[] = [
     educationInfo: "Currently in 10th grade, struggles with math",
     medicalInfo: "No known allergies, regular checkups",
     mentalHealthInfo: "Diagnosed with ADHD, taking medication",
+    peerInteraction: 4,
+    adultInteraction: 3,
+    investmentLevel: 4,
+    dealAuthority: 2,
     createdAt: new Date("2024-01-15"),
     updatedAt: new Date("2024-01-15")
   },
@@ -33,6 +37,10 @@ export const mockYouthData: Omit<Youth, 'id'>[] = [
     educationInfo: "9th grade, good in English and history",
     medicalInfo: "Asthma, uses inhaler as needed",
     mentalHealthInfo: "Anxiety disorder, seeing counselor weekly",
+    peerInteraction: 2,
+    adultInteraction: 3,
+    investmentLevel: 2,
+    dealAuthority: 1,
     createdAt: new Date("2024-02-01"),
     updatedAt: new Date("2024-02-01")
   },
@@ -50,6 +58,10 @@ export const mockYouthData: Omit<Youth, 'id'>[] = [
     educationInfo: "11th grade, working toward GED",
     medicalInfo: "Previous sports injury, left knee",
     mentalHealthInfo: "Substance abuse counseling, group therapy",
+    peerInteraction: 5,
+    adultInteraction: 4,
+    investmentLevel: 5,
+    dealAuthority: 4,
     createdAt: new Date("2024-01-10"),
     updatedAt: new Date("2024-01-10")
   },
@@ -67,6 +79,10 @@ export const mockYouthData: Omit<Youth, 'id'>[] = [
     educationInfo: "8th grade, strong in science",
     medicalInfo: "Type 1 diabetes, insulin dependent",
     mentalHealthInfo: "Depression, individual therapy sessions",
+    peerInteraction: 1,
+    adultInteraction: 2,
+    investmentLevel: 1,
+    dealAuthority: 1,
     createdAt: new Date("2024-03-01"),
     updatedAt: new Date("2024-03-01")
   }

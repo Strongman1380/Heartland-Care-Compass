@@ -496,7 +496,7 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
                 <Button 
                   size="sm" 
                   onClick={handleLevelUp}
-                  disabled={!isEligibleForLevelUp() || !nextLevel}
+                  disabled={!nextLevel}
                   className={`flex-1 ${isEligibleForLevelUp() && nextLevel ? 'bg-green-600 hover:bg-green-700 text-white animate-pulse' : ''}`}
                 >
                   <TrendingUp size={14} className="mr-1" />
@@ -506,6 +506,7 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
                   size="sm" 
                   variant="destructive"
                   onClick={handleLevelDemotion}
+                  disabled={youth.level <= 1}
                   className="flex-1"
                 >
                   <TrendingDown size={14} className="mr-1" />

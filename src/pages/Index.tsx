@@ -153,7 +153,17 @@ const Index = () => {
       />
       <main className="container mx-auto px-4 py-8">
         {showAdmin ? (
-          <RapidPlacementAssessment />
+          <div className="space-y-6">
+            <div className="flex gap-4 mb-6">
+              <a 
+                href="/assessment-kpi" 
+                className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+              >
+                📊 Assessment KPI Dashboard
+              </a>
+            </div>
+            <RapidPlacementAssessment />
+          </div>
         ) : !selectedYouth ? (
           <>
             <YouthSelectionView

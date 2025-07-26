@@ -20,6 +20,9 @@ export interface Youth {
   adultInteraction?: number | null; // 0-5 rating
   investmentLevel?: number | null; // 0-5 rating
   dealAuthority?: number | null; // 0-5 rating
+  hyrnaRiskLevel?: string | null; // Low, Medium, High
+  hyrnaScore?: number | null; // Risk assessment score
+  hyrnaAssessmentDate?: Date | null;
   createdAt?: Date | null;
   updatedAt?: Date | null;
 }
@@ -82,6 +85,9 @@ export const mapYouthFromSupabase = (data: any): Youth => {
     adultInteraction: data.adultinteraction,
     investmentLevel: data.investmentlevel,
     dealAuthority: data.dealauthority,
+    hyrnaRiskLevel: data.hyrnarisklevel,
+    hyrnaScore: data.hyrnascore,
+    hyrnaAssessmentDate: data.hyrnaassessmentdate ? new Date(data.hyrnaassessmentdate) : null,
     createdAt: data.createdat ? new Date(data.createdat) : null,
     updatedAt: data.updatedat ? new Date(data.updatedat) : null
   };

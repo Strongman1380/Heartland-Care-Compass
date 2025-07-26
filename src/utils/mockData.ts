@@ -20,6 +20,9 @@ export const mockYouthData: Omit<Youth, 'id'>[] = [
     adultInteraction: 3,
     investmentLevel: 4,
     dealAuthority: 2,
+    hyrnaRiskLevel: "Medium",
+    hyrnaScore: 65,
+    hyrnaAssessmentDate: new Date("2024-01-20"),
     createdAt: new Date("2024-01-15"),
     updatedAt: new Date("2024-01-15")
   },
@@ -41,6 +44,9 @@ export const mockYouthData: Omit<Youth, 'id'>[] = [
     adultInteraction: 3,
     investmentLevel: 2,
     dealAuthority: 1,
+    hyrnaRiskLevel: "Low",
+    hyrnaScore: 35,
+    hyrnaAssessmentDate: new Date("2024-02-05"),
     createdAt: new Date("2024-02-01"),
     updatedAt: new Date("2024-02-01")
   },
@@ -62,6 +68,9 @@ export const mockYouthData: Omit<Youth, 'id'>[] = [
     adultInteraction: 4,
     investmentLevel: 5,
     dealAuthority: 4,
+    hyrnaRiskLevel: "High",
+    hyrnaScore: 85,
+    hyrnaAssessmentDate: new Date("2024-01-15"),
     createdAt: new Date("2024-01-10"),
     updatedAt: new Date("2024-01-10")
   },
@@ -83,6 +92,9 @@ export const mockYouthData: Omit<Youth, 'id'>[] = [
     adultInteraction: 2,
     investmentLevel: 1,
     dealAuthority: 1,
+    hyrnaRiskLevel: "Medium",
+    hyrnaScore: 55,
+    hyrnaAssessmentDate: new Date("2024-03-05"),
     createdAt: new Date("2024-03-01"),
     updatedAt: new Date("2024-03-01")
   }

@@ -108,18 +108,20 @@ const AssessmentKPIDashboard = () => {
     const totalAssessments = data.worksheets.length + data.riskassessments.length;
     const totalYouth = data.youths.length;
     
-    // Risk level distribution
-    const riskLevels = data.riskassessments.map(assessment => assessment.overallrisklevel || 'Unknown');
-    const riskCounts = riskLevels.reduce((acc, level) => {
-      acc[level] = (acc[level] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>);
-
-    const riskLevelDistribution = Object.entries(riskCounts).map(([level, count]) => ({
-      name: level,
-      value: count,
-      percentage: data.riskassessments.length > 0 ? (((count as number) / data.riskassessments.length) * 100).toFixed(1) : '0'
-    }));
+    // Risk level distribution from HYRNA assessments
+    const riskCounts = { Low: 0, Medium: 0, High: 0 };
+    data.youths.forEach(youth => {
+      const riskLevel = youth.hyrnarisklevel || 'Medium'; // Default to Medium if not set
+      if (riskLevel in riskCounts) {
+        riskCounts[riskLevel as keyof typeof riskCounts]++;
+      }
+    });
+    
+    const riskLevelDistribution = [
+      { name: 'Low', value: riskCounts.Low, percentage: totalYouth > 0 ? ((riskCounts.Low / totalYouth) * 100).toFixed(1) : '0' },
+      { name: 'Medium', value: riskCounts.Medium, percentage: totalYouth > 0 ? ((riskCounts.Medium / totalYouth) * 100).toFixed(1) : '0' },
+      { name: 'High', value: riskCounts.High, percentage: totalYouth > 0 ? ((riskCounts.High / totalYouth) * 100).toFixed(1) : '0' }
+    ];
 
     // Assessment trends over time
     const assessmentsByMonth = {};

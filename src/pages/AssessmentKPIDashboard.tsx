@@ -5,8 +5,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { supabase } from '@/integrations/supabase/client';
-import { TrendingUp, TrendingDown, Users, FileText, AlertTriangle, CheckCircle } from 'lucide-react';
+import { TrendingUp, TrendingDown, Users, FileText, AlertTriangle, CheckCircle, ArrowLeft } from 'lucide-react';
 import { Header } from '@/components/layout/Header';
+import { Button } from '@/components/ui/button';
+import { useNavigate } from 'react-router-dom';
 
 interface AssessmentData {
   worksheets: any[];
@@ -27,6 +29,7 @@ interface KPIMetrics {
 }
 
 const AssessmentKPIDashboard = () => {
+  const navigate = useNavigate();
   const [data, setData] = useState<AssessmentData>({
     worksheets: [],
     riskassessments: [],
@@ -267,9 +270,20 @@ const AssessmentKPIDashboard = () => {
       <Header />
       <div className="container mx-auto px-4 py-8">
         <div className="flex justify-between items-center mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-foreground">Assessment KPI Dashboard</h1>
-            <p className="text-muted-foreground mt-2">Track assessment progress and youth improvements</p>
+          <div className="flex items-center gap-4">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate('/profiles')}
+              className="flex items-center gap-2"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back to Profiles
+            </Button>
+            <div>
+              <h1 className="text-3xl font-bold text-foreground">Assessment KPI Dashboard</h1>
+              <p className="text-muted-foreground mt-2">Track assessment progress and youth improvements</p>
+            </div>
           </div>
           <Select value={timeframe} onValueChange={setTimeframe}>
             <SelectTrigger className="w-40">

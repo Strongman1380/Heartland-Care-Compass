@@ -242,7 +242,7 @@ const AssessmentKPIDashboard = () => {
   const getRiskLevelColor = (level: string) => {
     switch (level.toLowerCase()) {
       case 'low': return '#10b981';
-      case 'moderate': return '#f59e0b';
+      case 'medium': return '#f59e0b';
       case 'high': return '#ef4444';
       case 'very high': return '#dc2626';
       default: return '#6b7280';

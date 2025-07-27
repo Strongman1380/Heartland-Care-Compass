@@ -399,17 +399,28 @@ const AssessmentKPIDashboard = () => {
                       data={chartData.riskLevelDistribution}
                       cx="50%"
                       cy="50%"
-                      labelLine={false}
-                      label={({ name, percentage }) => `${name}: ${percentage}%`}
                       outerRadius={80}
                       fill="#8884d8"
                       dataKey="value"
+                      stroke="#ffffff"
+                      strokeWidth={2}
                     >
                       {chartData.riskLevelDistribution.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={getRiskLevelColor(entry.name)} />
                       ))}
                     </Pie>
-                    <Tooltip />
+                    <Tooltip 
+                      formatter={(value, name) => [`${value} youth`, name]}
+                      labelFormatter={(label) => `Risk Level: ${label}`}
+                    />
+                    <Legend 
+                      verticalAlign="bottom" 
+                      height={36}
+                      formatter={(value, entry: any) => {
+                        const item = chartData.riskLevelDistribution.find(d => d.name === value);
+                        return `${value}: ${item?.percentage}% (${item?.value} youth)`;
+                      }}
+                    />
                   </PieChart>
                 </ResponsiveContainer>
               </CardContent>

@@ -12,6 +12,7 @@ import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Youth } from '@/types/app-types';
 import QuickISPAssessment from './QuickISPAssessment';
+import { ComprehensivePlacementAssessment } from './ComprehensivePlacementAssessment';
 
 interface AssessmentData {
   youthName: string;
@@ -491,6 +492,21 @@ export const RapidPlacementAssessment = () => {
                   selectedYouth={youthSelection === 'existing' && selectedYouthId ? youths.find(y => y.id === selectedYouthId) : undefined}
                 />
               </div>
+            ) : assessmentType === 'comprehensive' ? (
+              <div>
+                <div className="flex items-center justify-between mb-4 print:hidden">
+                  <Button variant="outline" onClick={resetSelection}>
+                    ← Back to Assessment Selection
+                  </Button>
+                  <Badge variant="secondary">
+                    CPAT - {youthSelection === 'new' ? 'New Youth' : 'Existing Youth'}
+                  </Badge>
+                </div>
+                <ComprehensivePlacementAssessment 
+                  youthId={youthSelection === 'existing' && selectedYouthId ? selectedYouthId : ''} 
+                  youth={youthSelection === 'existing' && selectedYouthId ? youths.find(y => y.id === selectedYouthId) : undefined}
+                />
+              </div>
             ) : (
               <>
                 <div className="text-center mb-8 print:mb-4">
@@ -499,7 +515,7 @@ export const RapidPlacementAssessment = () => {
                       ← Back to Assessment Selection
                     </Button>
                     <Badge variant="secondary">
-                      {assessmentType === 'rapid' ? 'RPAT' : 'CPAT'} - {youthSelection === 'new' ? 'New Youth' : 'Existing Youth'}
+                      RPAT - {youthSelection === 'new' ? 'New Youth' : 'Existing Youth'}
                     </Badge>
                   </div>
               <h1 className="text-3xl font-bold text-red-800 mb-2 print:text-black print:text-2xl">

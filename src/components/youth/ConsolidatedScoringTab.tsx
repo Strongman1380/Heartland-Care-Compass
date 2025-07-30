@@ -104,7 +104,7 @@ export const ConsolidatedScoringTab = ({ youth }: ConsolidatedScoringTabProps) =
     </div>
   );
 
-  const handleSaveAll = async () => {
+  const handleSaveDPN = async () => {
     setLoading(true);
     try {
       // Save daily ratings
@@ -123,6 +123,36 @@ export const ConsolidatedScoringTab = ({ youth }: ConsolidatedScoringTabProps) =
 
       if (ratingError) throw ratingError;
 
+      toast({
+        title: "Success",
+        description: "DPN (Daily Point Number) saved successfully"
+      });
+
+      // Reset daily ratings form only
+      setDailyRating({
+        peerInteraction: 0,
+        adultInteraction: 0,
+        investmentLevel: 0,
+        dealAuthority: 0,
+        comments: ""
+      });
+      setStaffName("");
+
+    } catch (error) {
+      console.error("Error saving DPN:", error);
+      toast({
+        title: "Error",
+        description: "Failed to save DPN data",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSaveDailyPoints = async () => {
+    setLoading(true);
+    try {
       // Save daily points
       const { error: pointsError } = await supabase
         .from("points")
@@ -148,27 +178,20 @@ export const ConsolidatedScoringTab = ({ youth }: ConsolidatedScoringTabProps) =
 
       toast({
         title: "Success",
-        description: "All scoring data saved successfully"
+        description: "Daily Points Total saved successfully"
       });
 
-      // Reset forms
-      setDailyRating({
-        peerInteraction: 0,
-        adultInteraction: 0,
-        investmentLevel: 0,
-        dealAuthority: 0,
-        comments: ""
-      });
+      // Reset daily points form only
       setDailyPoints({
         totalPoints: 0,
         comments: ""
       });
 
     } catch (error) {
-      console.error("Error saving data:", error);
+      console.error("Error saving daily points:", error);
       toast({
         title: "Error",
-        description: "Failed to save scoring data",
+        description: "Failed to save daily points data",
         variant: "destructive"
       });
     } finally {
@@ -236,6 +259,20 @@ export const ConsolidatedScoringTab = ({ youth }: ConsolidatedScoringTabProps) =
               rows={2}
             />
           </div>
+          
+          {/* DPN Submit Button */}
+          <div className="flex justify-end pt-4 border-t">
+            <Button 
+              onClick={handleSaveDPN} 
+              disabled={loading || !staffName.trim()} 
+              size="lg"
+              variant="outline"
+              className="min-w-[150px]"
+            >
+              <Save className="mr-2 h-4 w-4" />
+              {loading ? "Saving..." : "Submit DPN"}
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
@@ -267,21 +304,21 @@ export const ConsolidatedScoringTab = ({ youth }: ConsolidatedScoringTabProps) =
               rows={2}
             />
           </div>
+          
+          {/* Daily Points Submit Button */}
+          <div className="flex justify-end pt-4 border-t">
+            <Button 
+              onClick={handleSaveDailyPoints} 
+              disabled={loading || dailyPoints.totalPoints === 0} 
+              size="lg"
+              className="min-w-[180px]"
+            >
+              <Save className="mr-2 h-4 w-4" />
+              {loading ? "Saving..." : "Submit Daily Points"}
+            </Button>
+          </div>
         </CardContent>
       </Card>
-
-      {/* Save Button */}
-      <div className="flex justify-center">
-        <Button 
-          onClick={handleSaveAll} 
-          disabled={loading || !staffName.trim()} 
-          size="lg"
-          className="min-w-[200px]"
-        >
-          <Save className="mr-2 h-4 w-4" />
-          {loading ? "Saving..." : "Save All Data"}
-        </Button>
-      </div>
     </div>
   );
 };

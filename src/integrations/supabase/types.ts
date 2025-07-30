@@ -141,6 +141,134 @@ export type Database = {
           },
         ]
       }
+      real_colors_assessments: {
+        Row: {
+          assessment_date: string
+          comments: string | null
+          completed_by: string | null
+          created_at: string
+          id: string
+          insights: string | null
+          is_screening: boolean | null
+          observations: string | null
+          primary_color: string
+          secondary_color: string | null
+          updated_at: string
+          youth_id: string
+        }
+        Insert: {
+          assessment_date?: string
+          comments?: string | null
+          completed_by?: string | null
+          created_at?: string
+          id?: string
+          insights?: string | null
+          is_screening?: boolean | null
+          observations?: string | null
+          primary_color: string
+          secondary_color?: string | null
+          updated_at?: string
+          youth_id: string
+        }
+        Update: {
+          assessment_date?: string
+          comments?: string | null
+          completed_by?: string | null
+          created_at?: string
+          id?: string
+          insights?: string | null
+          is_screening?: boolean | null
+          observations?: string | null
+          primary_color?: string
+          secondary_color?: string | null
+          updated_at?: string
+          youth_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "real_colors_assessments_youth_id_fkey"
+            columns: ["youth_id"]
+            isOneToOne: false
+            referencedRelation: "youths"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      riskassessments: {
+        Row: {
+          assessmentdate: string
+          completedby: string | null
+          createdat: string
+          domains: Json | null
+          id: string
+          interventiontargets: string | null
+          overallrisklevel: string | null
+          recommendedlevel: string | null
+          strengths: string | null
+          traumahistory: string | null
+          updatedat: string
+          youth_id: string
+        }
+        Insert: {
+          assessmentdate?: string
+          completedby?: string | null
+          createdat?: string
+          domains?: Json | null
+          id: string
+          interventiontargets?: string | null
+          overallrisklevel?: string | null
+          recommendedlevel?: string | null
+          strengths?: string | null
+          traumahistory?: string | null
+          updatedat?: string
+          youth_id: string
+        }
+        Update: {
+          assessmentdate?: string
+          completedby?: string | null
+          createdat?: string
+          domains?: Json | null
+          id?: string
+          interventiontargets?: string | null
+          overallrisklevel?: string | null
+          recommendedlevel?: string | null
+          strengths?: string | null
+          traumahistory?: string | null
+          updatedat?: string
+          youth_id?: string
+        }
+        Relationships: []
+      }
+      worksheets: {
+        Row: {
+          createdat: string
+          events: Json | null
+          id: string
+          skillstoimprove: string[] | null
+          summary: string | null
+          updatedat: string
+          youth_id: string
+        }
+        Insert: {
+          createdat?: string
+          events?: Json | null
+          id: string
+          skillstoimprove?: string[] | null
+          summary?: string | null
+          updatedat?: string
+          youth_id: string
+        }
+        Update: {
+          createdat?: string
+          events?: Json | null
+          id?: string
+          skillstoimprove?: string[] | null
+          summary?: string | null
+          updatedat?: string
+          youth_id?: string
+        }
+        Relationships: []
+      }
       youths: {
         Row: {
           admissiondate: string | null

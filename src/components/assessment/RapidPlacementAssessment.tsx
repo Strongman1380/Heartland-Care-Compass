@@ -12,6 +12,7 @@ import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Youth } from '@/types/app-types';
 import QuickISPAssessment from './QuickISPAssessment';
+import { RealColorsAssessment } from './RealColorsAssessment';
 
 interface AssessmentData {
   youthName: string;
@@ -422,6 +423,12 @@ export const RapidPlacementAssessment = () => {
                           Quick Individualized Service Plan (ISP)
                         </div>
                       </SelectItem>
+                      <SelectItem value="realcolors">
+                        <div className="flex items-center gap-2">
+                          <FileText className="h-4 w-4" />
+                          Real Colors Personality Assessment
+                        </div>
+                      </SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -482,6 +489,20 @@ export const RapidPlacementAssessment = () => {
                   </Badge>
                 </div>
                 <QuickISPAssessment 
+                  selectedYouth={youthSelection === 'existing' && selectedYouthId ? youths.find(y => y.id === selectedYouthId) : undefined}
+                />
+              </div>
+            ) : assessmentType === 'realcolors' ? (
+              <div>
+                <div className="flex items-center justify-between mb-4 print:hidden">
+                  <Button variant="outline" onClick={resetSelection}>
+                    ← Back to Assessment Selection
+                  </Button>
+                  <Badge variant="secondary">
+                    Real Colors - {youthSelection === 'new' ? 'New Youth' : 'Existing Youth'}
+                  </Badge>
+                </div>
+                <RealColorsAssessment 
                   selectedYouth={youthSelection === 'existing' && selectedYouthId ? youths.find(y => y.id === selectedYouthId) : undefined}
                 />
               </div>

@@ -5,7 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { supabase } from '@/integrations/supabase/client';
-import { TrendingUp, TrendingDown, Users, FileText, AlertTriangle, CheckCircle, ArrowLeft } from 'lucide-react';
+import { TrendingUp, TrendingDown, Users, FileText, AlertTriangle, CheckCircle, ArrowLeft, Palette } from 'lucide-react';
 import { Header } from '@/components/layout/Header';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
@@ -17,6 +17,7 @@ interface AssessmentData {
   points: any[];
   daily_ratings: any[];
   youths: any[];
+  realColorsAssessments: any[];
 }
 
 interface KPIMetrics {
@@ -26,6 +27,7 @@ interface KPIMetrics {
   completionRate: number;
   improvementTrend: number;
   lastMonthAssessments: number;
+  realColorsAssessments: number;
 }
 
 const AssessmentKPIDashboard = () => {
@@ -36,7 +38,8 @@ const AssessmentKPIDashboard = () => {
     notes: [],
     points: [],
     daily_ratings: [],
-    youths: []
+    youths: [],
+    realColorsAssessments: []
   });
   const [kpiMetrics, setKpiMetrics] = useState<KPIMetrics>({
     totalAssessments: 0,
@@ -44,7 +47,8 @@ const AssessmentKPIDashboard = () => {
     averageRiskLevel: 'Low',
     completionRate: 0,
     improvementTrend: 0,
-    lastMonthAssessments: 0
+    lastMonthAssessments: 0,
+    realColorsAssessments: 0
   });
   const [timeframe, setTimeframe] = useState('month');
   const [isLoading, setIsLoading] = useState(true);
@@ -53,7 +57,8 @@ const AssessmentKPIDashboard = () => {
     riskLevelDistribution: [],
     pointTrends: [],
     completionStats: [],
-    levelTrends: []
+    levelTrends: [],
+    colorDistribution: []
   });
 
   useEffect(() => {
@@ -69,13 +74,14 @@ const AssessmentKPIDashboard = () => {
   const fetchAllAssessmentData = async () => {
     setIsLoading(true);
     try {
-      const [worksheetsRes, riskRes, notesRes, pointsRes, ratingsRes, youthsRes] = await Promise.all([
+      const [worksheetsRes, riskRes, notesRes, pointsRes, ratingsRes, youthsRes, realColorsRes] = await Promise.all([
         supabase.from('worksheets' as any).select('*').order('createdat', { ascending: false }),
         supabase.from('riskassessments' as any).select('*').order('createdat', { ascending: false }),
         supabase.from('notes').select('*').order('createdat', { ascending: false }),
         supabase.from('points').select('*').order('createdat', { ascending: false }),
         supabase.from('daily_ratings').select('*').order('created_at', { ascending: false }),
-        supabase.from('youths').select('*').order('createdat', { ascending: false })
+        supabase.from('youths').select('*').order('createdat', { ascending: false }),
+        supabase.from('real_colors_assessments').select('*').order('created_at', { ascending: false })
       ]);
 
       setData({
@@ -84,7 +90,8 @@ const AssessmentKPIDashboard = () => {
         notes: notesRes.data || [],
         points: pointsRes.data || [],
         daily_ratings: ratingsRes.data || [],
-        youths: youthsRes.data || []
+        youths: youthsRes.data || [],
+        realColorsAssessments: realColorsRes.data || []
       });
     } catch (error) {
       console.error('Error fetching assessment data:', error);
@@ -108,7 +115,7 @@ const AssessmentKPIDashboard = () => {
     const timeframeDate = getTimeframeDate();
     
     // Calculate KPI metrics
-    const totalAssessments = data.worksheets.length + data.riskassessments.length;
+    const totalAssessments = data.worksheets.length + data.riskassessments.length + data.realColorsAssessments.length;
     const totalYouth = data.youths.length;
     
     // Risk level distribution from HYRNA assessments
@@ -170,11 +177,25 @@ const AssessmentKPIDashboard = () => {
     
     const completionRate = totalYouth > 0 ? (youthWithAssessments.size / totalYouth) * 100 : 0;
 
+    // Real Colors distribution
+    const colorCounts = data.realColorsAssessments.reduce((acc, assessment) => {
+      if (assessment.primary_color) {
+        acc[assessment.primary_color] = (acc[assessment.primary_color] || 0) + 1;
+      }
+      return acc;
+    }, {} as Record<string, number>);
+
+    const colorDistribution = Object.entries(colorCounts).map(([color, count]) => ({
+      color,
+      count,
+      percentage: totalYouth > 0 ? Math.round((Number(count) / totalYouth) * 100) : 0
+    }));
+
     // Recent assessments (last month)
     const lastMonth = new Date();
     lastMonth.setMonth(lastMonth.getMonth() - 1);
-    const lastMonthAssessments = [...data.worksheets, ...data.riskassessments]
-      .filter(assessment => new Date(assessment.createdat || assessment.assessmentdate) >= lastMonth).length;
+    const lastMonthAssessments = [...data.worksheets, ...data.riskassessments, ...data.realColorsAssessments]
+      .filter(assessment => new Date(assessment.createdat || assessment.assessmentdate || assessment.created_at) >= lastMonth).length;
 
     // Calculate improvement trend
     const recentPoints = pointTrends.slice(-2);
@@ -227,7 +248,8 @@ const AssessmentKPIDashboard = () => {
       averageRiskLevel: Object.keys(riskCounts).reduce((a, b) => riskCounts[a] > riskCounts[b] ? a : b, 'Low'),
       completionRate,
       improvementTrend,
-      lastMonthAssessments
+      lastMonthAssessments,
+      realColorsAssessments: data.realColorsAssessments.length
     });
 
     setChartData({
@@ -238,7 +260,8 @@ const AssessmentKPIDashboard = () => {
         { name: 'Completed Assessments', value: youthWithAssessments.size },
         { name: 'Pending Assessments', value: totalYouth - youthWithAssessments.size }
       ] as any,
-      levelTrends: levelTrends as any
+      levelTrends: levelTrends as any,
+      colorDistribution: colorDistribution as any
     });
   };
 
@@ -298,7 +321,7 @@ const AssessmentKPIDashboard = () => {
         </div>
 
         {/* KPI Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total Assessments</CardTitle>
@@ -355,6 +378,19 @@ const AssessmentKPIDashboard = () => {
               </Badge>
             </CardContent>
           </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Real Colors</CardTitle>
+              <Palette className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{kpiMetrics.realColorsAssessments}</div>
+              <p className="text-xs text-muted-foreground">
+                {kpiMetrics.totalYouth > 0 ? Math.round((kpiMetrics.realColorsAssessments / kpiMetrics.totalYouth) * 100) : 0}% coverage
+              </p>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Charts */}
@@ -365,6 +401,7 @@ const AssessmentKPIDashboard = () => {
             <TabsTrigger value="progress">Progress Tracking</TabsTrigger>
             <TabsTrigger value="levels">Level Changes</TabsTrigger>
             <TabsTrigger value="completion">Completion Stats</TabsTrigger>
+            <TabsTrigger value="colors">Real Colors</TabsTrigger>
           </TabsList>
 
           <TabsContent value="trends">
@@ -489,6 +526,92 @@ const AssessmentKPIDashboard = () => {
                 </ResponsiveContainer>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="colors">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Real Colors Distribution</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <PieChart>
+                      <Pie
+                        data={chartData.colorDistribution}
+                        cx="50%"
+                        cy="50%"
+                        outerRadius={100}
+                        fill="#8884d8"
+                        dataKey="count"
+                        stroke="#ffffff"
+                        strokeWidth={2}
+                      >
+                        {chartData.colorDistribution.map((entry, index) => (
+                          <Cell 
+                            key={`cell-${index}`} 
+                            fill={
+                              entry.color === 'Gold' ? '#F59E0B' :
+                              entry.color === 'Blue' ? '#3B82F6' :
+                              entry.color === 'Green' ? '#10B981' :
+                              entry.color === 'Orange' ? '#F97316' : '#6B7280'
+                            } 
+                          />
+                        ))}
+                      </Pie>
+                      <Tooltip 
+                        formatter={(value: any, name: any, props: any) => [
+                          `${value} youth`,
+                          `${props.payload.color} Color`
+                        ]}
+                      />
+                      <Legend 
+                        verticalAlign="bottom" 
+                        height={36}
+                        formatter={(value, entry: any) => {
+                          const item = chartData.colorDistribution.find(d => d.color === value);
+                          return `${value}: ${item?.percentage}% (${item?.count} youth)`;
+                        }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Color Breakdown</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {chartData.colorDistribution.map((color, index) => (
+                      <div key={index} className="flex justify-between items-center p-3 bg-muted rounded-lg">
+                        <div className="flex items-center gap-3">
+                          <div 
+                            className={`w-4 h-4 rounded-full ${
+                              color.color === 'Gold' ? 'bg-yellow-500' :
+                              color.color === 'Blue' ? 'bg-blue-500' :
+                              color.color === 'Green' ? 'bg-green-500' :
+                              color.color === 'Orange' ? 'bg-orange-500' : 'bg-gray-500'
+                            }`}
+                          />
+                          <span className="font-medium">{color.color}</span>
+                        </div>
+                        <div className="text-right">
+                          <div className="font-bold">{color.count}</div>
+                          <div className="text-sm text-muted-foreground">{color.percentage}%</div>
+                        </div>
+                      </div>
+                    ))}
+                    {chartData.colorDistribution.length === 0 && (
+                      <div className="text-center text-muted-foreground py-8">
+                        No Real Colors assessments completed yet
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
         </Tabs>
       </div>

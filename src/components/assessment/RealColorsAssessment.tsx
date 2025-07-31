@@ -185,7 +185,7 @@ export const RealColorsAssessment = ({ selectedYouth }: RealColorsAssessmentProp
         .insert({
           youth_id: youthId,
           primary_color: primaryColor,
-          secondary_color: secondaryColor || null,
+          secondary_color: secondaryColor === 'none' ? null : secondaryColor || null,
           insights: insights || null,
           comments: comments || null,
           observations: observations || null,
@@ -315,7 +315,7 @@ export const RealColorsAssessment = ({ selectedYouth }: RealColorsAssessmentProp
                 <SelectValue placeholder="Select secondary color (optional)" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">None</SelectItem>
+                <SelectItem value="none">None</SelectItem>
                 {Object.keys(COLOR_PROFILES)
                   .filter(color => color !== primaryColor)
                   .map((color) => (

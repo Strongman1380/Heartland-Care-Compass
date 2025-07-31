@@ -58,6 +58,10 @@ export const YouthProfile = ({ youth, onBack, onYouthUpdated }: YouthProfileProp
               <CardTitle className="text-3xl text-red-800 mb-2">
                 {youth.firstName} {youth.lastName}
               </CardTitle>
+              <div className="text-sm text-red-600 mb-3">
+                <span className="font-semibold">Youth ID:</span> 
+                <span className="font-mono ml-2">{youth.id}</span>
+              </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm text-red-700">
                 <div>
                   <span className="font-semibold">Age:</span> {youth.age || "Not specified"}

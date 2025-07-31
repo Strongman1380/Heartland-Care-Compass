@@ -229,6 +229,7 @@ export const YouthProfilesTable = ({ youths, loading, onYouthSelect, onYouthUpda
                     onCheckedChange={handleSelectAll}
                   />
                 </TableHead>
+                <TableHead>Youth ID</TableHead>
                 <TableHead>Name</TableHead>
                 <TableHead>Age</TableHead>
                 <TableHead>Level</TableHead>
@@ -245,6 +246,9 @@ export const YouthProfilesTable = ({ youths, loading, onYouthSelect, onYouthUpda
                       checked={selectedYouthIds.includes(youth.id)}
                       onCheckedChange={(checked) => handleSelectYouth(youth.id, checked as boolean)}
                     />
+                  </TableCell>
+                  <TableCell className="font-mono text-sm">
+                    {youth.id.substring(0, 8)}...
                   </TableCell>
                   <TableCell className="font-medium">
                     {youth.firstName} {youth.lastName}

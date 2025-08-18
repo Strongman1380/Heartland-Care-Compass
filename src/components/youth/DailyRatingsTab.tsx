@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Youth, DailyRating, mapDailyRatingFromSupabase } from "@/types/app-types";
+import { Youth, DailyRating } from "@/types/app-types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Calendar, CalendarDays } from "lucide-react";
 import { format, subDays, startOfWeek, startOfMonth } from "date-fns";
-import { supabase } from "@/integrations/supabase/client";
+// Supabase removed - using local storage only
 import { useToast } from "@/hooks/use-toast";
 
 interface DailyRatingsTabProps {
@@ -47,17 +47,10 @@ export const DailyRatingsTab = ({ youth }: DailyRatingsTabProps) => {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
-  const fetchRatings = async () => {
+  const fetchRatings = () => {
     try {
-      const { data, error } = await supabase
-        .from("daily_ratings")
-        .select("*")
-        .eq("youth_id", youth.id)
-        .order("date", { ascending: false });
-
-      if (error) throw error;
-
-      const mappedRatings = data?.map(mapDailyRatingFromSupabase) || [];
+      // TODO: Implement daily ratings fetching from local storage
+      const mappedRatings: DailyRating[] = [];
       setRatings(mappedRatings);
       
       // Calculate averages
@@ -116,23 +109,20 @@ export const DailyRatingsTab = ({ youth }: DailyRatingsTabProps) => {
     });
   };
 
-  const handleSaveRating = async () => {
+  const handleSaveRating = () => {
     setLoading(true);
     try {
-      const { error } = await supabase
-        .from("daily_ratings")
-        .upsert({
-          youth_id: youth.id,
-          date: selectedDate,
-          peer_interaction: todayRating.peerInteraction,
-          adult_interaction: todayRating.adultInteraction,
-          investment_level: todayRating.investmentLevel,
-          deal_authority: todayRating.dealAuthority,
-          staff: todayRating.staff,
-          comments: todayRating.comments
-        });
-
-      if (error) throw error;
+      // TODO: Save daily rating to local storage
+      console.log('Saving daily rating:', {
+        youth_id: youth.id,
+        date: selectedDate,
+        peer_interaction: todayRating.peerInteraction,
+        adult_interaction: todayRating.adultInteraction,
+        investment_level: todayRating.investmentLevel,
+        deal_authority: todayRating.dealAuthority,
+        staff: todayRating.staff,
+        comments: todayRating.comments
+      });
 
       toast({
         title: "Success",

@@ -6,7 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { supabase } from "@/integrations/supabase/client";
+// Supabase removed - using local storage only
+import { updateYouth } from "@/utils/local-storage-utils";
 import { Youth } from "@/types/app-types";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
@@ -67,28 +68,23 @@ export const EditYouthDialog = ({ youth, open, onClose, onSuccess }: EditYouthDi
 
     try {
       const updateData = {
-        firstname: formData.firstName,
-        lastname: formData.lastName,
-        dob: formData.dob || null,
-        age: formData.age ? parseInt(formData.age) : null,
-        admissiondate: formData.admissionDate || null,
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        dob: formData.dob ? new Date(formData.dob) : undefined,
+        age: formData.age ? parseInt(formData.age) : undefined,
+        admissionDate: formData.admissionDate ? new Date(formData.admissionDate) : undefined,
         level: parseInt(formData.level),
-        pointtotal: parseInt(formData.pointTotal),
-        referralsource: formData.referralSource || null,
-        referralreason: formData.referralReason || null,
-        educationinfo: formData.educationInfo || null,
-        medicalinfo: formData.medicalInfo || null,
-        mentalhealthinfo: formData.mentalHealthInfo || null,
-        legalstatus: formData.legalStatus || null,
-        updatedat: new Date().toISOString()
+        pointTotal: parseInt(formData.pointTotal),
+        referralSource: formData.referralSource || undefined,
+        referralReason: formData.referralReason || undefined,
+        educationInfo: formData.educationInfo || undefined,
+        medicalInfo: formData.medicalInfo || undefined,
+        mentalHealthInfo: formData.mentalHealthInfo || undefined,
+        legalStatus: formData.legalStatus || undefined,
+        updatedAt: new Date()
       };
 
-      const { error } = await supabase
-        .from('youths')
-        .update(updateData)
-        .eq('id', youth.id);
-
-      if (error) throw error;
+      updateYouth(youth.id, updateData);
 
       toast({
         title: "Success",

@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
+import { saveYouth } from "@/utils/local-storage-utils";
 import { useYouthForm } from "@/hooks/useYouthForm";
 import { PersonalInfoTab } from "./PersonalInfoTab";
 import { BackgroundTab } from "./BackgroundTab";
@@ -13,9 +13,10 @@ import { MentalHealthTab } from "./MentalHealthTab";
 
 interface AddYouthDialogProps {
   onClose: () => void;
+  onSuccess?: () => void;
 }
 
-export const AddYouthDialog = ({ onClose }: AddYouthDialogProps) => {
+export const AddYouthDialog = ({ onClose, onSuccess }: AddYouthDialogProps) => {
   const [activeTab, setActiveTab] = useState("personal");
   const [isSubmitting, setIsSubmitting] = useState(false);
   
@@ -48,73 +49,77 @@ export const AddYouthDialog = ({ onClose }: AddYouthDialogProps) => {
     try {
       setIsSubmitting(true);
       
-      const age = calculateAge(formData.dob);
+      // Extract all the fields
+      const {
+        firstName,
+        lastName,
+        dob,
+        admissionDate,
+        level,
+        referralSource,
+        referralReason,
+      } = formData;
       
-      // Create a consolidated education, medical, and mental health info for database storage
-      const educationInfo = `
-School: ${formData.currentSchool}
-Grade: ${formData.grade}
-IEP: ${formData.hasIEP ? 'Yes' : 'No'}
-Strengths: ${formData.academicStrengths}
-Challenges: ${formData.academicChallenges}
-Goals: ${formData.educationGoals}
-Contact: ${formData.schoolContact} (${formData.schoolPhone})
-      `.trim();
-      
-      const medicalInfo = `
-Physician: ${formData.physician} (${formData.physicianPhone})
-Insurance: ${formData.insuranceProvider} (${formData.policyNumber})
-Allergies: ${formData.allergies}
-Conditions: ${formData.medicalConditions}
-Restrictions: ${formData.medicalRestrictions}
-      `.trim();
-      
-      const mentalHealthInfo = `
-Diagnoses: ${formData.currentDiagnoses}
-Trauma History: ${formData.traumaHistory.join(', ')}
-Previous Treatment: ${formData.previousTreatment}
-Current Counseling: ${formData.currentCounseling.join(', ')}
-Therapist: ${formData.therapistName} (${formData.therapistContact})
-Self-Harm History: ${formData.selfHarmHistory.join(', ')}
-      `.trim();
-      
-      const legalStatus = `
-Placement Authority: ${formData.placementAuthority.join(', ')}
-Court Involvement: ${formData.courtInvolvement.join(', ')}
-Probation Officer: ${formData.probationOfficer} (${formData.probationContact})
-Guardian: ${formData.legalGuardian} (${formData.guardianRelationship})
-Guardian Contact: ${formData.guardianContact}, ${formData.guardianEmail}
-      `.trim();
-      
-      const youthData = {
-        firstname: formData.firstName,
-        lastname: formData.lastName,
-        dob: formData.dob ? new Date(formData.dob).toISOString() : null,
-        age: age,
-        admissiondate: formData.admissionDate ? new Date(formData.admissionDate).toISOString() : new Date().toISOString(),
-        level: parseInt(formData.level, 10) || 1,
-        pointtotal: 0,
-        referralsource: formData.referralSource || formData.referralReason,
-        referralreason: formData.referralReason,
-        educationinfo: educationInfo,
-        medicalinfo: medicalInfo,
-        mentalhealthinfo: mentalHealthInfo,
-        legalstatus: legalStatus,
-        createdat: new Date().toISOString(),
-        updatedat: new Date().toISOString(),
-      };
-      
-      const { data, error } = await supabase
-        .from('youths')
-        .insert(youthData)
-        .select();
-        
-      if (error) {
-        throw error;
+      // Validate required fields
+      if (!firstName || !lastName) {
+        toast.error("First name and last name are required");
+        return;
       }
 
+      // Calculate age from DOB
+      const age = dob ? calculateAge(dob) : null;
+      
+      // Combine educational information
+      const educationInfo = [
+        formData.currentSchool && `School: ${formData.currentSchool}`,
+        formData.grade && `Grade: ${formData.grade}`,
+        formData.hasIEP && "Has IEP",
+        formData.academicStrengths && `Strengths: ${formData.academicStrengths}`,
+        formData.academicChallenges && `Challenges: ${formData.academicChallenges}`
+      ].filter(Boolean).join('; ');
+      
+      // Combine medical information
+      const medicalInfo = [
+        formData.medicalConditions,
+        formData.allergies && `Allergies: ${formData.allergies}`,
+        formData.medicalRestrictions && `Restrictions: ${formData.medicalRestrictions}`
+      ].filter(Boolean).join('; ');
+      
+      // Combine mental health information
+      const mentalHealthInfo = [
+        formData.currentDiagnoses || formData.diagnoses,
+        formData.traumaHistory?.length > 0 && `Trauma history: ${formData.traumaHistory.join(', ')}`,
+        formData.previousTreatment && `Previous treatment: ${formData.previousTreatment}`
+      ].filter(Boolean).join('; ');
+      
+      // Create the youth object
+      const youthData = {
+        firstName,
+        lastName,
+        dob: dob ? new Date(dob) : null,
+        age,
+        admissionDate: admissionDate ? new Date(admissionDate) : null,
+        level: level ? parseInt(level) : 1,
+        pointTotal: 0, // Default to 0
+        referralSource,
+        referralReason,
+        educationInfo,
+        medicalInfo,
+        mentalHealthInfo,
+        legalStatus: formData.courtInvolvement?.join(', ') || null,
+      };
+      
+      // Save to local storage
+      saveYouth(youthData);
+        
       toast.success("Youth profile added successfully");
-      onClose();
+      
+      // Call onSuccess callback if provided, otherwise just close
+      if (onSuccess) {
+        onSuccess();
+      } else {
+        onClose();
+      }
     } catch (error) {
       console.error("Error adding youth:", error);
       toast.error("Failed to add youth profile");

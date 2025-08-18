@@ -3,8 +3,8 @@ import { useState, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
-import { mapYouthFromSupabase, type Youth } from "@/types/app-types";
+import { type Youth } from "@/types/app-types";
+import { fetchYouth } from "@/utils/local-storage-utils";
 
 import { YouthProfile } from "@/components/youth/YouthProfile";
 import { BehaviorCard } from "@/components/behavior/BehaviorCard";
@@ -25,26 +25,17 @@ export const YouthDashboard = ({ youthId }: YouthDashboardProps) => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchYouthData = async () => {
+    const fetchYouthData = () => {
       try {
         console.log("Fetching youth data for ID:", youthId);
         setIsLoading(true);
         setError(null);
         
-        const { data: youthData, error: youthError } = await supabase
-          .from("youths")
-          .select("*")
-          .eq("id", youthId)
-          .single();
-        
-        if (youthError) {
-          throw youthError;
-        }
+        const youthData = fetchYouth(youthId);
         
         if (youthData) {
-          const mappedYouth = mapYouthFromSupabase(youthData);
-          console.log("Mapped youth data:", mappedYouth);
-          setYouth(mappedYouth);
+          console.log("Found youth data:", youthData);
+          setYouth(youthData);
         } else {
           setError("Youth profile not found");
         }

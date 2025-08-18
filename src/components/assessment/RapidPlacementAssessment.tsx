@@ -9,7 +9,8 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Printer, Save, Calculator, FileText, ClipboardCheck } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
+// Supabase removed - using local storage only
+import { fetchAllYouths } from '@/utils/local-storage-utils';
 import { Youth } from '@/types/app-types';
 import QuickISPAssessment from './QuickISPAssessment';
 import { RealColorsAssessment } from './RealColorsAssessment';
@@ -158,14 +159,9 @@ export const RapidPlacementAssessment = () => {
     fetchYouths();
   }, []);
 
-  const fetchYouths = async () => {
+  const fetchYouths = () => {
     try {
-      const { data, error } = await supabase
-        .from('youths')
-        .select('*')
-        .order('firstname');
-      
-      if (error) throw error;
+      const data = fetchAllYouths();
       setYouths(data || []);
     } catch (error) {
       console.error('Error fetching youths:', error);

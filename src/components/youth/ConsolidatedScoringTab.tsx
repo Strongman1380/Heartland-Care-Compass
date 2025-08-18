@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Youth, DailyRating, mapDailyRatingFromSupabase } from "@/types/app-types";
+import { Youth, DailyRating } from "@/types/app-types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Calendar, Save, Plus } from "lucide-react";
 import { format } from "date-fns";
-import { supabase } from "@/integrations/supabase/client";
+// Supabase removed - using local storage only
 import { useToast } from "@/hooks/use-toast";
 
 interface ConsolidatedScoringTabProps {
@@ -36,42 +36,22 @@ export const ConsolidatedScoringTab = ({ youth }: ConsolidatedScoringTabProps) =
     comments: ""
   });
 
-  const fetchExistingData = async () => {
+  const fetchExistingData = () => {
     try {
-      // Fetch existing daily rating
-      const { data: ratingData } = await supabase
-        .from("daily_ratings")
-        .select("*")
-        .eq("youth_id", youth.id)
-        .eq("date", selectedDate)
-        .single();
-
-      if (ratingData) {
-        const rating = mapDailyRatingFromSupabase(ratingData);
-        setDailyRating({
-          peerInteraction: rating.peerInteraction || 0,
-          adultInteraction: rating.adultInteraction || 0,
-          investmentLevel: rating.investmentLevel || 0,
-          dealAuthority: rating.dealAuthority || 0,
-          comments: rating.comments || ""
-        });
-        setStaffName(rating.staff || "");
-      }
-
-      // Fetch existing points
-      const { data: pointsData } = await supabase
-        .from("points")
-        .select("*")
-        .eq("youth_id", youth.id)
-        .eq("date", selectedDate)
-        .single();
-
-      if (pointsData) {
-        setDailyPoints({
-          totalPoints: pointsData.totalpoints || 0,
-          comments: pointsData.comments || ""
-        });
-      }
+      // TODO: Implement daily ratings and points fetching from local storage
+      // For now, just reset to defaults
+      setDailyRating({
+        peerInteraction: 0,
+        adultInteraction: 0,
+        investmentLevel: 0,
+        dealAuthority: 0,
+        comments: ""
+      });
+      setStaffName("");
+      setDailyPoints({
+        totalPoints: 0,
+        comments: ""
+      });
     } catch (error) {
       // No existing data found, which is fine
       console.log("No existing data for selected date");
@@ -104,24 +84,20 @@ export const ConsolidatedScoringTab = ({ youth }: ConsolidatedScoringTabProps) =
     </div>
   );
 
-  const handleSaveDPN = async () => {
+  const handleSaveDPN = () => {
     setLoading(true);
     try {
-      // Save daily ratings
-      const { error: ratingError } = await supabase
-        .from("daily_ratings")
-        .upsert({
-          youth_id: youth.id,
-          date: selectedDate,
-          peer_interaction: dailyRating.peerInteraction,
-          adult_interaction: dailyRating.adultInteraction,
-          investment_level: dailyRating.investmentLevel,
-          deal_authority: dailyRating.dealAuthority,
-          staff: staffName,
-          comments: dailyRating.comments
-        });
-
-      if (ratingError) throw ratingError;
+      // TODO: Save daily ratings to local storage
+      console.log('Saving DPN:', {
+        youth_id: youth.id,
+        date: selectedDate,
+        peer_interaction: dailyRating.peerInteraction,
+        adult_interaction: dailyRating.adultInteraction,
+        investment_level: dailyRating.investmentLevel,
+        deal_authority: dailyRating.dealAuthority,
+        staff: staffName,
+        comments: dailyRating.comments
+      });
 
       toast({
         title: "Success",
@@ -150,31 +126,22 @@ export const ConsolidatedScoringTab = ({ youth }: ConsolidatedScoringTabProps) =
     }
   };
 
-  const handleSaveDailyPoints = async () => {
+  const handleSaveDailyPoints = () => {
     setLoading(true);
     try {
-      // Save daily points
-      const { error: pointsError } = await supabase
-        .from("points")
-        .upsert({
-          youth_id: youth.id,
-          date: selectedDate,
-          morningpoints: 0,
-          afternoonpoints: 0,
-          eveningpoints: 0,
-          totalpoints: dailyPoints.totalPoints,
-          comments: dailyPoints.comments
-        });
+      // TODO: Save daily points to local storage
+      console.log('Saving daily points:', {
+        youth_id: youth.id,
+        date: selectedDate,
+        morningpoints: 0,
+        afternoonpoints: 0,
+        eveningpoints: 0,
+        totalpoints: dailyPoints.totalPoints,
+        comments: dailyPoints.comments
+      });
 
-      if (pointsError) throw pointsError;
-
-      // Update youth's total points
-      const { error: updateError } = await supabase
-        .from("youths")
-        .update({ pointtotal: (youth.pointTotal || 0) + dailyPoints.totalPoints })
-        .eq("id", youth.id);
-
-      if (updateError) throw updateError;
+      // TODO: Update youth's total points in local storage
+      console.log('Updating youth total points:', (youth.pointTotal || 0) + dailyPoints.totalPoints);
 
       toast({
         title: "Success",

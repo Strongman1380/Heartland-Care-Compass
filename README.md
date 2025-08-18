@@ -1,22 +1,16 @@
-# Welcome to your Lovable project
+# Heartland Youth Compass
 
 ## Project info
 
-**URL**: https://lovable.dev/projects/708793a2-03b1-4cee-afec-800d5cd72c92
+A youth management platform for Heartland Boys Home.
 
 ## How can I edit this code?
 
 There are several ways of editing your application.
 
-**Use Lovable**
-
-Simply visit the [Lovable Project](https://lovable.dev/projects/708793a2-03b1-4cee-afec-800d5cd72c92) and start prompting.
-
-Changes made via Lovable will be committed automatically to this repo.
-
 **Use your preferred IDE**
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+If you want to work locally using your own IDE, you can clone this repo and push changes.
 
 The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
 
@@ -62,12 +56,86 @@ This project is built with:
 
 ## How can I deploy this project?
 
-Simply open [Lovable](https://lovable.dev/projects/708793a2-03b1-4cee-afec-800d5cd72c92) and click on Share -> Publish.
+You can deploy this project using various hosting platforms like:
 
-## Can I connect a custom domain to my Lovable project?
+- Vercel
+- Netlify
+- GitHub Pages
+- Or any static hosting service
 
-Yes, you can!
+## Deployment instructions
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+1. Build the project:
+```sh
+npm run build
+```
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+2. The built files will be in the `dist` directory, which you can deploy to any static hosting service.
+
+3. For local testing of the production build:
+```sh
+npx serve -s dist
+```
+
+## GitHub Pages Deployment
+
+This project is a Vite React SPA. To deploy manually to GitHub Pages:
+
+1. Build the project:
+```sh
+npm run predeploy
+```
+2. Commit and push the `dist` folder to a `gh-pages` branch (or use an action).
+3. In GitHub repo settings, enable Pages and point it to the `gh-pages` branch root (or `/docs` if you move it there).
+
+You can also use a GitHub Action for automatic deployment. Example workflow (add to `.github/workflows/deploy.yml`):
+```yaml
+name: Deploy
+on:
+	push:
+		branches: [ main ]
+permissions:
+	contents: write
+jobs:
+	build-deploy:
+		runs-on: ubuntu-latest
+		steps:
+			- uses: actions/checkout@v4
+			- uses: actions/setup-node@v4
+				with:
+					node-version: 20
+			- run: npm ci
+			- run: npm run build
+				env:
+					GH_PAGES_BASE: '/' # or '/<repo-name>/' if using project pages
+			- name: Deploy to gh-pages
+				uses: peaceiris/actions-gh-pages@v3
+				with:
+					github_token: ${{ secrets.GITHUB_TOKEN }}
+					publish_dir: dist
+```
+
+If using this repository project page (username.github.io/Heartland-Care-Compass), the base path is already set by scripts:
+```sh
+npm run deploy:gh
+```
+This builds with `GH_PAGES_BASE='/Heartland-Care-Compass/'`.
+
+## Vercel Deployment
+
+Vercel supports Vite out of the box:
+1. Push the repo to GitHub.
+2. Import the project in Vercel.
+3. Framework preset: Vite.
+4. Build Command: `npm run build`
+5. Output Directory: `dist`
+
+No special base path needed for Vercel; it serves from root.
+
+## Environment Variables
+
+Currently no runtime env vars are required. If you add any, configure them in Vercel dashboard or GitHub Actions secrets.
+
+## SPA Routing on GitHub Pages
+
+`404.html` is included to redirect all unknown routes back to `index.html` for client-side routing.

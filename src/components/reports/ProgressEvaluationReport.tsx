@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Youth, DailyRating, mapDailyRatingFromSupabase } from "@/types/app-types";
+import { Youth, DailyRating } from "@/types/app-types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -8,7 +8,6 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Calendar, FileText, Printer } from "lucide-react";
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subWeeks, subMonths } from "date-fns";
-import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
 interface ProgressEvaluationReportProps {
@@ -72,17 +71,8 @@ export const ProgressEvaluationReport = ({ youth }: ProgressEvaluationReportProp
           break;
       }
 
-      const { data, error } = await supabase
-        .from("daily_ratings")
-        .select("*")
-        .eq("youth_id", youth.id)
-        .gte("date", startDate.toISOString().split('T')[0])
-        .lte("date", endDate.toISOString().split('T')[0])
-        .order("date", { ascending: false });
-
-      if (error) throw error;
-
-      const ratings = data?.map(mapDailyRatingFromSupabase) || [];
+      // For now, use mock data since we don't have daily ratings in local storage yet
+      const ratings: DailyRating[] = [];
       
       const calcAverage = (field: keyof DailyRating) => {
         const values = ratings.map(r => r[field] as number).filter(v => v !== null && v !== undefined);

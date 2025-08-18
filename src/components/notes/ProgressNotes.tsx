@@ -12,7 +12,7 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { fetchProgressNotes, saveProgressNote } from "@/utils/supabase-utils";
+import { fetchProgressNotes, saveProgressNote } from "@/utils/local-storage-utils";
 import { ProgressNote } from "@/types/app-types";
 
 interface ProgressNotesProps {
@@ -54,14 +54,13 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
     filterNotes();
   }, [notes, searchTerm, selectedCategory]);
 
-  const fetchNotes = async () => {
+  const fetchNotes = () => {
     try {
       setIsLoading(true);
-      const fetchedNotes = await fetchProgressNotes(youthId);
+      const fetchedNotes = fetchProgressNotes(youthId);
       setNotes(fetchedNotes);
       setFilteredNotes(fetchedNotes);
     } catch (error) {
-      console.error("Error fetching notes:", error);
       toast.error("Failed to load progress notes");
     } finally {
       setIsLoading(false);
@@ -117,7 +116,7 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
         staff: formData.staff.trim() || "Staff Member",
       };
       
-      await saveProgressNote(youthId, newNote);
+      saveProgressNote(youthId, newNote);
       
       toast.success("Progress note added successfully");
       
@@ -139,7 +138,6 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
       
       fetchNotes();
     } catch (error) {
-      console.error("Error adding note:", error);
       toast.error("Failed to add progress note");
     } finally {
       setIsSubmitting(false);
@@ -178,8 +176,10 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
   };
 
   const handleExportNotes = () => {
-    // PDF export functionality would be implemented here
-    console.log("Export notes to PDF");
+    // PDF export functionality
+    toast.info("Export Feature Coming Soon", {
+      description: "The PDF export feature will be available in the next update."
+    });
   };
 
   return (

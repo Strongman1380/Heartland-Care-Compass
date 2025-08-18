@@ -4,8 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PlusCircle, User } from "lucide-react";
 import { AddYouthDialog } from "@/components/youth/AddYouthDialog";
-import { supabase } from "@/integrations/supabase/client";
-import { mapYouthFromSupabase, type Youth } from "@/types/app-types";
+import { fetchAllYouths } from "@/utils/local-storage-utils";
+import { type Youth } from "@/types/app-types";
+import { useToast } from "@/hooks/use-toast";
 
 interface YouthSelectorProps {
   onSelectYouth: (youthId: string) => void;
@@ -17,73 +18,47 @@ export const YouthSelector = ({ onSelectYouth, selectedYouthId }: YouthSelectorP
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isAddYouthDialogOpen, setIsAddYouthDialogOpen] = useState(false);
+  const { toast } = useToast();
 
-  const fetchYouths = async () => {
+  const loadYouths = () => {
     try {
       setLoading(true);
-      const { data: youthsData, error: youthsError } = await supabase
-        .from("youths")
-        .select("*")
-        .order("firstname", { ascending: true });
-
-      if (youthsError) {
-        throw youthsError;
-      }
-
-      const mappedYouths = youthsData
-        .map(mapYouthFromSupabase)
-        .filter(youth => {
-          const hasValidId = youth.id && 
-                           typeof youth.id === 'string' && 
-                           youth.id.trim() !== "" && 
-                           youth.id.length > 0;
-          
-          const hasValidNames = youth.firstName && 
-                               youth.lastName && 
-                               typeof youth.firstName === 'string' &&
-                               typeof youth.lastName === 'string' &&
-                               youth.firstName.trim() !== "" && 
-                               youth.lastName.trim() !== "";
-          
-          if (!hasValidId) {
-            console.warn("Filtering out youth with invalid ID:", youth);
-            return false;
-          }
-          
-          if (!hasValidNames) {
-            console.warn("Filtering out youth with invalid names:", youth);
-            return false;
-          }
-          
-          return true;
-        });
-        
-      console.log("Fetched and validated youths:", mappedYouths);
-      setYouths(mappedYouths);
+      setError(null);
+      
+      const youthsData = fetchAllYouths();
+      
+      const validYouths = youthsData.filter(youth => {
+        const hasValidId = youth.id && typeof youth.id === 'string' && youth.id.trim() !== "";
+        const hasValidNames = youth.firstName && youth.lastName && 
+                             youth.firstName.trim() !== "" && youth.lastName.trim() !== "";
+        return hasValidId && hasValidNames;
+      });
+      
+      setYouths(validYouths);
     } catch (err) {
-      console.error("Error fetching youths:", err);
       setError("Failed to load youth profiles");
+      toast({
+        title: "Error Loading Data",
+        description: "There was a problem loading youth profiles. Please try again.",
+        variant: "destructive"
+      });
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchYouths();
+    loadYouths();
   }, []);
 
+  // Handle youth selection
   const handleYouthSelect = (youthId: string) => {
-    console.log("Selected youth ID:", youthId);
-    if (youthId && typeof youthId === 'string' && youthId.trim() !== "" && youthId.length > 0) {
-      onSelectYouth(youthId);
-    } else {
-      console.warn("Invalid youth ID selected:", youthId);
-    }
+    onSelectYouth(youthId);
   };
 
   const handleAddYouthDialogClose = () => {
     setIsAddYouthDialogOpen(false);
-    fetchYouths();
+    loadYouths();
   };
 
   if (loading) {
@@ -98,7 +73,7 @@ export const YouthSelector = ({ onSelectYouth, selectedYouthId }: YouthSelectorP
     return (
       <div className="mb-4 p-4 border border-red-300 rounded bg-red-50 text-red-700">
         <p>{error}</p>
-        <Button variant="outline" size="sm" className="mt-2" onClick={fetchYouths}>
+        <Button variant="outline" size="sm" className="mt-2" onClick={loadYouths}>
           Retry
         </Button>
       </div>

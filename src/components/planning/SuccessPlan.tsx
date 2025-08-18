@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { FileText, Download, Save, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { saveAssessment, fetchAssessment, SuccessPlanData } from "@/utils/supabase-utils";
+// Note: Success plan saving/loading functionality will need to be implemented with local storage
 
 interface SuccessPlanProps {
   youthId: string;

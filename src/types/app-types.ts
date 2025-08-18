@@ -1,5 +1,5 @@
 
-// Application-specific types that work with the Supabase schema
+// Application types for the local storage version
 
 export interface Youth {
   id: string;
@@ -64,74 +64,4 @@ export interface DailyRating {
   updatedAt?: Date | null;
 }
 
-// Helper functions to convert between Supabase and app types
-export const mapYouthFromSupabase = (data: any): Youth => {
-  return {
-    id: data.id,
-    firstName: data.firstname,
-    lastName: data.lastname,
-    dob: data.dob ? new Date(data.dob) : null,
-    age: data.age,
-    admissionDate: data.admissiondate ? new Date(data.admissiondate) : null,
-    level: data.level || 1,
-    pointTotal: data.pointtotal || 0,
-    referralSource: data.referralsource,
-    referralReason: data.referralreason,
-    educationInfo: data.educationinfo,
-    medicalInfo: data.medicalinfo,
-    mentalHealthInfo: data.mentalhealthinfo,
-    legalStatus: data.legalstatus,
-    peerInteraction: data.peerinteraction,
-    adultInteraction: data.adultinteraction,
-    investmentLevel: data.investmentlevel,
-    dealAuthority: data.dealauthority,
-    hyrnaRiskLevel: data.hyrnarisklevel,
-    hyrnaScore: data.hyrnascore,
-    hyrnaAssessmentDate: data.hyrnaassessmentdate ? new Date(data.hyrnaassessmentdate) : null,
-    createdAt: data.createdat ? new Date(data.createdat) : null,
-    updatedAt: data.updatedat ? new Date(data.updatedat) : null
-  };
-};
 
-export const mapPointsFromSupabase = (data: any): BehaviorPoints => {
-  return {
-    id: data.id,
-    youth_id: data.youth_id,
-    date: data.date ? new Date(data.date) : null,
-    morningPoints: data.morningpoints || 0,
-    afternoonPoints: data.afternoonpoints || 0,
-    eveningPoints: data.eveningpoints || 0,
-    totalPoints: data.totalpoints || 0,
-    comments: data.comments,
-    createdAt: data.createdat ? new Date(data.createdat) : null
-  };
-};
-
-export const mapNoteFromSupabase = (data: any): ProgressNote => {
-  return {
-    id: data.id,
-    youth_id: data.youth_id,
-    date: data.date ? new Date(data.date) : null,
-    category: data.category,
-    note: data.note,
-    rating: data.rating,
-    staff: data.staff,
-    createdAt: data.createdat ? new Date(data.createdat) : null
-  };
-};
-
-export const mapDailyRatingFromSupabase = (data: any): DailyRating => {
-  return {
-    id: data.id,
-    youth_id: data.youth_id,
-    date: data.date ? new Date(data.date) : null,
-    peerInteraction: data.peer_interaction,
-    adultInteraction: data.adult_interaction,
-    investmentLevel: data.investment_level,
-    dealAuthority: data.deal_authority,
-    staff: data.staff,
-    comments: data.comments,
-    createdAt: data.created_at ? new Date(data.created_at) : null,
-    updatedAt: data.updated_at ? new Date(data.updated_at) : null
-  };
-};

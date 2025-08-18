@@ -11,10 +11,10 @@ import { format, startOfWeek, endOfWeek, eachDayOfInterval } from "date-fns";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle, ArrowRight, Calendar, Download, FileText, TrendingUp, TrendingDown, Users, History } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { fetchBehaviorPoints, saveBehaviorPoints } from "@/utils/supabase-utils";
+import { fetchBehaviorPoints, saveBehaviorPoints } from "@/utils/local-storage-utils";
+import { updateYouth } from "@/utils/local-storage-utils";
 import { BehaviorPoints } from "@/types/app-types";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { supabase } from "@/integrations/supabase/client";
 
 interface BehaviorCardProps {
   youthId: string;
@@ -242,18 +242,15 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
       await saveBehaviorPoints(youthId, pointEntry);
       
       // Update youth's total points - add the daily points directly (already in thousands)
-      const currentTotal = youth.pointtotal || 0;
+      const currentTotal = youth.pointTotal || 0;
       const newTotal = currentTotal + formData.dailyPoints;
-      const { error: updateError } = await supabase
-        .from("youths")
-        .update({ pointtotal: newTotal })
-        .eq("id", youthId);
-        
-      if (!updateError) {
-        youth.pointtotal = newTotal; // Update local state
+      
+      try {
+        updateYouth(youthId, { pointTotal: newTotal });
+        youth.pointTotal = newTotal; // Update local state
         console.log(`Updated youth total points: ${currentTotal} + ${formData.dailyPoints} = ${newTotal}`);
-      } else {
-        console.error("Error updating youth total:", updateError);
+      } catch (error) {
+        console.error("Error updating youth total:", error);
       }
       
       // Check if points meet privilege requirement
@@ -280,25 +277,20 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
     }
   };
 
-  const handleLevelUp = async () => {
+  const handleLevelUp = () => {
     if (nextLevel) {
       try {
         // Update youth level and reset points
-        const { error } = await supabase
-          .from("youths")
-          .update({ 
-            level: youth.level + 1,
-            pointtotal: 0  // Reset points to 0 when leveling up
-          })
-          .eq("id", youthId);
-
-        if (error) throw error;
+        updateYouth(youthId, { 
+          level: youth.level + 1,
+          pointTotal: 0  // Reset points to 0 when leveling up
+        });
 
         toast.success(`Congratulations! Advanced to ${nextLevel.name}! Points reset to 0.`);
         
         // Update the local youth object to reflect the changes
         youth.level = youth.level + 1;
-        youth.pointtotal = 0;
+        youth.pointTotal = 0;
         
         // Force component re-render by updating form data
         setFormData(prev => ({ ...prev, dailyPoints: 0 }));
@@ -309,26 +301,21 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
     }
   };
 
-  const handleLevelDemotion = async () => {
+  const handleLevelDemotion = () => {
     if (youth.level > 1) {
       try {
         // Update youth level and reset points
-        const { error } = await supabase
-          .from("youths")
-          .update({ 
-            level: youth.level - 1,
-            pointtotal: 0  // Reset points to 0 when demoting
-          })
-          .eq("id", youthId);
-
-        if (error) throw error;
+        updateYouth(youthId, { 
+          level: youth.level - 1,
+          pointTotal: 0  // Reset points to 0 when demoting
+        });
 
         const previousLevel = levelsData.find(level => level.level === youth.level - 1);
         toast.warning(`Demoted to ${previousLevel?.name || `Level ${youth.level - 1}`}. Points reset to 0.`);
         
         // Update the local youth object to reflect the changes
         youth.level = youth.level - 1;
-        youth.pointtotal = 0;
+        youth.pointTotal = 0;
         
         // Force component re-render by updating form data
         setFormData(prev => ({ ...prev, dailyPoints: 0 }));

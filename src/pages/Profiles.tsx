@@ -4,8 +4,9 @@ import { Header } from "@/components/layout/Header";
 import { YouthProfile } from "@/components/youth/YouthProfile";
 import { YouthProfilesTable } from "@/components/youth/YouthProfilesTable";
 import { RapidPlacementAssessment } from "@/components/assessment/RapidPlacementAssessment";
-import { supabase } from "@/integrations/supabase/client";
-import { mapYouthFromSupabase, type Youth } from "@/types/app-types";
+import { fetchAllYouths } from "@/utils/local-storage-utils";
+import { type Youth } from "@/types/app-types";
+import { toast } from "sonner";
 
 const Profiles = () => {
   const [selectedYouth, setSelectedYouth] = useState<Youth | null>(null);
@@ -13,37 +14,29 @@ const Profiles = () => {
   const [loading, setLoading] = useState(true);
   const [showAdmin, setShowAdmin] = useState(false);
 
-  const fetchYouths = async () => {
+  const loadYouths = () => {
     try {
       setLoading(true);
-      const { data: youthsData, error: youthsError } = await supabase
-        .from("youths")
-        .select("*")
-        .order("firstname", { ascending: true });
-
-      if (youthsError) {
-        throw youthsError;
-      }
-
-      const mappedYouths = youthsData
-        .map(mapYouthFromSupabase)
-        .filter(youth => {
-          const hasValidId = youth.id && typeof youth.id === 'string' && youth.id.trim() !== "";
-          const hasValidNames = youth.firstName && youth.lastName && 
-                               youth.firstName.trim() !== "" && youth.lastName.trim() !== "";
-          return hasValidId && hasValidNames;
-        });
+      const youthsData = fetchAllYouths();
+      
+      const validYouths = youthsData.filter(youth => {
+        const hasValidId = youth.id && typeof youth.id === 'string' && youth.id.trim() !== "";
+        const hasValidNames = youth.firstName && youth.lastName && 
+                             youth.firstName.trim() !== "" && youth.lastName.trim() !== "";
+        return hasValidId && hasValidNames;
+      });
         
-      setYouths(mappedYouths);
+      setYouths(validYouths);
     } catch (err) {
       console.error("Error fetching youths:", err);
+      toast.error("Failed to load youth profiles");
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchYouths();
+    loadYouths();
   }, []);
 
   const handleYouthSelect = (youth: Youth) => {
@@ -55,7 +48,7 @@ const Profiles = () => {
   };
 
   const handleYouthUpdated = () => {
-    fetchYouths();
+    loadYouths();
     setSelectedYouth(null);
   };
 

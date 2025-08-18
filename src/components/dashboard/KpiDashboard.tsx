@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { format, subDays, startOfMonth, endOfMonth } from "date-fns";
 import { AlertCircle, Calendar, TrendingDown, TrendingUp } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area, BarChart, Bar, Legend, PieChart, Pie, Cell } from 'recharts';
-import { fetchBehaviorPoints, fetchProgressNotes } from "@/utils/supabase-utils";
+import { fetchBehaviorPoints, fetchProgressNotes } from "@/utils/local-storage-utils";
 import { BehaviorPoints, ProgressNote } from "@/types/app-types";
 
 interface KpiDashboardProps {
@@ -43,16 +43,16 @@ export const KpiDashboard = ({ youthId, youth }: KpiDashboardProps) => {
     }
   }, [pointsData, notesData, timeframe]);
   
-  const fetchData = async () => {
+  const fetchData = () => {
     try {
       setIsLoading(true);
       
       // Fetch points data
-      const points = await fetchBehaviorPoints(youthId);
+      const points = fetchBehaviorPoints(youthId);
       setPointsData(points);
       
       // Fetch notes data
-      const notes = await fetchProgressNotes(youthId);
+      const notes = fetchProgressNotes(youthId);
       setNotesData(notes);
     } catch (error) {
       console.error("Error fetching KPI data:", error);

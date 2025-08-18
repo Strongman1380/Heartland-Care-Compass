@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { saveAssessment, fetchAssessment } from "@/utils/supabase-utils";
+// Note: Assessment saving/loading functionality will need to be implemented with local storage
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Printer, Download, Save } from "lucide-react";

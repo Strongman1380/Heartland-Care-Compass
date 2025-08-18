@@ -1,5 +1,6 @@
 
-import { supabase } from "@/integrations/supabase/client";
+// Supabase removed - using local storage only
+import { updateYouth } from "@/utils/local-storage-utils";
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -84,17 +85,12 @@ export const EnhancedBehaviorCard = ({
     }
   };
 
-  const handleLevelUp = async () => {
+  const handleLevelUp = () => {
     const result = processLevelUp(currentLevelIndex, pointsInCurrentLevel);
     if (result) {
       try {
-        // Update level in database
-        const { error } = await supabase
-          .from("youths")
-          .update({ level: result.newLevelIndex })
-          .eq("id", youthId);
-
-        if (error) throw error;
+        // Update level in local storage
+        updateYouth(youthId, { level: result.newLevelIndex });
 
         setCurrentLevelIndex(result.newLevelIndex);
         setPointsInCurrentLevel(result.pointsInNewLevel);
@@ -103,22 +99,17 @@ export const EnhancedBehaviorCard = ({
         toast.success(`Congratulations! Advanced to ${newLevel.name}!`);
       } catch (error) {
         console.error("Error updating level:", error);
-        toast.error("Failed to update level in database");
+        toast.error("Failed to update level");
       }
     }
   };
 
-  const handleLevelDemotion = async () => {
+  const handleLevelDemotion = () => {
     const result = processLevelDemotion(currentLevelIndex);
     if (result) {
       try {
-        // Update level in database
-        const { error } = await supabase
-          .from("youths")
-          .update({ level: result.newLevelIndex })
-          .eq("id", youthId);
-
-        if (error) throw error;
+        // Update level in local storage
+        updateYouth(youthId, { level: result.newLevelIndex });
 
         setCurrentLevelIndex(result.newLevelIndex);
         setPointsInCurrentLevel(result.pointsInNewLevel);

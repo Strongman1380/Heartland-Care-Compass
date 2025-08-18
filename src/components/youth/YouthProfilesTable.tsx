@@ -6,7 +6,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Edit, Trash2, Archive, Users } from "lucide-react";
 import { format } from "date-fns";
-import { supabase } from "@/integrations/supabase/client";
+// Supabase removed - using local storage only
+import { deleteYouth } from "@/utils/local-storage-utils";
 import { Youth } from "@/types/app-types";
 import { useToast } from "@/hooks/use-toast";
 import { EditYouthDialog } from "./EditYouthDialog";
@@ -60,16 +61,11 @@ export const YouthProfilesTable = ({ youths, loading, onYouthSelect, onYouthUpda
     setDeleteConfirmOpen(true);
   };
 
-  const confirmDeleteYouth = async () => {
+  const confirmDeleteYouth = () => {
     if (!youthToDelete) return;
 
     try {
-      const { error } = await supabase
-        .from('youths')
-        .delete()
-        .eq('id', youthToDelete.id);
-
-      if (error) throw error;
+      deleteYouth(youthToDelete.id);
 
       toast({
         title: "Success",
@@ -90,7 +86,7 @@ export const YouthProfilesTable = ({ youths, loading, onYouthSelect, onYouthUpda
     }
   };
 
-  const handleDeleteSelected = async () => {
+  const handleDeleteSelected = () => {
     if (selectedYouthIds.length === 0) {
       toast({
         title: "No selection",
@@ -101,12 +97,7 @@ export const YouthProfilesTable = ({ youths, loading, onYouthSelect, onYouthUpda
     }
 
     try {
-      const { error } = await supabase
-        .from('youths')
-        .delete()
-        .in('id', selectedYouthIds);
-
-      if (error) throw error;
+      selectedYouthIds.forEach(id => deleteYouth(id));
 
       toast({
         title: "Success",

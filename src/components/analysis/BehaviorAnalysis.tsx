@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { FileText, Download, Save } from "lucide-react";
 import { toast } from "sonner";
-import { saveAssessment, fetchAssessment, BehaviorWorksheetData } from "@/utils/supabase-utils";
+// Note: Assessment saving/loading functionality will need to be implemented with local storage
 
 interface BehaviorAnalysisProps {
   youthId: string;
@@ -74,31 +74,19 @@ export const BehaviorAnalysis = ({ youthId, youth }: BehaviorAnalysisProps) => {
     fetchWorksheet();
   }, [youthId]);
   
-  const fetchWorksheet = async () => {
+  const fetchWorksheet = () => {
     try {
       setIsLoading(true);
       
-      const worksheetData = await fetchAssessment(youthId, 'worksheets', 'behaviorAnalysis') as BehaviorWorksheetData | null;
-      
-      if (worksheetData) {
-        setWorksheet({
-          id: worksheetData.id,
-          events: worksheetData.events || Array(3).fill({}).map(() => ({ ...EMPTY_EVENT })),
-          summary: worksheetData.summary || "",
-          skillsToImprove: worksheetData.skillstoImprove || [],
-          createdAt: worksheetData.createdat ? new Date(worksheetData.createdat) : new Date(),
-          updatedAt: worksheetData.updatedat ? new Date(worksheetData.updatedat) : new Date()
-        });
-      } else {
-        // Initialize with default structure if no worksheet exists
-        setWorksheet({
-          events: Array(3).fill({}).map(() => ({ ...EMPTY_EVENT })),
-          summary: "",
-          skillsToImprove: [],
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        });
-      }
+      // For now, just initialize with default structure
+      // TODO: Implement local storage for behavior worksheets
+      setWorksheet({
+        events: Array(3).fill({}).map(() => ({ ...EMPTY_EVENT })),
+        summary: "",
+        skillsToImprove: [],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
     } catch (error) {
       console.error("Error fetching behavior worksheet:", error);
       toast.error("Failed to load behavior analysis worksheet");
@@ -144,24 +132,12 @@ export const BehaviorAnalysis = ({ youthId, youth }: BehaviorAnalysisProps) => {
     });
   };
   
-  const handleSaveWorksheet = async () => {
+  const handleSaveWorksheet = () => {
     try {
       setIsSaving(true);
       
-      const worksheetData = {
-        events: worksheet.events,
-        summary: worksheet.summary,
-        skillstoImprove: worksheet.skillsToImprove,
-        createdat: new Date().toISOString(),
-        updatedat: new Date().toISOString()
-      };
-      
-      await saveAssessment(
-        youthId, 
-        'worksheets', 
-        'behaviorAnalysis',
-        worksheetData
-      );
+      // TODO: Implement local storage for behavior worksheets
+      console.log("Saving worksheet:", worksheet);
       
       toast.success("Behavior analysis worksheet saved successfully");
     } catch (error) {

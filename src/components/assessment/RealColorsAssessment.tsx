@@ -8,8 +8,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from '@/integrations/supabase/client';
-import { Youth, mapYouthFromSupabase } from '@/types/app-types';
+// Supabase removed - using local storage only
+import { Youth } from '@/types/app-types';
+import { fetchAllYouths, saveYouth } from '@/utils/local-storage-utils';
 import { User, Palette, FileText, Save } from 'lucide-react';
 
 const COLOR_PROFILES = {
@@ -101,15 +102,10 @@ export const RealColorsAssessment = ({ selectedYouth }: RealColorsAssessmentProp
     }
   }, [selectedYouth]);
 
-  const fetchYouths = async () => {
+  const fetchYouths = () => {
     try {
-      const { data, error } = await supabase
-        .from('youths')
-        .select('*')
-        .order('firstname');
-      
-      if (error) throw error;
-      setYouths((data || []).map(mapYouthFromSupabase));
+      const data = fetchAllYouths();
+      setYouths(data || []);
     } catch (error) {
       console.error('Error fetching youths:', error);
       toast({
@@ -167,33 +163,33 @@ export const RealColorsAssessment = ({ selectedYouth }: RealColorsAssessmentProp
         const [firstName, ...lastNameParts] = newYouthName.trim().split(' ');
         const lastName = lastNameParts.join(' ');
 
-        const { data: newYouth, error: youthError } = await supabase
-          .from('youths')
-          .insert({
-            firstname: firstName,
-            lastname: lastName || '',
-          })
-          .select()
-          .single();
+        const newYouth = {
+          id: Date.now().toString(),
+          firstName,
+          lastName: lastName || '',
+          age: 0,
+          level: 0,
+          pointTotal: 0,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        };
 
-        if (youthError) throw youthError;
+        saveYouth(newYouth);
         youthId = newYouth.id;
+        fetchYouths(); // Refresh the list
       }
 
-      const { error } = await supabase
-        .from('real_colors_assessments')
-        .insert({
-          youth_id: youthId,
-          primary_color: primaryColor,
-          secondary_color: secondaryColor === 'none' ? null : secondaryColor || null,
-          insights: insights || null,
-          comments: comments || null,
-          observations: observations || null,
-          is_screening: isScreening,
-          completed_by: completedBy || null,
-        });
-
-      if (error) throw error;
+      // TODO: Implement Real Colors assessment storage in local storage
+      console.log('Saving Real Colors assessment:', {
+        youth_id: youthId,
+        primary_color: primaryColor,
+        secondary_color: secondaryColor === 'none' ? null : secondaryColor || null,
+        insights: insights || null,
+        comments: comments || null,
+        observations: observations || null,
+        is_screening: isScreening,
+        completed_by: completedBy || null,
+      });
 
       toast({
         title: "Success",

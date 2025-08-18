@@ -4,11 +4,11 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { supabase } from '@/integrations/supabase/client';
 import { TrendingUp, TrendingDown, Users, FileText, AlertTriangle, CheckCircle, ArrowLeft, Palette } from 'lucide-react';
 import { Header } from '@/components/layout/Header';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
+import { fetchAllYouths, fetchBehaviorPoints, fetchProgressNotes } from '@/utils/local-storage-utils';
 
 interface AssessmentData {
   worksheets: any[];
@@ -74,24 +74,25 @@ const AssessmentKPIDashboard = () => {
   const fetchAllAssessmentData = async () => {
     setIsLoading(true);
     try {
-      const [worksheetsRes, riskRes, notesRes, pointsRes, ratingsRes, youthsRes, realColorsRes] = await Promise.all([
-        supabase.from('worksheets' as any).select('*').order('createdat', { ascending: false }),
-        supabase.from('riskassessments' as any).select('*').order('createdat', { ascending: false }),
-        supabase.from('notes').select('*').order('createdat', { ascending: false }),
-        supabase.from('points').select('*').order('createdat', { ascending: false }),
-        supabase.from('daily_ratings').select('*').order('created_at', { ascending: false }),
-        supabase.from('youths').select('*').order('createdat', { ascending: false }),
-        supabase.from('real_colors_assessments').select('*').order('created_at', { ascending: false })
-      ]);
+      const youths = fetchAllYouths();
+      // TODO: Implement global behavior points and progress notes fetching
+      const points: any[] = [];
+      const notes: any[] = [];
+      
+      // Mock data for assessments since we don't have them in local storage yet
+      const worksheets = [];
+      const riskassessments = [];
+      const daily_ratings = [];
+      const realColorsAssessments = [];
 
       setData({
-        worksheets: worksheetsRes.data || [],
-        riskassessments: riskRes.data || [],
-        notes: notesRes.data || [],
-        points: pointsRes.data || [],
-        daily_ratings: ratingsRes.data || [],
-        youths: youthsRes.data || [],
-        realColorsAssessments: realColorsRes.data || []
+        worksheets,
+        riskassessments,
+        notes,
+        points,
+        daily_ratings,
+        youths,
+        realColorsAssessments
       });
     } catch (error) {
       console.error('Error fetching assessment data:', error);
@@ -121,7 +122,7 @@ const AssessmentKPIDashboard = () => {
     // Risk level distribution from HYRNA assessments
     const riskCounts = { Low: 0, Medium: 0, High: 0 };
     data.youths.forEach(youth => {
-      const riskLevel = youth.hyrnarisklevel || 'Medium'; // Default to Medium if not set
+      const riskLevel = youth.hyrnaRiskLevel || 'Medium'; // Default to Medium if not set
       if (riskLevel in riskCounts) {
         riskCounts[riskLevel as keyof typeof riskCounts]++;
       }
@@ -133,10 +134,10 @@ const AssessmentKPIDashboard = () => {
       { name: 'High', value: riskCounts.High, percentage: totalYouth > 0 ? ((riskCounts.High / totalYouth) * 100).toFixed(1) : '0' }
     ];
 
-    // Assessment trends over time
+    // Assessment trends over time (using notes as proxy for assessments)
     const assessmentsByMonth = {};
-    [...data.worksheets, ...data.riskassessments].forEach(assessment => {
-      const date = new Date(assessment.createdat || assessment.assessmentdate);
+    data.notes.forEach(note => {
+      const date = new Date(note.createdAt || note.date);
       const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
       assessmentsByMonth[monthKey] = (assessmentsByMonth[monthKey] || 0) + 1;
     });
@@ -152,12 +153,12 @@ const AssessmentKPIDashboard = () => {
     // Point trends for improvement tracking
     const pointsByMonth = {};
     data.points.forEach(point => {
-      const date = new Date(point.createdat);
+      const date = new Date(point.createdAt || point.date);
       const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
       if (!pointsByMonth[monthKey]) {
         pointsByMonth[monthKey] = { total: 0, count: 0 };
       }
-      pointsByMonth[monthKey].total += (point.totalpoints as number) || 0;
+      pointsByMonth[monthKey].total += point.totalPoints || 0;
       pointsByMonth[monthKey].count += 1;
     });
 
@@ -169,33 +170,18 @@ const AssessmentKPIDashboard = () => {
         averagePoints: data.count > 0 ? (data.total / data.count).toFixed(1) : '0'
       }));
 
-    // Completion stats
-    const youthWithAssessments = new Set([
-      ...data.worksheets.map(w => w.youth_id),
-      ...data.riskassessments.map(r => r.youth_id)
-    ]);
-    
+    // Completion stats (using notes as proxy for completed assessments)
+    const youthWithAssessments = new Set(data.notes.map(n => n.youth_id));
     const completionRate = totalYouth > 0 ? (youthWithAssessments.size / totalYouth) * 100 : 0;
 
-    // Real Colors distribution
-    const colorCounts = data.realColorsAssessments.reduce((acc, assessment) => {
-      if (assessment.primary_color) {
-        acc[assessment.primary_color] = (acc[assessment.primary_color] || 0) + 1;
-      }
-      return acc;
-    }, {} as Record<string, number>);
+    // Real Colors distribution (empty for now)
+    const colorDistribution = [];
 
-    const colorDistribution = Object.entries(colorCounts).map(([color, count]) => ({
-      color,
-      count,
-      percentage: totalYouth > 0 ? Math.round((Number(count) / totalYouth) * 100) : 0
-    }));
-
-    // Recent assessments (last month)
+    // Recent assessments (last month) - using notes
     const lastMonth = new Date();
     lastMonth.setMonth(lastMonth.getMonth() - 1);
-    const lastMonthAssessments = [...data.worksheets, ...data.riskassessments, ...data.realColorsAssessments]
-      .filter(assessment => new Date(assessment.createdat || assessment.assessmentdate || assessment.created_at) >= lastMonth).length;
+    const lastMonthAssessments = data.notes
+      .filter(note => new Date(note.createdAt || note.date) >= lastMonth).length;
 
     // Calculate improvement trend
     const recentPoints = pointTrends.slice(-2);
@@ -204,46 +190,10 @@ const AssessmentKPIDashboard = () => {
       : 0;
 
     // Level trends - track level ups and downs by week
-    const levelTrendsByWeek = {};
-    data.youths.forEach(youth => {
-      // Since we don't have historical level data, we'll simulate based on current level and admission date
-      // In a real system, you'd track level changes in a separate table
-      const admissionDate = new Date(youth.admissiondate || youth.createdat);
-      const currentLevel = youth.level || 1;
-      
-      // Generate weekly data based on admission date to now
-      const weeksFromAdmission = Math.floor((new Date().getTime() - admissionDate.getTime()) / (7 * 24 * 60 * 60 * 1000));
-      
-      for (let week = 0; week <= Math.min(weeksFromAdmission, 12); week++) {
-        const weekDate = new Date(admissionDate);
-        weekDate.setDate(weekDate.getDate() + (week * 7));
-        const weekKey = `${weekDate.getFullYear()}-W${Math.ceil(weekDate.getDate() / 7)}`;
-        
-        if (!levelTrendsByWeek[weekKey]) {
-          levelTrendsByWeek[weekKey] = { levelUps: 0, levelDowns: 0 };
-        }
-        
-        // Simulate level changes based on youth progress (this would be real data in production)
-        if (week > 0 && week % 3 === 0 && currentLevel > 1) {
-          levelTrendsByWeek[weekKey].levelUps += Math.random() > 0.7 ? 1 : 0;
-        }
-        if (week > 0 && week % 4 === 0) {
-          levelTrendsByWeek[weekKey].levelDowns += Math.random() > 0.9 ? 1 : 0;
-        }
-      }
-    });
-
-    const levelTrends = Object.entries(levelTrendsByWeek)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .slice(-8)
-      .map(([week, data]: [string, any]) => ({
-        week,
-        levelUps: data.levelUps,
-        levelDowns: data.levelDowns
-      }));
+    const levelTrends = [];
 
     setKpiMetrics({
-      totalAssessments,
+      totalAssessments: data.notes.length, // Using notes as proxy
       totalYouth,
       averageRiskLevel: Object.keys(riskCounts).reduce((a, b) => riskCounts[a] > riskCounts[b] ? a : b, 'Low'),
       completionRate,
@@ -350,44 +300,55 @@ const AssessmentKPIDashboard = () => {
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Improvement Trend</CardTitle>
-              {kpiMetrics.improvementTrend >= 0 ? (
-                <TrendingUp className="h-4 w-4 text-green-600" />
-              ) : (
-                <TrendingDown className="h-4 w-4 text-red-600" />
-              )}
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {kpiMetrics.improvementTrend >= 0 ? '+' : ''}
-                {kpiMetrics.improvementTrend.toFixed(1)}%
-              </div>
-              <p className="text-xs text-muted-foreground">Point average change</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Avg Risk Level</CardTitle>
+              <CardTitle className="text-sm font-medium">Average Risk Level</CardTitle>
               <AlertTriangle className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{kpiMetrics.averageRiskLevel}</div>
-              <Badge variant="outline" className="text-xs">
-                Most Common
-              </Badge>
+              <div className="text-2xl font-bold">
+                <Badge 
+                  variant="outline" 
+                  style={{ 
+                    backgroundColor: getRiskLevelColor(kpiMetrics.averageRiskLevel),
+                    color: 'white',
+                    border: 'none'
+                  }}
+                >
+                  {kpiMetrics.averageRiskLevel}
+                </Badge>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Most common level
+              </p>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Real Colors</CardTitle>
-              <Palette className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-sm font-medium">Completion Rate</CardTitle>
+              <CheckCircle className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{kpiMetrics.realColorsAssessments}</div>
+              <div className="text-2xl font-bold">{kpiMetrics.completionRate.toFixed(1)}%</div>
               <p className="text-xs text-muted-foreground">
-                {kpiMetrics.totalYouth > 0 ? Math.round((kpiMetrics.realColorsAssessments / kpiMetrics.totalYouth) * 100) : 0}% coverage
+                Youth with assessments
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Improvement Trend</CardTitle>
+              {kpiMetrics.improvementTrend >= 0 ? 
+                <TrendingUp className="h-4 w-4 text-green-600" /> : 
+                <TrendingDown className="h-4 w-4 text-red-600" />
+              }
+            </CardHeader>
+            <CardContent>
+              <div className={`text-2xl font-bold ${kpiMetrics.improvementTrend >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                {kpiMetrics.improvementTrend >= 0 ? '+' : ''}{kpiMetrics.improvementTrend.toFixed(1)}%
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Point average change
               </p>
             </CardContent>
           </Card>
@@ -395,223 +356,108 @@ const AssessmentKPIDashboard = () => {
 
         {/* Charts */}
         <Tabs defaultValue="trends" className="space-y-6">
-          <TabsList>
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="trends">Assessment Trends</TabsTrigger>
             <TabsTrigger value="risk">Risk Distribution</TabsTrigger>
-            <TabsTrigger value="progress">Progress Tracking</TabsTrigger>
-            <TabsTrigger value="levels">Level Changes</TabsTrigger>
+            <TabsTrigger value="points">Point Trends</TabsTrigger>
             <TabsTrigger value="completion">Completion Stats</TabsTrigger>
-            <TabsTrigger value="colors">Real Colors</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="trends">
+          <TabsContent value="trends" className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle>Assessment Completion Trends</CardTitle>
+                <CardTitle>Assessment Trends Over Time</CardTitle>
               </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={400}>
+                <ResponsiveContainer width="100%" height={300}>
                   <LineChart data={chartData.assessmentTrends}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="month" />
                     <YAxis />
                     <Tooltip />
                     <Legend />
-                    <Line type="monotone" dataKey="assessments" stroke="hsl(var(--primary))" strokeWidth={2} />
+                    <Line type="monotone" dataKey="assessments" stroke="#8884d8" strokeWidth={2} />
                   </LineChart>
                 </ResponsiveContainer>
               </CardContent>
             </Card>
           </TabsContent>
 
-          <TabsContent value="risk">
+          <TabsContent value="risk" className="space-y-6">
             <Card>
               <CardHeader>
                 <CardTitle>Risk Level Distribution</CardTitle>
               </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={400}>
+                <ResponsiveContainer width="100%" height={300}>
                   <PieChart>
                     <Pie
                       data={chartData.riskLevelDistribution}
                       cx="50%"
                       cy="50%"
+                      labelLine={false}
+                      label={({ name, percentage }) => `${name}: ${percentage}%`}
                       outerRadius={80}
                       fill="#8884d8"
                       dataKey="value"
-                      stroke="#ffffff"
-                      strokeWidth={2}
                     >
-                      {chartData.riskLevelDistribution.map((entry, index) => (
+                      {chartData.riskLevelDistribution.map((entry: any, index) => (
                         <Cell key={`cell-${index}`} fill={getRiskLevelColor(entry.name)} />
                       ))}
                     </Pie>
-                    <Tooltip 
-                      formatter={(value, name) => [`${value} youth`, name]}
-                      labelFormatter={(label) => `Risk Level: ${label}`}
-                    />
-                    <Legend 
-                      verticalAlign="bottom" 
-                      height={36}
-                      formatter={(value, entry: any) => {
-                        const item = chartData.riskLevelDistribution.find(d => d.name === value);
-                        return `${value}: ${item?.percentage}% (${item?.value} youth)`;
-                      }}
-                    />
+                    <Tooltip />
                   </PieChart>
                 </ResponsiveContainer>
               </CardContent>
             </Card>
           </TabsContent>
 
-          <TabsContent value="progress">
+          <TabsContent value="points" className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle>Average Point Trends</CardTitle>
+                <CardTitle>Average Points Trends</CardTitle>
               </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={400}>
+                <ResponsiveContainer width="100%" height={300}>
                   <LineChart data={chartData.pointTrends}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="month" />
                     <YAxis />
                     <Tooltip />
                     <Legend />
-                    <Line type="monotone" dataKey="averagePoints" stroke="hsl(var(--chart-2))" strokeWidth={2} />
+                    <Line type="monotone" dataKey="averagePoints" stroke="#82ca9d" strokeWidth={2} />
                   </LineChart>
                 </ResponsiveContainer>
               </CardContent>
             </Card>
           </TabsContent>
 
-          <TabsContent value="levels">
-            <Card>
-              <CardHeader>
-                <CardTitle>Weekly Level Changes</CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  Track level ups and level downs per week to monitor youth progress
-                </p>
-              </CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={400}>
-                  <BarChart data={chartData.levelTrends}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="week" />
-                    <YAxis />
-                    <Tooltip />
-                    <Legend />
-                    <Bar dataKey="levelUps" fill="hsl(var(--chart-1))" name="Level Ups" />
-                    <Bar dataKey="levelDowns" fill="hsl(var(--chart-5))" name="Level Downs" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="completion">
+          <TabsContent value="completion" className="space-y-6">
             <Card>
               <CardHeader>
                 <CardTitle>Assessment Completion Status</CardTitle>
               </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={400}>
-                  <BarChart data={chartData.completionStats}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="name" />
-                    <YAxis />
+                <ResponsiveContainer width="100%" height={300}>
+                  <PieChart>
+                    <Pie
+                      data={chartData.completionStats}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={({ name, value }) => `${name}: ${value}`}
+                      outerRadius={80}
+                      fill="#8884d8"
+                      dataKey="value"
+                    >
+                      <Cell fill="#10b981" />
+                      <Cell fill="#f59e0b" />
+                    </Pie>
                     <Tooltip />
-                    <Legend />
-                    <Bar dataKey="value" fill="hsl(var(--primary))" />
-                  </BarChart>
+                  </PieChart>
                 </ResponsiveContainer>
               </CardContent>
             </Card>
-          </TabsContent>
-
-          <TabsContent value="colors">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Real Colors Distribution</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <PieChart>
-                      <Pie
-                        data={chartData.colorDistribution}
-                        cx="50%"
-                        cy="50%"
-                        outerRadius={100}
-                        fill="#8884d8"
-                        dataKey="count"
-                        stroke="#ffffff"
-                        strokeWidth={2}
-                      >
-                        {chartData.colorDistribution.map((entry, index) => (
-                          <Cell 
-                            key={`cell-${index}`} 
-                            fill={
-                              entry.color === 'Gold' ? '#F59E0B' :
-                              entry.color === 'Blue' ? '#3B82F6' :
-                              entry.color === 'Green' ? '#10B981' :
-                              entry.color === 'Orange' ? '#F97316' : '#6B7280'
-                            } 
-                          />
-                        ))}
-                      </Pie>
-                      <Tooltip 
-                        formatter={(value: any, name: any, props: any) => [
-                          `${value} youth`,
-                          `${props.payload.color} Color`
-                        ]}
-                      />
-                      <Legend 
-                        verticalAlign="bottom" 
-                        height={36}
-                        formatter={(value, entry: any) => {
-                          const item = chartData.colorDistribution.find(d => d.color === value);
-                          return `${value}: ${item?.percentage}% (${item?.count} youth)`;
-                        }}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Color Breakdown</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {chartData.colorDistribution.map((color, index) => (
-                      <div key={index} className="flex justify-between items-center p-3 bg-muted rounded-lg">
-                        <div className="flex items-center gap-3">
-                          <div 
-                            className={`w-4 h-4 rounded-full ${
-                              color.color === 'Gold' ? 'bg-yellow-500' :
-                              color.color === 'Blue' ? 'bg-blue-500' :
-                              color.color === 'Green' ? 'bg-green-500' :
-                              color.color === 'Orange' ? 'bg-orange-500' : 'bg-gray-500'
-                            }`}
-                          />
-                          <span className="font-medium">{color.color}</span>
-                        </div>
-                        <div className="text-right">
-                          <div className="font-bold">{color.count}</div>
-                          <div className="text-sm text-muted-foreground">{color.percentage}%</div>
-                        </div>
-                      </div>
-                    ))}
-                    {chartData.colorDistribution.length === 0 && (
-                      <div className="text-center text-muted-foreground py-8">
-                        No Real Colors assessments completed yet
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
           </TabsContent>
         </Tabs>
       </div>

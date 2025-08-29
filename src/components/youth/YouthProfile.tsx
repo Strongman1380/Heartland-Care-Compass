@@ -14,7 +14,7 @@ import { MentalHealthProfileTab } from "./MentalHealthProfileTab";
 import { RatingsProfileTab } from "./RatingsProfileTab";
 import { DailyRatingsTab } from "./DailyRatingsTab";
 import { ConsolidatedScoringTab } from "./ConsolidatedScoringTab";
-import { ProgressEvaluationReport } from "../reports/ProgressEvaluationReport";
+import { ReportsTab } from "../reports/ReportsTab";
 import { EditYouthDialog } from "./EditYouthDialog";
 
 interface YouthProfileProps {
@@ -136,7 +136,7 @@ export const YouthProfile = ({ youth, onBack, onYouthUpdated }: YouthProfileProp
             </TabsContent>
 
             <TabsContent value="progress-reports">
-              <ProgressEvaluationReport youth={youth} />
+              <ReportsTab youth={youth} />
             </TabsContent>
           </Tabs>
         </CardContent>

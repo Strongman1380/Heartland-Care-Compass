@@ -1,17 +1,26 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Header } from "@/components/layout/Header";
 import { BehaviorCard } from "@/components/behavior/BehaviorCard";
 import { YouthSelector } from "@/components/common/YouthSelector";
 import { Skeleton } from "@/components/ui/skeleton";
+import { fetchAllYouths } from "@/utils/local-storage-utils";
+import { type Youth } from "@/types/app-types";
 
 const DailyPoints = () => {
   const [selectedYouthId, setSelectedYouthId] = useState<string | null>(null);
+  const [selectedYouth, setSelectedYouth] = useState<Youth | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
   const handleYouthSelect = (youthId: string) => {
     setIsLoading(true);
     setSelectedYouthId(youthId);
+    
+    // Fetch the selected youth data
+    const youths = fetchAllYouths();
+    const youth = youths.find(y => y.id === youthId);
+    setSelectedYouth(youth || null);
+    
     // Simulate loading for a smoother UX
     setTimeout(() => setIsLoading(false), 500);
   };
@@ -45,7 +54,7 @@ const DailyPoints = () => {
                 <Skeleton className="h-40 w-full" />
               </div>
             ) : (
-              <BehaviorCard youthId={selectedYouthId} youth={null} />
+              <BehaviorCard youthId={selectedYouthId} youth={selectedYouth} />
             )}
           </div>
         </div>

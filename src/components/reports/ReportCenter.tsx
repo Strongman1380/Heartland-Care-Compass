@@ -3,6 +3,8 @@ import { useState } from "react";
 import { ReportGenerationForm } from "./ReportGenerationForm";
 import { RecentReports } from "./RecentReports";
 import { ReportTemplates } from "./ReportTemplates";
+import { generateReport, downloadReport, ReportOptions } from "@/utils/report-service";
+import { useToast } from "@/hooks/use-toast";
 
 interface ReportCenterProps {
   youthId: string;
@@ -11,14 +13,31 @@ interface ReportCenterProps {
 
 export const ReportCenter = ({ youthId, youth }: ReportCenterProps) => {
   const [isGenerating, setIsGenerating] = useState(false);
+  const { toast } = useToast();
   
-  const handleGenerateReport = () => {
+  const handleGenerateReport = async (options: ReportOptions) => {
     setIsGenerating(true);
     
-    // In a real application, this would trigger report generation via a PDF library
-    setTimeout(() => {
+    try {
+      const reportContent = await generateReport(youth, options);
+      const filename = `${youth.firstName}_${youth.lastName}_${options.reportType}_report_${new Date().toISOString().split('T')[0]}.txt`;
+      
+      downloadReport(reportContent, filename);
+      
+      toast({
+        title: "Report Generated",
+        description: `${options.reportType.charAt(0).toUpperCase() + options.reportType.slice(1)} report has been downloaded successfully.`,
+      });
+    } catch (error) {
+      console.error("Error generating report:", error);
+      toast({
+        title: "Error",
+        description: "Failed to generate report. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
       setIsGenerating(false);
-    }, 1500);
+    }
   };
 
   return (

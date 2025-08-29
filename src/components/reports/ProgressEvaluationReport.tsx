@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Calendar, FileText, Printer } from "lucide-react";
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subWeeks, subMonths } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
+import { fetchDailyRatings } from "@/utils/local-storage-utils";
 
 interface ProgressEvaluationReportProps {
   youth: Youth;
@@ -71,11 +72,18 @@ export const ProgressEvaluationReport = ({ youth }: ProgressEvaluationReportProp
           break;
       }
 
-      // For now, use mock data since we don't have daily ratings in local storage yet
-      const ratings: DailyRating[] = [];
+      // Fetch actual daily ratings from localStorage
+      const allRatings = fetchDailyRatings(youth.id);
+      
+      // Filter ratings for the selected period
+      const ratings = allRatings.filter(rating => {
+        if (!rating.date) return false;
+        const ratingDate = new Date(rating.date);
+        return ratingDate >= startDate && ratingDate <= endDate;
+      });
       
       const calcAverage = (field: keyof DailyRating) => {
-        const values = ratings.map(r => r[field] as number).filter(v => v !== null && v !== undefined);
+        const values = ratings.map(r => r[field] as number).filter(v => v !== null && v !== undefined && v > 0);
         return values.length > 0 ? Math.round((values.reduce((sum, v) => sum + v, 0) / values.length) * 10) / 10 : 0;
       };
 
@@ -105,7 +113,12 @@ export const ProgressEvaluationReport = ({ youth }: ProgressEvaluationReportProp
   };
 
   const handlePrint = () => {
-    window.print();
+    // Generate the report first to ensure data is current
+    generateReport();
+    // Small delay to ensure state updates before printing
+    setTimeout(() => {
+      window.print();
+    }, 100);
   };
 
   const getRatingDescription = (rating: number) => {
@@ -298,22 +311,142 @@ export const ProgressEvaluationReport = ({ youth }: ProgressEvaluationReportProp
       <style dangerouslySetInnerHTML={{
         __html: `
           @media print {
+            * {
+              -webkit-print-color-adjust: exact !important;
+              color-adjust: exact !important;
+            }
+            
+            body {
+              background: white !important;
+              color: black !important;
+              font-family: 'Times New Roman', serif !important;
+              line-height: 1.4 !important;
+            }
+            
             .no-print {
               display: none !important;
             }
+            
             .print-section {
               box-shadow: none !important;
               border: none !important;
+              border-radius: 0 !important;
               margin: 0 !important;
               padding: 0 !important;
+              background: white !important;
+              color: black !important;
+              font-size: 12pt !important;
+              line-height: 1.4 !important;
+              width: 100% !important;
+              max-width: none !important;
             }
+            
+            .print-section h1 {
+              font-size: 18pt !important;
+              font-weight: bold !important;
+              margin-bottom: 8pt !important;
+              color: black !important;
+              text-align: center !important;
+            }
+            
+            .print-section h2 {
+              font-size: 14pt !important;
+              font-weight: bold !important;
+              margin-bottom: 12pt !important;
+              color: black !important;
+              text-align: center !important;
+            }
+            
+            .print-section h3 {
+              font-size: 12pt !important;
+              font-weight: bold !important;
+              margin-bottom: 6pt !important;
+              margin-top: 12pt !important;
+              color: black !important;
+            }
+            
+            .print-section h4 {
+              font-size: 11pt !important;
+              font-weight: bold !important;
+              margin-bottom: 4pt !important;
+              color: black !important;
+            }
+            
+            .print-section p {
+              font-size: 11pt !important;
+              margin-bottom: 6pt !important;
+              color: black !important;
+              text-align: justify !important;
+            }
+            
+            .print-section .grid {
+              display: block !important;
+            }
+            
+            .print-section .grid-cols-2 > div {
+              display: inline-block !important;
+              width: 48% !important;
+              margin-right: 4% !important;
+              vertical-align: top !important;
+            }
+            
+            .print-section .grid-cols-2 > div:nth-child(2n) {
+              margin-right: 0 !important;
+            }
+            
+            .print-section .space-y-4 > * + * {
+              margin-top: 12pt !important;
+            }
+            
+            .print-section .space-y-6 > * + * {
+              margin-top: 18pt !important;
+            }
+            
+            .print-section .border-b {
+              border-bottom: 1pt solid black !important;
+              padding-bottom: 8pt !important;
+              margin-bottom: 8pt !important;
+            }
+            
+            .print-section .border-t {
+              border-top: 1pt solid black !important;
+              padding-top: 12pt !important;
+              margin-top: 18pt !important;
+            }
+            
+            .print-section strong {
+              font-weight: bold !important;
+              color: black !important;
+            }
+            
             .print-only {
               display: block !important;
             }
+            
+            .print-only > div {
+              margin-bottom: 12pt !important;
+              page-break-inside: avoid !important;
+            }
+            
             @page {
-              margin: 1in;
+              margin: 0.75in !important;
+              size: letter !important;
+            }
+            
+            /* Ensure content flows properly */
+            .print-section > div {
+              page-break-inside: avoid !important;
+            }
+            
+            /* Make sure text areas content appears properly */
+            .print-section .print-only p {
+              white-space: pre-wrap !important;
+              word-wrap: break-word !important;
+              margin-top: 4pt !important;
+              padding-left: 12pt !important;
             }
           }
+          
           .print-only {
             display: none;
           }

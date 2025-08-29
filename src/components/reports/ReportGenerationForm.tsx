@@ -8,8 +8,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { FileText, FilePlus, FileCheck } from "lucide-react";
 
+import { ReportOptions } from "@/utils/report-service";
+
 interface ReportGenerationFormProps {
-  onGenerateReport: () => void;
+  onGenerateReport: (options: ReportOptions) => void;
   isGenerating: boolean;
 }
 
@@ -180,7 +182,16 @@ export const ReportGenerationForm = ({ onGenerateReport, isGenerating }: ReportG
           
           <Button 
             className="w-full"
-            onClick={onGenerateReport}
+            onClick={() => {
+              const options: ReportOptions = {
+                reportType: selectedReportType as "comprehensive" | "summary" | "progress",
+                period: selectedPeriod as "allTime" | "last7" | "last30" | "last90" | "custom",
+                customStartDate,
+                customEndDate,
+                includeOptions
+              };
+              onGenerateReport(options);
+            }}
             disabled={isGenerating}
           >
             {isGenerating ? "Generating Report..." : "Generate Report"}

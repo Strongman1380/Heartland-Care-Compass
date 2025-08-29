@@ -1,7 +1,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { PlusCircle, Settings, Home, Calendar, BookOpen, LineChart, BellRing } from "lucide-react";
+import { PlusCircle, Settings, Home, Calendar, BookOpen, LineChart, BellRing, Database } from "lucide-react";
 import { AddYouthDialog } from "@/components/youth/AddYouthDialog";
 import { Link } from "react-router-dom";
 
@@ -77,6 +77,10 @@ export const Header = ({ showAdmin = false, onAdminToggle }: HeaderProps) => {
                 <BellRing size={16} />
                 <span>Alerts</span>
               </Link>
+              <Link to="/migration" className="text-blue-700 hover:text-blue-800 flex items-center gap-1 font-medium">
+                <Database size={16} />
+                <span>Migration</span>
+              </Link>
               
               <div className="flex items-center gap-4 ml-4">
                 {onAdminToggle && (
@@ -139,6 +143,12 @@ export const Header = ({ showAdmin = false, onAdminToggle }: HeaderProps) => {
                 <span className="flex items-center gap-2">
                   <BellRing size={16} />
                   Alerts
+                </span>
+              </Link>
+              <Link to="/migration" className="block py-2 px-4 text-blue-700 hover:bg-blue-50 rounded">
+                <span className="flex items-center gap-2">
+                  <Database size={16} />
+                  Migration
                 </span>
               </Link>
               <div className="flex flex-col gap-2 py-2">

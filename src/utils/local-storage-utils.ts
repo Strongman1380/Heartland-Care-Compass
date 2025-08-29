@@ -8,14 +8,25 @@ export const STORAGE_KEYS = {
   POINTS: 'heartland_points',
   NOTES: 'heartland_notes',
   ASSESSMENTS: 'heartland_assessments',
-  RATINGS: 'heartland_ratings'
+  RATINGS: 'heartland_ratings',
+  VERSION: 'heartland_data_version'
 };
+
+// Data version - increment this when you want to force refresh the youth data
+const CURRENT_DATA_VERSION = '2024-12-19-v2';
 
 // Helper to initialize storage with mock data if needed
 export const initializeStorage = () => {
   const existingYouths = getItem<Youth[]>(STORAGE_KEYS.YOUTHS);
+  const currentVersion = getItem<string>(STORAGE_KEYS.VERSION);
   
-  if (!existingYouths || existingYouths.length === 0) {
+  // Force refresh if version doesn't match or no youths exist
+  if (!existingYouths || existingYouths.length === 0 || currentVersion !== CURRENT_DATA_VERSION) {
+    console.log('Initializing/updating youth data with new roster...');
+    
+    // Clear existing data to start fresh
+    clearAllData();
+    
     // Add IDs to the mock data and store them
     const youthsWithIds = mockYouthData.map(youth => ({
       ...youth,
@@ -23,6 +34,7 @@ export const initializeStorage = () => {
     }));
     
     setItem(STORAGE_KEYS.YOUTHS, youthsWithIds);
+    setItem(STORAGE_KEYS.VERSION, CURRENT_DATA_VERSION);
     return true;
   }
   

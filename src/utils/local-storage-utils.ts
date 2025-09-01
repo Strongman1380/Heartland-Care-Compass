@@ -1,5 +1,4 @@
 import { Youth, BehaviorPoints, ProgressNote, DailyRating } from "@/types/app-types";
-import { mockYouthData } from "./mockData";
 import { v4 as uuidv4 } from '@/utils/uuid';
 
 // Storage keys
@@ -15,25 +14,21 @@ export const STORAGE_KEYS = {
 // Data version - increment this when you want to force refresh the youth data
 const CURRENT_DATA_VERSION = '2024-12-19-v2';
 
-// Helper to initialize storage with mock data if needed
+// Helper to initialize storage
 export const initializeStorage = () => {
   const existingYouths = getItem<Youth[]>(STORAGE_KEYS.YOUTHS);
   const currentVersion = getItem<string>(STORAGE_KEYS.VERSION);
   
-  // Force refresh if version doesn't match or no youths exist
-  if (!existingYouths || existingYouths.length === 0 || currentVersion !== CURRENT_DATA_VERSION) {
-    console.log('Initializing/updating youth data with new roster...');
+  // Initialize empty storage if no data exists
+  if (!existingYouths || currentVersion !== CURRENT_DATA_VERSION) {
+    console.log('Initializing storage...');
     
-    // Clear existing data to start fresh
-    clearAllData();
-    
-    // Add IDs to the mock data and store them
-    const youthsWithIds = mockYouthData.map(youth => ({
-      ...youth,
-      id: uuidv4()
-    }));
-    
-    setItem(STORAGE_KEYS.YOUTHS, youthsWithIds);
+    // Initialize with empty arrays
+    setItem(STORAGE_KEYS.YOUTHS, []);
+    setItem(STORAGE_KEYS.POINTS, []);
+    setItem(STORAGE_KEYS.NOTES, []);
+    setItem(STORAGE_KEYS.ASSESSMENTS, []);
+    setItem(STORAGE_KEYS.RATINGS, []);
     setItem(STORAGE_KEYS.VERSION, CURRENT_DATA_VERSION);
     return true;
   }

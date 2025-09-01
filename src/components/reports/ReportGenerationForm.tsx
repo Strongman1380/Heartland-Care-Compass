@@ -28,6 +28,7 @@ export const ReportGenerationForm = ({ onGenerateReport, isGenerating }: ReportG
     successPlan: false,
     documents: false,
   });
+  const [outputFormat, setOutputFormat] = useState<'text' | 'pdf' | 'docx'>('text');
 
   const handleIncludeOptionChange = (option: string) => {
     setIncludeOptions(prev => ({
@@ -179,6 +180,20 @@ export const ReportGenerationForm = ({ onGenerateReport, isGenerating }: ReportG
               </div>
             </div>
           </div>
+
+          <div>
+            <Label className="text-base font-medium mb-2 block">Output Format</Label>
+            <Select value={outputFormat} onValueChange={(v) => setOutputFormat(v as any)}>
+              <SelectTrigger className="max-w-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="text">Plain Text (.txt)</SelectItem>
+                <SelectItem value="pdf">PDF (.pdf)</SelectItem>
+                <SelectItem value="docx">Word (.docx)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           
           <Button 
             className="w-full"
@@ -188,7 +203,8 @@ export const ReportGenerationForm = ({ onGenerateReport, isGenerating }: ReportG
                 period: selectedPeriod as "allTime" | "last7" | "last30" | "last90" | "custom",
                 customStartDate,
                 customEndDate,
-                includeOptions
+                includeOptions,
+                outputFormat
               };
               onGenerateReport(options);
             }}

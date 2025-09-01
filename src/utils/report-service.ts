@@ -1,6 +1,35 @@
 import { Youth, BehaviorPoints, DailyRating, ProgressNote } from "@/types/app-types";
 import { fetchBehaviorPoints, fetchDailyRatings, fetchProgressNotes } from "./local-storage-utils";
+import { getBehaviorPointsByYouth, getDailyRatingsByYouth, getProgressNotesByYouth } from "@/lib/api";
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subWeeks, subMonths, subDays } from "date-fns";
+
+// API fetch functions with fallback to localStorage
+const fetchBehaviorPointsAPI = async (youthId: string): Promise<BehaviorPoints[]> => {
+  try {
+    return await getBehaviorPointsByYouth(youthId);
+  } catch (e) {
+    console.warn('API fetch failed for behavior-points; falling back to localStorage:', e);
+    return fetchBehaviorPoints(youthId);
+  }
+};
+
+const fetchProgressNotesAPI = async (youthId: string): Promise<ProgressNote[]> => {
+  try {
+    return await getProgressNotesByYouth(youthId);
+  } catch (e) {
+    console.warn('API fetch failed for progress-notes; falling back to localStorage:', e);
+    return fetchProgressNotes(youthId);
+  }
+};
+
+const fetchDailyRatingsAPI = async (youthId: string): Promise<DailyRating[]> => {
+  try {
+    return await getDailyRatingsByYouth(youthId);
+  } catch (e) {
+    console.warn('API fetch failed for daily-ratings; falling back to localStorage:', e);
+    return fetchDailyRatings(youthId);
+  }
+};
 
 export interface ReportOptions {
   reportType: "comprehensive" | "summary" | "progress";
@@ -15,6 +44,7 @@ export interface ReportOptions {
     successPlan: boolean;
     documents: boolean;
   };
+  outputFormat?: 'text' | 'pdf' | 'docx';
 }
 
 export const generateReport = async (youth: Youth, options: ReportOptions): Promise<string> => {
@@ -35,6 +65,163 @@ export const generateReport = async (youth: Youth, options: ReportOptions): Prom
     default:
       throw new Error("Invalid report type");
   }
+};
+
+// Styled HTML report generation for PDF/DOCX export
+export const generateReportHTML = async (youth: Youth, options: ReportOptions): Promise<string> => {
+  const { startDate, endDate } = getDateRange(options);
+  const data = await fetchReportData(youth.id, options, startDate, endDate);
+
+  const fmt = (d?: Date | string | null) => d ? format(new Date(d), "M/d/yyyy") : "Not provided";
+  const esc = (s: any) => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+  const header = (title: string) => `
+    <div style="text-align:center; margin-bottom:12pt;">
+      <img src="/files/BoysHomeLogo.png" alt="Heartland Boys Home" style="height:56px; object-fit:contain; margin-bottom:6pt;"/>
+      <h1 style="font-size:18pt; margin:0;">Heartland Boys Home</h1>
+      <h2 style="font-size:14pt; margin:6pt 0 0;">${esc(title)}</h2>
+    </div>`;
+
+  const youthInfo = `
+    <div style="margin:8pt 0 12pt;">
+      <h3 style="font-size:12pt; margin:0 0 6pt;">Youth Information</h3>
+      <div style="display:flex; gap:24pt; flex-wrap:wrap; font-size:11pt;">
+        <div><strong>Name:</strong> ${esc(youth.firstName)} ${esc(youth.lastName)}</div>
+        <div><strong>Date of Birth:</strong> ${fmt(youth.dob as any)}</div>
+        <div><strong>Admission Date:</strong> ${fmt(youth.admissionDate as any)}</div>
+        <div><strong>Current Level:</strong> ${esc(youth.level)}</div>
+      </div>
+    </div>`;
+
+  const period = `
+    <div style="margin:0 0 12pt; font-size:11pt;">
+      <strong>Report Period:</strong> ${fmt(startDate)} to ${fmt(endDate)}
+    </div>`;
+
+  const behaviorSection = () => {
+    if (!options.includeOptions.points || !data.behaviorPoints) return '';
+    const totalPoints = data.behaviorPoints.reduce((sum: number, p: BehaviorPoints) => sum + (p.totalPoints || 0), 0);
+    const avg = (key: keyof BehaviorPoints) => {
+      const arr = data.behaviorPoints as BehaviorPoints[];
+      return arr.length ? Math.round((arr.reduce((s, r) => s + (Number(r[key]) || 0), 0)/arr.length)*10)/10 : 0;
+    };
+    return `
+      <div style="margin:12pt 0;">
+        <h3 style="font-size:12pt; margin:0 0 6pt;">Behavior Point Summary</h3>
+        <ul style="margin:0 0 0 16pt; font-size:11pt;">
+          <li><strong>Total Points This Period:</strong> ${totalPoints}</li>
+          <li><strong>Average Morning Points:</strong> ${avg('morningPoints')}</li>
+          <li><strong>Average Afternoon Points:</strong> ${avg('afternoonPoints')}</li>
+          <li><strong>Average Evening Points:</strong> ${avg('eveningPoints')}</li>
+          <li><strong>Days Recorded:</strong> ${data.behaviorPoints.length}</li>
+        </ul>
+      </div>`;
+  };
+
+  const ratingsSection = () => {
+    if (!data.dailyRatings || data.dailyRatings.length === 0) return '';
+    const calcAvg = (field: keyof DailyRating) => {
+      const values = data.dailyRatings.map((r: DailyRating) => Number(r[field]) || 0).filter((v: number) => v > 0);
+      return values.length ? Math.round((values.reduce((s: number, v: number)=>s+v,0)/values.length)*10)/10 : 0;
+    };
+    return `
+      <div style="margin:12pt 0;">
+        <h3 style="font-size:12pt; margin:0 0 6pt;">Daily Ratings Summary</h3>
+        <ul style="margin:0 0 0 16pt; font-size:11pt;">
+          <li><strong>Peer Interaction Average:</strong> ${calcAvg('peerInteraction')} / 5</li>
+          <li><strong>Adult Interaction Average:</strong> ${calcAvg('adultInteraction')} / 5</li>
+          <li><strong>Program Investment Average:</strong> ${calcAvg('investmentLevel')} / 5</li>
+          <li><strong>Authority Response Average:</strong> ${calcAvg('dealAuthority')} / 5</li>
+        </ul>
+      </div>`;
+  };
+
+  const notesSection = () => {
+    if (!options.includeOptions.notes || !data.progressNotes) return '';
+    const items = (data.progressNotes as ProgressNote[]).slice(0, 10).map(n => `
+      <li>${fmt(n.date as any)} - ${esc(n.category || 'General')}: ${esc(n.note || 'No note')}</li>`).join('');
+    return `
+      <div style="margin:12pt 0;">
+        <h3 style="font-size:12pt; margin:0 0 6pt;">Progress Notes (${(data.progressNotes as any[]).length} entries)</h3>
+        <ul style="margin:0 0 0 16pt; font-size:11pt;">${items}</ul>
+      </div>`;
+  };
+
+  const progressWeeklySection = () => {
+    if (options.reportType !== 'progress' || !data.behaviorPoints) return '';
+    const weekly: Record<string, BehaviorPoints[]> = {};
+    (data.behaviorPoints as BehaviorPoints[]).forEach(p => {
+      if (!p.date) return;
+      const wk = format(startOfWeek(new Date(p.date)), 'M/d/yyyy');
+      (weekly[wk] ||= []).push(p);
+    });
+    const rows = Object.entries(weekly).map(([week, points]) => {
+      const total = points.reduce((s, p)=> s + (p.totalPoints || 0), 0);
+      return `<tr><td style="padding:6pt 8pt;border:1pt solid #000;">${esc(week)}</td><td style="padding:6pt 8pt;border:1pt solid #000;">${total}</td><td style="padding:6pt 8pt;border:1pt solid #000;">${points.length}</td></tr>`;
+    }).join('');
+    if (!rows) return '';
+    return `
+      <div style="margin:12pt 0;">
+        <h3 style="font-size:12pt; margin:0 0 6pt;">Weekly Breakdown</h3>
+        <table style="border-collapse:collapse; font-size:11pt;">
+          <thead>
+            <tr>
+              <th style="padding:6pt 8pt;border:1pt solid #000; text-align:left;">Week Of</th>
+              <th style="padding:6pt 8pt;border:1pt solid #000; text-align:left;">Total Points</th>
+              <th style="padding:6pt 8pt;border:1pt solid #000; text-align:left;">Days</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+  };
+
+  let title = '';
+  switch (options.reportType) {
+    case 'comprehensive':
+      title = 'Comprehensive Report';
+      break;
+    case 'summary':
+      title = 'Summary Report';
+      break;
+    case 'progress':
+      title = 'Progress Report';
+      break;
+  }
+
+  const profileSection = options.includeOptions.profile ? `
+    <div style="margin:12pt 0;">
+      <h3 style="font-size:12pt; margin:0 0 6pt;">Profile Information</h3>
+      <div style="font-size:11pt;">
+        <div><strong>Referral Source:</strong> ${esc(youth.referralSource || 'Not provided')}</div>
+        <div><strong>Referral Reason:</strong> ${esc(youth.referralReason || 'Not provided')}</div>
+        <div><strong>Education Info:</strong> ${esc(youth.educationInfo || 'Not provided')}</div>
+        <div><strong>Medical Info:</strong> ${esc(youth.medicalInfo || 'Not provided')}</div>
+        <div><strong>Mental Health Info:</strong> ${esc(youth.mentalHealthInfo || 'Not provided')}</div>
+        <div><strong>Legal Status:</strong> ${esc(youth.legalStatus || 'Not provided')}</div>
+      </div>
+    </div>` : '';
+
+  const generated = format(new Date(), 'M/d/yyyy h:mm a');
+
+  // Compose HTML document body
+  const body = `
+    ${header(title)}
+    ${youthInfo}
+    ${period}
+    ${profileSection}
+    ${behaviorSection()}
+    ${ratingsSection()}
+    ${notesSection()}
+    ${progressWeeklySection()}
+    <div style="margin-top:12pt; font-size:10pt; color:#333;">Report Generated: ${esc(generated)}</div>
+  `;
+
+  // Wrap with minimal print-friendly container
+  return `
+    <div style="font-family: 'Times New Roman', serif; color:#000; font-size:12pt; line-height:1.4;">
+      ${body}
+    </div>`;
 };
 
 const getDateRange = (options: ReportOptions): { startDate: Date; endDate: Date } => {
@@ -74,7 +261,7 @@ const fetchReportData = async (youthId: string, options: ReportOptions, startDat
   const data: any = {};
   
   if (options.includeOptions.points) {
-    const allPoints = fetchBehaviorPoints(youthId);
+    const allPoints = await fetchBehaviorPointsAPI(youthId);
     data.behaviorPoints = allPoints.filter(point => {
       if (!point.date) return false;
       const pointDate = new Date(point.date);
@@ -83,7 +270,7 @@ const fetchReportData = async (youthId: string, options: ReportOptions, startDat
   }
   
   if (options.includeOptions.notes) {
-    const allNotes = fetchProgressNotes(youthId);
+    const allNotes = await fetchProgressNotesAPI(youthId);
     data.progressNotes = allNotes.filter(note => {
       if (!note.date) return false;
       const noteDate = new Date(note.date);
@@ -92,7 +279,7 @@ const fetchReportData = async (youthId: string, options: ReportOptions, startDat
   }
   
   // Fetch daily ratings for assessment data
-  const allRatings = fetchDailyRatings(youthId);
+  const allRatings = await fetchDailyRatingsAPI(youthId);
   data.dailyRatings = allRatings.filter(rating => {
     if (!rating.date) return false;
     const ratingDate = new Date(rating.date);

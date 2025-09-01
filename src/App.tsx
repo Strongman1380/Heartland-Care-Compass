@@ -6,7 +6,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { useEffect } from "react";
 import { initializeStorage } from "@/utils/local-storage-utils";
-import { toast } from "sonner";
 import Index from "./pages/Index";
 import Profiles from "./pages/Profiles";
 import DailyPoints from "./pages/DailyPoints";
@@ -22,11 +21,8 @@ const queryClient = new QueryClient();
 
 const App = () => {
   useEffect(() => {
-    // Initialize local storage with mock data if needed
-    const isInitialized = initializeStorage();
-    if (isInitialized) {
-      toast.success("Mock data has been loaded into local storage");
-    }
+    // Initialize local storage
+    initializeStorage();
   }, []);
   
   return (

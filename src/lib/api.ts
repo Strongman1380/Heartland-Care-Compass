@@ -3,13 +3,39 @@ import { Youth, BehaviorPoints, ProgressNote, DailyRating } from '../types/app-t
 const API_BASE_URL = '/api';
 
 class ApiClient {
+  private token: string | null = null;
+
+  constructor() {
+    // Load token from storage if present
+    try {
+      const stored = localStorage.getItem('auth_token');
+      if (stored) this.token = stored;
+    } catch {}
+  }
+
+  public setToken(token: string) {
+    this.token = token;
+    try { localStorage.setItem('auth_token', token); } catch {}
+  }
+
+  public clearToken() {
+    this.token = null;
+    try { localStorage.removeItem('auth_token'); } catch {}
+  }
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const url = `${API_BASE_URL}${endpoint}`;
     
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...(options.headers as any),
+    };
+    if (this.token) {
+      headers['Authorization'] = `Bearer ${this.token}`;
+    }
+
     const config: RequestInit = {
       headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
+        ...headers,
       },
       ...options,
     };
@@ -27,6 +53,23 @@ class ApiClient {
       console.error(`API request failed: ${endpoint}`, error);
       throw error;
     }
+  }
+
+  // Auth
+  async getAuthToken(apiKey: string): Promise<{ token: string }> {
+    const url = `${API_BASE_URL}/auth/token`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+      },
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || `Auth failed (${res.status})`);
+    }
+    return res.json();
   }
 
   // Health check
@@ -132,3 +175,5 @@ export const {
   createDailyRating,
   migrateData
 } = apiClient;
+
+export type { ApiClient };

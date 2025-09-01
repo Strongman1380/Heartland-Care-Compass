@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Youth } from "@/types/app-types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,7 +8,20 @@ import { Input } from "@/components/ui/input";
 import { FileText, Printer } from "lucide-react";
 import { format, startOfMonth, endOfMonth, subMonths } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
+import { exportElementToPDF, exportElementToDocx } from "@/utils/export";
 import { fetchBehaviorPoints } from "@/utils/local-storage-utils";
+import { getBehaviorPointsByYouth } from "@/lib/api";
+
+// API fetch function with fallback to localStorage
+const fetchBehaviorPointsAPI = async (youthId: string) => {
+  try {
+    const data = await getBehaviorPointsByYouth(youthId);
+    return data;
+  } catch (error) {
+    console.warn(`API fetch failed for behavior-points, falling back to localStorage:`, error);
+    return fetchBehaviorPoints(youthId);
+  }
+};
 
 interface CourtReportProps {
   youth: Youth;
@@ -56,12 +69,13 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
   });
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
+  const printRef = useRef<HTMLDivElement>(null);
 
   const generateReport = async () => {
     setLoading(true);
     try {
-      // Fetch actual behavior points from localStorage
-      const allPoints = fetchBehaviorPoints(youth.id);
+      // Fetch actual behavior points from API with localStorage fallback
+      const allPoints = await fetchBehaviorPointsAPI(youth.id);
       
       // Filter points for the report period
       const reportStartDate = new Date(reportData.reportPeriodFrom);
@@ -118,6 +132,16 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
     setTimeout(() => {
       window.print();
     }, 100);
+  };
+
+  const handleExportPDF = async () => {
+    if (!printRef.current) return;
+    await exportElementToPDF(printRef.current, `court-report-${youth.lastName || 'report'}.pdf`);
+  };
+
+  const handleExportDocx = async () => {
+    if (!printRef.current) return;
+    await exportElementToDocx(printRef.current, `court-report-${youth.lastName || 'report'}.docx`);
   };
 
   const handleInputChange = (field: keyof CourtReportData, value: string | number) => {
@@ -178,7 +202,7 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
       </Card>
 
       {/* Printable Report */}
-      <div className="print-section bg-white text-black p-8 rounded-lg border">
+      <div ref={printRef} className="print-section bg-white text-black p-8 rounded-lg border">
         <div className="text-center mb-6">
           <h1 className="text-2xl font-bold mb-2">COURT REPORT</h1>
           <h2 className="text-xl font-semibold">Heartland Boys Home</h2>
@@ -565,6 +589,10 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
           }
         `
       }} />
+      <div className="no-print flex gap-2 mt-4">
+        <Button variant="outline" onClick={handleExportPDF}>Export PDF</Button>
+        <Button variant="outline" onClick={handleExportDocx}>Export Word (.docx)</Button>
+      </div>
     </div>
   );
 };

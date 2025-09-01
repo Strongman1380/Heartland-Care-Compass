@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Youth } from "@/types/app-types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,19 @@ import { Calendar, FileText, Printer } from "lucide-react";
 import { format, startOfMonth, endOfMonth, subMonths, startOfWeek, endOfWeek, addWeeks } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { fetchBehaviorPoints } from "@/utils/local-storage-utils";
+import { getBehaviorPointsByYouth } from "@/lib/api";
+import { exportElementToPDF, exportElementToDocx } from "@/utils/export";
+
+// API fetch function with fallback to localStorage
+const fetchBehaviorPointsAPI = async (youthId: string) => {
+  try {
+    const data = await getBehaviorPointsByYouth(youthId);
+    return data;
+  } catch (error) {
+    console.warn(`API fetch failed for behavior-points, falling back to localStorage:`, error);
+    return fetchBehaviorPoints(youthId);
+  }
+};
 
 interface MonthlyProgressReportProps {
   youth: Youth;
@@ -52,6 +65,7 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
   });
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
+  const printRef = useRef<HTMLDivElement>(null);
 
   const generateReport = async () => {
     setLoading(true);
@@ -60,8 +74,8 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
       const monthStart = startOfMonth(selectedDate);
       const monthEnd = endOfMonth(selectedDate);
       
-      // Fetch actual behavior points from localStorage
-      const allPoints = fetchBehaviorPoints(youth.id);
+      // Fetch actual behavior points from API with localStorage fallback
+      const allPoints = await fetchBehaviorPointsAPI(youth.id);
       
       // Calculate weekly totals from actual data
       const week1Start = monthStart;
@@ -169,7 +183,7 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
       </Card>
 
       {/* Printable Report */}
-      <div className="print-section bg-white text-black p-8 rounded-lg border">
+      <div ref={printRef} className="print-section bg-white text-black p-8 rounded-lg border">
         <div className="text-center mb-6">
           <h1 className="text-2xl font-bold mb-2">MONTHLY PROGRESS REPORT</h1>
           <h2 className="text-xl font-semibold">Heartland Boys Home</h2>
@@ -439,6 +453,10 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
           }
         `
       }} />
+      <div className="no-print flex gap-2 mt-4">
+        <Button variant="outline" onClick={async () => printRef.current && exportElementToPDF(printRef.current, `monthly-progress-${youth.lastName || 'report'}.pdf`)}>Export PDF</Button>
+        <Button variant="outline" onClick={async () => printRef.current && exportElementToDocx(printRef.current, `monthly-progress-${youth.lastName || 'report'}.docx`)}>Export Word (.docx)</Button>
+      </div>
     </div>
   );
 };

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Youth, DailyRating } from "@/types/app-types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,19 @@ import { Calendar, FileText, Printer } from "lucide-react";
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subWeeks, subMonths } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { fetchDailyRatings } from "@/utils/local-storage-utils";
+import { getDailyRatingsByYouth } from "@/lib/api";
+import { exportElementToPDF, exportElementToDocx } from "@/utils/export";
+
+// API fetch function with fallback to localStorage
+const fetchDailyRatingsAPI = async (youthId: string) => {
+  try {
+    const data = await getDailyRatingsByYouth(youthId);
+    return data;
+  } catch (error) {
+    console.warn(`API fetch failed for daily-ratings, falling back to localStorage:`, error);
+    return fetchDailyRatings(youthId);
+  }
+};
 
 interface ProgressEvaluationReportProps {
   youth: Youth;
@@ -44,6 +57,7 @@ export const ProgressEvaluationReport = ({ youth }: ProgressEvaluationReportProp
   });
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
+  const printRef = useRef<HTMLDivElement>(null);
 
   const generateReport = async () => {
     setLoading(true);
@@ -72,8 +86,8 @@ export const ProgressEvaluationReport = ({ youth }: ProgressEvaluationReportProp
           break;
       }
 
-      // Fetch actual daily ratings from localStorage
-      const allRatings = fetchDailyRatings(youth.id);
+      // Fetch actual daily ratings from API with localStorage fallback
+      const allRatings = await fetchDailyRatingsAPI(youth.id);
       
       // Filter ratings for the selected period
       const ratings = allRatings.filter(rating => {
@@ -119,6 +133,16 @@ export const ProgressEvaluationReport = ({ youth }: ProgressEvaluationReportProp
     setTimeout(() => {
       window.print();
     }, 100);
+  };
+
+  const handleExportPDF = async () => {
+    if (!printRef.current) return;
+    await exportElementToPDF(printRef.current, `progress-evaluation-${youth.lastName || 'report'}.pdf`);
+  };
+
+  const handleExportDocx = async () => {
+    if (!printRef.current) return;
+    await exportElementToDocx(printRef.current, `progress-evaluation-${youth.lastName || 'report'}.docx`);
   };
 
   const getRatingDescription = (rating: number) => {
@@ -177,7 +201,7 @@ export const ProgressEvaluationReport = ({ youth }: ProgressEvaluationReportProp
       </Card>
 
       {/* Printable Report */}
-      <div className="print-section bg-white text-black p-8 rounded-lg border">
+      <div ref={printRef} className="print-section bg-white text-black p-8 rounded-lg border">
         <div className="text-center mb-6">
           <h1 className="text-2xl font-bold mb-2">Heartland Boys Home</h1>
           <h2 className="text-xl font-semibold">Resident {reportType.charAt(0).toUpperCase() + reportType.slice(1)} Progress Evaluation</h2>
@@ -452,6 +476,10 @@ export const ProgressEvaluationReport = ({ youth }: ProgressEvaluationReportProp
           }
         `
       }} />
+      <div className="no-print flex gap-2 mt-4">
+        <Button variant="outline" onClick={handleExportPDF}>Export PDF</Button>
+        <Button variant="outline" onClick={handleExportDocx}>Export Word (.docx)</Button>
+      </div>
     </div>
   );
 };

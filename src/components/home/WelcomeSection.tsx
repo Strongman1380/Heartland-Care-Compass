@@ -6,9 +6,9 @@ export const WelcomeSection = () => {
     <div className="bg-white rounded-lg shadow-lg border-2 border-yellow-300 p-6 mb-8">
       <div className="text-center">
         <img 
-          src="assets/heartland-logo.png" 
+          src="/files/BoysHomeLogo.png" 
           alt="Heartland Boys Home Logo" 
-          className="w-24 h-24 mx-auto mb-4 rounded-full bg-gradient-to-br from-red-100 to-yellow-100 p-2"
+          className="w-24 h-24 mx-auto mb-4 rounded-full bg-gradient-to-br from-red-100 to-yellow-100 p-2 object-contain"
         />
         <h1 className="text-4xl font-bold bg-gradient-to-r from-red-800 via-red-700 to-yellow-600 bg-clip-text text-transparent mb-4">
           Welcome to the Heartland Boys Home Platform

@@ -59,15 +59,6 @@ const Index = () => {
     loadYouths();
   }, []);
 
-  const handleLoadMockData = () => {
-    const success = initializeStorage();
-    if (success) {
-      toast.success("Sample data loaded successfully!");
-      loadYouths();
-    } else {
-      toast.error("Data already exists. Clear local storage to reload sample data.");
-    }
-  };
 
   const handleYouthSelect = (youth: Youth) => {
     setSelectedYouth(youth);
@@ -167,19 +158,6 @@ const Index = () => {
             />
             
             {/* Show Load Mock Data button only when there are no youths */}
-            {!loading && youths.length === 0 && (
-              <div className="text-center mt-8">
-                <button
-                  onClick={handleLoadMockData}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
-                >
-                  Load Sample Data
-                </button>
-                <p className="text-gray-600 text-sm mt-2">
-                  Click to populate the system with sample youth profiles for testing
-                </p>
-              </div>
-            )}
           </>
         ) : (
           <YouthDetailView

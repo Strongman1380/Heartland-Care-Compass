@@ -6,15 +6,130 @@ import { join, resolve } from 'path';
 import dotenv from 'dotenv';
 import { v4 as uuidv4 } from 'uuid';
 import { database, COLLECTIONS } from './database.js';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
+import jwt from 'jsonwebtoken';
+import { z } from 'zod';
 
 // Load environment variables
 dotenv.config();
 
 // Create Express app
 const app = express();
-app.use(cors());
+app.set('trust proxy', 1);
+app.use(helmet());
+// Optionally restrict CORS via CORS_ORIGIN env (comma-separated). Defaults to permissive.
+const allowedOrigins = process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',').map(s => s.trim()) : null;
+if (allowedOrigins && allowedOrigins.length) {
+  app.use(cors({ origin: allowedOrigins }));
+} else {
+  app.use(cors());
+}
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Rate limiting
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+});
+app.use('/api/', apiLimiter);
+
+// Simple JWT auth helpers
+const JWT_SECRET = process.env.JWT_SECRET || 'dev-insecure-secret-change-me';
+const requireAuth = (req, res, next) => {
+  const auth = req.headers.authorization || '';
+  const token = auth.startsWith('Bearer ') ? auth.slice(7) : null;
+  if (!token) return res.status(401).json({ error: 'Missing token' });
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.user = decoded;
+    next();
+  } catch (e) {
+    return res.status(401).json({ error: 'Invalid token' });
+  }
+};
+
+// Enforce auth on all API routes except health and token
+app.use('/api', (req, res, next) => {
+  const open = req.path === '/health' || req.path === '/auth/token';
+  if (open) return next();
+  return requireAuth(req, res, next);
+});
+
+// Validation schemas
+const youthSchema = z.object({
+  id: z.string().uuid().optional(),
+  firstName: z.string().min(1),
+  lastName: z.string().min(1),
+  dob: z.coerce.date().optional().nullable(),
+  age: z.number().int().min(0).max(120).optional().nullable(),
+  admissionDate: z.coerce.date().optional().nullable(),
+  level: z.number().int().min(0).max(10),
+  pointTotal: z.number().int().min(0),
+  referralSource: z.string().optional().nullable(),
+  referralReason: z.string().optional().nullable(),
+  educationInfo: z.string().optional().nullable(),
+  medicalInfo: z.string().optional().nullable(),
+  mentalHealthInfo: z.string().optional().nullable(),
+  legalStatus: z.string().optional().nullable(),
+  peerInteraction: z.number().min(0).max(5).optional().nullable(),
+  adultInteraction: z.number().min(0).max(5).optional().nullable(),
+  investmentLevel: z.number().min(0).max(5).optional().nullable(),
+  dealAuthority: z.number().min(0).max(5).optional().nullable(),
+  hyrnaRiskLevel: z.string().optional().nullable(),
+  hyrnaScore: z.number().optional().nullable(),
+  hyrnaAssessmentDate: z.coerce.date().optional().nullable(),
+});
+
+const behaviorPointsSchema = z.object({
+  id: z.string().uuid().optional(),
+  youth_id: z.string().min(1),
+  date: z.coerce.date().optional().nullable(),
+  morningPoints: z.number().int().min(0),
+  afternoonPoints: z.number().int().min(0),
+  eveningPoints: z.number().int().min(0),
+  totalPoints: z.number().int().min(0),
+  comments: z.string().optional().nullable(),
+});
+
+const progressNoteSchema = z.object({
+  id: z.string().uuid().optional(),
+  youth_id: z.string().min(1),
+  date: z.coerce.date().optional().nullable(),
+  category: z.string().optional().nullable(),
+  note: z.string().optional().nullable(),
+  rating: z.number().min(0).max(5).optional().nullable(),
+  staff: z.string().optional().nullable(),
+});
+
+const dailyRatingSchema = z.object({
+  id: z.string().uuid().optional(),
+  youth_id: z.string().min(1),
+  date: z.coerce.date().optional().nullable(),
+  peerInteraction: z.number().min(0).max(5).optional().nullable(),
+  adultInteraction: z.number().min(0).max(5).optional().nullable(),
+  investmentLevel: z.number().min(0).max(5).optional().nullable(),
+  dealAuthority: z.number().min(0).max(5).optional().nullable(),
+  staff: z.string().optional().nullable(),
+  comments: z.string().optional().nullable(),
+});
+
+// Auth route: exchange ADMIN_API_KEY for a JWT (simple bootstrap)
+app.post('/api/auth/token', authLimiter, (req, res) => {
+  const provided = req.headers['x-api-key'] || req.body?.apiKey;
+  const adminKey = process.env.ADMIN_API_KEY;
+  if (!adminKey) return res.status(500).json({ error: 'Server not configured' });
+  if (provided !== adminKey) return res.status(401).json({ error: 'Invalid api key' });
+  const token = jwt.sign({ role: 'admin' }, JWT_SECRET, { expiresIn: '8h' });
+  res.json({ token });
+});
 
 // Health check endpoint
 app.get('/api/health', async (req, res) => {
@@ -35,7 +150,7 @@ app.get('/api/health', async (req, res) => {
 });
 
 // Youth API Routes
-app.get('/api/youth', async (req, res) => {
+app.get('/api/youth', requireAuth, async (req, res) => {
   try {
     const collection = database.getCollection(COLLECTIONS.YOUTH);
     const youth = await collection.find({}).toArray();
@@ -46,7 +161,7 @@ app.get('/api/youth', async (req, res) => {
   }
 });
 
-app.get('/api/youth/:id', async (req, res) => {
+app.get('/api/youth/:id', requireAuth, async (req, res) => {
   try {
     const collection = database.getCollection(COLLECTIONS.YOUTH);
     const youth = await collection.findOne({ id: req.params.id });
@@ -60,11 +175,13 @@ app.get('/api/youth/:id', async (req, res) => {
   }
 });
 
-app.post('/api/youth', async (req, res) => {
+app.post('/api/youth', requireAuth, async (req, res) => {
   try {
     const collection = database.getCollection(COLLECTIONS.YOUTH);
+    const parsed = youthSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'Invalid payload', details: parsed.error.flatten() });
     const youthData = {
-      ...req.body,
+      ...parsed.data,
       id: req.body.id || uuidv4(),
       createdAt: new Date(),
       updatedAt: new Date()
@@ -78,11 +195,13 @@ app.post('/api/youth', async (req, res) => {
   }
 });
 
-app.put('/api/youth/:id', async (req, res) => {
+app.put('/api/youth/:id', requireAuth, async (req, res) => {
   try {
     const collection = database.getCollection(COLLECTIONS.YOUTH);
+    const parsed = youthSchema.partial().safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'Invalid payload', details: parsed.error.flatten() });
     const updateData = {
-      ...req.body,
+      ...parsed.data,
       updatedAt: new Date()
     };
     
@@ -92,17 +211,18 @@ app.put('/api/youth/:id', async (req, res) => {
       { returnDocument: 'after' }
     );
     
-    if (!result) {
+    const updated = result && result.value;
+    if (!updated) {
       return res.status(404).json({ error: 'Youth not found' });
     }
-    res.json(result);
+    res.json(updated);
   } catch (error) {
     console.error('Error updating youth:', error);
     res.status(500).json({ error: 'Failed to update youth' });
   }
 });
 
-app.delete('/api/youth/:id', async (req, res) => {
+app.delete('/api/youth/:id', requireAuth, async (req, res) => {
   try {
     const collection = database.getCollection(COLLECTIONS.YOUTH);
     const result = await collection.deleteOne({ id: req.params.id });
@@ -118,7 +238,7 @@ app.delete('/api/youth/:id', async (req, res) => {
 });
 
 // Behavior Points API Routes
-app.get('/api/behavior-points/youth/:youthId', async (req, res) => {
+app.get('/api/behavior-points/youth/:youthId', requireAuth, async (req, res) => {
   try {
     const collection = database.getCollection(COLLECTIONS.BEHAVIOR_POINTS);
     const points = await collection.find({ youth_id: req.params.youthId })
@@ -131,11 +251,13 @@ app.get('/api/behavior-points/youth/:youthId', async (req, res) => {
   }
 });
 
-app.post('/api/behavior-points', async (req, res) => {
+app.post('/api/behavior-points', requireAuth, async (req, res) => {
   try {
     const collection = database.getCollection(COLLECTIONS.BEHAVIOR_POINTS);
+    const parsed = behaviorPointsSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'Invalid payload', details: parsed.error.flatten() });
     const pointsData = {
-      ...req.body,
+      ...parsed.data,
       id: req.body.id || uuidv4(),
       createdAt: new Date()
     };
@@ -149,7 +271,7 @@ app.post('/api/behavior-points', async (req, res) => {
 });
 
 // Progress Notes API Routes
-app.get('/api/progress-notes/youth/:youthId', async (req, res) => {
+app.get('/api/progress-notes/youth/:youthId', requireAuth, async (req, res) => {
   try {
     const collection = database.getCollection(COLLECTIONS.PROGRESS_NOTES);
     const notes = await collection.find({ youth_id: req.params.youthId })
@@ -162,11 +284,13 @@ app.get('/api/progress-notes/youth/:youthId', async (req, res) => {
   }
 });
 
-app.post('/api/progress-notes', async (req, res) => {
+app.post('/api/progress-notes', requireAuth, async (req, res) => {
   try {
     const collection = database.getCollection(COLLECTIONS.PROGRESS_NOTES);
+    const parsed = progressNoteSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'Invalid payload', details: parsed.error.flatten() });
     const noteData = {
-      ...req.body,
+      ...parsed.data,
       id: req.body.id || uuidv4(),
       createdAt: new Date()
     };
@@ -180,7 +304,7 @@ app.post('/api/progress-notes', async (req, res) => {
 });
 
 // Daily Ratings API Routes
-app.get('/api/daily-ratings/youth/:youthId', async (req, res) => {
+app.get('/api/daily-ratings/youth/:youthId', requireAuth, async (req, res) => {
   try {
     const collection = database.getCollection(COLLECTIONS.DAILY_RATINGS);
     const ratings = await collection.find({ youth_id: req.params.youthId })
@@ -193,11 +317,13 @@ app.get('/api/daily-ratings/youth/:youthId', async (req, res) => {
   }
 });
 
-app.post('/api/daily-ratings', async (req, res) => {
+app.post('/api/daily-ratings', requireAuth, async (req, res) => {
   try {
     const collection = database.getCollection(COLLECTIONS.DAILY_RATINGS);
+    const parsed = dailyRatingSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'Invalid payload', details: parsed.error.flatten() });
     const ratingData = {
-      ...req.body,
+      ...parsed.data,
       id: req.body.id || uuidv4(),
       createdAt: new Date(),
       updatedAt: new Date()
@@ -212,7 +338,7 @@ app.post('/api/daily-ratings', async (req, res) => {
 });
 
 // Data migration endpoint (for moving from localStorage to MongoDB)
-app.post('/api/migrate', async (req, res) => {
+app.post('/api/migrate', requireAuth, async (req, res) => {
   try {
     const { youth, behaviorPoints, progressNotes, dailyRatings } = req.body;
     
@@ -223,53 +349,99 @@ app.post('/api/migrate', async (req, res) => {
       dailyRatings: 0
     };
 
-    // Migrate youth data
+    // Migrate youth data (idempotent upsert by id)
     if (youth && youth.length > 0) {
       const youthCollection = database.getCollection(COLLECTIONS.YOUTH);
-      const youthData = youth.map(y => ({
-        ...y,
-        createdAt: y.createdAt ? new Date(y.createdAt) : new Date(),
-        updatedAt: y.updatedAt ? new Date(y.updatedAt) : new Date()
+      const normalized = youth.map(y => {
+        const id = y.id && typeof y.id === 'string' && y.id.length ? y.id : uuidv4();
+        return {
+          ...y,
+          id,
+          dob: y.dob ? new Date(y.dob) : y.dob ?? null,
+          admissionDate: y.admissionDate ? new Date(y.admissionDate) : y.admissionDate ?? null,
+          createdAt: y.createdAt ? new Date(y.createdAt) : new Date(),
+          updatedAt: new Date(),
+        };
+      });
+      const ops = normalized.map(doc => ({
+        updateOne: {
+          filter: { id: doc.id },
+          update: { $set: doc },
+          upsert: true,
+        }
       }));
-      await youthCollection.insertMany(youthData);
-      results.youth = youthData.length;
+      const bulk = await youthCollection.bulkWrite(ops, { ordered: false });
+      results.youth = (bulk.upsertedCount || 0) + (bulk.modifiedCount || 0);
     }
 
-    // Migrate behavior points
+    // Migrate behavior points (idempotent upsert by id)
     if (behaviorPoints && behaviorPoints.length > 0) {
       const pointsCollection = database.getCollection(COLLECTIONS.BEHAVIOR_POINTS);
-      const pointsData = behaviorPoints.map(bp => ({
-        ...bp,
-        date: bp.date ? new Date(bp.date) : new Date(),
-        createdAt: bp.createdAt ? new Date(bp.createdAt) : new Date()
+      const normalized = behaviorPoints.map(bp => {
+        const id = bp.id && typeof bp.id === 'string' && bp.id.length ? bp.id : uuidv4();
+        return {
+          ...bp,
+          id,
+          date: bp.date ? new Date(bp.date) : new Date(),
+          createdAt: bp.createdAt ? new Date(bp.createdAt) : new Date(),
+        };
+      });
+      const ops = normalized.map(doc => ({
+        updateOne: {
+          filter: { id: doc.id },
+          update: { $set: doc },
+          upsert: true,
+        }
       }));
-      await pointsCollection.insertMany(pointsData);
-      results.behaviorPoints = pointsData.length;
+      const bulk = await pointsCollection.bulkWrite(ops, { ordered: false });
+      results.behaviorPoints = (bulk.upsertedCount || 0) + (bulk.modifiedCount || 0);
     }
 
-    // Migrate progress notes
+    // Migrate progress notes (idempotent upsert by id)
     if (progressNotes && progressNotes.length > 0) {
       const notesCollection = database.getCollection(COLLECTIONS.PROGRESS_NOTES);
-      const notesData = progressNotes.map(pn => ({
-        ...pn,
-        date: pn.date ? new Date(pn.date) : new Date(),
-        createdAt: pn.createdAt ? new Date(pn.createdAt) : new Date()
+      const normalized = progressNotes.map(pn => {
+        const id = pn.id && typeof pn.id === 'string' && pn.id.length ? pn.id : uuidv4();
+        return {
+          ...pn,
+          id,
+          date: pn.date ? new Date(pn.date) : new Date(),
+          createdAt: pn.createdAt ? new Date(pn.createdAt) : new Date(),
+        };
+      });
+      const ops = normalized.map(doc => ({
+        updateOne: {
+          filter: { id: doc.id },
+          update: { $set: doc },
+          upsert: true,
+        }
       }));
-      await notesCollection.insertMany(notesData);
-      results.progressNotes = notesData.length;
+      const bulk = await notesCollection.bulkWrite(ops, { ordered: false });
+      results.progressNotes = (bulk.upsertedCount || 0) + (bulk.modifiedCount || 0);
     }
 
-    // Migrate daily ratings
+    // Migrate daily ratings (idempotent upsert by id)
     if (dailyRatings && dailyRatings.length > 0) {
       const ratingsCollection = database.getCollection(COLLECTIONS.DAILY_RATINGS);
-      const ratingsData = dailyRatings.map(dr => ({
-        ...dr,
-        date: dr.date ? new Date(dr.date) : new Date(),
-        createdAt: dr.createdAt ? new Date(dr.createdAt) : new Date(),
-        updatedAt: dr.updatedAt ? new Date(dr.updatedAt) : new Date()
+      const normalized = dailyRatings.map(dr => {
+        const id = dr.id && typeof dr.id === 'string' && dr.id.length ? dr.id : uuidv4();
+        return {
+          ...dr,
+          id,
+          date: dr.date ? new Date(dr.date) : new Date(),
+          createdAt: dr.createdAt ? new Date(dr.createdAt) : new Date(),
+          updatedAt: dr.updatedAt ? new Date(dr.updatedAt) : new Date(),
+        };
+      });
+      const ops = normalized.map(doc => ({
+        updateOne: {
+          filter: { id: doc.id },
+          update: { $set: doc },
+          upsert: true,
+        }
       }));
-      await ratingsCollection.insertMany(ratingsData);
-      results.dailyRatings = ratingsData.length;
+      const bulk = await ratingsCollection.bulkWrite(ops, { ordered: false });
+      results.dailyRatings = (bulk.upsertedCount || 0) + (bulk.modifiedCount || 0);
     }
 
     res.json({
@@ -310,6 +482,19 @@ async function startServer() {
     // Connect to MongoDB
     await database.connect();
     console.log('✅ Database connected successfully');
+
+    // Ensure indexes
+    try {
+      await Promise.all([
+        database.getCollection(COLLECTIONS.YOUTH).createIndex({ id: 1 }, { unique: true }),
+        database.getCollection(COLLECTIONS.BEHAVIOR_POINTS).createIndex({ youth_id: 1, date: -1 }),
+        database.getCollection(COLLECTIONS.PROGRESS_NOTES).createIndex({ youth_id: 1, date: -1 }),
+        database.getCollection(COLLECTIONS.DAILY_RATINGS).createIndex({ youth_id: 1, date: -1 })
+      ]);
+      console.log('🔎 Indexes ensured');
+    } catch (idxErr) {
+      console.warn('Index creation warning:', idxErr?.message || idxErr);
+    }
 
     // Create HTTP server
     const server = createServer(app);

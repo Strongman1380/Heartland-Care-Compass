@@ -22,7 +22,8 @@ export abstract class BaseService<T> {
 
   // Find document by ID
   async findById(id: string): Promise<T | null> {
-    return await this.collection.findOne({ _id: id } as Filter<T>);
+    // Use application-level id field (not Mongo _id)
+    return await this.collection.findOne({ id } as Filter<T>);
   }
 
   // Find all documents with optional filter
@@ -38,12 +39,14 @@ export abstract class BaseService<T> {
     } as UpdateFilter<T>;
 
     const result = await this.collection.findOneAndUpdate(
-      { _id: id } as Filter<T>,
+      // Use application-level id field (not Mongo _id)
+      { id } as Filter<T>,
       { $set: updateDoc },
       { returnDocument: 'after' }
     );
 
-    return result || null;
+    // findOneAndUpdate returns a ModifyResult; the updated doc is in value
+    return (result && (result as any).value) || null;
   }
 
   // Delete document by ID

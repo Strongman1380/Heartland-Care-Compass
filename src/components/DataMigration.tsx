@@ -20,6 +20,9 @@ export const DataMigration: React.FC = () => {
   const [hasLocalData, setHasLocalData] = useState(false);
   const [dataSummary, setDataSummary] = useState<any>(null);
   const [isConnected, setIsConnected] = useState(false);
+  const [hasToken, setHasToken] = useState<boolean>(() => !!localStorage.getItem('auth_token'));
+  const [apiKey, setApiKey] = useState<string>('');
+  const [authError, setAuthError] = useState<string | null>(null);
   const [migrationSteps, setMigrationSteps] = useState<MigrationStep[]>([
     {
       id: 'backup',
@@ -69,6 +72,17 @@ export const DataMigration: React.FC = () => {
       }
     } catch (error) {
       console.error('Error checking initial state:', error);
+    }
+  };
+
+  const authenticate = async () => {
+    setAuthError(null);
+    try {
+      const { token } = await apiClient.getAuthToken(apiKey.trim());
+      apiClient.setToken(token);
+      setHasToken(true);
+    } catch (e) {
+      setAuthError(e instanceof Error ? e.message : 'Authentication failed');
     }
   };
 
@@ -197,6 +211,42 @@ export const DataMigration: React.FC = () => {
           <Button onClick={checkInitialState} className="mt-4">
             Retry Connection
           </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!hasToken) {
+    return (
+      <Card className="w-full max-w-2xl mx-auto">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Database className="h-6 w-6" />
+            Authenticate to Migrate
+          </CardTitle>
+          <CardDescription>
+            Enter the admin API key to obtain a JWT for migration.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            <input
+              type="password"
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              placeholder="Admin API Key"
+              className="w-full border rounded px-3 py-2"
+            />
+            {authError && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{authError}</AlertDescription>
+              </Alert>
+            )}
+            <Button onClick={authenticate} disabled={!apiKey.trim()} className="w-full">
+              Authenticate
+            </Button>
+          </div>
         </CardContent>
       </Card>
     );

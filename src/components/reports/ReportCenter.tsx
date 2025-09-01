@@ -4,6 +4,8 @@ import { ReportGenerationForm } from "./ReportGenerationForm";
 import { RecentReports } from "./RecentReports";
 import { ReportTemplates } from "./ReportTemplates";
 import { generateReport, downloadReport, ReportOptions } from "@/utils/report-service";
+import { exportElementToPDF, exportElementToDocx } from "@/utils/export";
+import { useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
 
 interface ReportCenterProps {
@@ -14,19 +16,31 @@ interface ReportCenterProps {
 export const ReportCenter = ({ youthId, youth }: ReportCenterProps) => {
   const [isGenerating, setIsGenerating] = useState(false);
   const { toast } = useToast();
+  const exportRef = useRef<HTMLDivElement>(null);
   
   const handleGenerateReport = async (options: ReportOptions) => {
     setIsGenerating(true);
     
     try {
-      const reportContent = await generateReport(youth, options);
-      const filename = `${youth.firstName}_${youth.lastName}_${options.reportType}_report_${new Date().toISOString().split('T')[0]}.txt`;
-      
-      downloadReport(reportContent, filename);
+      const base = `${youth.firstName}_${youth.lastName}_${options.reportType}_report_${new Date().toISOString().split('T')[0]}`;
+      if (options.outputFormat === 'pdf' || options.outputFormat === 'docx') {
+        const styledHTML = await generateReportHTML(youth, options);
+        if (exportRef.current) {
+          exportRef.current.innerHTML = styledHTML;
+          if (options.outputFormat === 'pdf') {
+            await exportElementToPDF(exportRef.current, `${base}.pdf`);
+          } else {
+            await exportElementToDocx(exportRef.current, `${base}.docx`);
+          }
+        }
+      } else {
+        const reportContent = await generateReport(youth, options);
+        downloadReport(reportContent, `${base}.txt`);
+      }
       
       toast({
         title: "Report Generated",
-        description: `${options.reportType.charAt(0).toUpperCase() + options.reportType.slice(1)} report has been downloaded successfully.`,
+        description: `${options.reportType.charAt(0).toUpperCase() + options.reportType.slice(1)} report downloaded successfully.`,
       });
     } catch (error) {
       console.error("Error generating report:", error);
@@ -60,6 +74,9 @@ export const ReportCenter = ({ youthId, youth }: ReportCenterProps) => {
           <ReportTemplates />
         </div>
       </div>
+
+      {/* Hidden container for export to PDF/DOCX */}
+      <div ref={exportRef} style={{ position: 'absolute', left: '-99999px', top: 0 }} aria-hidden="true" />
     </div>
   );
 };

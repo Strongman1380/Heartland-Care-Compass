@@ -35,6 +35,12 @@ jobs:
         env:
           GH_PAGES_BASE: /Heartland-Care-Compass/
 
+      - name: Copy index to 404
+        run: cp dist/index.html dist/404.html
+
+      - name: Create .nojekyll
+        run: touch dist/.nojekyll
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:

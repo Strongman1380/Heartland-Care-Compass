@@ -9,7 +9,8 @@ export const STORAGE_KEYS = {
   NOTES: 'heartland_notes',
   ASSESSMENTS: 'heartland_assessments',
   RATINGS: 'heartland_ratings',
-  VERSION: 'heartland_data_version'
+  VERSION: 'heartland_data_version',
+  DPN_COMMENTS: 'heartland_dpn_comments'
 };
 
 // Data version - increment this when you want to force refresh the youth data
@@ -294,5 +295,46 @@ export const fetchAssessment = (
 export const clearAllData = () => {
   Object.values(STORAGE_KEYS).forEach(key => {
     localStorage.removeItem(key);
+  });
+};
+
+// DPN comments storage (for weekly/bi-weekly notes aggregation)
+export interface DpnComments {
+  id: string;
+  youth_id: string;
+  periodStart: string; // ISO date
+  periodEnd: string;   // ISO date
+  variant: 'weekly' | 'biweekly' | 'monthly';
+  peer: string;
+  adult: string;
+  investment: string;
+  authority: string;
+  strengths?: string;
+  deficiencies?: string;
+  createdAt: string;
+}
+
+export const saveDpnComments = (entry: Omit<DpnComments, 'id' | 'createdAt'>): DpnComments => {
+  const all = getItem<DpnComments[]>(STORAGE_KEYS.DPN_COMMENTS) || [];
+  const newEntry: DpnComments = {
+    ...entry,
+    id: uuidv4(),
+    createdAt: new Date().toISOString(),
+  };
+  all.push(newEntry);
+  setItem(STORAGE_KEYS.DPN_COMMENTS, all);
+  return newEntry;
+};
+
+export const fetchDpnCommentsByYouth = (youthId: string): DpnComments[] => {
+  const all = getItem<DpnComments[]>(STORAGE_KEYS.DPN_COMMENTS) || [];
+  return all.filter(e => e.youth_id === youthId);
+};
+
+export const fetchDpnCommentsInRange = (youthId: string, start: Date, end: Date): DpnComments[] => {
+  return fetchDpnCommentsByYouth(youthId).filter(e => {
+    const s = new Date(e.periodStart).getTime();
+    const en = new Date(e.periodEnd).getTime();
+    return s >= start.getTime() && en <= end.getTime();
   });
 };

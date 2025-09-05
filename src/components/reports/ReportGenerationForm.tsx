@@ -59,6 +59,9 @@ export const ReportGenerationForm = ({ onGenerateReport, isGenerating }: ReportG
                   <SelectItem value="progress">Progress Report</SelectItem>
                   <SelectItem value="progressMonthly">Monthly Progress Report</SelectItem>
                   <SelectItem value="court">Court Report (builder)</SelectItem>
+                  <SelectItem value="dpnWeekly">DPN Weekly Progress Evaluation</SelectItem>
+                  <SelectItem value="dpnBiWeekly">DPN Bi-Weekly Progress Evaluation</SelectItem>
+                  <SelectItem value="dpnMonthly">DPN Monthly Progress Evaluation</SelectItem>
                 </SelectContent>
               </Select>
             </div>

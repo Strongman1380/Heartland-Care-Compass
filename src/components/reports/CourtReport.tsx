@@ -97,7 +97,7 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
         fetchDailyRatingsAPI(youth.id),
       ]);
       
-      // Filter points for the report period
+      // Filter data for the report period
       const reportStartDate = new Date(reportData.reportPeriodFrom);
       const reportEndDate = new Date(reportData.reportPeriodTo);
       
@@ -106,6 +106,8 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
         const pointDate = new Date(point.date);
         return pointDate >= reportStartDate && pointDate <= reportEndDate;
       });
+      const periodNotes = allNotes.filter(n => n.date && new Date(n.date) >= reportStartDate && new Date(n.date) <= reportEndDate);
+      const periodRatings = allRatings.filter(r => r.date && new Date(r.date) >= reportStartDate && new Date(r.date) <= reportEndDate);
 
       // Calculate averages from actual data
       const morningAvg = periodPoints.length > 0 
@@ -129,21 +131,37 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
         eveningPointsAverage: eveningAvg,
         totalPointsThisPeriod: totalPoints,
         currentGradeLevel: youth.educationInfo || "",
-        academicPerformance: "",
-        schoolAttendance: ""
+        academicPerformance: prev.academicPerformance,
+        schoolAttendance: `${periodRatings.length} recorded days`
       }));
 
       // Attach derived summaries for notes/ratings in DOM via refs
       try {
-        const notesCount = allNotes.filter(n => n.date && new Date(n.date) >= reportStartDate && new Date(n.date) <= reportEndDate).length;
-        const ratingsInPeriod = allRatings.filter(r => r.date && new Date(r.date) >= reportStartDate && new Date(r.date) <= reportEndDate);
+        const notesCount = periodNotes.length;
+        const ratingsInPeriod = periodRatings;
         const avg = (field: keyof typeof ratingsInPeriod[0]) => {
           const vals = ratingsInPeriod.map((r:any)=> Number(r[field])||0).filter(v=>v>0);
           return vals.length ? Math.round((vals.reduce((s:number,v:number)=>s+v,0)/vals.length)*10)/10 : 0;
         };
-        (window as any).__court_meta = { notesCount, ratingsAvg: {
+        // Trend label based on points change between first and second half of period
+        let trendLabel = 'stable';
+        if (periodPoints.length > 4) {
+          const mid = Math.floor(periodPoints.length/2);
+          const sum = (arr:any[]) => arr.reduce((s,p)=> s + (p.totalPoints||0), 0);
+          const first = sum(periodPoints.slice(0, mid)) / Math.max(mid,1);
+          const second = sum(periodPoints.slice(mid)) / Math.max(periodPoints.length-mid,1);
+          if (second > first + 5) trendLabel = 'improving';
+          else if (second < first - 5) trendLabel = 'regressing';
+        }
+
+        // Incident extraction from notes (by category match)
+        const incidents = periodNotes.filter(n => (n.category||'').toLowerCase().includes('incident')).slice(0, 6)
+          .map(n => ({ date: n.date ? format(new Date(n.date), 'M/d/yyyy') : '—', text: (n.note||'').slice(0,160) }));
+
+        (window as any).__court_meta = { notesCount, attendanceDays: periodRatings.length, trendLabel, ratingsAvg: {
           peer: avg('peerInteraction'), adult: avg('adultInteraction'), invest: avg('investmentLevel'), authority: avg('dealAuthority')
         }};
+        (window as any).__court_incidents = incidents;
       } catch {}
 
     } catch (error) {
@@ -242,6 +260,17 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
           <h2 className="text-xl font-semibold">Heartland Boys Home</h2>
         </div>
 
+        {/* 1. Legal and Behavioral History Summary */}
+        <div className="mb-6">
+          <h3 className="font-bold mb-2">1. Legal and Behavioral History Summary (Pre-Placement / Court Report Context)</h3>
+          <p className="ml-4">
+            The youth was placed at Heartland Boys Home on {youth.admissionDate ? format(new Date(youth.admissionDate), "M/d/yyyy") : "_____"}
+            {youth.referralReason ? ` following adjudication for ${youth.referralReason}.` : '.'}
+            Key concerns noted at intake may include chronic defiance of authority, school refusal or academic disengagement, family conflict, and peer aggression or AWOL history.
+            The placement provides structured, trauma-informed care within a normalized group setting to promote behavioral change, responsibility, and readiness for reintegration.
+          </p>
+        </div>
+
         <div className="mb-6">
           <h3 className="font-bold mb-4">Youth Information:</h3>
           <div className="space-y-2 ml-4">
@@ -253,15 +282,24 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
         </div>
 
         <div className="mb-6">
-          <h3 className="font-bold mb-4">Report Period:</h3>
+          <h3 className="font-bold mb-2">Report Period</h3>
           <div className="space-y-2 ml-4">
             <div><strong>From:</strong> {format(new Date(reportData.reportPeriodFrom), "M/d/yyyy")}</div>
             <div><strong>To:</strong> {format(new Date(reportData.reportPeriodTo), "M/d/yyyy")}</div>
           </div>
         </div>
 
+        {/* 2. Academic Functioning Summary */}
         <div className="mb-6">
-          <h3 className="font-bold mb-4">BEHAVIOR SUMMARY:</h3>
+          <h3 className="font-bold mb-2">2. Academic Functioning Summary</h3>
+          <div className="space-y-1 ml-4">
+            <div><strong>Attendance:</strong> {(window as any).__court_meta?.attendanceDays ?? '—'} days recorded</div>
+            <div><strong>Behavior:</strong> {(window as any).__court_meta?.ratingsAvg?.adult ? ((window as any).__court_meta?.ratingsAvg?.adult >= 3 ? 'Respectful/cooperative' : 'Inconsistent; requires redirection') : '—'}</div>
+          </div>
+        </div>
+
+        <div className="mb-6">
+          <h3 className="font-bold mb-2">3. Group Home Behavior Summary</h3>
           <div className="space-y-2 ml-4">
             <div><strong>Morning Points Average:</strong> {reportData.morningPointsAverage}</div>
             <div><strong>Afternoon Points Average:</strong> {reportData.afternoonPointsAverage}</div>
@@ -271,7 +309,7 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
         </div>
 
         <div className="mb-6">
-          <h3 className="font-bold mb-4">RATINGS SUMMARY:</h3>
+          <h3 className="font-bold mb-2">Ratings Summary</h3>
           <div className="space-y-2 ml-4">
             {/* Values are computed and used for export; for on-screen display we read from window meta if present */}
             <div><strong>Peer Interaction Avg:</strong> {(window as any).__court_meta?.ratingsAvg?.peer ?? '—'}</div>
@@ -281,11 +319,43 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
           </div>
         </div>
 
+        {/* 4. Strengths Observed */}
         <div className="mb-6">
-          <h3 className="font-bold mb-4">NOTES SUMMARY:</h3>
-          <div className="space-y-2 ml-4">
-            <div><strong>Progress Notes in Period:</strong> {(window as any).__court_meta?.notesCount ?? '—'}</div>
+          <h3 className="font-bold mb-2">4. Strengths Observed</h3>
+          <ul className="list-disc ml-9">
+            <li>Engages in structured activities</li>
+            <li>Responds well to praise</li>
+            <li>Demonstrates empathy / peer support</li>
+            <li>Completes chores / hygiene routines independently</li>
+            <li>Maintains family contact positively</li>
+            <li>Self-advocates appropriately</li>
+            <li>Uses coping tools (walking away, asking for breaks)</li>
+          </ul>
+        </div>
+
+        {/* 6. Incident Reports Summary */}
+        <div className="mb-6">
+          <h3 className="font-bold mb-2">6. Incident Reports Summary</h3>
+          <div className="space-y-1 ml-4">
+            <div><strong>Total Critical Incidents:</strong> {(window as any).__court_meta?.notesCount ?? 0}</div>
+            {Array.isArray((window as any).__court_incidents) && (window as any).__court_incidents.length > 0 ? (
+              <ul className="list-disc ml-5">
+                {(window as any).__court_incidents.map((i:any, idx:number) => (
+                  <li key={idx}>{i.date}: {i.text}</li>
+                ))}
+              </ul>
+            ) : (
+              <div className="text-sm text-gray-600">No incident notes recorded in this period.</div>
+            )}
           </div>
+        </div>
+
+        {/* 7. Summary of Month */}
+        <div className="mb-6">
+          <h3 className="font-bold mb-2">7. Summary of Month</h3>
+          <p className="ml-4">
+            This month, the youth demonstrated {(window as any).__court_meta?.trendLabel || 'stable'} overall progress. He is currently on Level {youth.level}. Focus areas include respectful communication, accountability, self-regulation, school participation, and healthy peer relationships.
+          </p>
         </div>
 
         <div className="mb-6">
@@ -427,28 +497,17 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
           </div>
         </div>
 
+        {/* 8. Recommendation */}
         <div className="mb-6">
-          <h3 className="font-bold mb-4">RECOMMENDATIONS:</h3>
+          <h3 className="font-bold mb-2">8. Recommendation</h3>
           <div className="ml-4">
-            <div className="no-print">
-              <Textarea
-                value={reportData.recommendations}
-                onChange={(e) => handleInputChange('recommendations', e.target.value)}
-                placeholder="Provide recommendations for the court..."
-                rows={4}
-              />
-            </div>
-            <div className="print-only">
-              {reportData.recommendations ? (
-                <p className="whitespace-pre-wrap">{reportData.recommendations}</p>
-              ) : (
-                <div className="space-y-1">
-                  <div>{"_".repeat(60)}</div>
-                  <div>{"_".repeat(60)}</div>
-                  <div>{"_".repeat(60)}</div>
-                </div>
-              )}
-            </div>
+            <ul className="list-disc ml-5">
+              <li>☐ Youth is not yet ready for step-down or reintegration. Continued placement is recommended to stabilize behavior and promote accountability.</li>
+              <li>☐ Youth is approaching readiness for transition. Continued observation is advised with focus on stability during family contact or passes.</li>
+              <li>☐ Youth has reached maximum benefit of programming. Discharge planning toward a less restrictive setting is recommended with support.</li>
+              <li>☐ Youth is not benefitting due to non-engagement or safety concerns. Consider alternative placement if gains do not resume within the next month.</li>
+              <li>☐ Court should consider a step-down program / return home / extended placement / additional evaluation.</li>
+            </ul>
           </div>
         </div>
 

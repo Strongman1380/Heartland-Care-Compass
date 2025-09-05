@@ -8,6 +8,7 @@ import { exportElementToPDF, exportElementToDocx, exportHTMLToPDF, exportHTMLToD
 import { useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { CourtReport } from "./CourtReport";
+import { DpnReport } from "./DpnReport";
 import { summarizeReport } from "@/lib/aiClient";
 
 interface ReportCenterProps {
@@ -20,6 +21,7 @@ export const ReportCenter = ({ youthId, youth }: ReportCenterProps) => {
   const { toast } = useToast();
   const exportRef = useRef<HTMLDivElement>(null);
   const [showCourtReport, setShowCourtReport] = useState(false);
+  const [dpnVariant, setDpnVariant] = useState<null | 'weekly' | 'biweekly' | 'monthly'>(null);
   
   const handleGenerateReport = async (options: ReportOptions) => {
     setIsGenerating(true);
@@ -27,6 +29,11 @@ export const ReportCenter = ({ youthId, youth }: ReportCenterProps) => {
     try {
       if (options.reportType === 'court') {
         setShowCourtReport(true);
+        setIsGenerating(false);
+        return;
+      }
+      if (['dpnWeekly','dpnBiWeekly','dpnMonthly'].includes(options.reportType as any)) {
+        setDpnVariant(options.reportType === 'dpnWeekly' ? 'weekly' : options.reportType === 'dpnBiWeekly' ? 'biweekly' : 'monthly');
         setIsGenerating(false);
         return;
       }
@@ -104,6 +111,11 @@ export const ReportCenter = ({ youthId, youth }: ReportCenterProps) => {
       {showCourtReport && (
         <div className="space-y-4">
           <CourtReport youth={youth} />
+        </div>
+      )}
+      {dpnVariant && (
+        <div className="space-y-4">
+          <DpnReport youth={youth} variant={dpnVariant} />
         </div>
       )}
 

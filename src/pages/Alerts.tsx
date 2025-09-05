@@ -71,7 +71,7 @@ const Alerts = () => {
           // Send a test notification
           new Notification('Heartland Care Compass', {
             body: 'Notifications are now enabled for alerts and updates.',
-            icon: '/favicon.ico'
+            icon: `${import.meta.env.BASE_URL}favicon.ico`
           });
         } else {
           toast.error('Push notifications denied');
@@ -105,7 +105,7 @@ const Alerts = () => {
     if (notificationsEnabled) {
       new Notification(`Alert: ${alert.title}`, {
         body: alert.description,
-        icon: '/favicon.ico'
+        icon: `${import.meta.env.BASE_URL}favicon.ico`
       });
     }
 

@@ -12,11 +12,14 @@
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview",
+    "preview:gh": "vite preview --outDir dist --base /Heartland-Care-Compass/ --host --port 4173 --strictPort",
     "start": "node server-mongodb.js",
     "start:old": "node server.js",
     "predeploy": "npm run build",
     "deploy": "gh-pages -d dist",
-    "deploy:gh": "GH_PAGES_BASE=/Heartland-Care-Compass/ npm run build && gh-pages -d dist"
+    "deploy:gh": "GH_PAGES_BASE=/Heartland-Care-Compass/ npm run build && gh-pages -d dist",
+    "build:watch:gh": "GH_PAGES_BASE=/Heartland-Care-Compass/ vite build --watch",
+    "preview:watch:gh": "concurrently -c green,blue -n build,serve \"npm:build:watch:gh\" \"npm:preview:gh\""
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
@@ -88,6 +91,7 @@
     "@types/uuid": "^10.0.0",
     "@vitejs/plugin-react-swc": "^3.5.0",
     "autoprefixer": "^10.4.20",
+    "concurrently": "^9.2.1",
     "eslint": "^9.9.0",
     "eslint-plugin-react-hooks": "^5.1.0-rc.0",
     "eslint-plugin-react-refresh": "^0.4.9",

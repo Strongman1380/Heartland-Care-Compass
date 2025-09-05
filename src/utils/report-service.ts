@@ -75,9 +75,10 @@ export const generateReportHTML = async (youth: Youth, options: ReportOptions): 
   const fmt = (d?: Date | string | null) => d ? format(new Date(d), "M/d/yyyy") : "Not provided";
   const esc = (s: any) => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
+  const logoSrc = `${typeof window !== 'undefined' ? window.location.origin : ''}${import.meta.env.BASE_URL}files/BoysHomeLogo.png`;
   const header = (title: string) => `
     <div style="text-align:center; margin-bottom:12pt;">
-      <img src="/files/BoysHomeLogo.png" alt="Heartland Boys Home" style="height:56px; object-fit:contain; margin-bottom:6pt;"/>
+      <img src="${logoSrc}" alt="Heartland Boys Home" style="height:56px; object-fit:contain; margin-bottom:6pt;"/>
       <h1 style="font-size:18pt; margin:0;">Heartland Boys Home</h1>
       <h2 style="font-size:14pt; margin:6pt 0 0;">${esc(title)}</h2>
     </div>`;

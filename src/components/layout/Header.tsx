@@ -64,7 +64,7 @@ export const Header = ({ showAdmin = false, onAdminToggle }: HeaderProps) => {
           <div className="flex justify-between items-center">
             <Link to="/" aria-label="Home" className="flex items-center gap-3">
               <img 
-                src="/files/BoysHomeLogo.png" 
+                src={`${import.meta.env.BASE_URL}files/BoysHomeLogo.png`}
                 alt="Heartland Boys Home Logo" 
                 className="h-10 w-auto rounded-sm"
               />

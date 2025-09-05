@@ -6,7 +6,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { FileText, FilePlus, FileCheck } from "lucide-react";
+// Icons removed: switching to a simple dropdown for report type
 
 import { ReportOptions } from "@/utils/report-service";
 
@@ -28,7 +28,8 @@ export const ReportGenerationForm = ({ onGenerateReport, isGenerating }: ReportG
     successPlan: false,
     documents: false,
   });
-  const [outputFormat, setOutputFormat] = useState<'text' | 'pdf' | 'docx'>('text');
+  const [outputFormat, setOutputFormat] = useState<'text' | 'pdf' | 'docx'>('pdf');
+  const [useAI, setUseAI] = useState<boolean>(false);
 
   const handleIncludeOptionChange = (option: string) => {
     setIncludeOptions(prev => ({
@@ -47,39 +48,19 @@ export const ReportGenerationForm = ({ onGenerateReport, isGenerating }: ReportG
         <div className="space-y-6">
           <div>
             <Label className="text-base font-medium mb-2 block">Report Type</Label>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div 
-                className={`p-4 border rounded-md cursor-pointer ${
-                  selectedReportType === "comprehensive" ? "border-blue-600 bg-blue-50" : "hover:bg-gray-50"
-                }`}
-                onClick={() => setSelectedReportType("comprehensive")}
-              >
-                <FileText className="h-5 w-5 text-blue-600 mb-2" />
-                <h4 className="font-medium">Comprehensive Report</h4>
-                <p className="text-sm text-gray-500 mt-1">Complete overview of all youth data and progress</p>
-              </div>
-              
-              <div 
-                className={`p-4 border rounded-md cursor-pointer ${
-                  selectedReportType === "summary" ? "border-blue-600 bg-blue-50" : "hover:bg-gray-50"
-                }`}
-                onClick={() => setSelectedReportType("summary")}
-              >
-                <FilePlus className="h-5 w-5 text-blue-600 mb-2" />
-                <h4 className="font-medium">Summary Report</h4>
-                <p className="text-sm text-gray-500 mt-1">Condensed highlights of key information</p>
-              </div>
-              
-              <div 
-                className={`p-4 border rounded-md cursor-pointer ${
-                  selectedReportType === "progress" ? "border-blue-600 bg-blue-50" : "hover:bg-gray-50"
-                }`}
-                onClick={() => setSelectedReportType("progress")}
-              >
-                <FileCheck className="h-5 w-5 text-blue-600 mb-2" />
-                <h4 className="font-medium">Progress Report</h4>
-                <p className="text-sm text-gray-500 mt-1">Focus on behavior points and goal progress</p>
-              </div>
+            <div className="max-w-sm">
+              <Select value={selectedReportType} onValueChange={(v) => setSelectedReportType(v)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select report type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="comprehensive">Comprehensive Report</SelectItem>
+                  <SelectItem value="summary">Summary Report</SelectItem>
+                  <SelectItem value="progress">Progress Report</SelectItem>
+                  <SelectItem value="progressMonthly">Monthly Progress Report</SelectItem>
+                  <SelectItem value="court">Court Report (builder)</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
           
@@ -178,6 +159,14 @@ export const ReportGenerationForm = ({ onGenerateReport, isGenerating }: ReportG
                 />
                 <Label htmlFor="includeDocuments">Uploaded Documents</Label>
               </div>
+              <div className="flex items-center space-x-2 pt-2">
+                <Checkbox 
+                  id="useAI" 
+                  checked={useAI} 
+                  onCheckedChange={() => setUseAI(!useAI)}
+                />
+                <Label htmlFor="useAI">Use AI to draft narrative (if configured)</Label>
+              </div>
             </div>
           </div>
 
@@ -199,13 +188,18 @@ export const ReportGenerationForm = ({ onGenerateReport, isGenerating }: ReportG
             className="w-full"
             onClick={() => {
               const options: ReportOptions = {
-                reportType: selectedReportType as "comprehensive" | "summary" | "progress",
+                reportType: selectedReportType as any,
                 period: selectedPeriod as "allTime" | "last7" | "last30" | "last90" | "custom",
                 customStartDate,
                 customEndDate,
                 includeOptions,
-                outputFormat
+                outputFormat,
+                useAI
               };
+              // If user chose Monthly Progress, normalize to last30 period
+              if (selectedReportType === 'progressMonthly') {
+                options.period = 'last30';
+              }
               onGenerateReport(options);
             }}
             disabled={isGenerating}

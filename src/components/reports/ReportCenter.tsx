@@ -3,10 +3,12 @@ import { useState } from "react";
 import { ReportGenerationForm } from "./ReportGenerationForm";
 import { RecentReports } from "./RecentReports";
 import { ReportTemplates } from "./ReportTemplates";
-import { generateReport, downloadReport, ReportOptions } from "@/utils/report-service";
-import { exportElementToPDF, exportElementToDocx } from "@/utils/export";
+import { generateReport, downloadReport, ReportOptions, generateReportHTML } from "@/utils/report-service";
+import { exportElementToPDF, exportElementToDocx, exportHTMLToPDF, exportHTMLToDocx } from "@/utils/export";
 import { useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { CourtReport } from "./CourtReport";
+import { summarizeReport } from "@/lib/aiClient";
 
 interface ReportCenterProps {
   youthId: string;
@@ -17,24 +19,48 @@ export const ReportCenter = ({ youthId, youth }: ReportCenterProps) => {
   const [isGenerating, setIsGenerating] = useState(false);
   const { toast } = useToast();
   const exportRef = useRef<HTMLDivElement>(null);
+  const [showCourtReport, setShowCourtReport] = useState(false);
   
   const handleGenerateReport = async (options: ReportOptions) => {
     setIsGenerating(true);
     
     try {
+      if (options.reportType === 'court') {
+        setShowCourtReport(true);
+        setIsGenerating(false);
+        return;
+      }
+
+      // Normalize monthly progress to progress content with a monthly title
+      const effectiveType = options.reportType === 'progressMonthly' ? 'progress' : options.reportType;
+      const effectiveOptions = { ...options, reportType: effectiveType as any } as ReportOptions;
       const base = `${youth.firstName}_${youth.lastName}_${options.reportType}_report_${new Date().toISOString().split('T')[0]}`;
-      if (options.outputFormat === 'pdf' || options.outputFormat === 'docx') {
-        const styledHTML = await generateReportHTML(youth, options);
-        if (exportRef.current) {
-          exportRef.current.innerHTML = styledHTML;
-          if (options.outputFormat === 'pdf') {
-            await exportElementToPDF(exportRef.current, `${base}.pdf`);
-          } else {
-            await exportElementToDocx(exportRef.current, `${base}.docx`);
+      if (effectiveOptions.outputFormat === 'pdf' || effectiveOptions.outputFormat === 'docx') {
+        let styledHTML = await generateReportHTML(youth, { ...effectiveOptions });
+        // Optional AI narrative
+        if (options.useAI) {
+          const now = new Date();
+          const start = new Date(now);
+          start.setDate(now.getDate() - (effectiveOptions.period === 'last30' ? 30 : effectiveOptions.period === 'last7' ? 7 : 90));
+          const aiText = await summarizeReport({
+            youth,
+            reportType: effectiveType,
+            period: { startDate: start.toISOString(), endDate: now.toISOString() },
+            data: {},
+          });
+          if (aiText) {
+            const aiSection = `\n<div style="margin:12pt 0;">\n  <h3 style="font-size:12pt; margin:0 0 6pt;">AI-Assisted Narrative</h3>\n  <div style="font-size:11pt; white-space:pre-wrap;">${aiText.replace(/[&<>]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;'} as any)[c])}</div>\n</div>`;
+            styledHTML = styledHTML.replace('</div>', `${aiSection}</div>`);
           }
         }
+        // Export directly from HTML string to avoid invisible DOM rendering issues
+        if (effectiveOptions.outputFormat === 'pdf') {
+          await exportHTMLToPDF(styledHTML, `${base}.pdf`);
+        } else {
+          await exportHTMLToDocx(styledHTML, `${base}.docx`);
+        }
       } else {
-        const reportContent = await generateReport(youth, options);
+        const reportContent = await generateReport(youth, effectiveOptions);
         downloadReport(reportContent, `${base}.txt`);
       }
       
@@ -74,6 +100,12 @@ export const ReportCenter = ({ youthId, youth }: ReportCenterProps) => {
           <ReportTemplates />
         </div>
       </div>
+
+      {showCourtReport && (
+        <div className="space-y-4">
+          <CourtReport youth={youth} />
+        </div>
+      )}
 
       {/* Hidden container for export to PDF/DOCX */}
       <div ref={exportRef} style={{ position: 'absolute', left: '-99999px', top: 0 }} aria-hidden="true" />

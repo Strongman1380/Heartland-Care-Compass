@@ -9,10 +9,10 @@ import { FileText, Printer } from "lucide-react";
 import { format, startOfMonth, endOfMonth, subMonths } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { exportElementToPDF, exportElementToDocx } from "@/utils/export";
-import { fetchBehaviorPoints } from "@/utils/local-storage-utils";
-import { getBehaviorPointsByYouth } from "@/lib/api";
+import { fetchBehaviorPoints, fetchProgressNotes, fetchDailyRatings } from "@/utils/local-storage-utils";
+import { getBehaviorPointsByYouth, getProgressNotesByYouth, getDailyRatingsByYouth } from "@/lib/api";
 
-// API fetch function with fallback to localStorage
+// API fetch functions with fallback to localStorage
 const fetchBehaviorPointsAPI = async (youthId: string) => {
   try {
     const data = await getBehaviorPointsByYouth(youthId);
@@ -20,6 +20,22 @@ const fetchBehaviorPointsAPI = async (youthId: string) => {
   } catch (error) {
     console.warn(`API fetch failed for behavior-points, falling back to localStorage:`, error);
     return fetchBehaviorPoints(youthId);
+  }
+};
+const fetchProgressNotesAPI = async (youthId: string) => {
+  try {
+    return await getProgressNotesByYouth(youthId);
+  } catch (e) {
+    console.warn('API fetch failed for progress-notes, falling back to localStorage:', e);
+    return fetchProgressNotes(youthId);
+  }
+};
+const fetchDailyRatingsAPI = async (youthId: string) => {
+  try {
+    return await getDailyRatingsByYouth(youthId);
+  } catch (e) {
+    console.warn('API fetch failed for daily-ratings, falling back to localStorage:', e);
+    return fetchDailyRatings(youthId);
   }
 };
 
@@ -74,8 +90,12 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
   const generateReport = async () => {
     setLoading(true);
     try {
-      // Fetch actual behavior points from API with localStorage fallback
-      const allPoints = await fetchBehaviorPointsAPI(youth.id);
+      // Fetch data from API with localStorage fallback
+      const [allPoints, allNotes, allRatings] = await Promise.all([
+        fetchBehaviorPointsAPI(youth.id),
+        fetchProgressNotesAPI(youth.id),
+        fetchDailyRatingsAPI(youth.id),
+      ]);
       
       // Filter points for the report period
       const reportStartDate = new Date(reportData.reportPeriodFrom);
@@ -112,6 +132,19 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
         academicPerformance: "",
         schoolAttendance: ""
       }));
+
+      // Attach derived summaries for notes/ratings in DOM via refs
+      try {
+        const notesCount = allNotes.filter(n => n.date && new Date(n.date) >= reportStartDate && new Date(n.date) <= reportEndDate).length;
+        const ratingsInPeriod = allRatings.filter(r => r.date && new Date(r.date) >= reportStartDate && new Date(r.date) <= reportEndDate);
+        const avg = (field: keyof typeof ratingsInPeriod[0]) => {
+          const vals = ratingsInPeriod.map((r:any)=> Number(r[field])||0).filter(v=>v>0);
+          return vals.length ? Math.round((vals.reduce((s:number,v:number)=>s+v,0)/vals.length)*10)/10 : 0;
+        };
+        (window as any).__court_meta = { notesCount, ratingsAvg: {
+          peer: avg('peerInteraction'), adult: avg('adultInteraction'), invest: avg('investmentLevel'), authority: avg('dealAuthority')
+        }};
+      } catch {}
 
     } catch (error) {
       console.error("Error generating court report:", error);
@@ -204,6 +237,7 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
       {/* Printable Report */}
       <div ref={printRef} className="print-section bg-white text-black p-8 rounded-lg border">
         <div className="text-center mb-6">
+          <img src={`${import.meta.env.BASE_URL}files/BoysHomeLogo.png`} alt="Heartland Boys Home Logo" className="h-14 mx-auto mb-2 object-contain" />
           <h1 className="text-2xl font-bold mb-2">COURT REPORT</h1>
           <h2 className="text-xl font-semibold">Heartland Boys Home</h2>
         </div>
@@ -233,6 +267,24 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
             <div><strong>Afternoon Points Average:</strong> {reportData.afternoonPointsAverage}</div>
             <div><strong>Evening Points Average:</strong> {reportData.eveningPointsAverage}</div>
             <div><strong>Total Points This Period:</strong> {reportData.totalPointsThisPeriod}</div>
+          </div>
+        </div>
+
+        <div className="mb-6">
+          <h3 className="font-bold mb-4">RATINGS SUMMARY:</h3>
+          <div className="space-y-2 ml-4">
+            {/* Values are computed and used for export; for on-screen display we read from window meta if present */}
+            <div><strong>Peer Interaction Avg:</strong> {(window as any).__court_meta?.ratingsAvg?.peer ?? '—'}</div>
+            <div><strong>Adult Interaction Avg:</strong> {(window as any).__court_meta?.ratingsAvg?.adult ?? '—'}</div>
+            <div><strong>Program Investment Avg:</strong> {(window as any).__court_meta?.ratingsAvg?.invest ?? '—'}</div>
+            <div><strong>Authority Response Avg:</strong> {(window as any).__court_meta?.ratingsAvg?.authority ?? '—'}</div>
+          </div>
+        </div>
+
+        <div className="mb-6">
+          <h3 className="font-bold mb-4">NOTES SUMMARY:</h3>
+          <div className="space-y-2 ml-4">
+            <div><strong>Progress Notes in Period:</strong> {(window as any).__court_meta?.notesCount ?? '—'}</div>
           </div>
         </div>
 

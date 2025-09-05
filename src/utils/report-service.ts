@@ -32,7 +32,7 @@ const fetchDailyRatingsAPI = async (youthId: string): Promise<DailyRating[]> => 
 };
 
 export interface ReportOptions {
-  reportType: "comprehensive" | "summary" | "progress";
+  reportType: "comprehensive" | "summary" | "progress" | "progressMonthly" | "court";
   period: "allTime" | "last7" | "last30" | "last90" | "custom";
   customStartDate?: string;
   customEndDate?: string;
@@ -45,6 +45,7 @@ export interface ReportOptions {
     documents: boolean;
   };
   outputFormat?: 'text' | 'pdf' | 'docx';
+  useAI?: boolean;
 }
 
 export const generateReport = async (youth: Youth, options: ReportOptions): Promise<string> => {
@@ -61,6 +62,7 @@ export const generateReport = async (youth: Youth, options: ReportOptions): Prom
     case "summary":
       return generateSummaryReport(youth, data, startDate, endDate, options);
     case "progress":
+    case "progressMonthly":
       return generateProgressReport(youth, data, startDate, endDate, options);
     default:
       throw new Error("Invalid report type");
@@ -75,7 +77,25 @@ export const generateReportHTML = async (youth: Youth, options: ReportOptions): 
   const fmt = (d?: Date | string | null) => d ? format(new Date(d), "M/d/yyyy") : "Not provided";
   const esc = (s: any) => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
-  const logoSrc = `${typeof window !== 'undefined' ? window.location.origin : ''}${import.meta.env.BASE_URL}files/BoysHomeLogo.png`;
+  const logoUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}${import.meta.env.BASE_URL}files/BoysHomeLogo.png`;
+  let logoSrc = logoUrl;
+  // Attempt to inline the logo as a data URL so DOCX embeds it reliably
+  if (typeof window !== 'undefined' && window.fetch) {
+    try {
+      const res = await fetch(logoUrl, { cache: 'force-cache' });
+      const blob = await res.blob();
+      const reader = new FileReader();
+      const dataUrl: string = await new Promise((resolve, reject) => {
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+      if (dataUrl && dataUrl.startsWith('data:')) logoSrc = dataUrl;
+    } catch (e) {
+      // Fallback to URL if inlining fails
+      console.warn('Could not inline logo; falling back to URL');
+    }
+  }
   const header = (title: string) => `
     <div style="text-align:center; margin-bottom:12pt;">
       <img src="${logoSrc}" alt="Heartland Boys Home" style="height:56px; object-fit:contain; margin-bottom:6pt;"/>
@@ -177,6 +197,35 @@ export const generateReportHTML = async (youth: Youth, options: ReportOptions): 
       </div>`;
   };
 
+  const progressMonthlySection = () => {
+    if (options.reportType !== 'progressMonthly' || !data.behaviorPoints) return '';
+    const monthly: Record<string, BehaviorPoints[]> = {};
+    (data.behaviorPoints as BehaviorPoints[]).forEach(p => {
+      if (!p.date) return;
+      const m = format(startOfMonth(new Date(p.date)), 'MMMM yyyy');
+      (monthly[m] ||= []).push(p);
+    });
+    const rows = Object.entries(monthly).map(([month, points]) => {
+      const total = points.reduce((s, p)=> s + (p.totalPoints || 0), 0);
+      return `<tr><td style=\"padding:6pt 8pt;border:1pt solid #000;\">${esc(month)}</td><td style=\"padding:6pt 8pt;border:1pt solid #000;\">${total}</td><td style=\"padding:6pt 8pt;border:1pt solid #000;\">${points.length}</td></tr>`;
+    }).join('');
+    if (!rows) return '';
+    return `
+      <div style=\"margin:12pt 0;\">
+        <h3 style=\"font-size:12pt; margin:0 0 6pt;\">Monthly Breakdown</h3>
+        <table style=\"border-collapse:collapse; font-size:11pt;\">
+          <thead>
+            <tr>
+              <th style=\"padding:6pt 8pt;border:1pt solid #000; text-align:left;\">Month</th>
+              <th style=\"padding:6pt 8pt;border:1pt solid #000; text-align:left;\">Total Points</th>
+              <th style=\"padding:6pt 8pt;border:1pt solid #000; text-align:left;\">Days</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+  };
+
   let title = '';
   switch (options.reportType) {
     case 'comprehensive':
@@ -187,6 +236,12 @@ export const generateReportHTML = async (youth: Youth, options: ReportOptions): 
       break;
     case 'progress':
       title = 'Progress Report';
+      break;
+    case 'progressMonthly':
+      title = 'Monthly Progress Report';
+      break;
+    case 'court':
+      title = 'Court Report';
       break;
   }
 
@@ -215,6 +270,7 @@ export const generateReportHTML = async (youth: Youth, options: ReportOptions): 
     ${ratingsSection()}
     ${notesSection()}
     ${progressWeeklySection()}
+    ${progressMonthlySection()}
     <div style="margin-top:12pt; font-size:10pt; color:#333;">Report Generated: ${esc(generated)}</div>
   `;
 

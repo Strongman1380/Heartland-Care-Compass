@@ -149,6 +149,45 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
+// AI-assisted report summarization (optional; requires OPENAI_API_KEY)
+app.post('/api/ai/summarize-report', requireAuth, async (req, res) => {
+  try {
+    const { OPENAI_API_KEY } = process.env;
+    if (!OPENAI_API_KEY) {
+      return res.status(501).json({ error: 'AI not configured' });
+    }
+    const body = req.body || {};
+    const system = `You are a reporting assistant for a youth residential program. Write concise, objective narratives (150-250 words) for professional reports. Avoid speculative language. Use past tense and neutral tone.`;
+    const user = `Report Type: ${body.reportType}\nPeriod: ${body?.period?.startDate} to ${body?.period?.endDate}\nYouth: ${body?.youth?.firstName} ${body?.youth?.lastName} (Level ${body?.youth?.level ?? 'N/A'})\nEducation: ${body?.youth?.educationInfo ?? 'N/A'}\nLegal Status: ${body?.youth?.legalStatus ?? 'N/A'}\n\nTask: Draft a professional narrative summary highlighting participation, behavior trends (points, ratings), and key notes. Include 2-3 actionable recommendations. Do not include headers; return plain paragraphs.`;
+    const resp = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${OPENAI_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: system },
+          { role: 'user', content: user },
+        ],
+        temperature: 0.4,
+        max_tokens: 400,
+      }),
+    });
+    if (!resp.ok) {
+      const err = await resp.text();
+      return res.status(502).json({ error: 'Upstream AI error', details: err });
+    }
+    const json = await resp.json();
+    const summary = json?.choices?.[0]?.message?.content || '';
+    res.json({ summary });
+  } catch (e) {
+    console.error('AI summarize error', e);
+    res.status(500).json({ error: 'AI summarize failed' });
+  }
+});
+
 // Youth API Routes
 app.get('/api/youth', requireAuth, async (req, res) => {
   try {

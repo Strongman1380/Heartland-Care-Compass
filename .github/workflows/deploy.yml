@@ -34,6 +34,7 @@ jobs:
         run: npm run build
         env:
           GH_PAGES_BASE: /Heartland-Care-Compass/
+          VITE_API_BASE_URL: ${{ secrets.PROD_API_BASE_URL }}
 
       - name: Copy index to 404
         run: cp dist/index.html dist/404.html

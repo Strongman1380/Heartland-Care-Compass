@@ -9,7 +9,12 @@ export async function summarizeReport(payload: AISummaryRequest): Promise<string
   try {
     const res = await fetch('/api/ai/summarize-report', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(typeof window !== 'undefined' && localStorage.getItem('auth_token')
+          ? { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` }
+          : {}),
+      },
       body: JSON.stringify(payload),
     });
     if (!res.ok) {
@@ -23,4 +28,3 @@ export async function summarizeReport(payload: AISummaryRequest): Promise<string
     return '';
   }
 }
-

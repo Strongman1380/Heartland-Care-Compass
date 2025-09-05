@@ -159,6 +159,7 @@ app.post('/api/ai/summarize-report', requireAuth, async (req, res) => {
     const body = req.body || {};
     const system = `You are a reporting assistant for a youth residential program. Write concise, objective narratives (150-250 words) for professional reports. Avoid speculative language. Use past tense and neutral tone.`;
     const user = `Report Type: ${body.reportType}\nPeriod: ${body?.period?.startDate} to ${body?.period?.endDate}\nYouth: ${body?.youth?.firstName} ${body?.youth?.lastName} (Level ${body?.youth?.level ?? 'N/A'})\nEducation: ${body?.youth?.educationInfo ?? 'N/A'}\nLegal Status: ${body?.youth?.legalStatus ?? 'N/A'}\n\nTask: Draft a professional narrative summary highlighting participation, behavior trends (points, ratings), and key notes. Include 2-3 actionable recommendations. Do not include headers; return plain paragraphs.`;
+    const model = process.env.OPENAI_MODEL || 'gpt-4o-mini';
     const resp = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -166,7 +167,7 @@ app.post('/api/ai/summarize-report', requireAuth, async (req, res) => {
         'Authorization': `Bearer ${OPENAI_API_KEY}`,
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model,
         messages: [
           { role: 'system', content: system },
           { role: 'user', content: user },

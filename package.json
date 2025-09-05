@@ -12,6 +12,7 @@
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview",
+    "dev:full": "concurrently -n api,web -c magenta,cyan \"npm run start\" \"vite --port 8080\"",
     "preview:gh": "vite preview --outDir dist --base /Heartland-Care-Compass/ --host --port 4173 --strictPort",
     "start": "node server-mongodb.js",
     "start:old": "node server.js",

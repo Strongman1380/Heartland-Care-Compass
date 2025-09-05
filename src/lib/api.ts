@@ -1,6 +1,6 @@
 import { Youth, BehaviorPoints, ProgressNote, DailyRating } from '../types/app-types';
 
-const API_BASE_URL = '/api';
+const API_BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || '/api';
 
 class ApiClient {
   private token: string | null = null;

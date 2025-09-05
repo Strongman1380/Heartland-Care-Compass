@@ -1,5 +1,6 @@
 import { Youth, BehaviorPoints, ProgressNote, DailyRating } from "@/types/app-types";
 import { v4 as uuidv4 } from '@/utils/uuid';
+import { seedMockData } from '@/utils/mockData';
 
 // Storage keys
 export const STORAGE_KEYS = {
@@ -30,6 +31,18 @@ export const initializeStorage = () => {
     setItem(STORAGE_KEYS.ASSESSMENTS, []);
     setItem(STORAGE_KEYS.RATINGS, []);
     setItem(STORAGE_KEYS.VERSION, CURRENT_DATA_VERSION);
+
+    // Optionally seed mock data once to help with local troubleshooting
+    try {
+      const alreadySeeded = localStorage.getItem('heartland_mock_seeded') === 'true';
+      if (!alreadySeeded) {
+        seedMockData();
+        localStorage.setItem('heartland_mock_seeded', 'true');
+        console.log('Mock data seeded');
+      }
+    } catch (e) {
+      console.warn('Mock data seeding skipped:', e);
+    }
     return true;
   }
   

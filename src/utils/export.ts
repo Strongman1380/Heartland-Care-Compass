@@ -1,7 +1,8 @@
 // Utilities to export a DOM element to PDF or Word DOCX from the browser
+import html2pdf from 'html2pdf.js';
+import htmlToDocx from 'html-to-docx';
 
 export async function exportElementToPDF(element: HTMLElement, filename: string) {
-  const html2pdf = (await import('html2pdf.js')).default || (await import('html2pdf.js'));
   const opt = {
     margin: 10,
     filename,
@@ -15,7 +16,6 @@ export async function exportElementToPDF(element: HTMLElement, filename: string)
 }
 
 export async function exportElementToDocx(element: HTMLElement, filename: string) {
-  const htmlToDocx: any = (await import('html-to-docx')).default || (await import('html-to-docx'));
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8" /></head><body>${element.outerHTML}</body></html>`;
 
   const blob: Blob = await htmlToDocx(html, undefined, {
@@ -36,7 +36,6 @@ export async function exportElementToDocx(element: HTMLElement, filename: string
 // Prefer exporting from an HTML string to avoid layout/visibility issues when the
 // export container is off-screen or hidden.
 export async function exportHTMLToPDF(html: string, filename: string) {
-  const html2pdf = (await import('html2pdf.js')).default || (await import('html2pdf.js'));
   const opt = {
     margin: 10,
     filename,
@@ -50,7 +49,6 @@ export async function exportHTMLToPDF(html: string, filename: string) {
 }
 
 export async function exportHTMLToDocx(htmlBody: string, filename: string) {
-  const htmlToDocx: any = (await import('html-to-docx')).default || (await import('html-to-docx'));
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8" /></head><body>${htmlBody}</body></html>`;
   const blob: Blob = await htmlToDocx(html, undefined, {
     orientation: 'portrait',

@@ -159,21 +159,24 @@ class ApiClient {
 // Export singleton instance
 export const apiClient = new ApiClient();
 
-// Export individual methods for easier importing
-export const {
-  healthCheck,
-  getYouth,
-  getYouthById,
-  createYouth,
-  updateYouth,
-  deleteYouth,
-  getBehaviorPointsByYouth,
-  createBehaviorPoints,
-  getProgressNotesByYouth,
-  createProgressNote,
-  getDailyRatingsByYouth,
-  createDailyRating,
-  migrateData
-} = apiClient;
+// Export wrapper functions to preserve `this` context
+export const healthCheck = () => apiClient.healthCheck();
+
+export const getYouth = () => apiClient.getYouth();
+export const getYouthById = (id: string) => apiClient.getYouthById(id);
+export const createYouth = (youth: Omit<Youth, 'id' | 'createdAt' | 'updatedAt'>) => apiClient.createYouth(youth);
+export const updateYouth = (id: string, youth: Partial<Youth>) => apiClient.updateYouth(id, youth);
+export const deleteYouth = (id: string) => apiClient.deleteYouth(id);
+
+export const getBehaviorPointsByYouth = (youthId: string) => apiClient.getBehaviorPointsByYouth(youthId);
+export const createBehaviorPoints = (points: Omit<BehaviorPoints, 'id' | 'createdAt'>) => apiClient.createBehaviorPoints(points);
+
+export const getProgressNotesByYouth = (youthId: string) => apiClient.getProgressNotesByYouth(youthId);
+export const createProgressNote = (note: Omit<ProgressNote, 'id' | 'createdAt'>) => apiClient.createProgressNote(note);
+
+export const getDailyRatingsByYouth = (youthId: string) => apiClient.getDailyRatingsByYouth(youthId);
+export const createDailyRating = (rating: Omit<DailyRating, 'id' | 'createdAt' | 'updatedAt'>) => apiClient.createDailyRating(rating);
+
+export const migrateData = (data: { youth: Youth[]; behaviorPoints: BehaviorPoints[]; progressNotes: ProgressNote[]; dailyRatings: DailyRating[]; }) => apiClient.migrateData(data);
 
 export type { ApiClient };

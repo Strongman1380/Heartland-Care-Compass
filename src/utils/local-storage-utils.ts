@@ -45,7 +45,19 @@ export const initializeStorage = () => {
     }
     return true;
   }
-  
+  // If storage exists but is empty, seed mock data once to help with troubleshooting
+  try {
+    const alreadySeeded = localStorage.getItem('heartland_mock_seeded') === 'true';
+    if ((!existingYouths || existingYouths.length === 0) && !alreadySeeded) {
+      seedMockData();
+      localStorage.setItem('heartland_mock_seeded', 'true');
+      console.log('Mock data seeded (post-initialization)');
+      return true;
+    }
+  } catch (e) {
+    console.warn('Mock data seeding (post-init) skipped:', e);
+  }
+
   return false;
 };
 

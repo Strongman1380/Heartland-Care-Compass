@@ -5,6 +5,7 @@ import { YouthSelectionView } from "@/components/home/YouthSelectionView";
 import { YouthDetailView } from "@/components/home/YouthDetailView";
 import { RapidPlacementAssessment } from "@/components/assessment/RapidPlacementAssessment";
 import { fetchAllYouths, updateYouth, initializeStorage } from "@/utils/local-storage-utils";
+import { seedMockData } from "@/utils/mockData";
 import { type Youth } from "@/types/app-types";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -137,7 +138,7 @@ const Index = () => {
           <div className="space-y-6">
             <div className="flex gap-4 mb-6">
               <a 
-                href="/assessment-kpi" 
+                href={`${import.meta.env.BASE_URL}assessment-kpi`} 
                 className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
               >
                 📊 Assessment KPI Dashboard
@@ -158,6 +159,25 @@ const Index = () => {
             />
             
             {/* Show Load Mock Data button only when there are no youths */}
+            {youths.length === 0 && (
+              <div className="mt-6 flex justify-center">
+                <button
+                  onClick={() => {
+                    try {
+                      seedMockData();
+                      localStorage.setItem('heartland_mock_seeded', 'true');
+                      uiToast({ title: 'Mock data loaded' });
+                      loadYouths();
+                    } catch (e) {
+                      uiToast({ title: 'Failed to load mock data', variant: 'destructive' });
+                    }
+                  }}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg"
+                >
+                  Load Mock Data
+                </button>
+              </div>
+            )}
           </>
         ) : (
           <YouthDetailView

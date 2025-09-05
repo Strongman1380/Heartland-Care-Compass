@@ -29,3 +29,8 @@ dist-ssr
 .env.development.local
 .env.test.local
 .env.production.local
+
+# Local preview artifacts
+.preview.pid
+preview.log
+preview-watch.log

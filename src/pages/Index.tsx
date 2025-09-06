@@ -4,10 +4,8 @@ import { EditYouthDialog } from "@/components/youth/EditYouthDialog";
 import { YouthSelectionView } from "@/components/home/YouthSelectionView";
 import { YouthDetailView } from "@/components/home/YouthDetailView";
 import { RapidPlacementAssessment } from "@/components/assessment/RapidPlacementAssessment";
-import { supabase } from "@/integrations/supabase/client";
-import { mapYouthFromSupabase, type Youth } from "@/types/app-types";
+import { type Youth } from "@/types/app-types";
 import { useToast } from "@/hooks/use-toast";
-import { populateMockData } from "@/utils/populateMockData";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -33,27 +31,19 @@ const Index = () => {
   const fetchYouths = async () => {
     try {
       setLoading(true);
-      const { data: youthsData, error: youthsError } = await supabase
-        .from("youths")
-        .select("*")
-        .order("firstname", { ascending: true });
-
-      if (youthsError) {
-        throw youthsError;
-      }
-
-      const mappedYouths = youthsData
-        .map(mapYouthFromSupabase)
-        .filter(youth => {
-          const hasValidId = youth.id && typeof youth.id === 'string' && youth.id.trim() !== "";
-          const hasValidNames = youth.firstName && youth.lastName && 
-                               youth.firstName.trim() !== "" && youth.lastName.trim() !== "";
-          return hasValidId && hasValidNames;
-        });
-        
-      setYouths(mappedYouths);
+      
+      // Use mock data instead of Supabase
+      const { mockYouthData } = await import("@/utils/mockData");
+      
+      // Add IDs to mock data
+      const youthsWithIds = mockYouthData.map((youth, index) => ({
+        ...youth,
+        id: `mock-${index + 1}`
+      }));
+      
+      setYouths(youthsWithIds);
     } catch (err) {
-      console.error("Error fetching youths:", err);
+      console.error("Error loading mock data:", err);
     } finally {
       setLoading(false);
     }
@@ -64,10 +54,12 @@ const Index = () => {
   }, []);
 
   const handleLoadMockData = async () => {
-    const success = await populateMockData();
-    if (success) {
-      fetchYouths();
-    }
+    // Just reload the mock data
+    await fetchYouths();
+    toast({
+      title: "Mock data loaded",
+      description: "Sample youth data has been loaded successfully"
+    });
   };
 
   const handleYouthSelect = (youth: Youth) => {
@@ -90,38 +82,27 @@ const Index = () => {
     setDeleteConfirmOpen(true);
   };
 
-  const confirmDeleteYouth = async () => {
+    const confirmDeleteYouth = async () => {
     if (!youthToDelete) return;
 
     try {
-      const { error } = await supabase
-        .from('youths')
-        .delete()
-        .eq('id', youthToDelete.id);
-
-      if (error) throw error;
-
+      // Remove from local state for mock data
+      setYouths(prevYouths => prevYouths.filter(youth => youth.id !== youthToDelete.id));
+      
       toast({
         title: "Profile Deleted",
         description: `${youthToDelete.firstName} ${youthToDelete.lastName}'s profile has been removed. 🗑️`,
       });
-
-      // If the deleted youth was selected, go back to home
-      if (selectedYouth && selectedYouth.id === youthToDelete.id) {
-        setSelectedYouth(null);
-      }
-
-      fetchYouths();
-    } catch (error) {
-      console.error("Error deleting youth profile:", error);
-      toast({
-        title: "Error",
-        description: "Failed to delete youth profile.",
-        variant: "destructive",
-      });
-    } finally {
+      
       setDeleteConfirmOpen(false);
       setYouthToDelete(null);
+    } catch (error) {
+      console.error("Error deleting youth:", error);
+      toast({
+        title: "Error",
+        description: "Failed to delete youth profile",
+        variant: "destructive"
+      });
     }
   };
 

@@ -11,3 +11,4 @@ server.log
 server.pid
 .server.pid
 
+.vercel

@@ -396,7 +396,6 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
         updated_at: new Date().toISOString(),
         staff: 'Demo',
         comments: sampleComments[i],
-        id: crypto.randomUUID(),
       }));
 
       const notesRows = [0,2,4,6].map((idx) => ({

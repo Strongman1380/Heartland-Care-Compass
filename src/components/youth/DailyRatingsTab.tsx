@@ -5,28 +5,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Calendar, CalendarDays } from "lucide-react";
-import { format, subDays, startOfWeek, startOfMonth } from "date-fns";
+import { Calendar } from "lucide-react";
+import { format, subDays } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
 interface DailyRatingsTabProps {
   youth: Youth;
-}
-
-interface RatingAverages {
-  weekly: {
-    peerInteraction: number;
-    adultInteraction: number;
-    investmentLevel: number;
-    dealAuthority: number;
-  };
-  monthly: {
-    peerInteraction: number;
-    adultInteraction: number;
-    investmentLevel: number;
-    dealAuthority: number;
-  };
 }
 
 export const DailyRatingsTab = ({ youth }: DailyRatingsTabProps) => {
@@ -39,10 +24,6 @@ export const DailyRatingsTab = ({ youth }: DailyRatingsTabProps) => {
     dealAuthority: 0,
     staff: "",
     comments: ""
-  });
-  const [averages, setAverages] = useState<RatingAverages>({
-    weekly: { peerInteraction: 0, adultInteraction: 0, investmentLevel: 0, dealAuthority: 0 },
-    monthly: { peerInteraction: 0, adultInteraction: 0, investmentLevel: 0, dealAuthority: 0 }
   });
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
@@ -59,9 +40,6 @@ export const DailyRatingsTab = ({ youth }: DailyRatingsTabProps) => {
 
       const mappedRatings = data?.map(mapDailyRatingFromSupabase) || [];
       setRatings(mappedRatings);
-      
-      // Calculate averages
-      calculateAverages(mappedRatings);
       
       // Check if there's a rating for selected date
       const existingRating = mappedRatings.find(r => 
@@ -86,34 +64,6 @@ export const DailyRatingsTab = ({ youth }: DailyRatingsTabProps) => {
         variant: "destructive"
       });
     }
-  };
-
-  const calculateAverages = (ratingsData: DailyRating[]) => {
-    const weekStart = startOfWeek(new Date());
-    const monthStart = startOfMonth(new Date());
-    
-    const weeklyRatings = ratingsData.filter(r => r.date && r.date >= weekStart);
-    const monthlyRatings = ratingsData.filter(r => r.date && r.date >= monthStart);
-    
-    const calcAvg = (ratings: DailyRating[], field: keyof DailyRating) => {
-      const values = ratings.map(r => r[field] as number).filter(v => v !== null && v !== undefined);
-      return values.length > 0 ? Math.round((values.reduce((sum, v) => sum + v, 0) / values.length) * 10) / 10 : 0;
-    };
-    
-    setAverages({
-      weekly: {
-        peerInteraction: calcAvg(weeklyRatings, 'peerInteraction'),
-        adultInteraction: calcAvg(weeklyRatings, 'adultInteraction'),
-        investmentLevel: calcAvg(weeklyRatings, 'investmentLevel'),
-        dealAuthority: calcAvg(weeklyRatings, 'dealAuthority')
-      },
-      monthly: {
-        peerInteraction: calcAvg(monthlyRatings, 'peerInteraction'),
-        adultInteraction: calcAvg(monthlyRatings, 'adultInteraction'),
-        investmentLevel: calcAvg(monthlyRatings, 'investmentLevel'),
-        dealAuthority: calcAvg(monthlyRatings, 'dealAuthority')
-      }
-    });
   };
 
   const handleSaveRating = async () => {
@@ -178,26 +128,6 @@ export const DailyRatingsTab = ({ youth }: DailyRatingsTabProps) => {
     </div>
   );
 
-  const renderAverageBox = (title: string, weeklyAvg: number, monthlyAvg: number) => (
-    <Card className="border-primary/20">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium text-primary">{title}</CardTitle>
-      </CardHeader>
-      <CardContent className="pt-0">
-        <div className="space-y-2">
-          <div className="flex justify-between text-xs">
-            <span className="text-muted-foreground">Weekly:</span>
-            <span className="font-bold text-primary">{weeklyAvg}</span>
-          </div>
-          <div className="flex justify-between text-xs">
-            <span className="text-muted-foreground">Monthly:</span>
-            <span className="font-bold text-primary">{monthlyAvg}</span>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-
   return (
     <div className="space-y-6">
       {/* Daily Rating Input */}
@@ -255,24 +185,6 @@ export const DailyRatingsTab = ({ youth }: DailyRatingsTabProps) => {
           <Button onClick={handleSaveRating} disabled={loading} className="w-full">
             {loading ? "Saving..." : "Save Rating"}
           </Button>
-        </CardContent>
-      </Card>
-
-      {/* Averages Display */}
-      <Card className="border-2 border-primary/20">
-        <CardHeader>
-          <CardTitle className="text-xl text-primary flex items-center gap-2">
-            <CalendarDays className="h-5 w-5" />
-            Rating Averages
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {renderAverageBox("Peer Interaction", averages.weekly.peerInteraction, averages.monthly.peerInteraction)}
-            {renderAverageBox("Adult Interaction", averages.weekly.adultInteraction, averages.monthly.adultInteraction)}
-            {renderAverageBox("Investment Level", averages.weekly.investmentLevel, averages.monthly.investmentLevel)}
-            {renderAverageBox("Deal Authority", averages.weekly.dealAuthority, averages.monthly.dealAuthority)}
-          </div>
         </CardContent>
       </Card>
 

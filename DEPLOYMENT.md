@@ -34,3 +34,4 @@ Notes
 -----
 - Remove any unused server-related configs (Express/MongoDB). This app runs entirely as a static SPA with Supabase.
 - Keep `vercel.json` if deploying to Vercel; it already matches the static setup.
+- To enable AI narratives, add `OPENAI_API_KEY` (and optional `OPENAI_MODEL`) to your Vercel Project → Settings → Environment Variables. The app will call the serverless function at `/api/ai-summarize` for eligible report types.

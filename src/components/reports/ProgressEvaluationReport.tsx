@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Calendar, FileText, Printer } from "lucide-react";
+import { Calendar, FileText, Printer, Wand2 } from "lucide-react";
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subWeeks, subMonths } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -43,6 +43,7 @@ export const ProgressEvaluationReport = ({ youth }: ProgressEvaluationReportProp
     evaluatedBy: ""
   });
   const [loading, setLoading] = useState(false);
+  const [periodNotes, setPeriodNotes] = useState<Array<{ date: string; category: string | null; note: string | null; staff: string | null }>>([]);
   const { toast } = useToast();
 
   const generateReport = async () => {
@@ -102,6 +103,22 @@ export const ProgressEvaluationReport = ({ youth }: ProgressEvaluationReportProp
         evaluatedBy: ""
       });
 
+      // Also fetch progress notes for the same period to surface in the report
+      const { data: notesData, error: notesError } = await supabase
+        .from("notes")
+        .select("date,category,note,staff")
+        .eq("youth_id", youth.id)
+        .gte("date", startDate.toISOString().split('T')[0])
+        .lte("date", endDate.toISOString().split('T')[0])
+        .order("date", { ascending: false });
+      if (notesError) throw notesError;
+      setPeriodNotes((notesData || []).map(n => ({
+        date: n.date || new Date().toISOString().split('T')[0],
+        category: n.category,
+        note: n.note,
+        staff: n.staff,
+      })));
+
     } catch (error) {
       console.error("Error generating report:", error);
       toast({
@@ -116,6 +133,31 @@ export const ProgressEvaluationReport = ({ youth }: ProgressEvaluationReportProp
 
   const handlePrint = () => {
     window.print();
+  };
+
+  const autoDraftFromNotes = () => {
+    if (periodNotes.length === 0) {
+      toast({ title: "No notes", description: "No progress notes found in this period." });
+      return;
+    }
+    const text = periodNotes.map(n => `${n.date} ${n.category ? `[${n.category}] `: ""}${n.note || ""}`).join("\n");
+    // Naive drafting: pick sentences mentioning strengths/positive and areas/needs
+    const strengths = text.split(/\n/).filter(l => /positive|improved|strength|participat|helpful|respect/i.test(l)).slice(0, 4).join("\n");
+    const deficiencies = text.split(/\n/).filter(l => /struggle|needs|concern|incident|redirect|issue/i.test(l)).slice(0, 4).join("\n");
+    const incidents = text.split(/\n/).filter(l => /incident|warning|violation|consequence/i.test(l)).slice(0, 5).join("\n");
+    const recs = [
+      "Continue weekly individual counseling focusing on goal progression.",
+      "Reinforce positive peer/adult interactions through role-play exercises.",
+      "Monitor compliance with program structure and provide timely feedback.",
+    ].join("\n");
+    setReportData(r => ({
+      ...r,
+      socialSkillsStrengths: strengths || r.socialSkillsStrengths,
+      socialSkillsDeficiencies: deficiencies || r.socialSkillsDeficiencies,
+      incidents: incidents || r.incidents,
+      recommendations: r.recommendations || recs,
+    }));
+    toast({ title: "Draft ready", description: "Fields drafted from recent notes. Review and edit as needed." });
   };
 
   const getRatingDescription = (rating: number) => {
@@ -163,7 +205,11 @@ export const ProgressEvaluationReport = ({ youth }: ProgressEvaluationReportProp
                 placeholder="Staff name"
               />
             </div>
-            <div className="flex items-end">
+            <div className="flex items-end gap-2">
+              <Button type="button" variant="outline" onClick={autoDraftFromNotes} className="w-full">
+                <Wand2 className="h-4 w-4 mr-2" />
+                Auto-draft from Notes
+              </Button>
               <Button onClick={handlePrint} className="w-full">
                 <Printer className="h-4 w-4 mr-2" />
                 Print Report
@@ -260,6 +306,20 @@ export const ProgressEvaluationReport = ({ youth }: ProgressEvaluationReportProp
               className="mt-1"
             />
           </div>
+        </div>
+
+        {/* Recent notes context */}
+        <div className="no-print mt-6">
+          <h4 className="font-semibold mb-2">Recent Notes in Period</h4>
+          {periodNotes.length === 0 ? (
+            <p className="text-gray-600">No notes available for this period.</p>
+          ) : (
+            <ul className="list-disc pl-5 space-y-1 text-sm text-gray-700">
+              {periodNotes.slice(0, 8).map((n, i) => (
+                <li key={i}>{n.date} {n.category ? `[${n.category}] `: ""}{n.note}</li>
+              ))}
+            </ul>
+          )}
         </div>
 
         {/* Print version of text fields */}

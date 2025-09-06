@@ -55,11 +55,7 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
     onSubsystem: false,
   });
   const [pointsError, setPointsError] = useState("");
-  const [weeklyAverages, setWeeklyAverages] = useState({
-    averagePointsPerDay: 0,
-    totalPointsThisWeek: 0,
-    daysRecorded: 0,
-  });
+  // Removed weekly average display from Level Information
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [subsystemHistory, setSubsystemHistory] = useState<SubsystemHistoryEntry[]>([
     { status: 'off', date: new Date().toLocaleString(), recordedBy: 'System' }
@@ -150,7 +146,6 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
       setIsLoading(true);
       const entries = await fetchBehaviorPoints(youthId);
       setPointEntries(entries);
-      calculateWeeklyAverages(entries);
     } catch (error) {
       console.error("Error fetching point entries:", error);
       toast.error("Failed to load behavior cards");
@@ -159,25 +154,7 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
     }
   };
 
-  const calculateWeeklyAverages = (entries: BehaviorPoints[]) => {
-    const startOfCurrentWeek = startOfWeek(new Date());
-    const endOfCurrentWeek = endOfWeek(new Date());
-    
-    const thisWeekEntries = entries.filter(entry => {
-      const entryDate = entry.date instanceof Date ? entry.date : new Date(entry.date);
-      return entryDate >= startOfCurrentWeek && entryDate <= endOfCurrentWeek;
-    });
-    
-    const totalPoints = thisWeekEntries.reduce((sum, entry) => sum + entry.totalPoints, 0);
-    const daysRecorded = thisWeekEntries.length;
-    const averagePointsPerDay = daysRecorded > 0 ? totalPoints / daysRecorded : 0;
-    
-    setWeeklyAverages({
-      averagePointsPerDay,
-      totalPointsThisWeek: totalPoints,
-      daysRecorded,
-    });
-  };
+  // Weekly averages removed
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -368,6 +345,90 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
     });
   };
 
+  // Load a sample week of data (points, ratings, notes) for demo purposes
+  const [loadingSample, setLoadingSample] = useState(false);
+  const loadSampleWeek = async () => {
+    try {
+      setLoadingSample(true);
+      const start = startOfWeek(new Date(), { weekStartsOn: 0 });
+      const end = endOfWeek(new Date(), { weekStartsOn: 0 });
+      const days = eachDayOfInterval({ start, end });
+
+      const samplePoints = [20000, 35000, 45000, 30000, 50000, 25000, 40000];
+      const sampleRatings = [
+        { peer: 3, adult: 3, invest: 3, auth: 3 },
+        { peer: 4, adult: 3, invest: 3, auth: 3 },
+        { peer: 4, adult: 4, invest: 4, auth: 4 },
+        { peer: 3, adult: 3, invest: 4, auth: 3 },
+        { peer: 5, adult: 4, invest: 4, auth: 4 },
+        { peer: 3, adult: 3, invest: 3, auth: 3 },
+        { peer: 4, adult: 4, invest: 4, auth: 4 },
+      ];
+      const sampleComments = [
+        "Participated in group session respectfully.",
+        "Needed one redirect during chores.",
+        "Helped peer with activity; positive attitude.",
+        "Minor conflict resolved with staff support.",
+        "Excellent effort in schoolwork today.",
+        "Quiet day; followed directions.",
+        "Strong participation and respect for authority.",
+      ];
+
+      const pointsRows = days.map((d, i) => ({
+        youth_id: youthId,
+        date: format(d, 'yyyy-MM-dd'),
+        morningpoints: 0,
+        afternoonpoints: 0,
+        eveningpoints: 0,
+        totalpoints: samplePoints[i],
+        comments: sampleComments[i],
+        createdat: new Date().toISOString(),
+      }));
+
+      const ratingsRows = days.map((d, i) => ({
+        youth_id: youthId,
+        date: format(d, 'yyyy-MM-dd'),
+        peer_interaction: sampleRatings[i].peer,
+        adult_interaction: sampleRatings[i].adult,
+        investment_level: sampleRatings[i].invest,
+        deal_authority: sampleRatings[i].auth,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        staff: 'Demo',
+        comments: sampleComments[i],
+        id: crypto.randomUUID(),
+      }));
+
+      const notesRows = [0,2,4,6].map((idx) => ({
+        youth_id: youthId,
+        date: format(days[idx], 'yyyy-MM-dd'),
+        category: idx % 4 === 0 ? 'Counseling' : 'Group',
+        note: sampleComments[idx],
+        rating: 4,
+        staff: 'Demo',
+        createdat: new Date().toISOString(),
+      }));
+
+      const [pIns, rIns, nIns] = await Promise.all([
+        supabase.from('points').insert(pointsRows),
+        supabase.from('daily_ratings').insert(ratingsRows),
+        supabase.from('notes').insert(notesRows),
+      ]);
+
+      if (pIns.error) throw pIns.error;
+      if (rIns.error) throw rIns.error;
+      if (nIns.error) throw nIns.error;
+
+      toast.success('Sample week data loaded.');
+      fetchPointEntries();
+    } catch (e) {
+      console.error('Error loading sample data', e);
+      toast.error('Failed to load sample data');
+    } finally {
+      setLoadingSample(false);
+    }
+  };
+
   const isEligibleForLevelUp = () => {
     // Points are already stored in thousands in the database
     const youthTotal = youth.pointtotal || 0;
@@ -488,15 +549,7 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
                 </div>
               )}
               
-              <div>
-                <Label className="text-sm font-medium text-gray-500">Weekly Average</Label>
-                <p className="text-lg font-semibold">
-                  {formatPoints(weeklyAverages.averagePointsPerDay)} points
-                  <span className="text-sm font-normal text-gray-500 ml-2">
-                    ({weeklyAverages.daysRecorded}/7 days)
-                  </span>
-                </p>
-              </div>
+              {/* Weekly Average removed from Level Information */}
 
               <div className="flex gap-2 pt-2">
                 <Button 
@@ -644,11 +697,16 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-3">
                       <p className="font-medium">Current Week: {format(startOfWeek(new Date()), 'MMM d')} - {format(endOfWeek(new Date()), 'MMM d, yyyy')}</p>
                       
-                      <div className="flex items-center mt-2 sm:mt-0">
+                      <div className="flex items-center mt-2 sm:mt-0 gap-2">
                         <Calendar size={16} className="mr-1.5 text-gray-500" />
                         <Button variant="ghost" size="sm" className="h-8 px-2 text-xs">
                           View Previous Weeks
                         </Button>
+                        {pointEntries.length === 0 && (
+                          <Button size="sm" className="h-8 px-2 text-xs" onClick={loadSampleWeek} disabled={loadingSample}>
+                            {loadingSample ? 'Loading…' : 'Load Demo Week'}
+                          </Button>
+                        )}
                       </div>
                     </div>
                     

@@ -8,14 +8,34 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { FileText, FilePlus, FileCheck } from "lucide-react";
 
-interface ReportGenerationFormProps {
-  onGenerateReport: () => void;
-  isGenerating: boolean;
+export type ReportType = "comprehensive" | "summary" | "progress";
+export type ReportPeriod = "allTime" | "last7" | "last30" | "last90" | "custom";
+
+export interface GenerateReportOptions {
+  reportType: ReportType;
+  period: ReportPeriod;
+  startDate?: string;
+  endDate?: string;
+  include: {
+    profile: boolean;
+    points: boolean;
+    notes: boolean;
+    assessment: boolean;
+    successPlan: boolean;
+    documents: boolean;
+  };
 }
 
-export const ReportGenerationForm = ({ onGenerateReport, isGenerating }: ReportGenerationFormProps) => {
-  const [selectedReportType, setSelectedReportType] = useState<string>("comprehensive");
-  const [selectedPeriod, setSelectedPeriod] = useState<string>("last30");
+interface ReportGenerationFormProps {
+  onGenerateReport: (options: GenerateReportOptions) => void;
+  isGenerating: boolean;
+  onReportTypeChange?: (reportType: ReportType) => void;
+  onPeriodChange?: (period: ReportPeriod) => void;
+}
+
+export const ReportGenerationForm = ({ onGenerateReport, isGenerating, onReportTypeChange, onPeriodChange }: ReportGenerationFormProps) => {
+  const [selectedReportType, setSelectedReportType] = useState<ReportType>("comprehensive");
+  const [selectedPeriod, setSelectedPeriod] = useState<ReportPeriod>("last30");
   const [customStartDate, setCustomStartDate] = useState<string>("");
   const [customEndDate, setCustomEndDate] = useState<string>("");
   const [includeOptions, setIncludeOptions] = useState({
@@ -49,7 +69,7 @@ export const ReportGenerationForm = ({ onGenerateReport, isGenerating }: ReportG
                 className={`p-4 border rounded-md cursor-pointer ${
                   selectedReportType === "comprehensive" ? "border-blue-600 bg-blue-50" : "hover:bg-gray-50"
                 }`}
-                onClick={() => setSelectedReportType("comprehensive")}
+                onClick={() => { setSelectedReportType("comprehensive"); onReportTypeChange?.("comprehensive"); }}
               >
                 <FileText className="h-5 w-5 text-blue-600 mb-2" />
                 <h4 className="font-medium">Comprehensive Report</h4>
@@ -60,7 +80,7 @@ export const ReportGenerationForm = ({ onGenerateReport, isGenerating }: ReportG
                 className={`p-4 border rounded-md cursor-pointer ${
                   selectedReportType === "summary" ? "border-blue-600 bg-blue-50" : "hover:bg-gray-50"
                 }`}
-                onClick={() => setSelectedReportType("summary")}
+                onClick={() => { setSelectedReportType("summary"); onReportTypeChange?.("summary"); }}
               >
                 <FilePlus className="h-5 w-5 text-blue-600 mb-2" />
                 <h4 className="font-medium">Summary Report</h4>
@@ -71,7 +91,7 @@ export const ReportGenerationForm = ({ onGenerateReport, isGenerating }: ReportG
                 className={`p-4 border rounded-md cursor-pointer ${
                   selectedReportType === "progress" ? "border-blue-600 bg-blue-50" : "hover:bg-gray-50"
                 }`}
-                onClick={() => setSelectedReportType("progress")}
+                onClick={() => { setSelectedReportType("progress"); onReportTypeChange?.("progress"); }}
               >
                 <FileCheck className="h-5 w-5 text-blue-600 mb-2" />
                 <h4 className="font-medium">Progress Report</h4>
@@ -82,7 +102,7 @@ export const ReportGenerationForm = ({ onGenerateReport, isGenerating }: ReportG
           
           <div>
             <Label className="text-base font-medium mb-2 block">Time Period</Label>
-            <Select value={selectedPeriod} onValueChange={(value) => setSelectedPeriod(value)}>
+            <Select value={selectedPeriod} onValueChange={(value: ReportPeriod) => { setSelectedPeriod(value); onPeriodChange?.(value); }}>
               <SelectTrigger className="max-w-xs">
                 <SelectValue placeholder="Select time period" />
               </SelectTrigger>
@@ -180,7 +200,13 @@ export const ReportGenerationForm = ({ onGenerateReport, isGenerating }: ReportG
           
           <Button 
             className="w-full"
-            onClick={onGenerateReport}
+            onClick={() => onGenerateReport({
+              reportType: selectedReportType,
+              period: selectedPeriod,
+              startDate: customStartDate || undefined,
+              endDate: customEndDate || undefined,
+              include: { ...includeOptions },
+            })}
             disabled={isGenerating}
           >
             {isGenerating ? "Generating Report..." : "Generate Report"}

@@ -1,24 +1,28 @@
 
 import { useState } from "react";
-import { ReportGenerationForm } from "./ReportGenerationForm";
+import { ReportGenerationForm, type GenerateReportOptions } from "./ReportGenerationForm";
 import { RecentReports } from "./RecentReports";
 import { ReportTemplates } from "./ReportTemplates";
+import { ReportPreview } from "./ReportPreview";
 
 interface ReportCenterProps {
-  youthId: string;
-  youth: any;
+  youthId: string | null;
+  youth: any | null;
 }
 
 export const ReportCenter = ({ youthId, youth }: ReportCenterProps) => {
   const [isGenerating, setIsGenerating] = useState(false);
-  
-  const handleGenerateReport = () => {
+  const [activeOptions, setActiveOptions] = useState<GenerateReportOptions | null>(null);
+
+  const handleGenerateReport = (options: GenerateReportOptions) => {
+    // Clear any existing preview and set new options
     setIsGenerating(true);
-    
-    // In a real application, this would trigger report generation via a PDF library
+    setActiveOptions(null);
+    // Debounce a beat so the UI can clear
     setTimeout(() => {
+      setActiveOptions(options);
       setIsGenerating(false);
-    }, 1500);
+    }, 150);
   };
 
   return (
@@ -31,10 +35,19 @@ export const ReportCenter = ({ youthId, youth }: ReportCenterProps) => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <ReportGenerationForm 
-          onGenerateReport={handleGenerateReport}
-          isGenerating={isGenerating}
-        />
+        <div className="lg:col-span-2 space-y-6">
+          <ReportGenerationForm 
+            onGenerateReport={handleGenerateReport}
+            isGenerating={isGenerating}
+            onReportTypeChange={() => setActiveOptions(null)}
+            onPeriodChange={() => setActiveOptions(null)}
+          />
+
+          {/* Preview: Clears automatically when type/period change */}
+          {activeOptions && youthId && (
+            <ReportPreview youthId={youthId} youth={youth} options={activeOptions} />
+          )}
+        </div>
 
         <div className="space-y-6">
           <RecentReports />

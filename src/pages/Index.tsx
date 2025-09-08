@@ -6,6 +6,8 @@ import { YouthDetailView } from "@/components/home/YouthDetailView";
 import { RapidPlacementAssessment } from "@/components/assessment/RapidPlacementAssessment";
 import { type Youth } from "@/types/app-types";
 import { useToast } from "@/hooks/use-toast";
+import { mongoClient } from "@/utils/mongoClient";
+import { populateMockData } from "@/utils/populateMockData";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -32,18 +34,44 @@ const Index = () => {
     try {
       setLoading(true);
       
-      // Use mock data instead of Supabase
-      const { mockYouthData } = await import("@/utils/mockData");
-      
-      // Add IDs to mock data
-      const youthsWithIds = mockYouthData.map((youth, index) => ({
-        ...youth,
-        id: `mock-${index + 1}`
+      // Fetch from MongoDB API
+      const data = await mongoClient.getYouths();
+
+      // Convert MongoDB data to Youth type
+      const youthsData: Youth[] = (data || []).map((youth: any) => ({
+        id: youth._id,
+        firstName: youth.firstName,
+        lastName: youth.lastName,
+        age: youth.age || 0,
+        dob: youth.dob ? new Date(youth.dob) : null,
+        admissionDate: youth.admissionDate ? new Date(youth.admissionDate) : null,
+        level: youth.level || 1,
+        pointTotal: youth.pointTotal || 0,
+        referralSource: youth.referralSource || '',
+        referralReason: youth.referralReason || '',
+        legalStatus: youth.legalStatus || '',
+        educationInfo: youth.educationInfo || '',
+        medicalInfo: youth.medicalInfo || '',
+        mentalHealthInfo: youth.mentalHealthInfo || '',
+        peerInteraction: youth.peerInteraction || 3,
+        adultInteraction: youth.adultInteraction || 3,
+        investmentLevel: youth.investmentLevel || 3,
+        dealAuthority: youth.dealAuthority || 2,
+        hyrnaRiskLevel: youth.hyrnaRiskLevel || "Medium",
+        hyrnaScore: youth.hyrnaScore || 50,
+        hyrnaAssessmentDate: youth.hyrnaAssessmentDate ? new Date(youth.hyrnaAssessmentDate) : new Date(),
+        createdAt: youth.createdAt ? new Date(youth.createdAt) : new Date(),
+        updatedAt: youth.updatedAt ? new Date(youth.updatedAt) : new Date()
       }));
       
-      setYouths(youthsWithIds);
+      setYouths(youthsData);
     } catch (err) {
-      console.error("Error loading mock data:", err);
+      console.error("Error loading youths:", err);
+      toast({
+        title: "Error",
+        description: "Failed to load youth data",
+        variant: "destructive"
+      });
     } finally {
       setLoading(false);
     }
@@ -54,12 +82,51 @@ const Index = () => {
   }, []);
 
   const handleLoadMockData = async () => {
-    // Just reload the mock data
-    await fetchYouths();
-    toast({
-      title: "Mock data loaded",
-      description: "Sample youth data has been loaded successfully"
-    });
+    try {
+      setLoading(true);
+      const success = await populateMockData();
+      if (success) {
+        await fetchYouths(); // Reload data from database
+        toast({
+          title: "Sample data populated",
+          description: "Sample youth data has been added to the database successfully"
+        });
+      }
+    } catch (error) {
+      console.error("Error loading mock data:", error);
+      toast({
+        title: "Error",
+        description: "Failed to populate sample data",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleClearAllData = async () => {
+    try {
+      setLoading(true);
+      
+      // Clear all data from MongoDB
+      const result = await mongoClient.clearAllData();
+      console.log("Data cleared:", result.message);
+
+      setYouths([]);
+      toast({
+        title: "All data cleared",
+        description: "All youth data has been removed from the database"
+      });
+    } catch (error) {
+      console.error("Error clearing data:", error);
+      toast({
+        title: "Error",
+        description: "Failed to clear data",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleYouthSelect = (youth: Youth) => {
@@ -82,11 +149,14 @@ const Index = () => {
     setDeleteConfirmOpen(true);
   };
 
-    const confirmDeleteYouth = async () => {
+  const confirmDeleteYouth = async () => {
     if (!youthToDelete) return;
 
     try {
-      // Remove from local state for mock data
+      // Delete from MongoDB
+      await mongoClient.deleteYouth(youthToDelete.id);
+
+      // Remove from local state
       setYouths(prevYouths => prevYouths.filter(youth => youth.id !== youthToDelete.id));
       
       toast({
@@ -157,18 +227,37 @@ const Index = () => {
               formatDate={formatDate}
             />
             
-            {/* Show Load Mock Data button only when there are no youths */}
-            {!loading && youths.length === 0 && (
+            {/* Show data management buttons */}
+            {!loading && (
               <div className="text-center mt-8">
-                <button
-                  onClick={handleLoadMockData}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
-                >
-                  Load Sample Data
-                </button>
-                <p className="text-gray-600 text-sm mt-2">
-                  Click to populate the system with sample youth profiles for testing
-                </p>
+                {youths.length === 0 ? (
+                  <div>
+                    <button
+                      onClick={handleLoadMockData}
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
+                    >
+                      Load Sample Data
+                    </button>
+                    <p className="text-gray-600 text-sm mt-2">
+                      Click to populate the system with sample youth profiles for testing
+                    </p>
+                  </div>
+                ) : (
+                  <div className="flex gap-4 justify-center">
+                    <button
+                      onClick={handleLoadMockData}
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                    >
+                      Add More Sample Data
+                    </button>
+                    <button
+                      onClick={handleClearAllData}
+                      className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                    >
+                      Clear All Data
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </>

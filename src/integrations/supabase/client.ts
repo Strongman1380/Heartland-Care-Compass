@@ -5,12 +5,34 @@ import type { Database } from './types';
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
 const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 
+// Create a dummy client if environment variables are missing (for MongoDB mode)
+let supabase: any;
+
 if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
-  // Fail fast in development to avoid hitting the wrong backend
-  console.error('Missing Supabase env vars. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.');
+  console.warn('Supabase env vars not set. Using MongoDB mode.');
+  // Create a dummy client that won't cause errors
+  supabase = {
+    from: () => ({
+      select: () => ({ data: [], error: null }),
+      insert: () => ({ data: [], error: null }),
+      update: () => ({ data: [], error: null }),
+      delete: () => ({ data: [], error: null }),
+      eq: () => ({ data: [], error: null }),
+      order: () => ({ data: [], error: null }),
+      limit: () => ({ data: [], error: null }),
+    }),
+    auth: {
+      getSession: () => Promise.resolve({ data: { session: null }, error: null }),
+      signInWithPassword: () => Promise.resolve({ data: { user: null, session: null }, error: null }),
+      signOut: () => Promise.resolve({ error: null }),
+      onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
+    }
+  };
+} else {
+  supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 }
 
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
-export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+export { supabase };

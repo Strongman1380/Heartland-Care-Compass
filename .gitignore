@@ -34,3 +34,4 @@ dist-ssr
 .preview.pid
 preview.log
 preview-watch.log
+.vercel

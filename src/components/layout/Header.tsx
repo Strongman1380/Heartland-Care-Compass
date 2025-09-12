@@ -32,7 +32,7 @@ export const Header = ({ showAdmin = false, onAdminToggle }: HeaderProps) => {
     { path: '/progress-notes', label: 'Progress Notes', icon: BookOpen },
     { path: '/reports', label: 'Reports', icon: LineChart },
     { path: '/alerts', label: 'Alerts', icon: BellRing },
-    { path: '/migration', label: 'Migration', icon: Database, variant: 'secondary' as const },
+
   ];
 
   const isActiveRoute = (path: string) => {

@@ -31,7 +31,7 @@ export const RatingsProfileTab = ({ youth }: RatingsProfileTabProps) => {
       <div>
         <h3 className="font-semibold text-red-800 mb-4">Behavioral Ratings</h3>
         <p className="text-sm text-gray-600 mb-6">
-          Each category is rated on a scale of 0-5, where 0 is the lowest and 5 is the highest performance.
+          Each category is rated on a scale of 1-4, where 1 is the lowest and 4 is the highest performance.
         </p>
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">

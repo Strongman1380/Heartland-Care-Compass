@@ -112,19 +112,18 @@ export const KpiDashboard = ({ youthId, youth }: KpiDashboardProps) => {
     setCategoriesData(categoryData);
     
     // Process notes data by rating
-    const ratingCounts = [0, 0, 0, 0, 0]; // Ratings 1-5
+    const ratingCounts = [0, 0, 0, 0]; // Ratings 1-4
     filteredNotesData.forEach(note => {
-      if (note.rating >= 1 && note.rating <= 5) {
+      if (note.rating >= 1 && note.rating <= 4) {
         ratingCounts[note.rating - 1]++;
       }
     });
     
     const ratingData = [
-      { name: "1 - Very Poor", value: ratingCounts[0] },
-      { name: "2 - Poor", value: ratingCounts[1] },
-      { name: "3 - Average", value: ratingCounts[2] },
-      { name: "4 - Good", value: ratingCounts[3] },
-      { name: "5 - Excellent", value: ratingCounts[4] }
+      { name: "1 - Poor", value: ratingCounts[0] },
+      { name: "2 - Below Average", value: ratingCounts[1] },
+      { name: "3 - Good", value: ratingCounts[2] },
+      { name: "4 - Excellent", value: ratingCounts[3] }
     ];
     
     setRatingsData(ratingData);

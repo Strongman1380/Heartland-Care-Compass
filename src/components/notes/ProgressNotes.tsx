@@ -27,6 +27,8 @@ const NOTE_CATEGORIES = [
   { value: "Incident", label: "Incident" },
   { value: "Achievement", label: "Achievement" },
   { value: "Family", label: "Family" },
+  { value: "Counseling Session", label: "Counseling Session" },
+  { value: "Therapy", label: "Therapy" },
   { value: "Other", label: "Other" },
 ];
 
@@ -246,17 +248,16 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
               </div>
               
               <div>
-                <Label htmlFor="rating">Rating (1-5)</Label>
+                <Label htmlFor="rating">Rating (1-4)</Label>
                 <Select name="rating" defaultValue={formData.rating} onValueChange={value => handleSelectChange("rating", value)}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select rating" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="1">1 - Very Poor</SelectItem>
-                    <SelectItem value="2">2 - Poor</SelectItem>
-                    <SelectItem value="3">3 - Average</SelectItem>
-                    <SelectItem value="4">4 - Good</SelectItem>
-                    <SelectItem value="5">5 - Excellent</SelectItem>
+                    <SelectItem value="1">1 - Poor</SelectItem>
+                    <SelectItem value="2">2 - Below Average</SelectItem>
+                    <SelectItem value="3">3 - Good</SelectItem>
+                    <SelectItem value="4">4 - Excellent</SelectItem>
                   </SelectContent>
                 </Select>
                 

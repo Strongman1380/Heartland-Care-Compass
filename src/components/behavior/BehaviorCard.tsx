@@ -331,7 +331,66 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
   };
 
   const handlePrintCard = () => {
-    window.print();
+    generateIndividualizedReport();
+    setTimeout(() => {
+      window.print();
+    }, 100);
+  };
+
+  const handleExportData = async () => {
+    try {
+      const entries = await fetchBehaviorPoints(youthId);
+      const csvData = generateCSVData(entries);
+      downloadCSV(csvData, `${youth.firstName}_${youth.lastName}_behavior_data.csv`);
+      toast.success("Behavior data exported successfully!");
+    } catch (error) {
+      console.error("Error exporting data:", error);
+      toast.error("Failed to export behavior data");
+    }
+  };
+
+  const generateCSVData = (entries: BehaviorPoints[]) => {
+    const headers = ['Date', 'Morning Points', 'Afternoon Points', 'Evening Points', 'Total Points', 'Comments'];
+    const rows = entries.map(entry => [
+      format(entry.date as Date, 'yyyy-MM-dd'),
+      entry.morningPoints || 0,
+      entry.afternoonPoints || 0,
+      entry.eveningPoints || 0,
+      entry.totalPoints || 0,
+      `"${(entry.comments || '').replace(/"/g, '""')}"`
+    ]);
+    
+    return [headers, ...rows].map(row => row.join(',')).join('\n');
+  };
+
+  const downloadCSV = (csvData: string, filename: string) => {
+    const blob = new Blob([csvData], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const generateIndividualizedReport = () => {
+    const reportData = {
+      youth: youth,
+      currentDate: format(new Date(), 'MMMM dd, yyyy'),
+      currentTime: format(new Date(), 'h:mm a'),
+      dailyPoints: formData.dailyPoints,
+      totalPoints: youth.pointTotal || 0,
+      currentLevel: currentLevel,
+      weeklyAverages: weeklyAverages,
+      recentEntries: pointEntries.slice(-7), // Last 7 entries
+      comments: formData.comments,
+      onSubsystem: formData.onSubsystem
+    };
+    
+    // Store report data for printing
+    (window as any).__behaviorReportData = reportData;
   };
 
   const getPointsByDate = (dateString: string) => {
@@ -421,11 +480,11 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
         </div>
         
         <div className="flex space-x-2 mb-4 sm:mb-0">
-          <Button variant="outline" size="sm" onClick={() => window.print()}>
+          <Button variant="outline" size="sm" onClick={handlePrintCard}>
             <FileText size={16} className="mr-2" />
             Print Card
           </Button>
-          <Button variant="outline" size="sm">
+          <Button variant="outline" size="sm" onClick={handleExportData}>
             <Download size={16} className="mr-2" />
             Export Data
           </Button>
@@ -728,6 +787,99 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
             </CardContent>
           </Tabs>
         </Card>
+      </div>
+
+      {/* Print-only individualized report section */}
+      <div className="print-only" style={{ display: 'none' }}>
+        <div className="print-report">
+          <div className="text-center mb-6">
+            <h1 className="text-2xl font-bold">Heartland Care Compass</h1>
+            <h2 className="text-xl">Daily Behavior Report</h2>
+            <p className="text-gray-600">Generated on {format(new Date(), 'MMMM dd, yyyy')} at {format(new Date(), 'h:mm a')}</p>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-6 mb-6">
+            <div>
+              <h3 className="font-bold text-lg mb-2">Youth Information</h3>
+              <p><strong>Name:</strong> {youth.firstName} {youth.lastName}</p>
+              <p><strong>Current Level:</strong> {currentLevel.name}</p>
+              <p><strong>Total Points:</strong> {formatPoints(youth.pointTotal || 0)}</p>
+              <p><strong>Subsystem Status:</strong> {formData.onSubsystem ? 'ON' : 'OFF'}</p>
+            </div>
+            
+            <div>
+              <h3 className="font-bold text-lg mb-2">Today's Performance</h3>
+              <p><strong>Date:</strong> {format(selectedDate, 'MMMM dd, yyyy')}</p>
+              <p><strong>Points Earned:</strong> {formatPoints(formData.dailyPoints)}</p>
+              <p><strong>Privilege Threshold:</strong> {formatPoints(currentLevel.dailyPointsForPrivileges)}</p>
+              <p><strong>Status:</strong> {formData.dailyPoints >= currentLevel.dailyPointsForPrivileges ? 
+                <span className="text-green-600 font-bold">Privileges Earned ✓</span> : 
+                <span className="text-red-600 font-bold">Below Threshold</span>}
+              </p>
+            </div>
+          </div>
+          
+          <div className="mb-6">
+            <h3 className="font-bold text-lg mb-2">Weekly Summary</h3>
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <p><strong>Days Recorded:</strong> {weeklyAverages.daysRecorded}</p>
+              </div>
+              <div>
+                <p><strong>Weekly Total:</strong> {formatPoints(weeklyAverages.totalPointsThisWeek)}</p>
+              </div>
+              <div>
+                <p><strong>Daily Average:</strong> {formatPoints(Math.round(weeklyAverages.averagePointsPerDay))}</p>
+              </div>
+            </div>
+          </div>
+          
+          <div className="mb-6">
+            <h3 className="font-bold text-lg mb-2">Recent Point History (Last 7 Days)</h3>
+            <table className="w-full border-collapse border border-gray-300">
+              <thead>
+                <tr className="bg-gray-100">
+                  <th className="border border-gray-300 p-2 text-left">Date</th>
+                  <th className="border border-gray-300 p-2 text-left">Points Earned</th>
+                  <th className="border border-gray-300 p-2 text-left">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pointEntries.slice(-7).map((entry, index) => (
+                  <tr key={entry.id || index}>
+                    <td className="border border-gray-300 p-2">{format(entry.date as Date, 'MMM dd, yyyy')}</td>
+                    <td className="border border-gray-300 p-2">{formatPoints(entry.totalPoints)}</td>
+                    <td className="border border-gray-300 p-2">
+                      {entry.totalPoints >= currentLevel.dailyPointsForPrivileges ? 
+                        <span className="text-green-600">✓ Privileges</span> : 
+                        <span className="text-red-600">Below Threshold</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          
+          {formData.comments && (
+            <div className="mb-6">
+              <h3 className="font-bold text-lg mb-2">Comments</h3>
+              <p className="border border-gray-300 p-3 rounded">{formData.comments}</p>
+            </div>
+          )}
+          
+          <div className="mt-8 pt-4 border-t border-gray-300">
+            <div className="grid grid-cols-2 gap-6">
+              <div>
+                <p><strong>Staff Signature:</strong> _________________________</p>
+                <p className="text-sm text-gray-600 mt-1">Date: _______________</p>
+              </div>
+              <div>
+                <p><strong>Supervisor Review:</strong> _________________________</p>
+                <p className="text-sm text-gray-600 mt-1">Date: _______________</p>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

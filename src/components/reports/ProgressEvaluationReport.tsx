@@ -146,9 +146,8 @@ export const ProgressEvaluationReport = ({ youth }: ProgressEvaluationReportProp
   };
 
   const getRatingDescription = (rating: number) => {
-    if (rating >= 4.5) return "Excellent";
-    if (rating >= 3.5) return "Above Average";
-    if (rating >= 2.5) return "Average";
+    if (rating >= 3.5) return "Excellent";
+    if (rating >= 2.5) return "Good";
     if (rating >= 1.5) return "Below Average";
     return "Poor";
   };

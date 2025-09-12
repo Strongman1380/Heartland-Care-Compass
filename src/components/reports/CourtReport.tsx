@@ -11,6 +11,58 @@ import { useToast } from "@/hooks/use-toast";
 import { exportElementToPDF, exportElementToDocx } from "@/utils/export";
 import { fetchBehaviorPoints, fetchProgressNotes, fetchDailyRatings } from "@/utils/local-storage-utils";
 import { getBehaviorPointsByYouth, getProgressNotesByYouth, getDailyRatingsByYouth } from "@/lib/api";
+import { generateBehavioralInsights, generateTreatmentRecommendations } from "@/lib/aiClient";
+
+// AI helper functions for generating behavioral comments
+const generatePositiveBehaviorComments = (avgPoints: number, peerRating: number, adultRating: number, youth: any): string => {
+  const comments = [];
+  
+  if (avgPoints >= 15000) {
+    comments.push("Consistently exceeds daily point expectations, demonstrating excellent program compliance");
+  } else if (avgPoints >= 12000) {
+    comments.push("Meets daily point requirements regularly, showing good behavioral consistency");
+  }
+  
+  if (peerRating >= 3) {
+    comments.push("Demonstrates positive peer interactions and appropriate social skills");
+  }
+  
+  if (adultRating >= 3) {
+    comments.push("Shows respect for authority figures and responds well to staff direction");
+  }
+  
+  if (youth.level >= 3) {
+    comments.push("Has achieved significant level advancement, indicating sustained behavioral improvement");
+  }
+  
+  return comments.length > 0 
+    ? comments.join(". ") + "."
+    : "Youth is working toward establishing consistent positive behavioral patterns.";
+};
+
+const generateImprovementComments = (avgPoints: number, programRating: number, authorityRating: number, youth: any): string => {
+  const areas = [];
+  
+  if (avgPoints < 12000) {
+    areas.push("Focus on achieving daily point requirements through improved behavioral choices");
+  }
+  
+  if (programRating < 3) {
+    areas.push("Increase engagement and investment in therapeutic programming");
+  }
+  
+  if (authorityRating < 3) {
+    areas.push("Work on appropriate responses to authority and following staff directions");
+  }
+  
+  if (youth.level < 2) {
+    areas.push("Continue building foundational behavioral skills for level advancement");
+  }
+  
+  return areas.length > 0 
+    ? areas.join(". ") + "."
+    : "Continue current programming to maintain positive behavioral trajectory.";
+};
 
 // API fetch functions with fallback to localStorage
 const fetchBehaviorPointsAPI = async (youthId: string) => {
@@ -61,6 +113,15 @@ interface CourtReportData {
   recommendations: string;
   notes: string;
   staffSignature: string;
+  // DPN Ratings (1-4 scale)
+  peerInteractionRating: number;
+  adultInteractionRating: number;
+  programInvestmentRating: number;
+  authorityResponseRating: number;
+  // AI-generated content
+  aiPositiveBehaviors: string;
+  aiAreasForImprovement: string;
+  aiCounselingNotes: string;
 }
 
 export const CourtReport = ({ youth }: CourtReportProps) => {
@@ -81,7 +142,16 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
     individualGoalsProgress: "",
     recommendations: "",
     notes: "",
-    staffSignature: ""
+    staffSignature: "",
+    // DPN Ratings
+    peerInteractionRating: 0,
+    adultInteractionRating: 0,
+    programInvestmentRating: 0,
+    authorityResponseRating: 0,
+    // AI-generated content
+    aiPositiveBehaviors: "",
+    aiAreasForImprovement: "",
+    aiCounselingNotes: ""
   });
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
@@ -124,15 +194,61 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
       
       const totalPoints = periodPoints.reduce((sum, p) => sum + (p.totalPoints || 0), 0);
 
+      // Calculate DPN ratings averages
+      const peerInteractionAvg = periodRatings.length > 0 
+        ? Math.round((periodRatings.reduce((sum, r) => sum + (r.peerInteraction || 0), 0) / periodRatings.length) * 10) / 10
+        : youth.peerInteraction || 0;
+      
+      const adultInteractionAvg = periodRatings.length > 0 
+        ? Math.round((periodRatings.reduce((sum, r) => sum + (r.adultInteraction || 0), 0) / periodRatings.length) * 10) / 10
+        : youth.adultInteraction || 0;
+      
+      const programInvestmentAvg = periodRatings.length > 0 
+        ? Math.round((periodRatings.reduce((sum, r) => sum + (r.investmentLevel || 0), 0) / periodRatings.length) * 10) / 10
+        : youth.investmentLevel || 0;
+      
+      const authorityResponseAvg = periodRatings.length > 0 
+        ? Math.round((periodRatings.reduce((sum, r) => sum + (r.dealAuthority || 0), 0) / periodRatings.length) * 10) / 10
+        : youth.dealAuthority || 0;
+
+      // Generate AI insights
+      const behavioralInsights = generateBehavioralInsights(periodPoints, youth);
+      const treatmentRecommendations = generateTreatmentRecommendations(youth, { notes: periodNotes, ratings: periodRatings });
+      
+      // Generate AI content for positive behaviors and areas for improvement
+      const avgDailyPoints = periodPoints.length > 0 ? totalPoints / periodPoints.length : 0;
+      const aiPositiveBehaviors = generatePositiveBehaviorComments(avgDailyPoints, peerInteractionAvg, adultInteractionAvg, youth);
+      const aiAreasForImprovement = generateImprovementComments(avgDailyPoints, programInvestmentAvg, authorityResponseAvg, youth);
+      
+      // Extract counseling session notes
+      const counselingNotes = periodNotes.filter(note => 
+        note.category?.toLowerCase().includes('counseling') || 
+        note.category?.toLowerCase().includes('therapy') ||
+        note.note?.toLowerCase().includes('counseling') ||
+        note.note?.toLowerCase().includes('therapy')
+      );
+      const aiCounselingNotes = counselingNotes.length > 0 
+        ? `${counselingNotes.length} counseling sessions documented. Key themes: ${counselingNotes.map(n => n.note?.substring(0, 100)).join('; ')}`
+        : "No specific counseling sessions documented during this period.";
+
       setReportData(prev => ({
         ...prev,
         morningPointsAverage: morningAvg,
         afternoonPointsAverage: afternoonAvg,
         eveningPointsAverage: eveningAvg,
         totalPointsThisPeriod: totalPoints,
-        currentGradeLevel: youth.educationInfo || "",
-        academicPerformance: prev.academicPerformance,
-        schoolAttendance: `${periodRatings.length} recorded days`
+        currentGradeLevel: youth.educationInfo || youth.currentGrade || "",
+        academicPerformance: youth.academicStrengths || prev.academicPerformance,
+        schoolAttendance: `${periodRatings.length} recorded days`,
+        // DPN Ratings
+        peerInteractionRating: peerInteractionAvg,
+        adultInteractionRating: adultInteractionAvg,
+        programInvestmentRating: programInvestmentAvg,
+        authorityResponseRating: authorityResponseAvg,
+        // AI-generated content
+        aiPositiveBehaviors: aiPositiveBehaviors,
+        aiAreasForImprovement: aiAreasForImprovement,
+        aiCounselingNotes: aiCounselingNotes
       }));
 
       // Attach derived summaries for notes/ratings in DOM via refs
@@ -326,21 +442,43 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
         <div className="mb-6">
           <h3 className="font-bold mb-2">3. Group Home Behavior Summary</h3>
           <div className="space-y-2 ml-4">
-            <div><strong>Morning Points Average:</strong> {reportData.morningPointsAverage}</div>
-            <div><strong>Afternoon Points Average:</strong> {reportData.afternoonPointsAverage}</div>
-            <div><strong>Evening Points Average:</strong> {reportData.eveningPointsAverage}</div>
-            <div><strong>Total Points This Period:</strong> {reportData.totalPointsThisPeriod}</div>
+            <div><strong>Morning Points Average:</strong> {reportData.morningPointsAverage.toLocaleString()}</div>
+            <div><strong>Afternoon Points Average:</strong> {reportData.afternoonPointsAverage.toLocaleString()}</div>
+            <div><strong>Evening Points Average:</strong> {reportData.eveningPointsAverage.toLocaleString()}</div>
+            <div><strong>Total Points This Period:</strong> {reportData.totalPointsThisPeriod.toLocaleString()}</div>
+            <div><strong>Current Grade Level:</strong> {reportData.currentGradeLevel || 'Not specified'}</div>
+            <div><strong>Academic Performance:</strong> {reportData.academicPerformance || 'See academic section'}</div>
           </div>
         </div>
 
         <div className="mb-6">
-          <h3 className="font-bold mb-2">Ratings Summary</h3>
+          <h3 className="font-bold mb-2">DPN Ratings Summary (1-4 Scale)</h3>
           <div className="space-y-2 ml-4">
-            {/* Values are computed and used for export; for on-screen display we read from window meta if present */}
-            <div><strong>Peer Interaction Avg:</strong> {(window as any).__court_meta?.ratingsAvg?.peer ?? '—'}</div>
-            <div><strong>Adult Interaction Avg:</strong> {(window as any).__court_meta?.ratingsAvg?.adult ?? '—'}</div>
-            <div><strong>Program Investment Avg:</strong> {(window as any).__court_meta?.ratingsAvg?.invest ?? '—'}</div>
-            <div><strong>Authority Response Avg:</strong> {(window as any).__court_meta?.ratingsAvg?.authority ?? '—'}</div>
+            <div><strong>Peer Interaction:</strong> {reportData.peerInteractionRating}/4</div>
+            <div><strong>Adult Interaction:</strong> {reportData.adultInteractionRating}/4</div>
+            <div><strong>Program Investment:</strong> {reportData.programInvestmentRating}/4</div>
+            <div><strong>Authority Response:</strong> {reportData.authorityResponseRating}/4</div>
+          </div>
+        </div>
+
+        <div className="mb-6">
+          <h3 className="font-bold mb-2">Positive Behaviors Noted</h3>
+          <div className="ml-4 p-3 bg-green-50 border border-green-200 rounded">
+            <p>{reportData.aiPositiveBehaviors || 'Click Generate Report to populate AI insights'}</p>
+          </div>
+        </div>
+
+        <div className="mb-6">
+          <h3 className="font-bold mb-2">Areas for Improvement</h3>
+          <div className="ml-4 p-3 bg-yellow-50 border border-yellow-200 rounded">
+            <p>{reportData.aiAreasForImprovement || 'Click Generate Report to populate AI insights'}</p>
+          </div>
+        </div>
+
+        <div className="mb-6">
+          <h3 className="font-bold mb-2">Counseling Sessions Summary</h3>
+          <div className="ml-4 p-3 bg-blue-50 border border-blue-200 rounded">
+            <p>{reportData.aiCounselingNotes || 'Click Generate Report to populate counseling information'}</p>
           </div>
         </div>
 

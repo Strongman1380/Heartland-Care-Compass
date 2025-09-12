@@ -27,14 +27,38 @@ class DatabaseConnection {
         throw new Error('MongoDB URI or database name not found in environment variables');
       }
 
+      // Check if URI is still the placeholder
+      if (uri.includes('username:password') || uri.includes('YOUR_USERNAME')) {
+        console.log('⚠️  MongoDB URI contains placeholder values. Please update your .env file with actual MongoDB Atlas credentials.');
+        console.log('📖 See setup-mongodb.md for detailed setup instructions.');
+        return;
+      }
+
       this.client = new MongoClient(uri);
       await this.client.connect();
       this.db = this.client.db(dbName);
       
       console.log('✅ Connected to MongoDB Atlas');
+      
+      // Initialize database indexes and structure
+      await this.initializeDatabase();
+      
     } catch (error) {
       console.error('❌ MongoDB connection error:', error);
+      console.log('💡 Make sure your MongoDB Atlas credentials are correct in the .env file');
+      console.log('📖 See setup-mongodb.md for setup instructions');
       throw error;
+    }
+  }
+
+  private async initializeDatabase(): Promise<void> {
+    try {
+      // Import here to avoid circular dependency
+      const { initializeDatabase } = await import('./db-init');
+      await initializeDatabase();
+    } catch (error) {
+      console.error('Database initialization error:', error);
+      // Don't throw here - connection is still valid even if initialization fails
     }
   }
 

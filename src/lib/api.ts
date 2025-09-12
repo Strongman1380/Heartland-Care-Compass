@@ -158,18 +158,7 @@ class ApiClient {
     });
   }
 
-  // Data migration method
-  async migrateData(data: {
-    youth: Youth[];
-    behaviorPoints: BehaviorPoints[];
-    progressNotes: ProgressNote[];
-    dailyRatings: DailyRating[];
-  }): Promise<{ message: string; results: any }> {
-    return this.request('/migrate', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-  }
+
 }
 
 // Export singleton instance
@@ -192,7 +181,5 @@ export const createProgressNote = (note: Omit<ProgressNote, 'id' | 'createdAt'>)
 
 export const getDailyRatingsByYouth = (youthId: string) => apiClient.getDailyRatingsByYouth(youthId);
 export const createDailyRating = (rating: Omit<DailyRating, 'id' | 'createdAt' | 'updatedAt'>) => apiClient.createDailyRating(rating);
-
-export const migrateData = (data: { youth: Youth[]; behaviorPoints: BehaviorPoints[]; progressNotes: ProgressNote[]; dailyRatings: DailyRating[]; }) => apiClient.migrateData(data);
 
 export type { ApiClient };

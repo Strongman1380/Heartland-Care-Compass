@@ -7,8 +7,8 @@ import { toast } from "sonner";
 import { format, subDays, startOfMonth, endOfMonth } from "date-fns";
 import { AlertCircle, Calendar, TrendingDown, TrendingUp } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area, BarChart, Bar, Legend, PieChart, Pie, Cell } from 'recharts';
-import { fetchBehaviorPoints, fetchProgressNotes } from "@/utils/local-storage-utils";
-import { BehaviorPoints, ProgressNote } from "@/types/app-types";
+import { useBehaviorPoints, useCaseNotes } from "@/hooks/useSupabase";
+import { type BehaviorPoints, type CaseNotes } from "@/integrations/supabase/services";
 
 interface KpiDashboardProps {
   youthId: string;
@@ -17,12 +17,13 @@ interface KpiDashboardProps {
 
 export const KpiDashboard = ({ youthId, youth }: KpiDashboardProps) => {
   const [timeframe, setTimeframe] = useState<"week" | "month" | "quarter">("week");
-  const [isLoading, setIsLoading] = useState(true);
-  const [pointsData, setPointsData] = useState<BehaviorPoints[]>([]);
-  const [notesData, setNotesData] = useState<ProgressNote[]>([]);
   const [pointsChartData, setPointsChartData] = useState<any[]>([]);
   const [categoriesData, setCategoriesData] = useState<any[]>([]);
   const [ratingsData, setRatingsData] = useState<any[]>([]);
+  
+  // Use Supabase hooks for data
+  const { behaviorPoints: pointsData, loading: pointsLoading } = useBehaviorPoints(youthId);
+  const { caseNotes: notesData, loading: notesLoading } = useCaseNotes(youthId);
   
   // KPI metrics
   const [kpiMetrics, setKpiMetrics] = useState({
@@ -34,33 +35,10 @@ export const KpiDashboard = ({ youthId, youth }: KpiDashboardProps) => {
   });
   
   useEffect(() => {
-    fetchData();
-  }, [youthId]);
-  
-  useEffect(() => {
     if (pointsData.length > 0 || notesData.length > 0) {
       processData();
     }
   }, [pointsData, notesData, timeframe]);
-  
-  const fetchData = () => {
-    try {
-      setIsLoading(true);
-      
-      // Fetch points data
-      const points = fetchBehaviorPoints(youthId);
-      setPointsData(points);
-      
-      // Fetch notes data
-      const notes = fetchProgressNotes(youthId);
-      setNotesData(notes);
-    } catch (error) {
-      console.error("Error fetching KPI data:", error);
-      toast.error("Failed to load dashboard data");
-    } finally {
-      setIsLoading(false);
-    }
-  };
   
   const processData = () => {
     // Get date range based on selected timeframe
@@ -80,53 +58,69 @@ export const KpiDashboard = ({ youthId, youth }: KpiDashboardProps) => {
     }
     
     // Filter data to selected timeframe
-    const filteredPointsData = pointsData.filter(point => 
-      point.date >= startDate && point.date <= endDate
-    );
+    const filteredPointsData = pointsData.filter(point => {
+      const pointDate = point.date instanceof Date ? point.date : new Date(point.date);
+      return pointDate >= startDate && pointDate <= endDate;
+    });
     
-    const filteredNotesData = notesData.filter(note => 
-      note.date >= startDate && note.date <= endDate
-    );
+    const filteredNotesData = notesData.filter(note => {
+      const noteDate = note.date instanceof Date ? note.date : new Date(note.date);
+      return noteDate >= startDate && noteDate <= endDate;
+    });
     
     // Process points data for chart
-    const chartData = filteredPointsData.map(point => ({
-      date: format(point.date as Date, 'MM/dd'),
-      points: point.totalPoints,
-      threshold: youth.level === 1 ? 80 : youth.level === 2 ? 85 : youth.level === 3 ? 90 : 95
-    }));
+    const chartData = filteredPointsData.map(point => {
+      const pointDate = point.date instanceof Date ? point.date : new Date(point.date);
+      return {
+        date: format(pointDate, 'MM/dd'),
+        points: point.totalPoints,
+        threshold: youth.level === 1 ? 80000 : youth.level === 2 ? 85000 : youth.level === 3 ? 90000 : 95000
+      };
+    });
     
     setPointsChartData(chartData);
     
-    // Process notes data by category
+    // Process notes data by summary keywords
+    const categoryKeywords = ['behavior', 'medical', 'education', 'therapy', 'incident', 'progress', 'family'];
     const categoryCounts: Record<string, number> = {};
+    
     filteredNotesData.forEach(note => {
-      const category = note.category;
-      categoryCounts[category] = (categoryCounts[category] || 0) + 1;
+      let categorized = false;
+      const summary = (note.summary || '').toLowerCase();
+      const noteText = (note.note || '').toLowerCase();
+      
+      categoryKeywords.forEach(keyword => {
+        if (summary.includes(keyword) || noteText.includes(keyword)) {
+          categoryCounts[keyword] = (categoryCounts[keyword] || 0) + 1;
+          categorized = true;
+        }
+      });
+      
+      if (!categorized) {
+        categoryCounts['general'] = (categoryCounts['general'] || 0) + 1;
+      }
     });
     
     const categoryData = Object.entries(categoryCounts).map(([name, value]) => ({
-      name,
+      name: name.charAt(0).toUpperCase() + name.slice(1),
       value
     }));
     
     setCategoriesData(categoryData);
     
-    // Process notes data by rating
-    const ratingCounts = [0, 0, 0, 0]; // Ratings 1-4
+    // Process notes data by staff frequency
+    const staffCounts: Record<string, number> = {};
     filteredNotesData.forEach(note => {
-      if (note.rating >= 1 && note.rating <= 4) {
-        ratingCounts[note.rating - 1]++;
-      }
+      const staff = note.staff || 'Unknown';
+      staffCounts[staff] = (staffCounts[staff] || 0) + 1;
     });
     
-    const ratingData = [
-      { name: "1 - Poor", value: ratingCounts[0] },
-      { name: "2 - Below Average", value: ratingCounts[1] },
-      { name: "3 - Good", value: ratingCounts[2] },
-      { name: "4 - Excellent", value: ratingCounts[3] }
-    ];
+    const staffData = Object.entries(staffCounts).map(([name, value]) => ({
+      name,
+      value
+    }));
     
-    setRatingsData(ratingData);
+    setRatingsData(staffData);
     
     // Calculate KPI metrics
     if (filteredPointsData.length > 0) {
@@ -140,19 +134,19 @@ export const KpiDashboard = ({ youthId, youth }: KpiDashboardProps) => {
       const secondHalfAvg = filteredPointsData.slice(midpoint).reduce((sum, day) => sum + day.totalPoints, 0) / (filteredPointsData.length - midpoint) || 0;
       const trend = secondHalfAvg - firstHalfAvg;
       
-      // Days on target
-      const threshold = youth.level === 1 ? 80 : youth.level === 2 ? 85 : youth.level === 3 ? 90 : 95;
+      // Days on target (using thousands like the behavior point system)
+      const threshold = youth.level === 1 ? 80000 : youth.level === 2 ? 85000 : youth.level === 3 ? 90000 : 95000;
       const daysOnTarget = filteredPointsData.filter(day => day.totalPoints >= threshold).length;
       
-      // Low ratings count
-      const lowRatings = filteredNotesData.filter(note => note.rating <= 2).length;
+      // Count case notes as indicator of activity level
+      const totalNotes = filteredNotesData.length;
       
       setKpiMetrics({
         avgPointsPerDay: avgPoints,
         pointTrend: trend,
         daysOnTarget: daysOnTarget,
         totalDays: filteredPointsData.length,
-        lowRatingCount: lowRatings
+        lowRatingCount: totalNotes
       });
     }
   };
@@ -165,7 +159,7 @@ export const KpiDashboard = ({ youthId, youth }: KpiDashboardProps) => {
     return ["#ff6b6b", "#ffa06b", "#ffd76b", "#6bafff", "#6bffaf"];
   };
 
-  if (isLoading) {
+  if (pointsLoading || notesLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
@@ -206,20 +200,20 @@ export const KpiDashboard = ({ youthId, youth }: KpiDashboardProps) => {
           <CardContent>
             <div className="flex items-baseline justify-between">
               <div className="text-2xl font-bold">
-                {kpiMetrics.avgPointsPerDay.toFixed(1)}
-                <span className="text-sm font-normal text-gray-500 ml-1">/ 105</span>
+                {(kpiMetrics.avgPointsPerDay / 1000).toFixed(1)}k
+                <span className="text-sm font-normal text-gray-500 ml-1">/ 105k</span>
               </div>
               
               <div className="flex items-center">
                 {kpiMetrics.pointTrend > 0 ? (
                   <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
                     <TrendingUp size={14} className="mr-1" />
-                    +{kpiMetrics.pointTrend.toFixed(1)}
+                    +{(kpiMetrics.pointTrend / 1000).toFixed(1)}k
                   </Badge>
                 ) : kpiMetrics.pointTrend < 0 ? (
                   <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
                     <TrendingDown size={14} className="mr-1" />
-                    {kpiMetrics.pointTrend.toFixed(1)}
+                    {(kpiMetrics.pointTrend / 1000).toFixed(1)}k
                   </Badge>
                 ) : (
                   <Badge variant="outline" className="bg-gray-50">
@@ -289,19 +283,19 @@ export const KpiDashboard = ({ youthId, youth }: KpiDashboardProps) => {
         
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-gray-500">Low Ratings</CardTitle>
+            <CardTitle className="text-sm font-medium text-gray-500">Case Notes</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex items-baseline justify-between">
               <div className="text-2xl font-bold">
                 {kpiMetrics.lowRatingCount}
-                <span className="text-sm font-normal text-gray-500 ml-1">incidents</span>
+                <span className="text-sm font-normal text-gray-500 ml-1">notes</span>
               </div>
               
-              {kpiMetrics.lowRatingCount > 2 && (
-                <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
+              {kpiMetrics.lowRatingCount > 5 && (
+                <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
                   <AlertCircle size={14} className="mr-1" />
-                  Attention
+                  Active
                 </Badge>
               )}
             </div>
@@ -321,9 +315,9 @@ export const KpiDashboard = ({ youthId, youth }: KpiDashboardProps) => {
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={pointsChartData}>
                     <XAxis dataKey="date" />
-                    <YAxis domain={[0, 105]} />
+                    <YAxis domain={[0, 105000]} tickFormatter={(value) => `${(value / 1000).toFixed(0)}k`} />
                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                    <Tooltip />
+                    <Tooltip formatter={(value) => [`${(Number(value) / 1000).toFixed(1)}k points`, 'Points']} />
                     <Line 
                       type="monotone" 
                       dataKey="points" 
@@ -353,8 +347,8 @@ export const KpiDashboard = ({ youthId, youth }: KpiDashboardProps) => {
 
         <Card>
           <CardHeader>
-            <CardTitle>Progress Notes Analysis</CardTitle>
-            <CardDescription>Distribution by category and rating</CardDescription>
+            <CardTitle>Case Notes Analysis</CardTitle>
+            <CardDescription>Distribution by category and staff</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
@@ -390,7 +384,7 @@ export const KpiDashboard = ({ youthId, youth }: KpiDashboardProps) => {
               </div>
               
               <div>
-                <h4 className="text-sm font-medium text-gray-500 mb-2">Notes by Rating</h4>
+                <h4 className="text-sm font-medium text-gray-500 mb-2">Notes by Staff</h4>
                 <div className="h-[180px]">
                   {ratingsData.some(item => item.value > 0) ? (
                     <ResponsiveContainer width="100%" height="100%">
@@ -467,32 +461,32 @@ export const KpiDashboard = ({ youthId, youth }: KpiDashboardProps) => {
                     </div>
                   )}
                   
-                  {kpiMetrics.pointTrend > 3 && (
+                  {kpiMetrics.pointTrend > 3000 && (
                     <div className="p-3 border-l-4 border-green-500 bg-green-50 rounded-r-md">
                       <h4 className="font-medium text-green-800">Positive Trend Detected</h4>
                       <p className="text-sm text-green-700">
-                        Youth's point average is trending positively (+{kpiMetrics.pointTrend.toFixed(1)} points).
+                        Youth's point average is trending positively (+{(kpiMetrics.pointTrend / 1000).toFixed(1)}k points).
                         Consider acknowledgment and positive reinforcement.
                       </p>
                     </div>
                   )}
                   
-                  {kpiMetrics.pointTrend < -3 && (
+                  {kpiMetrics.pointTrend < -3000 && (
                     <div className="p-3 border-l-4 border-red-500 bg-red-50 rounded-r-md">
                       <h4 className="font-medium text-red-800">Negative Trend Alert</h4>
                       <p className="text-sm text-red-700">
-                        Youth's point average is trending downward ({kpiMetrics.pointTrend.toFixed(1)} points).
+                        Youth's point average is trending downward ({(kpiMetrics.pointTrend / 1000).toFixed(1)}k points).
                         Consider a check-in meeting to address concerns.
                       </p>
                     </div>
                   )}
                   
-                  {kpiMetrics.lowRatingCount >= 3 && (
+                  {kpiMetrics.lowRatingCount >= 5 && (
                     <div className="p-3 border-l-4 border-purple-500 bg-purple-50 rounded-r-md">
-                      <h4 className="font-medium text-purple-800">Multiple Low Ratings</h4>
+                      <h4 className="font-medium text-purple-800">High Case Note Activity</h4>
                       <p className="text-sm text-purple-700">
-                        {kpiMetrics.lowRatingCount} low ratings (1-2) recorded recently.
-                        Consider targeted intervention in problem areas.
+                        {kpiMetrics.lowRatingCount} case notes recorded recently.
+                        Youth is actively being documented and monitored.
                       </p>
                     </div>
                   )}

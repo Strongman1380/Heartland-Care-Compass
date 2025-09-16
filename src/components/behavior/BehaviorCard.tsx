@@ -11,12 +11,12 @@ import { format, startOfWeek, endOfWeek, eachDayOfInterval } from "date-fns";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle, ArrowRight, Calendar, Download, FileText, TrendingUp, TrendingDown, Users, History } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { fetchBehaviorPoints, saveBehaviorPoints } from "@/utils/local-storage-utils";
-import { updateYouth } from "@/utils/local-storage-utils";
-import { BehaviorPoints } from "@/types/app-types";
+import { useBehaviorPoints, useYouth } from "@/hooks/useSupabase";
+import { type BehaviorPoints } from "@/integrations/supabase/services";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { calculatePointsNeededForNextLevel, syncYouthTotalPoints } from "@/utils/pointCalculations";
 import { syncYouthPoints } from "@/utils/pointSyncService";
+import { alertService } from "@/utils/alertService";
 
 interface BehaviorCardProps {
   youthId: string;
@@ -49,8 +49,11 @@ interface SubsystemHistoryEntry {
 export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
   const [activeTab, setActiveTab] = useState("daily");
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [pointEntries, setPointEntries] = useState<BehaviorPoints[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  
+  // Use Supabase hooks
+  const { behaviorPoints: pointEntries, saveBehaviorPoints, loadBehaviorPoints } = useBehaviorPoints(youthId);
+  const { updateYouth } = useYouth();
   const [formData, setFormData] = useState({
     dailyPoints: 0, // This will now be in thousands (e.g., 15000)
     comments: "",
@@ -142,24 +145,17 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
 
   useEffect(() => {
     if (youthId) {
-      fetchPointEntries();
+      loadBehaviorPoints(youthId);
       setFormData(prev => ({ ...prev, onSubsystem: youth.onSubsystem || false }));
     }
   }, [youthId, youth]);
 
-  const fetchPointEntries = async () => {
-    try {
-      setIsLoading(true);
-      const entries = await fetchBehaviorPoints(youthId);
-      setPointEntries(entries);
-      calculateWeeklyAverages(entries);
-    } catch (error) {
-      console.error("Error fetching point entries:", error);
-      toast.error("Failed to load behavior cards");
-    } finally {
+  useEffect(() => {
+    if (pointEntries.length > 0) {
+      calculateWeeklyAverages(pointEntries);
       setIsLoading(false);
     }
-  };
+  }, [pointEntries]);
 
   const calculateWeeklyAverages = (entries: BehaviorPoints[]) => {
     const startOfCurrentWeek = startOfWeek(new Date());
@@ -233,7 +229,7 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
       
       const pointEntry = {
         youth_id: youthId,
-        date: selectedDate,
+        date: format(selectedDate, 'yyyy-MM-dd'),
         morningPoints: 0,
         afternoonPoints: 0,
         eveningPoints: 0,
@@ -241,44 +237,38 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
         comments: formData.comments,
       };
       
-      await saveBehaviorPoints(youthId, pointEntry);
+      await saveBehaviorPoints(pointEntry);
       
-      // Sync youth's total points using the point sync service
-      try {
-        await syncYouthPoints(youthId);
-        console.log(`Points synced for youth ${youthId} after adding ${formData.dailyPoints} points`);
-      } catch (error) {
-        console.error("Error syncing youth points:", error);
-        
-        // Fallback to manual update if sync service fails
-        const currentTotal = youth.pointTotal || 0;
-        const newTotal = currentTotal + formData.dailyPoints;
-        updateYouth(youthId, { pointTotal: newTotal });
-        youth.pointTotal = newTotal;
+      // Update youth's subsystem status if changed
+      if (formData.onSubsystem !== youth.onSubsystem) {
+        await updateYouth(youthId, { onSubsystem: formData.onSubsystem });
       }
-      
-      // Check if points meet privilege requirement
-      if (formData.dailyPoints >= currentLevel.dailyPointsForPrivileges) {
-        toast.success(`Great job! ${formatPoints(formData.dailyPoints)} points saved successfully. Privileges earned for tomorrow. 🎉`);
-      } else {
-        toast.warning(`Points saved (${formatPoints(formData.dailyPoints)}), but below privilege requirement of ${formatPoints(currentLevel.dailyPointsForPrivileges)} points.`);
-      }
-      
-      // Reset form
-      setFormData({
-        dailyPoints: 0,
-        comments: "",
-        onSubsystem: formData.onSubsystem,
-      });
-      setPointsError("");
-      
-      fetchPointEntries();
     } catch (error) {
-      console.error("Error saving behavior card:", error);
-      toast.error("Oops! Something went wrong saving your points. Please try again.");
-    } finally {
-      setIsSubmitting(false);
+      console.error("Error syncing youth points:", error);
+      
+      // Fallback to manual update if sync service fails
+      const currentTotal = youth.pointTotal || 0;
+      const newTotal = currentTotal + formData.dailyPoints;
+      updateYouth(youthId, { pointTotal: newTotal });
+      youth.pointTotal = newTotal;
     }
+    
+    // Check if points meet privilege requirement
+    if (formData.dailyPoints >= currentLevel.dailyPointsForPrivileges) {
+      toast.success(`Great job! ${formatPoints(formData.dailyPoints)} points saved successfully. Privileges earned for tomorrow. 🎉`);
+    } else {
+      toast.warning(`Points saved (${formatPoints(formData.dailyPoints)}), but below privilege requirement of ${formatPoints(currentLevel.dailyPointsForPrivileges)} points.`);
+    }
+    
+    // Reset form
+    setFormData({
+      dailyPoints: 0,
+      comments: "",
+      onSubsystem: formData.onSubsystem,
+    });
+    setPointsError("");
+    
+    fetchPointEntries();
   };
 
   const handleLevelUp = () => {

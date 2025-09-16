@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { saveYouth } from "@/utils/local-storage-utils";
+import { useYouth } from "@/hooks/useSupabase";
 import { useYouthForm } from "@/hooks/useYouthForm";
 import { PersonalInfoTab } from "./PersonalInfoTab";
 import { BackgroundTab } from "./BackgroundTab";
@@ -20,6 +20,9 @@ export const AddYouthDialog = ({ onClose, onSuccess }: AddYouthDialogProps) => {
   const [activeTab, setActiveTab] = useState("personal");
   const [isSubmitting, setIsSubmitting] = useState(false);
   
+  // Use Supabase hook for youth operations
+  const { createYouth, youths } = useYouth();
+  
   const {
     formData,
     setFormData,
@@ -29,6 +32,38 @@ export const AddYouthDialog = ({ onClose, onSuccess }: AddYouthDialogProps) => {
     handleArrayItemChange,
     addArrayItem,
   } = useYouthForm();
+
+  // Generate unique ID when dialog opens
+  const generateUniqueId = () => {
+    const currentYear = new Date().getFullYear();
+    const existingIds = youths.map(youth => youth.idNumber).filter(Boolean);
+    
+    // Find the highest number for the current year
+    let maxNumber = 0;
+    const yearPrefix = `HBH-${currentYear}-`;
+    
+    existingIds.forEach(id => {
+      if (id && id.startsWith(yearPrefix)) {
+        const numberPart = id.split('-')[2];
+        const num = parseInt(numberPart, 10);
+        if (!isNaN(num) && num > maxNumber) {
+          maxNumber = num;
+        }
+      }
+    });
+    
+    // Generate next sequential number
+    const nextNumber = maxNumber + 1;
+    return `${yearPrefix}${nextNumber.toString().padStart(3, '0')}`;
+  };
+
+  // Auto-populate ID when component mounts
+  useEffect(() => {
+    if (!formData.idNumber) {
+      const newId = generateUniqueId();
+      setFormData(prev => ({ ...prev, idNumber: newId }));
+    }
+  }, [youths, formData.idNumber, setFormData]);
 
   const calculateAge = (dobString: string) => {
     if (!dobString) return null;
@@ -96,9 +131,10 @@ export const AddYouthDialog = ({ onClose, onSuccess }: AddYouthDialogProps) => {
       const youthData = {
         firstName,
         lastName,
-        dob: dob ? new Date(dob) : null,
+        dob: dob || null,
         age,
-        admissionDate: admissionDate ? new Date(admissionDate) : null,
+        idNumber: formData.idNumber,
+        admissionDate: admissionDate || null,
         level: level ? parseInt(level) : 1,
         pointTotal: 0, // Default to 0
         referralSource,
@@ -109,10 +145,8 @@ export const AddYouthDialog = ({ onClose, onSuccess }: AddYouthDialogProps) => {
         legalStatus: formData.courtInvolvement?.join(', ') || null,
       };
       
-      // Save to local storage
-      saveYouth(youthData);
-        
-      toast.success("Youth profile added successfully");
+      // Save to Supabase
+      await createYouth(youthData);
       
       // Call onSuccess callback if provided, otherwise just close
       if (onSuccess) {

@@ -249,6 +249,17 @@ export interface BehaviorPoints {
   createdAt?: Date | null;
 }
 
+export interface CaseNote {
+  id: string;
+  youth_id: string;
+  date?: Date | null;
+  summary?: string | null;
+  note?: string | null;
+  staff?: string | null;
+  createdAt?: Date | null;
+}
+
+// Keep ProgressNote for backward compatibility during transition
 export interface ProgressNote {
   id: string;
   youth_id: string;

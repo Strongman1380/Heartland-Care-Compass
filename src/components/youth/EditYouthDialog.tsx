@@ -4,8 +4,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { updateYouth } from "@/utils/local-storage-utils";
-import { Youth } from "@/types/app-types";
+import { useYouth } from "@/hooks/useSupabase";
+import { type Youth } from "@/integrations/supabase/services";
 import { useYouthForm, YouthFormData } from "@/hooks/useYouthForm";
 import { PersonalInfoTab } from "./PersonalInfoTab";
 import { BackgroundTab } from "./BackgroundTab";
@@ -24,6 +24,9 @@ interface EditYouthDialogProps {
 export const EditYouthDialog = ({ youth, open, onClose, onSuccess }: EditYouthDialogProps) => {
   const [activeTab, setActiveTab] = useState("personal");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Use Supabase hook for youth operations
+  const { updateYouth } = useYouth();
   
   const {
     formData,
@@ -280,10 +283,8 @@ export const EditYouthDialog = ({ youth, open, onClose, onSuccess }: EditYouthDi
         updatedAt: new Date()
       };
       
-      // Update youth in local storage
-      updateYouth(youth.id, updateData);
-        
-      toast.success("Youth profile updated successfully");
+      // Update youth in Supabase
+      await updateYouth(youth.id, updateData);
       
       // Call onSuccess callback
       if (onSuccess) {

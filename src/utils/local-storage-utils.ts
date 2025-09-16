@@ -1,12 +1,12 @@
-import { Youth, BehaviorPoints, ProgressNote, DailyRating } from "@/types/app-types";
+import { Youth, BehaviorPoints, ProgressNote, CaseNote, DailyRating } from "@/types/app-types";
 import { v4 as uuidv4 } from '@/utils/uuid';
-import { seedMockData } from '@/utils/mockData';
 
 // Storage keys
 export const STORAGE_KEYS = {
   YOUTHS: 'heartland_youths',
   POINTS: 'heartland_points',
-  NOTES: 'heartland_notes',
+  NOTES: 'heartland_notes', // Keep for backward compatibility
+  CASE_NOTES: 'heartland_case_notes',
   ASSESSMENTS: 'heartland_assessments',
   RATINGS: 'heartland_ratings',
   VERSION: 'heartland_data_version',
@@ -29,34 +29,12 @@ export const initializeStorage = () => {
     setItem(STORAGE_KEYS.YOUTHS, []);
     setItem(STORAGE_KEYS.POINTS, []);
     setItem(STORAGE_KEYS.NOTES, []);
+    setItem(STORAGE_KEYS.CASE_NOTES, []);
     setItem(STORAGE_KEYS.ASSESSMENTS, []);
     setItem(STORAGE_KEYS.RATINGS, []);
     setItem(STORAGE_KEYS.VERSION, CURRENT_DATA_VERSION);
 
-    // Optionally seed mock data once to help with local troubleshooting
-    try {
-      const alreadySeeded = localStorage.getItem('heartland_mock_seeded') === 'true';
-      if (!alreadySeeded) {
-        seedMockData();
-        localStorage.setItem('heartland_mock_seeded', 'true');
-        console.log('Mock data seeded');
-      }
-    } catch (e) {
-      console.warn('Mock data seeding skipped:', e);
-    }
     return true;
-  }
-  // If storage exists but is empty, seed mock data once to help with troubleshooting
-  try {
-    const alreadySeeded = localStorage.getItem('heartland_mock_seeded') === 'true';
-    if ((!existingYouths || existingYouths.length === 0) && !alreadySeeded) {
-      seedMockData();
-      localStorage.setItem('heartland_mock_seeded', 'true');
-      console.log('Mock data seeded (post-initialization)');
-      return true;
-    }
-  } catch (e) {
-    console.warn('Mock data seeding (post-init) skipped:', e);
   }
 
   return false;
@@ -189,6 +167,36 @@ export const saveProgressNote = (
   
   allNotes.push(newNote);
   setItem(STORAGE_KEYS.NOTES, allNotes);
+  return newNote;
+};
+
+// Case Notes functions
+export const fetchCaseNotes = (youthId: string): CaseNote[] => {
+  const allNotes = getItem<CaseNote[]>(STORAGE_KEYS.CASE_NOTES) || [];
+  return allNotes
+    .filter(note => note.youth_id === youthId)
+    .sort((a, b) => {
+      const dateA = a.date ? new Date(a.date).getTime() : 0;
+      const dateB = b.date ? new Date(b.date).getTime() : 0;
+      return dateB - dateA; // descending order
+    });
+};
+
+export const saveCaseNote = (
+  youthId: string, 
+  noteData: Omit<CaseNote, 'id' | 'createdAt' | 'youth_id'>
+): CaseNote => {
+  const allNotes = getItem<CaseNote[]>(STORAGE_KEYS.CASE_NOTES) || [];
+  
+  const newNote: CaseNote = {
+    id: uuidv4(),
+    youth_id: youthId,
+    ...noteData,
+    createdAt: new Date()
+  };
+  
+  allNotes.push(newNote);
+  setItem(STORAGE_KEYS.CASE_NOTES, allNotes);
   return newNote;
 };
 

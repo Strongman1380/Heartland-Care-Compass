@@ -5,49 +5,28 @@ import { ReportCenter } from "@/components/reports/ReportCenter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Youth } from "@/types/app-types";
-import { fetchAllYouths } from "@/utils/local-storage-utils";
-import { getYouth } from "@/lib/api";
+import { useYouth } from "@/hooks/useSupabase";
+import { type Youth } from "@/integrations/supabase/services";
 
 const Reports = () => {
-  const [allYouth, setAllYouth] = useState<Youth[]>([]);
   const [selectedYouthId, setSelectedYouthId] = useState<string>("");
   const [selectedYouth, setSelectedYouth] = useState<Youth | null>(null);
-  const [loading, setLoading] = useState(true);
+  
+  // Use Supabase hook for youth operations
+  const { youths, loading, loadYouths } = useYouth();
 
   useEffect(() => {
-    const loadYouth = async () => {
-      try {
-        // If we have a token, try API first; otherwise use local storage
-        const hasToken = !!localStorage.getItem('auth_token');
-        if (hasToken) {
-          const youthData = await getYouth();
-          setAllYouth(youthData);
-        } else {
-          const localYouth = fetchAllYouths();
-          setAllYouth(localYouth);
-        }
-      } catch (error) {
-        console.error('Error fetching youth:', error);
-        // Fallback to localStorage
-        const localYouth = fetchAllYouths();
-        setAllYouth(localYouth);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadYouth();
+    loadYouths();
   }, []);
 
   useEffect(() => {
     if (selectedYouthId) {
-      const youth = allYouth.find(y => y.id === selectedYouthId);
+      const youth = youths.find(y => y.id === selectedYouthId);
       setSelectedYouth(youth || null);
     } else {
       setSelectedYouth(null);
     }
-  }, [selectedYouthId, allYouth]);
+  }, [selectedYouthId, youths]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-red-50 via-yellow-50 to-red-100">
@@ -79,18 +58,33 @@ const Reports = () => {
                       <SelectValue placeholder="Select a youth..." />
                     </SelectTrigger>
                     <SelectContent>
-                      {allYouth.map((youth) => (
-                        <SelectItem key={youth.id} value={youth.id}>
-                          {youth.firstName} {youth.lastName} - Level {youth.level}
+                      {youths.length > 0 ? (
+                        youths.map((youth) => (
+                          <SelectItem key={youth.id} value={youth.id}>
+                            {youth.firstName} {youth.lastName} - Level {youth.level}
+                          </SelectItem>
+                        ))
+                      ) : (
+                        <SelectItem value="no-youth" disabled>
+                          No youth profiles available
                         </SelectItem>
-                      ))}
+                      )}
                     </SelectContent>
                   </Select>
                 </div>
               </CardContent>
             </Card>
 
-            {selectedYouth ? (
+            {youths.length === 0 ? (
+              <Card>
+                <CardContent className="text-center py-8">
+                  <p className="text-gray-600">No youth profiles available.</p>
+                  <p className="text-sm text-gray-500 mt-2">
+                    Add youth profiles from the main dashboard to generate reports.
+                  </p>
+                </CardContent>
+              </Card>
+            ) : selectedYouth ? (
               <ReportCenter youthId={selectedYouthId} youth={selectedYouth} />
             ) : (
               <Card>

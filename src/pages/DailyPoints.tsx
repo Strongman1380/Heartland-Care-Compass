@@ -4,20 +4,22 @@ import { Header } from "@/components/layout/Header";
 import { BehaviorCard } from "@/components/behavior/BehaviorCard";
 import { YouthSelector } from "@/components/common/YouthSelector";
 import { Skeleton } from "@/components/ui/skeleton";
-import { fetchAllYouths } from "@/utils/local-storage-utils";
-import { type Youth } from "@/types/app-types";
+import { useYouth } from "@/hooks/useSupabase";
+import { type Youth } from "@/integrations/supabase/services";
 
 const DailyPoints = () => {
   const [selectedYouthId, setSelectedYouthId] = useState<string | null>(null);
   const [selectedYouth, setSelectedYouth] = useState<Youth | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  
+  // Use Supabase hook for youth operations
+  const { youths } = useYouth();
 
   const handleYouthSelect = (youthId: string) => {
     setIsLoading(true);
     setSelectedYouthId(youthId);
     
-    // Fetch the selected youth data
-    const youths = fetchAllYouths();
+    // Find the selected youth from Supabase data
     const youth = youths.find(y => y.id === youthId);
     setSelectedYouth(youth || null);
     

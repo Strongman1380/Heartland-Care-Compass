@@ -4,8 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PlusCircle, User } from "lucide-react";
 import { AddYouthDialog } from "@/components/youth/AddYouthDialog";
-import { fetchAllYouths } from "@/utils/local-storage-utils";
-import { type Youth } from "@/types/app-types";
+import { useYouth } from "@/hooks/useSupabase";
+import { type Youth } from "@/integrations/supabase/services";
 import { useToast } from "@/hooks/use-toast";
 
 interface YouthSelectorProps {
@@ -14,38 +14,11 @@ interface YouthSelectorProps {
 }
 
 export const YouthSelector = ({ onSelectYouth, selectedYouthId }: YouthSelectorProps) => {
-  const [youths, setYouths] = useState<Youth[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [isAddYouthDialogOpen, setIsAddYouthDialogOpen] = useState(false);
   const { toast } = useToast();
-
-  const loadYouths = () => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      const youthsData = fetchAllYouths();
-      
-      const validYouths = youthsData.filter(youth => {
-        const hasValidId = youth.id && typeof youth.id === 'string' && youth.id.trim() !== "";
-        const hasValidNames = youth.firstName && youth.lastName && 
-                             youth.firstName.trim() !== "" && youth.lastName.trim() !== "";
-        return hasValidId && hasValidNames;
-      });
-      
-      setYouths(validYouths);
-    } catch (err) {
-      setError("Failed to load youth profiles");
-      toast({
-        title: "Error Loading Data",
-        description: "There was a problem loading youth profiles. Please try again.",
-        variant: "destructive"
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
+  
+  // Use Supabase hook for youth operations
+  const { youths, loading, error, loadYouths } = useYouth();
 
   useEffect(() => {
     loadYouths();

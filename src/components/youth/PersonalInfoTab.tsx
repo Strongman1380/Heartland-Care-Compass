@@ -247,7 +247,19 @@ export const PersonalInfoTab = ({ formData, handleChange, handleSelectChange, ha
         </div>
       </div>
       
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="idNumber">Youth ID Number</Label>
+          <Input 
+            id="idNumber" 
+            name="idNumber" 
+            value={formData.idNumber} 
+            onChange={handleChange}
+            className="bg-gray-50"
+            placeholder="Auto-generated ID"
+          />
+        </div>
+        
         <div className="space-y-2">
           <Label htmlFor="dob">Date of Birth</Label>
           <Input 
@@ -258,7 +270,9 @@ export const PersonalInfoTab = ({ formData, handleChange, handleSelectChange, ha
             onChange={handleChange} 
           />
         </div>
-        
+      </div>
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label htmlFor="admissionDate">Admission Date</Label>
           <Input 
@@ -277,10 +291,17 @@ export const PersonalInfoTab = ({ formData, handleChange, handleSelectChange, ha
               <SelectValue placeholder="Select level" />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="orientation">Orientation</SelectItem>
               <SelectItem value="1">Level 1</SelectItem>
               <SelectItem value="2">Level 2</SelectItem>
               <SelectItem value="3">Level 3</SelectItem>
               <SelectItem value="4">Level 4</SelectItem>
+              <SelectItem value="5">Level 5</SelectItem>
+              <SelectItem value="6">Level 6</SelectItem>
+              <SelectItem value="7">Level 7</SelectItem>
+              <SelectItem value="8">Level 8</SelectItem>
+              <SelectItem value="9">Level 9</SelectItem>
+              <SelectItem value="10">Level 10</SelectItem>
             </SelectContent>
           </Select>
         </div>

@@ -1,6 +1,6 @@
 
 import { Header } from "@/components/layout/Header";
-import { AlertTriangle, Clock, User, AlertCircle, Bell, Plus } from "lucide-react";
+import { AlertTriangle, Clock, User, AlertCircle, Bell, Plus, FileText, Zap, Check } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -11,8 +11,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { fetchAllYouths } from "@/utils/local-storage-utils";
-import { Youth } from "@/types/app-types";
+import { useYouth } from "@/hooks/useSupabase";
+import { type Youth } from "@/integrations/supabase/services";
 
 type Alert = {
   id: string;
@@ -21,38 +21,151 @@ type Alert = {
   description: string;
   timestamp: string;
   youth?: string;
+  youthId?: string;
   priority: "high" | "medium" | "low";
   createdAt: Date;
+  resolved?: boolean;
+  category?: string;
 };
+
+type AlertTemplate = {
+  id: string;
+  name: string;
+  type: "warning" | "info" | "urgent";
+  priority: "high" | "medium" | "low";
+  title: string;
+  description: string;
+  category: string;
+  icon: any;
+};
+
+const ALERT_TEMPLATES: AlertTemplate[] = [
+  {
+    id: "behavior-incident",
+    name: "Behavior Incident",
+    type: "warning",
+    priority: "high",
+    title: "Behavior Incident Reported",
+    description: "A significant behavior incident requires immediate attention and documentation.",
+    category: "Behavior",
+    icon: AlertTriangle
+  },
+  {
+    id: "medical-concern",
+    name: "Medical Concern",
+    type: "urgent",
+    priority: "high",
+    title: "Medical Attention Required",
+    description: "Youth requires medical attention or health monitoring.",
+    category: "Medical",
+    icon: AlertCircle
+  },
+  {
+    id: "safety-alert",
+    name: "Safety Alert",
+    type: "urgent",
+    priority: "high",
+    title: "Safety Concern Identified",
+    description: "Potential safety risk identified that requires immediate intervention.",
+    category: "Safety",
+    icon: AlertCircle
+  },
+  {
+    id: "medication-reminder",
+    name: "Medication Reminder",
+    type: "info",
+    priority: "medium",
+    title: "Medication Administration Due",
+    description: "Youth medication administration is due or overdue.",
+    category: "Medical",
+    icon: Clock
+  },
+  {
+    id: "therapy-session",
+    name: "Therapy Session",
+    type: "info",
+    priority: "medium",
+    title: "Therapy Session Scheduled",
+    description: "Reminder for upcoming therapy or counseling session.",
+    category: "Therapy",
+    icon: User
+  },
+  {
+    id: "court-date",
+    name: "Court Date",
+    type: "warning",
+    priority: "high",
+    title: "Court Appearance Scheduled",
+    description: "Youth has an upcoming court date that requires preparation.",
+    category: "Legal",
+    icon: Clock
+  },
+  {
+    id: "educational-concern",
+    name: "Educational Concern",
+    type: "warning",
+    priority: "medium",
+    title: "Educational Issue",
+    description: "Academic performance or school attendance concern requiring attention.",
+    category: "Education",
+    icon: AlertTriangle
+  },
+  {
+    id: "family-contact",
+    name: "Family Contact",
+    type: "info",
+    priority: "medium",
+    title: "Family Contact Scheduled",
+    description: "Scheduled family visit or contact session.",
+    category: "Family",
+    icon: User
+  }
+];
 
 const Alerts = () => {
   const [alerts, setAlerts] = useState<Alert[]>([]);
-  const [youths, setYouths] = useState<Youth[]>([]);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [isTemplateDialogOpen, setIsTemplateDialogOpen] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState<AlertTemplate | null>(null);
   const [newAlert, setNewAlert] = useState<{
     type: "warning" | "info" | "urgent";
     title: string;
     description: string;
     youth: string;
+    youthId: string;
     priority: "high" | "medium" | "low";
+    category: string;
   }>({
     type: "info",
     title: "",
     description: "",
     youth: "",
-    priority: "medium"
+    youthId: "general",
+    priority: "medium",
+    category: ""
   });
 
+  // Use Supabase hook for youth operations
+  const { youths, loading, loadYouths } = useYouth();
+
   useEffect(() => {
-    // Load alerts from localStorage
+    // Load youths from Supabase
+    loadYouths();
+    
+    // Load alerts from localStorage (for now, until we create Supabase alerts table)
     const savedAlerts = localStorage.getItem('heartland_alerts');
     if (savedAlerts) {
-      setAlerts(JSON.parse(savedAlerts));
+      try {
+        const parsedAlerts = JSON.parse(savedAlerts).map((alert: any) => ({
+          ...alert,
+          createdAt: new Date(alert.createdAt)
+        }));
+        setAlerts(parsedAlerts);
+      } catch (error) {
+        console.error('Error parsing saved alerts:', error);
+      }
     }
-    
-    // Load youths for selection
-    setYouths(fetchAllYouths());
     
     // Check notification permission status
     if ('Notification' in window) {
@@ -84,6 +197,20 @@ const Alerts = () => {
     }
   };
 
+  const useTemplate = (template: AlertTemplate) => {
+    setNewAlert({
+      type: template.type,
+      title: template.title,
+      description: template.description,
+      youth: "",
+      youthId: "general",
+      priority: template.priority,
+      category: template.category
+    });
+    setIsTemplateDialogOpen(false);
+    setIsCreateDialogOpen(true);
+  };
+
   const createAlert = () => {
     if (!newAlert.title.trim() || !newAlert.description.trim()) {
       toast.error('Please fill in all required fields');
@@ -94,7 +221,8 @@ const Alerts = () => {
       id: Date.now().toString(),
       ...newAlert,
       timestamp: 'Just now',
-      createdAt: new Date()
+      createdAt: new Date(),
+      resolved: false
     };
 
     const updatedAlerts = [alert, ...alerts];
@@ -105,18 +233,34 @@ const Alerts = () => {
     if (notificationsEnabled) {
       new Notification(`Alert: ${alert.title}`, {
         body: alert.description,
-        icon: `${import.meta.env.BASE_URL}favicon.ico`
+        icon: `${import.meta.env.BASE_URL}favicon.ico`,
+        tag: alert.id
       });
     }
 
     toast.success('Alert created successfully!');
     setIsCreateDialogOpen(false);
+    resetNewAlert();
+  };
+
+  const resolveAlert = (alertId: string) => {
+    const updatedAlerts = alerts.map(alert => 
+      alert.id === alertId ? { ...alert, resolved: true } : alert
+    );
+    setAlerts(updatedAlerts);
+    localStorage.setItem('heartland_alerts', JSON.stringify(updatedAlerts));
+    toast.success('Alert resolved');
+  };
+
+  const resetNewAlert = () => {
     setNewAlert({
       type: "info",
       title: "",
       description: "",
       youth: "",
-      priority: "medium"
+      youthId: "general",
+      priority: "medium",
+      category: ""
     });
   };
 
@@ -178,6 +322,53 @@ const Alerts = () => {
           <p className="text-red-700 text-lg">Monitor important events and required actions</p>
           
           <div className="flex justify-center items-center space-x-4 mt-6">
+            <Dialog open={isTemplateDialogOpen} onOpenChange={setIsTemplateDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" className="border-red-600 text-red-600 hover:bg-red-50">
+                  <FileText className="h-4 w-4 mr-2" />
+                  Use Template
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[600px]">
+                <DialogHeader>
+                  <DialogTitle>Alert Templates</DialogTitle>
+                  <DialogDescription>
+                    Choose from predefined alert templates for common scenarios.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
+                  {ALERT_TEMPLATES.map((template) => {
+                    const IconComponent = template.icon;
+                    return (
+                      <Card 
+                        key={template.id}
+                        className="cursor-pointer hover:shadow-md transition-shadow border-2 hover:border-red-300"
+                        onClick={() => useTemplate(template)}
+                      >
+                        <CardHeader className="pb-2">
+                          <div className="flex items-center space-x-2">
+                            <IconComponent className="h-5 w-5 text-red-600" />
+                            <CardTitle className="text-sm">{template.name}</CardTitle>
+                          </div>
+                        </CardHeader>
+                        <CardContent className="pt-0">
+                          <p className="text-xs text-gray-600 mb-2">{template.description}</p>
+                          <div className="flex justify-between items-center">
+                            <Badge className={getPriorityColor(template.priority)}>
+                              {template.priority.toUpperCase()}
+                            </Badge>
+                            <Badge variant="outline" className="text-xs">
+                              {template.category}
+                            </Badge>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+              </DialogContent>
+            </Dialog>
+
             <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
               <DialogTrigger asChild>
                 <Button className="bg-red-600 hover:bg-red-700">
@@ -236,18 +427,37 @@ const Alerts = () => {
                     </Select>
                   </div>
                   <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="category" className="text-right">
+                      Category
+                    </Label>
+                    <Input
+                      id="category"
+                      value={newAlert.category}
+                      onChange={(e) => setNewAlert({...newAlert, category: e.target.value})}
+                      className="col-span-3"
+                      placeholder="Alert category (optional)"
+                    />
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
                     <Label htmlFor="youth" className="text-right">
                       Youth
                     </Label>
-                    <Select value={newAlert.youth} onValueChange={(value) => setNewAlert({...newAlert, youth: value})}>
+                    <Select value={newAlert.youthId} onValueChange={(value) => {
+                      const selectedYouth = youths.find(y => y.id === value);
+                      setNewAlert({
+                        ...newAlert, 
+                        youthId: value,
+                        youth: selectedYouth ? `${selectedYouth.firstName} ${selectedYouth.lastName}` : ""
+                      });
+                    }}>
                       <SelectTrigger className="col-span-3">
                         <SelectValue placeholder="Select youth (optional)" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">None - General Alert</SelectItem>
+                        <SelectItem value="general">None - General Alert</SelectItem>
                         {youths.map((youth) => (
-                          <SelectItem key={youth.id} value={`${youth.firstName} ${youth.lastName}`}>
-                            {youth.firstName} {youth.lastName}
+                          <SelectItem key={youth.id} value={youth.id}>
+                            {youth.firstName} {youth.lastName} - Level {youth.level}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -268,7 +478,10 @@ const Alerts = () => {
                   </div>
                 </div>
                 <div className="flex justify-end space-x-2">
-                  <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
+                  <Button variant="outline" onClick={() => {
+                    setIsCreateDialogOpen(false);
+                    resetNewAlert();
+                  }}>
                     Cancel
                   </Button>
                   <Button onClick={createAlert} className="bg-red-600 hover:bg-red-700">
@@ -291,22 +504,51 @@ const Alerts = () => {
         
         <div className="space-y-4">
           {alerts.map((alert) => (
-            <Card key={alert.id} className="border-2 border-yellow-300">
+            <Card 
+              key={alert.id} 
+              className={`border-2 transition-all ${
+                alert.resolved 
+                  ? 'border-green-300 bg-green-50 opacity-75' 
+                  : 'border-yellow-300'
+              }`}
+            >
               <CardHeader>
                 <div className="flex items-start justify-between">
                   <div className="flex items-center space-x-3">
-                    {getAlertIcon(alert.type)}
+                    {alert.resolved ? (
+                      <Check className="h-5 w-5 text-green-600" />
+                    ) : (
+                      getAlertIcon(alert.type)
+                    )}
                     <div>
-                      <CardTitle className="text-lg">{alert.title}</CardTitle>
-                      <CardDescription className="flex items-center space-x-2 mt-1">
-                        {alert.youth && (
-                          <>
-                            <User className="h-4 w-4" />
-                            <span>{alert.youth}</span>
-                          </>
+                      <div className="flex items-center space-x-2">
+                        <CardTitle className={`text-lg ${alert.resolved ? 'line-through text-gray-500' : ''}`}>
+                          {alert.title}
+                        </CardTitle>
+                        {alert.resolved && (
+                          <Badge className="bg-green-100 text-green-800 border-green-200">
+                            RESOLVED
+                          </Badge>
                         )}
-                        <Clock className="h-4 w-4 ml-4" />
-                        <span>{alert.createdAt ? formatTimestamp(alert.createdAt) : alert.timestamp}</span>
+                      </div>
+                      <CardDescription className="flex items-center space-x-4 mt-1">
+                        <div className="flex items-center space-x-1">
+                          {alert.youth && alert.youth !== "general" && (
+                            <>
+                              <User className="h-4 w-4" />
+                              <span>{alert.youth}</span>
+                            </>
+                          )}
+                        </div>
+                        {alert.category && (
+                          <Badge variant="outline" className="text-xs">
+                            {alert.category}
+                          </Badge>
+                        )}
+                        <div className="flex items-center space-x-1">
+                          <Clock className="h-4 w-4" />
+                          <span>{alert.createdAt ? formatTimestamp(alert.createdAt) : alert.timestamp}</span>
+                        </div>
                       </CardDescription>
                     </div>
                   </div>
@@ -314,6 +556,16 @@ const Alerts = () => {
                     <Badge className={getPriorityColor(alert.priority)}>
                       {alert.priority.toUpperCase()}
                     </Badge>
+                    {!alert.resolved && (
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => resolveAlert(alert.id)}
+                        className="text-green-600 hover:text-green-800 hover:bg-green-50"
+                      >
+                        <Check className="h-4 w-4" />
+                      </Button>
+                    )}
                     <Button 
                       variant="ghost" 
                       size="sm" 
@@ -326,7 +578,9 @@ const Alerts = () => {
                 </div>
               </CardHeader>
               <CardContent>
-                <p className="text-gray-700">{alert.description}</p>
+                <p className={`text-gray-700 ${alert.resolved ? 'line-through opacity-60' : ''}`}>
+                  {alert.description}
+                </p>
               </CardContent>
             </Card>
           ))}

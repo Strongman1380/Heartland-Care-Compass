@@ -4,18 +4,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { PlusCircle, Settings, Home, Calendar, BookOpen, LineChart, BellRing, Database, KeyRound, LogOut, Menu, X, ChevronDown } from "lucide-react";
+import { PlusCircle, BarChart3, Home, Calendar, BookOpen, LineChart, Database, KeyRound, LogOut, Menu, X, ChevronDown } from "lucide-react";
 import { AddYouthDialog } from "@/components/youth/AddYouthDialog";
 import { Link, useLocation } from "react-router-dom";
 import { apiClient } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
 interface HeaderProps {
-  showAdmin?: boolean;
-  onAdminToggle?: () => void;
+  // Remove admin-related props
 }
 
-export const Header = ({ showAdmin = false, onAdminToggle }: HeaderProps) => {
+export const Header = () => {
   const [isAddYouthDialogOpen, setIsAddYouthDialogOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isAuthDialogOpen, setIsAuthDialogOpen] = useState(false);
@@ -29,10 +28,8 @@ export const Header = ({ showAdmin = false, onAdminToggle }: HeaderProps) => {
   const navigationItems = [
     { path: '/', label: 'Dashboard', icon: Home },
     { path: '/daily-points', label: 'Daily Points', icon: Calendar },
-    { path: '/progress-notes', label: 'Progress Notes', icon: BookOpen },
+    { path: '/case-notes', label: 'Case Notes', icon: BookOpen },
     { path: '/reports', label: 'Reports', icon: LineChart },
-    { path: '/alerts', label: 'Alerts', icon: BellRing },
-
   ];
 
   const isActiveRoute = (path: string) => {
@@ -49,7 +46,26 @@ export const Header = ({ showAdmin = false, onAdminToggle }: HeaderProps) => {
   };
 
   useEffect(() => {
-    setHasToken(!!localStorage.getItem('auth_token'));
+    const initAuth = async () => {
+      const existingToken = localStorage.getItem('auth_token');
+      if (existingToken) {
+        setHasToken(true);
+        return;
+      }
+      
+      // Auto-authenticate for local development
+      try {
+        const { token } = await apiClient.getAuthToken('local-admin-key');
+        apiClient.setToken(token);
+        setHasToken(true);
+        toast({ title: 'Auto-connected to API', description: 'Local development mode' });
+      } catch (e) {
+        console.warn('Auto-authentication failed:', e);
+        setHasToken(false);
+      }
+    };
+    
+    initAuth();
   }, []);
 
   const handleSignOut = () => {
@@ -97,38 +113,33 @@ export const Header = ({ showAdmin = false, onAdminToggle }: HeaderProps) => {
             </Link>
 
             {/* Desktop Navigation */}
-            <nav className="hidden lg:flex items-center space-x-1">
-              {navigationItems.map((item) => {
-                const Icon = item.icon;
-                const isActive = isActiveRoute(item.path);
-                const isSecondary = item.variant === 'secondary';
-                
-                return (
-                  <Link
-                    key={item.path}
-                    to={item.path}
-                    className={`
-                      relative flex items-center space-x-2 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200
-                      ${isActive 
-                        ? isSecondary 
-                          ? 'bg-blue-50 text-blue-700 shadow-sm' 
-                          : 'bg-red-50 text-red-700 shadow-sm'
-                        : isSecondary
-                          ? 'text-blue-600 hover:text-blue-700 hover:bg-blue-50'
+            <nav className="hidden lg:flex items-center justify-center flex-1 max-w-2xl mx-8">
+              <div className="flex items-center justify-between w-full space-x-6">
+                {navigationItems.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = isActiveRoute(item.path);
+                  
+                  return (
+                    <Link
+                      key={item.path}
+                      to={item.path}
+                      className={`
+                        relative flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex-1 justify-center
+                        ${isActive 
+                          ? 'bg-red-50 text-red-700 shadow-sm'
                           : 'text-gray-600 hover:text-red-700 hover:bg-red-50'
-                      }
-                    `}
-                  >
-                    <Icon className="h-4 w-4" />
-                    <span>{item.label}</span>
-                    {isActive && (
-                      <div className={`absolute inset-x-0 bottom-0 h-0.5 rounded-full ${
-                        isSecondary ? 'bg-blue-600' : 'bg-red-600'
-                      }`} />
-                    )}
-                  </Link>
-                );
-              })}
+                        }
+                      `}
+                    >
+                      <Icon className="h-4 w-4" />
+                      <span>{item.label}</span>
+                      {isActive && (
+                        <div className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-red-600" />
+                      )}
+                    </Link>
+                  );
+                })}
+              </div>
             </nav>
 
             {/* Desktop Actions */}
@@ -171,22 +182,17 @@ export const Header = ({ showAdmin = false, onAdminToggle }: HeaderProps) => {
                 </Button>
               )}
 
-              {/* Admin Toggle */}
-              {onAdminToggle && (
+              {/* KPI Dashboard Link */}
+              <Link to="/assessment-kpi">
                 <Button
-                  onClick={onAdminToggle}
-                  variant={showAdmin ? "default" : "ghost"}
+                  variant="ghost"
                   size="sm"
-                  className={showAdmin 
-                    ? "bg-red-600 hover:bg-red-700 text-white shadow-sm" 
-                    : "text-gray-600 hover:text-red-700 hover:bg-red-50"
-                  }
+                  className="text-gray-600 hover:text-red-700 hover:bg-red-50"
                 >
-                  <Settings className="h-4 w-4 mr-2" />
-                  Admin
-                  {showAdmin && <Badge className="ml-2 bg-red-500 text-white text-xs">ON</Badge>}
+                  <BarChart3 className="h-4 w-4 mr-2" />
+                  KPI Dashboard
                 </Button>
-              )}
+              </Link>
 
               {/* Primary CTA */}
               <Button 
@@ -226,7 +232,6 @@ export const Header = ({ showAdmin = false, onAdminToggle }: HeaderProps) => {
                 {navigationItems.map((item) => {
                   const Icon = item.icon;
                   const isActive = isActiveRoute(item.path);
-                  const isSecondary = item.variant === 'secondary';
                   
                   return (
                     <Link
@@ -236,21 +241,15 @@ export const Header = ({ showAdmin = false, onAdminToggle }: HeaderProps) => {
                       className={`
                         flex items-center space-x-3 px-3 py-3 rounded-lg text-sm font-medium transition-colors
                         ${isActive 
-                          ? isSecondary 
-                            ? 'bg-blue-50 text-blue-700' 
-                            : 'bg-red-50 text-red-700'
-                          : isSecondary
-                            ? 'text-blue-600 hover:bg-blue-50'
-                            : 'text-gray-600 hover:bg-gray-50'
+                          ? 'bg-red-50 text-red-700'
+                          : 'text-gray-600 hover:bg-gray-50'
                         }
                       `}
                     >
                       <Icon className="h-5 w-5" />
                       <span>{item.label}</span>
                       {isActive && (
-                        <div className={`w-2 h-2 rounded-full ml-auto ${
-                          isSecondary ? 'bg-blue-600' : 'bg-red-600'
-                        }`} />
+                        <div className="w-2 h-2 rounded-full ml-auto bg-red-600" />
                       )}
                     </Link>
                   );
@@ -303,23 +302,16 @@ export const Header = ({ showAdmin = false, onAdminToggle }: HeaderProps) => {
                     </Button>
                   )}
 
-                  {onAdminToggle && (
+                  <Link to="/assessment-kpi">
                     <Button
-                      onClick={() => {
-                        onAdminToggle();
-                        setIsMobileMenuOpen(false);
-                      }}
-                      variant={showAdmin ? "default" : "outline"}
-                      className={`justify-start ${showAdmin 
-                        ? "bg-red-600 hover:bg-red-700 text-white" 
-                        : ""
-                      }`}
+                      onClick={() => setIsMobileMenuOpen(false)}
+                      variant="outline"
+                      className="justify-start w-full"
                     >
-                      <Settings className="h-4 w-4 mr-2" />
-                      Admin Mode
-                      {showAdmin && <Badge className="ml-auto bg-red-500 text-white text-xs">ON</Badge>}
+                      <BarChart3 className="h-4 w-4 mr-2" />
+                      KPI Dashboard
                     </Button>
-                  )}
+                  </Link>
 
                   <Button 
                     onClick={() => {

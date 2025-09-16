@@ -43,7 +43,6 @@ export interface ReportOptions {
     points: boolean;
     notes: boolean;
     assessment: boolean;
-    successPlan: boolean;
     documents: boolean;
   };
   outputFormat?: 'text' | 'pdf' | 'docx';

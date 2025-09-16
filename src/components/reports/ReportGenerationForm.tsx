@@ -25,7 +25,6 @@ export const ReportGenerationForm = ({ onGenerateReport, isGenerating }: ReportG
     points: true,
     notes: true,
     assessment: false,
-    successPlan: false,
     documents: false,
   });
   const [outputFormat, setOutputFormat] = useState<'text' | 'pdf' | 'docx'>('pdf');
@@ -157,14 +156,6 @@ export const ReportGenerationForm = ({ onGenerateReport, isGenerating }: ReportG
                 <Label htmlFor="includeAssessment">Risk Assessment Results</Label>
               </div>
               
-              <div className="flex items-center space-x-2">
-                <Checkbox 
-                  id="includeSuccessPlan" 
-                  checked={includeOptions.successPlan} 
-                  onCheckedChange={() => handleIncludeOptionChange("successPlan")}
-                />
-                <Label htmlFor="includeSuccessPlan">Success Plan</Label>
-              </div>
               
               <div className="flex items-center space-x-2">
                 <Checkbox 

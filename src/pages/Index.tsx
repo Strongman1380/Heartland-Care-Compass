@@ -3,10 +3,8 @@ import { Header } from "@/components/layout/Header";
 import { EditYouthDialog } from "@/components/youth/EditYouthDialog";
 import { YouthSelectionView } from "@/components/home/YouthSelectionView";
 import { YouthDetailView } from "@/components/home/YouthDetailView";
-import { RapidPlacementAssessment } from "@/components/assessment/RapidPlacementAssessment";
-import { fetchAllYouths, updateYouth, initializeStorage } from "@/utils/local-storage-utils";
-import { seedMockData } from "@/utils/mockData";
-import { type Youth } from "@/types/app-types";
+import { useYouth } from "@/hooks/useSupabase";
+import { type Youth } from "@/integrations/supabase/services";
 import { useToast } from "@/hooks/use-toast";
 import {
   AlertDialog,
@@ -22,39 +20,15 @@ import { toast } from "sonner";
 
 const Index = () => {
   const [selectedYouth, setSelectedYouth] = useState<Youth | null>(null);
-  const [youths, setYouths] = useState<Youth[]>([]);
-  const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("profile");
   const [editingYouth, setEditingYouth] = useState<Youth | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [youthToDelete, setYouthToDelete] = useState<Youth | null>(null);
-  const [showAdmin, setShowAdmin] = useState(false);
+  // Remove admin state - no longer needed
   const { toast: uiToast } = useToast();
-
-  const loadYouths = () => {
-    try {
-      setLoading(true);
-      const youthsData = fetchAllYouths();
-      
-      const validYouths = youthsData.filter(youth => {
-        const hasValidId = youth.id && typeof youth.id === 'string' && youth.id.trim() !== "";
-        const hasValidNames = youth.firstName && youth.lastName && 
-                            youth.firstName.trim() !== "" && youth.lastName.trim() !== "";
-        return hasValidId && hasValidNames;
-      });
-        
-      setYouths(validYouths);
-    } catch (err) {
-      console.error("Error fetching youths:", err);
-      uiToast({
-        title: "Error Loading Data",
-        description: "Failed to load youth profiles. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
+  
+  // Use Supabase hook for youth operations
+  const { youths, loading, loadYouths, deleteYouth: deleteYouthFromSupabase } = useYouth();
 
   useEffect(() => {
     loadYouths();
@@ -81,23 +55,18 @@ const Index = () => {
     setDeleteConfirmOpen(true);
   };
 
-  const confirmDeleteYouth = () => {
+  const confirmDeleteYouth = async () => {
     if (!youthToDelete) return;
 
     try {
-      // Remove from local storage
-      const allYouths = fetchAllYouths();
-      const filteredYouths = allYouths.filter(y => y.id !== youthToDelete.id);
-      localStorage.setItem('heartland_youths', JSON.stringify(filteredYouths));
-
-      toast.success(`${youthToDelete.firstName} ${youthToDelete.lastName}'s profile has been removed. 🗑️`);
+      await deleteYouthFromSupabase(youthToDelete.id);
 
       // If the deleted youth was selected, go back to home
       if (selectedYouth && selectedYouth.id === youthToDelete.id) {
         setSelectedYouth(null);
       }
 
-      loadYouths();
+      toast.success(`${youthToDelete.firstName} ${youthToDelete.lastName}'s profile has been removed. 🗑️`);
     } catch (error) {
       console.error("Error deleting youth profile:", error);
       toast.error("Failed to delete youth profile.");
@@ -126,27 +95,9 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-red-50 via-yellow-50 to-red-100">
-      <Header 
-        showAdmin={showAdmin}
-        onAdminToggle={() => {
-          setShowAdmin(!showAdmin);
-          setSelectedYouth(null);
-        }}
-      />
+      <Header />
       <main className="container mx-auto px-4 py-8">
-        {showAdmin ? (
-          <div className="space-y-6">
-            <div className="flex gap-4 mb-6">
-              <a 
-                href={`${import.meta.env.BASE_URL}assessment-kpi`} 
-                className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
-              >
-                📊 Assessment KPI Dashboard
-              </a>
-            </div>
-            <RapidPlacementAssessment />
-          </div>
-        ) : !selectedYouth ? (
+        {!selectedYouth ? (
           <>
             <YouthSelectionView
               youths={youths}
@@ -157,27 +108,6 @@ const Index = () => {
               formatPoints={formatPoints}
               formatDate={formatDate}
             />
-            
-            {/* Show Load Mock Data button only when there are no youths */}
-            {youths.length === 0 && (
-              <div className="mt-6 flex justify-center">
-                <button
-                  onClick={() => {
-                    try {
-                      seedMockData();
-                      localStorage.setItem('heartland_mock_seeded', 'true');
-                      uiToast({ title: 'Mock data loaded' });
-                      loadYouths();
-                    } catch (e) {
-                      uiToast({ title: 'Failed to load mock data', variant: 'destructive' });
-                    }
-                  }}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg"
-                >
-                  Load Mock Data
-                </button>
-              </div>
-            )}
           </>
         ) : (
           <YouthDetailView

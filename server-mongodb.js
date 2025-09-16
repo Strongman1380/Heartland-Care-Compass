@@ -86,6 +86,37 @@ const youthSchema = z.object({
   hyrnaRiskLevel: z.string().optional().nullable(),
   hyrnaScore: z.number().optional().nullable(),
   hyrnaAssessmentDate: z.coerce.date().optional().nullable(),
+  // Extended profile fields
+  race: z.string().optional().nullable(),
+  physicalDescription: z.object({
+    height: z.string().optional().nullable(),
+    weight: z.string().optional().nullable(),
+    hairColor: z.string().optional().nullable(),
+    eyeColor: z.string().optional().nullable(),
+  }).optional().nullable(),
+  placingAgency: z.string().optional().nullable(),
+  probationOfficer: z.object({
+    name: z.string().optional().nullable(),
+    phone: z.string().optional().nullable(),
+  }).optional().nullable(),
+  guardian: z.string().optional().nullable(),
+  schoolInfo: z.object({
+    previous: z.string().optional().nullable(),
+    current: z.string().optional().nullable(),
+    iep: z.boolean().optional().nullable(),
+    notes: z.string().optional().nullable(),
+  }).optional().nullable(),
+  behavioralProfile: z.object({
+    strengths: z.array(z.string()).optional().nullable(),
+    improvements: z.array(z.string()).optional().nullable(),
+    concerns: z.array(z.string()).optional().nullable(),
+    incidents: z.array(z.string()).optional().nullable(),
+    recommendations: z.array(z.string()).optional().nullable(),
+  }).optional().nullable(),
+  choreAssignments: z.object({
+    afterSchool: z.array(z.string()).optional().nullable(),
+    kitchen: z.array(z.string()).optional().nullable(),
+  }).optional().nullable(),
 });
 
 const behaviorPointsSchema = z.object({
@@ -439,6 +470,37 @@ app.post('/api/progress-notes', requireAuth, async (req, res) => {
   } catch (error) {
     console.error('Error creating progress note:', error);
     res.status(500).json({ error: 'Failed to create progress note' });
+  }
+});
+
+// Case Notes API Routes
+app.get('/api/case-notes/youth/:youthId', requireAuth, async (req, res) => {
+  try {
+    const collection = database.getCollection(COLLECTIONS.CASE_NOTES);
+    const notes = await collection.find({ youth_id: req.params.youthId })
+      .sort({ date: -1 })
+      .toArray();
+    res.json(notes);
+  } catch (error) {
+    console.error('Error fetching case notes:', error);
+    res.status(500).json({ error: 'Failed to fetch case notes' });
+  }
+});
+
+app.post('/api/case-notes', requireAuth, async (req, res) => {
+  try {
+    const collection = database.getCollection(COLLECTIONS.CASE_NOTES);
+    const noteData = {
+      ...req.body,
+      id: req.body.id || uuidv4(),
+      createdAt: new Date()
+    };
+    
+    const result = await collection.insertOne(noteData);
+    res.status(201).json(noteData);
+  } catch (error) {
+    console.error('Error creating case note:', error);
+    res.status(500).json({ error: 'Failed to create case note' });
   }
 });
 

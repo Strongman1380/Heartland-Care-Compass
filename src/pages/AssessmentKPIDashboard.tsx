@@ -8,7 +8,7 @@ import { TrendingUp, TrendingDown, Users, FileText, AlertTriangle, CheckCircle, 
 import { Header } from '@/components/layout/Header';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
-import { fetchAllYouths, fetchBehaviorPoints, fetchProgressNotes } from '@/utils/local-storage-utils';
+import { youthService, behaviorPointsService, caseNotesService, type Youth, type BehaviorPoints, type CaseNotes } from '@/integrations/supabase/services';
 
 interface AssessmentData {
   worksheets: any[];
@@ -30,17 +30,15 @@ interface KPIMetrics {
   realColorsAssessments: number;
 }
 
-const AssessmentKPIDashboard = () => {
+const GroupHomeKPIDashboard = () => {
   const navigate = useNavigate();
-  const [data, setData] = useState<AssessmentData>({
-    worksheets: [],
-    riskassessments: [],
-    notes: [],
-    points: [],
-    daily_ratings: [],
-    youths: [],
-    realColorsAssessments: []
-  });
+  
+  // State for all data
+  const [youths, setYouths] = useState<Youth[]>([]);
+  const [allBehaviorPoints, setAllBehaviorPoints] = useState<BehaviorPoints[]>([]);
+  const [allCaseNotes, setAllCaseNotes] = useState<CaseNotes[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  
   const [kpiMetrics, setKpiMetrics] = useState<KPIMetrics>({
     totalAssessments: 0,
     totalYouth: 0,
@@ -51,7 +49,6 @@ const AssessmentKPIDashboard = () => {
     realColorsAssessments: 0
   });
   const [timeframe, setTimeframe] = useState('month');
-  const [isLoading, setIsLoading] = useState(true);
   const [chartData, setChartData] = useState({
     assessmentTrends: [],
     riskLevelDistribution: [],
@@ -61,45 +58,36 @@ const AssessmentKPIDashboard = () => {
     colorDistribution: []
   });
 
-  useEffect(() => {
-    fetchAllAssessmentData();
-  }, []);
-
-  useEffect(() => {
-    if (data.youths.length > 0) {
-      processKPIData();
-    }
-  }, [data, timeframe]);
-
-  const fetchAllAssessmentData = async () => {
-    setIsLoading(true);
+  // Fetch all data
+  const fetchAllData = async () => {
     try {
-      const youths = fetchAllYouths();
-      // TODO: Implement global behavior points and progress notes fetching
-      const points: any[] = [];
-      const notes: any[] = [];
+      setIsLoading(true);
+      const [youthData, pointsData, notesData] = await Promise.all([
+        youthService.getAll(),
+        behaviorPointsService.getAll(),
+        caseNotesService.getAll()
+      ]);
       
-      // Mock data for assessments since we don't have them in local storage yet
-      const worksheets = [];
-      const riskassessments = [];
-      const daily_ratings = [];
-      const realColorsAssessments = [];
-
-      setData({
-        worksheets,
-        riskassessments,
-        notes,
-        points,
-        daily_ratings,
-        youths,
-        realColorsAssessments
-      });
+      setYouths(youthData);
+      setAllBehaviorPoints(pointsData);
+      setAllCaseNotes(notesData);
     } catch (error) {
-      console.error('Error fetching assessment data:', error);
+      console.error('Error fetching data:', error);
     } finally {
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchAllData();
+  }, []);
+
+  useEffect(() => {
+    if (!isLoading && youths.length > 0) {
+      processKPIData();
+    }
+  }, [youths, allBehaviorPoints, allCaseNotes, timeframe, isLoading]);
+
 
   const processKPIData = () => {
     const now = new Date();
@@ -115,13 +103,13 @@ const AssessmentKPIDashboard = () => {
 
     const timeframeDate = getTimeframeDate();
     
-    // Calculate KPI metrics
-    const totalAssessments = data.worksheets.length + data.riskassessments.length + data.realColorsAssessments.length;
-    const totalYouth = data.youths.length;
+    // Calculate KPI metrics using real Supabase data
+    const totalAssessments = allCaseNotes.length; // Use case notes as proxy for assessments
+    const totalYouth = youths.length;
     
     // Risk level distribution from HYRNA assessments
     const riskCounts = { Low: 0, Medium: 0, High: 0 };
-    data.youths.forEach(youth => {
+    youths.forEach(youth => {
       const riskLevel = youth.hyrnaRiskLevel || 'Medium'; // Default to Medium if not set
       if (riskLevel in riskCounts) {
         riskCounts[riskLevel as keyof typeof riskCounts]++;
@@ -134,9 +122,9 @@ const AssessmentKPIDashboard = () => {
       { name: 'High', value: riskCounts.High, percentage: totalYouth > 0 ? ((riskCounts.High / totalYouth) * 100).toFixed(1) : '0' }
     ];
 
-    // Assessment trends over time (using notes as proxy for assessments)
+    // Assessment trends over time (using case notes as proxy for assessments)
     const assessmentsByMonth = {};
-    data.notes.forEach(note => {
+    allCaseNotes.forEach(note => {
       const date = new Date(note.createdAt || note.date);
       const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
       assessmentsByMonth[monthKey] = (assessmentsByMonth[monthKey] || 0) + 1;
@@ -152,7 +140,7 @@ const AssessmentKPIDashboard = () => {
 
     // Point trends for improvement tracking
     const pointsByMonth = {};
-    data.points.forEach(point => {
+    allBehaviorPoints.forEach(point => {
       const date = new Date(point.createdAt || point.date);
       const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
       if (!pointsByMonth[monthKey]) {
@@ -167,20 +155,20 @@ const AssessmentKPIDashboard = () => {
       .slice(-6)
       .map(([month, data]: [string, any]) => ({
         month,
-        averagePoints: data.count > 0 ? (data.total / data.count).toFixed(1) : '0'
+        averagePoints: data.count > 0 ? ((data.total / data.count) / 1000).toFixed(1) : '0' // Convert to thousands
       }));
 
-    // Completion stats (using notes as proxy for completed assessments)
-    const youthWithAssessments = new Set(data.notes.map(n => n.youth_id));
+    // Completion stats (using case notes as proxy for completed assessments)
+    const youthWithAssessments = new Set(allCaseNotes.map(n => n.youth_id));
     const completionRate = totalYouth > 0 ? (youthWithAssessments.size / totalYouth) * 100 : 0;
 
     // Real Colors distribution (empty for now)
     const colorDistribution = [];
 
-    // Recent assessments (last month) - using notes
+    // Recent assessments (last month) - using case notes
     const lastMonth = new Date();
     lastMonth.setMonth(lastMonth.getMonth() - 1);
-    const lastMonthAssessments = data.notes
+    const lastMonthAssessments = allCaseNotes
       .filter(note => new Date(note.createdAt || note.date) >= lastMonth).length;
 
     // Calculate improvement trend
@@ -193,13 +181,13 @@ const AssessmentKPIDashboard = () => {
     const levelTrends = [];
 
     setKpiMetrics({
-      totalAssessments: data.notes.length, // Using notes as proxy
+      totalAssessments: allCaseNotes.length, // Using case notes as proxy
       totalYouth,
       averageRiskLevel: Object.keys(riskCounts).reduce((a, b) => riskCounts[a] > riskCounts[b] ? a : b, 'Low'),
       completionRate,
       improvementTrend,
       lastMonthAssessments,
-      realColorsAssessments: data.realColorsAssessments.length
+      realColorsAssessments: 0 // No real colors assessments yet
     });
 
     setChartData({
@@ -247,15 +235,15 @@ const AssessmentKPIDashboard = () => {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => navigate('/profiles')}
+              onClick={() => navigate('/')}
               className="flex items-center gap-2"
             >
               <ArrowLeft className="h-4 w-4" />
-              Back to Profiles
+              Back to Dashboard
             </Button>
             <div>
-              <h1 className="text-3xl font-bold text-foreground">Assessment KPI Dashboard</h1>
-              <p className="text-muted-foreground mt-2">Track assessment progress and youth improvements</p>
+              <h1 className="text-3xl font-bold text-foreground">Group Home KPI Dashboard</h1>
+              <p className="text-muted-foreground mt-2">Comprehensive performance metrics and insights for residential care management</p>
             </div>
           </div>
           <Select value={timeframe} onValueChange={setTimeframe}>
@@ -465,4 +453,4 @@ const AssessmentKPIDashboard = () => {
   );
 };
 
-export default AssessmentKPIDashboard;
+export default GroupHomeKPIDashboard;

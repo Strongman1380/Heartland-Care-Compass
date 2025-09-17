@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -34,7 +34,7 @@ export const AddYouthDialog = ({ onClose, onSuccess }: AddYouthDialogProps) => {
   } = useYouthForm();
 
   // Generate unique ID when dialog opens
-  const generateUniqueId = () => {
+  const generateUniqueId = useCallback(() => {
     const currentYear = new Date().getFullYear();
     const existingIds = youths.map(youth => youth.idNumber).filter(Boolean);
     
@@ -55,7 +55,7 @@ export const AddYouthDialog = ({ onClose, onSuccess }: AddYouthDialogProps) => {
     // Generate next sequential number
     const nextNumber = maxNumber + 1;
     return `${yearPrefix}${nextNumber.toString().padStart(3, '0')}`;
-  };
+  }, [youths]);
 
   // Auto-populate ID when component mounts
   useEffect(() => {
@@ -63,7 +63,7 @@ export const AddYouthDialog = ({ onClose, onSuccess }: AddYouthDialogProps) => {
       const newId = generateUniqueId();
       setFormData(prev => ({ ...prev, idNumber: newId }));
     }
-  }, [youths, formData.idNumber, setFormData]);
+  }, [youths, setFormData, generateUniqueId]);
 
   const calculateAge = (dobString: string) => {
     if (!dobString) return null;
@@ -222,6 +222,7 @@ export const AddYouthDialog = ({ onClose, onSuccess }: AddYouthDialogProps) => {
                 formData={formData}
                 handleChange={handleChange}
                 handleCheckboxChange={handleCheckboxChange}
+                setFormData={setFormData}
               />
             </TabsContent>
           </Tabs>

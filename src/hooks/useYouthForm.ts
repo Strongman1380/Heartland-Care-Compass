@@ -176,7 +176,12 @@ export const useYouthForm = () => {
   };
 
   const handleSelectChange = (name: string, value: string) => {
-    setFormData(prev => ({ ...prev, [name]: value }));
+    // Handle array fields that should store single values as arrays
+    if (name === 'placementAuthority') {
+      setFormData(prev => ({ ...prev, [name]: value ? [value] : [] }));
+    } else {
+      setFormData(prev => ({ ...prev, [name]: value }));
+    }
   };
 
   const handleCheckboxChange = (name: string, checked: boolean) => {

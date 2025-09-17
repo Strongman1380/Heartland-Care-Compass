@@ -8,9 +8,10 @@ interface MentalHealthTabProps {
   formData: YouthFormData;
   handleChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
   handleCheckboxChange: (name: string, checked: boolean) => void;
+  setFormData: React.Dispatch<React.SetStateAction<YouthFormData>>;
 }
 
-export const MentalHealthTab = ({ formData, handleChange, handleCheckboxChange }: MentalHealthTabProps) => {
+export const MentalHealthTab = ({ formData, handleChange, handleCheckboxChange, setFormData }: MentalHealthTabProps) => {
   return (
     <div className="space-y-4">
       <div className="space-y-2">
@@ -34,19 +35,15 @@ export const MentalHealthTab = ({ formData, handleChange, handleCheckboxChange }
                 checked={formData.traumaHistory.includes(trauma)}
                 onCheckedChange={(checked) => {
                   if (checked) {
-                    handleChange({
-                      target: {
-                        name: "traumaHistory",
-                        value: [...formData.traumaHistory, trauma].join(",")
-                      }
-                    } as any);
+                    setFormData(prev => ({
+                      ...prev, 
+                      traumaHistory: [...prev.traumaHistory, trauma]
+                    }));
                   } else {
-                    handleChange({
-                      target: {
-                        name: "traumaHistory",
-                        value: formData.traumaHistory.filter(t => t !== trauma).join(",")
-                      }
-                    } as any);
+                    setFormData(prev => ({
+                      ...prev, 
+                      traumaHistory: prev.traumaHistory.filter(t => t !== trauma)
+                    }));
                   }
                 }}
               />
@@ -77,19 +74,15 @@ export const MentalHealthTab = ({ formData, handleChange, handleCheckboxChange }
                 checked={formData.currentCounseling.includes(counseling)}
                 onCheckedChange={(checked) => {
                   if (checked) {
-                    handleChange({
-                      target: {
-                        name: "currentCounseling",
-                        value: [...formData.currentCounseling, counseling].join(",")
-                      }
-                    } as any);
+                    setFormData(prev => ({
+                      ...prev, 
+                      currentCounseling: [...prev.currentCounseling, counseling]
+                    }));
                   } else {
-                    handleChange({
-                      target: {
-                        name: "currentCounseling",
-                        value: formData.currentCounseling.filter(c => c !== counseling).join(",")
-                      }
-                    } as any);
+                    setFormData(prev => ({
+                      ...prev, 
+                      currentCounseling: prev.currentCounseling.filter(c => c !== counseling)
+                    }));
                   }
                 }}
               />
@@ -153,19 +146,15 @@ export const MentalHealthTab = ({ formData, handleChange, handleCheckboxChange }
                 checked={formData.selfHarmHistory.includes(selfHarm)}
                 onCheckedChange={(checked) => {
                   if (checked) {
-                    handleChange({
-                      target: {
-                        name: "selfHarmHistory",
-                        value: [...formData.selfHarmHistory, selfHarm].join(",")
-                      }
-                    } as any);
+                    setFormData(prev => ({
+                      ...prev, 
+                      selfHarmHistory: [...prev.selfHarmHistory, selfHarm]
+                    }));
                   } else {
-                    handleChange({
-                      target: {
-                        name: "selfHarmHistory",
-                        value: formData.selfHarmHistory.filter(s => s !== selfHarm).join(",")
-                      }
-                    } as any);
+                    setFormData(prev => ({
+                      ...prev, 
+                      selfHarmHistory: prev.selfHarmHistory.filter(s => s !== selfHarm)
+                    }));
                   }
                 }}
               />

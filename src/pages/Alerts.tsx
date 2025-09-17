@@ -197,7 +197,7 @@ const Alerts = () => {
     }
   };
 
-  const useTemplate = (template: AlertTemplate) => {
+  const applyTemplate = (template: AlertTemplate) => {
     setNewAlert({
       type: template.type,
       title: template.title,
@@ -343,7 +343,7 @@ const Alerts = () => {
                       <Card 
                         key={template.id}
                         className="cursor-pointer hover:shadow-md transition-shadow border-2 hover:border-red-300"
-                        onClick={() => useTemplate(template)}
+                        onClick={() => applyTemplate(template)}
                       >
                         <CardHeader className="pb-2">
                           <div className="flex items-center space-x-2">

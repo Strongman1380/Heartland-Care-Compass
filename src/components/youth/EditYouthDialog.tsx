@@ -359,6 +359,7 @@ export const EditYouthDialog = ({ youth, open, onClose, onSuccess }: EditYouthDi
                 formData={formData}
                 handleChange={handleChange}
                 handleCheckboxChange={handleCheckboxChange}
+                setFormData={setFormData}
               />
             </TabsContent>
           </Tabs>

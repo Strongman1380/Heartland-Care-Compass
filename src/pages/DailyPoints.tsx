@@ -40,7 +40,7 @@ const DailyPoints = () => {
         
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           <div className="md:col-span-1">
-            <YouthSelector onSelectYouth={handleYouthSelect} selectedYouthId={selectedYouthId} />
+            <YouthSelector onSelectYouth={handleYouthSelect} selectedYouthId={selectedYouthId || undefined} />
           </div>
           
           <div className="md:col-span-3">

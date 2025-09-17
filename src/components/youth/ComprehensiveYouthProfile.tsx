@@ -30,20 +30,52 @@ import {
   UserCheck
 } from "lucide-react";
 import { Youth } from "@/types/app-types";
-import { updateYouth } from "@/utils/local-storage-utils";
 import { format } from "date-fns";
 import { generateProfilePDF } from "@/utils/profileExport";
+import { useYouth } from "@/hooks/useSupabase";
+import type { Youth as SupabaseYouth } from "@/integrations/supabase/services";
 
 interface ComprehensiveYouthProfileProps {
   youth: Youth;
   onUpdate?: (updatedYouth: Youth) => void;
 }
 
+// Helper functions to convert between local Youth type and Supabase Youth type
+const convertToSupabaseYouth = (youth: Youth): Partial<SupabaseYouth> => {
+  return {
+    ...youth,
+    dob: youth.dob ? youth.dob.toISOString().split('T')[0] : null,
+    admissionDate: youth.admissionDate ? youth.admissionDate.toISOString().split('T')[0] : null,
+    dischargeDate: youth.dischargeDate ? youth.dischargeDate.toISOString().split('T')[0] : null,
+    emergencyShelterCare: youth.emergencyShelterCare ? {
+      ...youth.emergencyShelterCare,
+      placementDate: youth.emergencyShelterCare.placementDate ? youth.emergencyShelterCare.placementDate.toISOString().split('T')[0] : undefined,
+      orientationDate: youth.emergencyShelterCare.orientationDate ? youth.emergencyShelterCare.orientationDate.toISOString().split('T')[0] : undefined,
+    } : null,
+  };
+};
+
+const convertFromSupabaseYouth = (supabaseYouth: SupabaseYouth): Youth => {
+  return {
+    ...supabaseYouth,
+    dob: supabaseYouth.dob ? new Date(supabaseYouth.dob) : null,
+    admissionDate: supabaseYouth.admissionDate ? new Date(supabaseYouth.admissionDate) : null,
+    dischargeDate: supabaseYouth.dischargeDate ? new Date(supabaseYouth.dischargeDate) : null,
+    sex: (supabaseYouth.sex as "M" | "F") || "M",
+    emergencyShelterCare: supabaseYouth.emergencyShelterCare ? {
+      ...(supabaseYouth.emergencyShelterCare as any),
+      placementDate: (supabaseYouth.emergencyShelterCare as any)?.placementDate ? new Date((supabaseYouth.emergencyShelterCare as any).placementDate) : undefined,
+      orientationDate: (supabaseYouth.emergencyShelterCare as any)?.orientationDate ? new Date((supabaseYouth.emergencyShelterCare as any).orientationDate) : undefined,
+    } : undefined,
+  } as Youth;
+};
+
 export const ComprehensiveYouthProfile = ({ youth, onUpdate }: ComprehensiveYouthProfileProps) => {
   const [formData, setFormData] = useState<Youth>(youth);
   const [isEditing, setIsEditing] = useState(false);
   const [activeTab, setActiveTab] = useState("basic");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { updateYouth } = useYouth();
 
   const handleInputChange = (field: string, value: any, nestedField?: string) => {
     setFormData(prev => {
@@ -83,14 +115,13 @@ export const ComprehensiveYouthProfile = ({ youth, onUpdate }: ComprehensiveYout
 
   const handleSave = async () => {
     try {
-      const updatedYouth = {
-        ...formData,
-        updatedAt: new Date()
-      };
-      
-      await updateYouth(youth.id, updatedYouth);
+      const dataForSave = convertToSupabaseYouth(formData);
+      const updatedSupabaseYouth = await updateYouth(youth.id, dataForSave);
+      const convertedYouth = convertFromSupabaseYouth(updatedSupabaseYouth);
+
+      setFormData(convertedYouth);
       setIsEditing(false);
-      onUpdate?.(updatedYouth);
+      onUpdate?.(convertedYouth);
       toast.success("Profile updated successfully");
     } catch (error) {
       console.error("Error updating youth profile:", error);
@@ -451,7 +482,7 @@ export const ComprehensiveYouthProfile = ({ youth, onUpdate }: ComprehensiveYout
               value={formData.physicalDescription?.height || ''}
               onChange={(e) => handleInputChange('physicalDescription', e.target.value, 'height')}
               disabled={!isEditing}
-              placeholder="e.g., 5'8\""
+              placeholder="e.g., 5'8&quot;"
             />
           </div>
           <div>

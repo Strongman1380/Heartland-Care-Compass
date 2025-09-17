@@ -261,13 +261,12 @@ const generateProfileHTML = (youth: Youth): string => {
 
       <!-- Legal Information -->
       ${tableWithHeaderOpen('LEGAL & PLACEMENT INFORMATION')}
-        ${row('Probation Officer', safe(youth.probationOfficer))}
-        ${row('Probation Contact', safe(youth.probationContact))}
+        ${row('Probation Officer', safe(typeof youth.probationOfficer === 'object' ? [youth.probationOfficer?.name, youth.probationOfficer?.phone, youth.probationOfficer?.email].filter(Boolean).join(' — ') : youth.probationOfficer))}
+        ${row('Caseworker', safe(typeof youth.caseworker === 'object' ? [youth.caseworker?.name, youth.caseworker?.phone].filter(Boolean).join(' — ') : youth.caseworker))}
         ${row('Guardian Ad Litem', safe(typeof youth.guardianAdLitem === 'object' ? [youth.guardianAdLitem?.name, youth.guardianAdLitem?.phone].filter(Boolean).join(' — ') : youth.guardianAdLitem))}
         ${row('Attorney', safe(youth.attorney))}
         ${row('Judge', safe(youth.judge))}
         ${row('Placing Agency/County', safe(youth.placingAgencyCounty))}
-        ${row('Referral Source', safe(youth.referralSource))}
       ${tableClose}
 
       <!-- Physical Description -->
@@ -281,41 +280,31 @@ const generateProfileHTML = (youth: Youth): string => {
 
       <!-- Health Information -->
       ${tableWithHeaderOpen('HEALTH & MEDICAL INFORMATION')}
-        ${row('Physician', safe(youth.physician))}
-        ${row('Physician Phone', safe(youth.physicianPhone))}
-        ${row('Insurance Provider', safe(youth.insuranceProvider))}
-        ${row('Policy Number', safe(youth.policyNumber))}
         ${row('Allergies', safePre(youth.allergies))}
         ${row('Current Medications', safePre(youth.currentMedications))}
-        ${row('Medical Conditions', safePre(youth.medicalConditions))}
-        ${row('Medical Restrictions', safePre(youth.medicalRestrictions))}
         ${row('Significant Health Conditions', safePre(youth.significantHealthConditions))}
+        ${row('Religion', safe(youth.religion))}
       ${tableClose}
 
       <!-- Education Information -->
       ${tableWithHeaderOpen('EDUCATION INFORMATION')}
-        ${row('School Name', safe(youth.schoolName))}
-        ${row('School Phone', safe(youth.schoolPhone))}
-        ${row('Grade Level', safe(youth.gradeLevel))}
-        ${row('IEP Status', safe(youth.iepStatus))}
-        ${row('Academic Strengths', safePre(youth.academicStrengths))}
-        ${row('Academic Challenges', safePre(youth.academicChallenges))}
-        ${row('Education Goals', safePre(youth.educationGoals))}
+        ${row('Last School Attended', safe(youth.lastSchoolAttended))}
+        ${row('Current Grade', safe(youth.currentGrade))}
+        ${row('Has IEP', safe(youth.hasIEP))}
       ${tableClose}
 
       <!-- Mental Health Information -->
       ${tableWithHeaderOpen('MENTAL HEALTH & BEHAVIORAL INFORMATION')}
-        ${row('Current Diagnoses', safePre(youth.currentDiagnoses || youth.diagnoses))}
-        ${row('Current Therapist', safe(youth.currentTherapist))}
-        ${row('Therapist Phone', safe(youth.therapistPhone))}
-        ${row('Session Day/Time', safe(youth.sessionTime))}
-        ${row('Previous Treatment', safePre(youth.previousTreatment))}
-        ${row('Trauma History', safe(Array.isArray(youth.traumaHistory) ? youth.traumaHistory.join(', ') : youth.traumaHistory))}
-        ${row('Self-harm History', safe(Array.isArray(youth.selfHarmHistory) ? youth.selfHarmHistory.join(', ') : youth.selfHarmHistory))}
-        ${row('Safety Plan in Place', safe(youth.hasSafetyPlan))}
-        ${row('Behavioral Strengths', safePre(youth.strengthsTalents))}
-        ${row('Behavioral Concerns', safePre(youth.behaviorProblems))}
-        ${row('Triggers', safePre(youth.triggers))}
+        ${row('Get Along With Others', safePre(youth.getAlongWithOthers))}
+        ${row('Behavioral Strengths/Talents', safePre(youth.strengthsTalents))}
+        ${row('Interests', safePre(youth.interests))}
+        ${row('Behavioral Concerns/Problems', safePre(youth.behaviorProblems))}
+        ${row('Dislikes About Self', safePre(youth.dislikesAboutSelf))}
+        ${row('Anger Triggers', safePre(youth.angerTriggers))}
+        ${row('History of Physically Hurting Others', safe(youth.historyPhysicallyHurting))}
+        ${row('History of Vandalism', safe(youth.historyVandalism))}
+        ${row('Gang Involvement', safe(youth.gangInvolvement))}
+        ${row('Family History of Violent Crimes', safe(youth.familyViolentCrimes))}
       ${tableClose}
 
       <!-- Substance Use -->
@@ -334,12 +323,49 @@ const generateProfileHTML = (youth: Youth): string => {
         ${row('Estimated Length of Stay', safe(youth.dischargePlan?.estimatedLengthOfStayMonths ? youth.dischargePlan.estimatedLengthOfStayMonths + ' months' : null))}
       ${tableClose}
 
-      <!-- Additional Information -->
-      ${tableWithHeaderOpen('ADDITIONAL INFORMATION')}
-        ${row('Religion', safe(youth.religion))}
-        ${row('Interests/Hobbies', safePre(youth.interests))}
-        ${row('Special Needs/Accommodations', safePre(youth.specialNeeds))}
-        ${row('Additional Notes', safePre(youth.additionalNotes))}
+      <!-- Community Resources -->
+      ${tableWithHeaderOpen('COMMUNITY RESOURCES USED')}
+        ${row('Day Treatment Services', safe(youth.communityResources?.dayTreatmentServices))}
+        ${row('Intensive In-Home Services', safe(youth.communityResources?.intensiveInHomeServices))}
+        ${row('Day School Placement', safe(youth.communityResources?.daySchoolPlacement))}
+        ${row('One-on-One School Counselor', safe(youth.communityResources?.oneOnOneSchoolCounselor))}
+        ${row('Mental Health Support Services', safe(youth.communityResources?.mentalHealthSupportServices))}
+        ${row('Other Community Resources', safePre(youth.communityResources?.other))}
+      ${tableClose}
+
+      <!-- Treatment Focus -->
+      ${tableWithHeaderOpen('DESIRED FOCUS OF TREATMENT')}
+        ${row('Excessive Dependency', safe(youth.treatmentFocus?.excessiveDependency))}
+        ${row('Withdrawal/Isolation', safe(youth.treatmentFocus?.withdrawalIsolation))}
+        ${row('Parent/Child Relationship', safe(youth.treatmentFocus?.parentChildRelationship))}
+        ${row('Peer Relationship', safe(youth.treatmentFocus?.peerRelationship))}
+        ${row('Acceptance of Authority', safe(youth.treatmentFocus?.acceptanceOfAuthority))}
+        ${row('Lying', safe(youth.treatmentFocus?.lying))}
+        ${row('Poor Academic Achievement', safe(youth.treatmentFocus?.poorAcademicAchievement))}
+        ${row('Poor Self-Esteem', safe(youth.treatmentFocus?.poorSelfEsteem))}
+        ${row('Manipulative Behavior', safe(youth.treatmentFocus?.manipulative))}
+        ${row('Property Destruction', safe(youth.treatmentFocus?.propertyDestruction))}
+        ${row('Hyperactivity', safe(youth.treatmentFocus?.hyperactivity))}
+        ${row('Anxiety', safe(youth.treatmentFocus?.anxiety))}
+        ${row('Verbal Aggression', safe(youth.treatmentFocus?.verbalAggression))}
+        ${row('Assaultive Behavior', safe(youth.treatmentFocus?.assaultive))}
+        ${row('Depression', safe(youth.treatmentFocus?.depression))}
+        ${row('Stealing', safe(youth.treatmentFocus?.stealing))}
+      ${tableClose}
+
+      <!-- Emergency Shelter Care -->
+      ${tableWithHeaderOpen('EMERGENCY SHELTER CARE')}
+        ${row('Legal Guardian Information', safePre(youth.emergencyShelterCare?.legalGuardianInfo))}
+        ${row('Parents Notified', safe(youth.emergencyShelterCare?.parentsNotified))}
+        ${row('Immediate Needs', safePre(youth.emergencyShelterCare?.immediateNeeds))}
+        ${row('Placing Agency Individual', safe(youth.emergencyShelterCare?.placingAgencyIndividual))}
+        ${row('Placement Date', fmt(youth.emergencyShelterCare?.placementDate))}
+        ${row('Placement Time', safe(youth.emergencyShelterCare?.placementTime))}
+        ${row('Reason for Placement', safePre(youth.emergencyShelterCare?.reasonForPlacement))}
+        ${row('Intake Worker Observation', safePre(youth.emergencyShelterCare?.intakeWorkerObservation))}
+        ${row('Orientation Completed By', safe(youth.emergencyShelterCare?.orientationCompletedBy))}
+        ${row('Orientation Date', fmt(youth.emergencyShelterCare?.orientationDate))}
+        ${row('Orientation Time', safe(youth.emergencyShelterCare?.orientationTime))}
       ${tableClose}
 
       <!-- Footer -->

@@ -72,14 +72,21 @@ Family engagement includes regular contact with ${youth.legalGuardian || 'identi
 export async function summarizeReport(payload: AISummaryRequest): Promise<string> {
   try {
     // First try the actual API
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (typeof window !== 'undefined' && auth.currentUser) {
+      try {
+        const token = await auth.currentUser.getIdToken();
+        headers['Authorization'] = `Bearer ${token}`;
+      } catch (tokenError) {
+        console.warn('Could not retrieve Firebase ID token', tokenError);
+      }
+    }
+
     const res = await fetch('/api/ai/summarize-report', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(typeof window !== 'undefined' && localStorage.getItem('auth_token')
-          ? { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` }
-          : {}),
-      },
+      headers,
       body: JSON.stringify(payload),
     });
     
@@ -138,3 +145,4 @@ export const generateTreatmentRecommendations = (youth: any, progressData: any):
   
   return recommendations.join(" ");
 };
+import { auth } from '@/lib/firebase';

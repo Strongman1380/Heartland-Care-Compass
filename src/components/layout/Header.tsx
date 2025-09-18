@@ -1,14 +1,12 @@
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { PlusCircle, BarChart3, Home, Users, LineChart, KeyRound, LogOut, Menu, X } from "lucide-react";
+import { PlusCircle, BarChart3, Home, Users, LineChart, LogOut, Menu, X, LogIn } from "lucide-react";
 import { AddYouthDialog } from "@/components/youth/AddYouthDialog";
-import { Link, useLocation } from "react-router-dom";
-import { apiClient } from "@/lib/api";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface HeaderProps {
   // Remove admin-related props
@@ -17,12 +15,10 @@ interface HeaderProps {
 export const Header = () => {
   const [isAddYouthDialogOpen, setIsAddYouthDialogOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isAuthDialogOpen, setIsAuthDialogOpen] = useState(false);
-  const [apiKey, setApiKey] = useState("");
-  const [hasToken, setHasToken] = useState<boolean>(() => !!localStorage.getItem('auth_token'));
-  const [authLoading, setAuthLoading] = useState(false);
   const { toast } = useToast();
   const location = useLocation();
+  const navigate = useNavigate();
+  const { user, signOutUser } = useAuth();
 
   // Navigation items configuration
   const navigationItems = [
@@ -43,49 +39,10 @@ export const Header = () => {
     setIsMobileMenuOpen(!isMobileMenuOpen);
   };
 
-  useEffect(() => {
-    const initAuth = async () => {
-      const existingToken = localStorage.getItem('auth_token');
-      if (existingToken) {
-        setHasToken(true);
-        return;
-      }
-      
-      // Auto-authenticate for local development
-      try {
-        const { token } = await apiClient.getAuthToken('local-admin-key');
-        apiClient.setToken(token);
-        setHasToken(true);
-        toast({ title: 'Auto-connected to API', description: 'Local development mode' });
-      } catch (e) {
-        console.warn('Auto-authentication failed:', e);
-        setHasToken(false);
-      }
-    };
-    
-    initAuth();
-  }, []);
-
-  const handleSignOut = () => {
-    apiClient.clearToken();
-    setHasToken(false);
+  const handleSignOut = async () => {
+    await signOutUser();
     toast({ title: 'Signed out' });
-  };
-
-  const handleSignIn = async () => {
-    try {
-      setAuthLoading(true);
-      const { token } = await apiClient.getAuthToken(apiKey.trim());
-      apiClient.setToken(token);
-      setHasToken(true);
-      setIsAuthDialogOpen(false);
-      setApiKey("");
-      toast({ title: 'Signed in', description: 'API access enabled' });
-    } catch (e) {
-      toast({ title: 'Authentication failed', description: e instanceof Error ? e.message : 'Unknown error', variant: 'destructive' });
-    } finally {
-      setAuthLoading(false);
-    }
+    navigate('/auth');
   };
 
   return (
@@ -144,28 +101,28 @@ export const Header = () => {
             <div className="hidden lg:flex items-center space-x-3">
               {/* Auth Status */}
               <div className="flex items-center space-x-2">
-                {hasToken ? (
+                {user ? (
                   <Badge variant="outline" className="text-green-700 border-green-200 bg-green-50">
                     <div className="w-2 h-2 bg-green-500 rounded-full mr-1.5"></div>
-                    Connected
+                    Signed In
                   </Badge>
                 ) : (
                   <Badge variant="outline" className="text-gray-600 border-gray-200">
                     <div className="w-2 h-2 bg-gray-400 rounded-full mr-1.5"></div>
-                    Offline
+                    Signed Out
                   </Badge>
                 )}
               </div>
 
               {/* Auth Button */}
-              {!hasToken ? (
+              {!user ? (
                 <Button
-                  onClick={() => setIsAuthDialogOpen(true)}
+                  onClick={() => navigate('/auth')}
                   variant="ghost"
                   size="sm"
                   className="text-gray-600 hover:text-red-700 hover:bg-red-50"
                 >
-                  <KeyRound className="h-4 w-4 mr-2" />
+                  <LogIn className="h-4 w-4 mr-2" />
                   Sign In
                 </Button>
               ) : (
@@ -259,31 +216,31 @@ export const Header = () => {
                 {/* Auth Status */}
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-gray-600">Connection Status</span>
-                  {hasToken ? (
+                  {user ? (
                     <Badge variant="outline" className="text-green-700 border-green-200 bg-green-50">
                       <div className="w-2 h-2 bg-green-500 rounded-full mr-1.5"></div>
-                      Connected
+                      Signed In
                     </Badge>
                   ) : (
                     <Badge variant="outline" className="text-gray-600 border-gray-200">
                       <div className="w-2 h-2 bg-gray-400 rounded-full mr-1.5"></div>
-                      Offline
+                      Signed Out
                     </Badge>
                   )}
                 </div>
 
                 {/* Mobile Action Buttons */}
                 <div className="grid grid-cols-1 gap-2">
-                  {!hasToken ? (
+                  {!user ? (
                     <Button
                       onClick={() => {
-                        setIsAuthDialogOpen(true);
                         setIsMobileMenuOpen(false);
+                        navigate('/auth');
                       }}
                       variant="outline"
                       className="justify-start"
                     >
-                      <KeyRound className="h-4 w-4 mr-2" />
+                      <LogIn className="h-4 w-4 mr-2" />
                       Sign In
                     </Button>
                   ) : (
@@ -338,28 +295,6 @@ export const Header = () => {
         />
       )}
 
-      <Dialog open={isAuthDialogOpen} onOpenChange={setIsAuthDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Sign in for API Access</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
-            <p className="text-sm text-gray-600">Enter the Admin API key to obtain a session token for protected endpoints.</p>
-            <Input
-              type="password"
-              placeholder="Admin API Key"
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-            />
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsAuthDialogOpen(false)} disabled={authLoading}>Cancel</Button>
-            <Button onClick={handleSignIn} disabled={!apiKey.trim() || authLoading}>
-              {authLoading ? 'Signing in...' : 'Sign In'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </>
   );
 };

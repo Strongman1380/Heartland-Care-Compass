@@ -16,6 +16,8 @@ import AssessmentKPIDashboard from "./pages/AssessmentKPIDashboard";
 import SupabaseTestPage from "./pages/SupabaseTest";
 import DataMigrationPage from "./pages/DataMigrationPage";
 import NotFound from "./pages/NotFound";
+import Auth from "./pages/Auth";
+import { ProtectedRoute } from "@/components/layout/ProtectedRoute";
 
 const queryClient = new QueryClient();
 
@@ -35,14 +37,15 @@ const App = () => {
       <Sonner />
       <BrowserRouter basename={import.meta.env.BASE_URL}>
         <Routes>
-          <Route path="/" element={<Index />} />
-          <Route path="/progress-notes" element={<ProgressNotesPage />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/alerts" element={<Alerts />} />
-          <Route path="/reports" element={<Reports />} />
-          <Route path="/assessment-kpi" element={<AssessmentKPIDashboard />} />
-          <Route path="/supabase-test" element={<SupabaseTestPage />} />
-          <Route path="/migrate-data" element={<DataMigrationPage />} />
+          <Route path="/auth" element={<Auth />} />
+          <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
+          <Route path="/progress-notes" element={<ProtectedRoute><ProgressNotesPage /></ProtectedRoute>} />
+          <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+          <Route path="/alerts" element={<ProtectedRoute><Alerts /></ProtectedRoute>} />
+          <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
+          <Route path="/assessment-kpi" element={<ProtectedRoute><AssessmentKPIDashboard /></ProtectedRoute>} />
+          <Route path="/supabase-test" element={<ProtectedRoute><SupabaseTestPage /></ProtectedRoute>} />
+          <Route path="/migrate-data" element={<ProtectedRoute><DataMigrationPage /></ProtectedRoute>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

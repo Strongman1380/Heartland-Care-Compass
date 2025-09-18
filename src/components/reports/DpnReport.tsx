@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Youth, DailyRating } from '@/types/app-types';
+import { Youth, DailyRating, BehaviorPoints, ProgressNote } from '@/types/app-types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -7,15 +7,21 @@ import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
 import { exportElementToPDF, exportElementToDocx } from '@/utils/export';
-import { fetchDailyRatings } from '@/utils/local-storage-utils';
-import { getDailyRatingsByYouth } from '@/lib/api';
+import { fetchDailyRatings, fetchBehaviorPoints, fetchProgressNotes } from '@/utils/local-storage-utils';
+import { getDailyRatingsByYouth, getBehaviorPointsByYouth, getProgressNotesByYouth } from '@/lib/api';
 import { saveDpnComments, fetchDpnCommentsInRange } from '@/utils/local-storage-utils';
+import { summarizeReport } from '@/lib/aiClient';
 
-export function DpnReport({ youth, variant }: { youth: Youth; variant: 'weekly' | 'biweekly' | 'monthly' }) {
+export function DpnReport({ youth, variant, onAutoExportComplete }: { youth: Youth; variant: 'weekly' | 'biweekly' | 'monthly'; onAutoExportComplete?: () => void }) {
   const [periodFrom, setPeriodFrom] = useState('');
   const [periodTo, setPeriodTo] = useState('');
   const [comments, setComments] = useState({ peer: '', adult: '', investment: '', authority: '', strengths: '', deficiencies: '' });
   const [averages, setAverages] = useState({ peer: 0, adult: 0, investment: 0, authority: 0 });
+  const [ratingsInRange, setRatingsInRange] = useState<DailyRating[]>([]);
+  const [aiNarrative, setAiNarrative] = useState<string>("");
+  const [autoExported, setAutoExported] = useState(false);
+  const [pointsInRange, setPointsInRange] = useState<BehaviorPoints[]>([]);
+  const [notesInRange, setNotesInRange] = useState<ProgressNote[]>([]);
   const printRef = useRef<HTMLDivElement>(null);
 
   // Default date range
@@ -43,10 +49,34 @@ export function DpnReport({ youth, variant }: { youth: Youth; variant: 'weekly' 
     }
   };
 
+  const loadPoints = async (start: Date, end: Date) => {
+    try {
+      const api = await getBehaviorPointsByYouth(youth.id);
+      return api.filter(p => p.date && new Date(p.date) >= start && new Date(p.date) <= end);
+    } catch {
+      const local = fetchBehaviorPoints(youth.id);
+      return local.filter(p => p.date && new Date(p.date) >= start && new Date(p.date) <= end);
+    }
+  };
+
+  const loadNotes = async (start: Date, end: Date) => {
+    try {
+      const api = await getProgressNotesByYouth(youth.id);
+      return api.filter(n => n.date && new Date(n.date) >= start && new Date(n.date) <= end) as any as ProgressNote[];
+    } catch {
+      const local = fetchProgressNotes(youth.id) as any as ProgressNote[];
+      return local.filter(n => n.date && new Date(n.date) >= start && new Date(n.date) <= end);
+    }
+  };
+
   const recalc = async () => {
     if (!periodFrom || !periodTo) return;
     const start = new Date(periodFrom); const end = new Date(periodTo);
-    const ratings = await loadRatings(start, end);
+    const [ratings, points, notes] = await Promise.all([
+      loadRatings(start, end),
+      loadPoints(start, end),
+      loadNotes(start, end)
+    ]);
     const avg = (field: keyof DailyRating) => {
       const vals = ratings.map(r => Number(r[field]) || 0).filter(v => v > 0);
       return vals.length ? Math.round((vals.reduce((s, v) => s + v, 0) / vals.length) * 10) / 10 : 0;
@@ -57,9 +87,70 @@ export function DpnReport({ youth, variant }: { youth: Youth; variant: 'weekly' 
       investment: avg('investmentLevel'),
       authority: avg('dealAuthority'),
     });
+    setRatingsInRange(ratings);
+    setPointsInRange(points);
+    setNotesInRange(notes);
   };
 
-  useEffect(() => { recalc(); }, [periodFrom, periodTo]);
+  // Recalculate when dates change (initially and on user edits)
+  useEffect(() => {
+    if (periodFrom && periodTo) {
+      recalc();
+    }
+  }, [periodFrom, periodTo]);
+
+  // Kick off AI summary after ratings are loaded; include fallback timeout export
+  useEffect(() => {
+    let timeoutId: any;
+    const ready = !!periodFrom && !!periodTo && !!printRef.current && ratingsInRange !== undefined;
+    if (!ready || autoExported) return;
+
+    // Start AI generation in background
+    const runAI = async () => {
+      try {
+        const variantToType = variant === 'weekly' ? 'dpnWeekly' : variant === 'biweekly' ? 'dpnBiWeekly' : 'dpnMonthly';
+        const aiText = await summarizeReport({
+          youth,
+          reportType: variantToType,
+          period: { startDate: new Date(periodFrom).toISOString(), endDate: new Date(periodTo).toISOString() },
+          data: { dailyRatings: ratingsInRange, behaviorPoints: pointsInRange, progressNotes: notesInRange }
+        });
+        if (aiText) setAiNarrative(aiText);
+      } catch (e) {
+        // AI optional; proceed without blocking
+        console.warn('AI narrative unavailable for DPN; proceeding without it');
+      }
+    };
+
+    runAI();
+
+    // Export after AI completes or after 5s, whichever first
+    const tryExport = async () => {
+      if (autoExported) return;
+      try {
+        // Slight delay to ensure DOM renders AI section if present
+        setTimeout(async () => {
+          if (!printRef.current) return;
+          await exportPDF();
+          setAutoExported(true);
+          onAutoExportComplete && onAutoExportComplete();
+        }, 300);
+      } catch (error) {
+        console.error("Error auto-generating DPN PDF:", error);
+      }
+    };
+
+    // Fallback timer
+    timeoutId = setTimeout(tryExport, 5000);
+
+    // When AI finishes, export early and clear fallback
+    if (aiNarrative) {
+      clearTimeout(timeoutId);
+      tryExport();
+    }
+
+    return () => clearTimeout(timeoutId);
+  }, [ratingsInRange, pointsInRange, notesInRange, periodFrom, periodTo, aiNarrative, autoExported, variant, youth]);
 
   const handleSaveComments = () => {
     if (!periodFrom || !periodTo) return;
@@ -90,7 +181,12 @@ export function DpnReport({ youth, variant }: { youth: Youth; variant: 'weekly' 
 
   const exportPDF = async () => {
     if (!printRef.current) return;
-    await exportElementToPDF(printRef.current, `DPN-${variant}-${youth.lastName || 'report'}.pdf`);
+    try {
+      await exportElementToPDF(printRef.current, `DPN-${variant}-${youth.lastName || 'report'}.pdf`);
+      // Optional: Add toast notification here if needed
+    } catch (error) {
+      console.error("Error exporting DPN PDF:", error);
+    }
   };
   const exportDOCX = async () => {
     if (!printRef.current) return;
@@ -194,8 +290,14 @@ export function DpnReport({ youth, variant }: { youth: Youth; variant: 'weekly' 
           <div className="font-semibold">Social Skill Deficiencies:</div>
           <p className="ml-1 whitespace-pre-wrap">{(monthlySummary?.deficiencies || comments.deficiencies) || '—'}</p>
         </div>
+
+        {aiNarrative && (
+          <div className="mt-6">
+            <div className="font-semibold">AI-Assisted Narrative</div>
+            <p className="ml-1 whitespace-pre-wrap">{aiNarrative}</p>
+          </div>
+        )}
       </div>
     </div>
   );
 }
-

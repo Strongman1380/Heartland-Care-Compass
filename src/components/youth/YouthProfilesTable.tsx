@@ -6,10 +6,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Edit, Trash2, Archive, Users } from "lucide-react";
 import { format } from "date-fns";
-// Supabase removed - using local storage only
-import { deleteYouth } from "@/utils/local-storage-utils";
-import { Youth } from "@/types/app-types";
+import { Youth } from "@/integrations/supabase/services";
 import { useToast } from "@/hooks/use-toast";
+import { useYouth } from "@/hooks/useSupabase";
 import { EditYouthDialog } from "./EditYouthDialog";
 import {
   AlertDialog,
@@ -34,7 +33,20 @@ export const YouthProfilesTable = ({ youths, loading, onYouthSelect, onYouthUpda
   const [editingYouth, setEditingYouth] = useState<Youth | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [youthToDelete, setYouthToDelete] = useState<Youth | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const { toast } = useToast();
+  const { deleteYouth: deleteYouthFromSupabase } = useYouth();
+
+  // Convert Supabase Youth type dates for display (dates are already strings in Supabase)
+  const formatDate = (dateString: string | null) => {
+    if (!dateString) return 'N/A';
+    try {
+      const date = new Date(dateString);
+      return format(date, 'MM/dd/yyyy');
+    } catch {
+      return 'Invalid Date';
+    }
+  };
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
@@ -61,11 +73,12 @@ export const YouthProfilesTable = ({ youths, loading, onYouthSelect, onYouthUpda
     setDeleteConfirmOpen(true);
   };
 
-  const confirmDeleteYouth = () => {
+  const confirmDeleteYouth = async () => {
     if (!youthToDelete) return;
 
+    setIsDeleting(true);
     try {
-      deleteYouth(youthToDelete.id);
+      await deleteYouthFromSupabase(youthToDelete.id);
 
       toast({
         title: "Success",
@@ -73,6 +86,8 @@ export const YouthProfilesTable = ({ youths, loading, onYouthSelect, onYouthUpda
       });
 
       onYouthUpdated();
+      setDeleteConfirmOpen(false);
+      setYouthToDelete(null);
     } catch (error) {
       console.error("Error deleting youth profile:", error);
       toast({
@@ -81,12 +96,11 @@ export const YouthProfilesTable = ({ youths, loading, onYouthSelect, onYouthUpda
         variant: "destructive",
       });
     } finally {
-      setDeleteConfirmOpen(false);
-      setYouthToDelete(null);
+      setIsDeleting(false);
     }
   };
 
-  const handleDeleteSelected = () => {
+  const handleDeleteSelected = async () => {
     if (selectedYouthIds.length === 0) {
       toast({
         title: "No selection",
@@ -96,8 +110,12 @@ export const YouthProfilesTable = ({ youths, loading, onYouthSelect, onYouthUpda
       return;
     }
 
+    setIsDeleting(true);
     try {
-      selectedYouthIds.forEach(id => deleteYouth(id));
+      // Delete each selected youth
+      for (const id of selectedYouthIds) {
+        await deleteYouthFromSupabase(id);
+      }
 
       toast({
         title: "Success",
@@ -113,6 +131,8 @@ export const YouthProfilesTable = ({ youths, loading, onYouthSelect, onYouthUpda
         description: "Failed to delete youth profiles.",
         variant: "destructive",
       });
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -132,15 +152,6 @@ export const YouthProfilesTable = ({ youths, loading, onYouthSelect, onYouthUpda
       title: "Archive functionality",
       description: "Archive functionality would be implemented here.",
     });
-  };
-
-  const formatDate = (date: Date | null) => {
-    if (!date) return "Not specified";
-    try {
-      return format(date, "MMM d, yyyy");
-    } catch {
-      return "Invalid date";
-    }
   };
 
   if (loading) {
@@ -202,10 +213,10 @@ export const YouthProfilesTable = ({ youths, loading, onYouthSelect, onYouthUpda
                 variant="destructive"
                 size="sm"
                 onClick={handleDeleteSelected}
-                disabled={selectedYouthIds.length === 0}
+                disabled={selectedYouthIds.length === 0 || isDeleting}
               >
                 <Trash2 className="h-4 w-4 mr-2" />
-                Delete Selected
+                {isDeleting ? "Deleting..." : "Delete Selected"}
               </Button>
             </div>
           </div>
@@ -269,6 +280,7 @@ export const YouthProfilesTable = ({ youths, loading, onYouthSelect, onYouthUpda
                         size="sm"
                         onClick={() => handleDeleteYouth(youth)}
                         className="text-red-600 hover:text-red-800"
+                        disabled={isDeleting}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -303,8 +315,9 @@ export const YouthProfilesTable = ({ youths, loading, onYouthSelect, onYouthUpda
             <AlertDialogAction
               onClick={confirmDeleteYouth}
               className="bg-red-600 hover:bg-red-700"
+              disabled={isDeleting}
             >
-              Delete Profile
+              {isDeleting ? "Deleting..." : "Delete Profile"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

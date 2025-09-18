@@ -9,11 +9,12 @@ import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { FileText, Download, Save } from "lucide-react";
 import { toast } from "sonner";
+import { Youth } from "@/integrations/supabase/services";
 // Note: Risk assessment saving/loading functionality will need to be implemented with local storage
 
 interface RiskAssessmentProps {
   youthId: string;
-  youth: any;
+  youth: Youth;
 }
 
 interface DomainScore {

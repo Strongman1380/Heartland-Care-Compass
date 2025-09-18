@@ -70,21 +70,15 @@ export const useYouth = () => {
   const updateYouth = async (id: string, updates: YouthUpdate) => {
     try {
       setLoading(true)
+      console.log('Updating youth with ID:', id, 'Updates:', updates)
       const updatedYouth = await youthService.update(id, updates)
       setYouths(prev => prev.map(y => y.id === id ? updatedYouth : y))
-      toast({
-        title: "Success",
-        description: `${updatedYouth.firstName} ${updatedYouth.lastName}'s profile has been updated.`,
-      })
+      console.log('Youth updated successfully:', updatedYouth)
       return updatedYouth
     } catch (err) {
+      console.error('Update youth error:', err)
       const errorMessage = err instanceof Error ? err.message : 'Failed to update youth profile'
-      toast({
-        title: "Error",
-        description: errorMessage,
-        variant: "destructive",
-      })
-      throw err
+      throw new Error(errorMessage)
     } finally {
       setLoading(false)
     }

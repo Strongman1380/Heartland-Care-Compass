@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { PlusCircle, BarChart3, Home, Calendar, BookOpen, LineChart, Database, KeyRound, LogOut, Menu, X, ChevronDown } from "lucide-react";
+import { PlusCircle, BarChart3, Home, Users, LineChart, KeyRound, LogOut, Menu, X } from "lucide-react";
 import { AddYouthDialog } from "@/components/youth/AddYouthDialog";
 import { Link, useLocation } from "react-router-dom";
 import { apiClient } from "@/lib/api";
@@ -27,8 +27,6 @@ export const Header = () => {
   // Navigation items configuration
   const navigationItems = [
     { path: '/', label: 'Dashboard', icon: Home },
-    { path: '/daily-points', label: 'Daily Points', icon: Calendar },
-    { path: '/case-notes', label: 'Case Notes', icon: BookOpen },
     { path: '/reports', label: 'Reports', icon: LineChart },
   ];
 

@@ -4,36 +4,15 @@ import { Header } from "@/components/layout/Header";
 import { YouthProfile } from "@/components/youth/YouthProfile";
 import { YouthProfilesTable } from "@/components/youth/YouthProfilesTable";
 import { RapidPlacementAssessment } from "@/components/assessment/RapidPlacementAssessment";
-import { fetchAllYouths } from "@/utils/local-storage-utils";
-import { type Youth } from "@/types/app-types";
+import { type Youth } from "@/integrations/supabase/services";
 import { toast } from "sonner";
+import { PasteYouthProfileDialog } from "@/components/youth/PasteYouthProfileDialog";
+import { useYouth } from "@/hooks/useSupabase";
 
 const Profiles = () => {
   const [selectedYouth, setSelectedYouth] = useState<Youth | null>(null);
-  const [youths, setYouths] = useState<Youth[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { youths, loading, loadYouths } = useYouth();
   const [showAdmin, setShowAdmin] = useState(false);
-
-  const loadYouths = () => {
-    try {
-      setLoading(true);
-      const youthsData = fetchAllYouths();
-      
-      const validYouths = youthsData.filter(youth => {
-        const hasValidId = youth.id && typeof youth.id === 'string' && youth.id.trim() !== "";
-        const hasValidNames = youth.firstName && youth.lastName && 
-                             youth.firstName.trim() !== "" && youth.lastName.trim() !== "";
-        return hasValidId && hasValidNames;
-      });
-        
-      setYouths(validYouths);
-    } catch (err) {
-      console.error("Error fetching youths:", err);
-      toast.error("Failed to load youth profiles");
-    } finally {
-      setLoading(false);
-    }
-  };
 
   useEffect(() => {
     loadYouths();
@@ -54,13 +33,7 @@ const Profiles = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-red-50 via-yellow-50 to-red-100">
-      <Header 
-        showAdmin={showAdmin}
-        onAdminToggle={() => {
-          setShowAdmin(!showAdmin);
-          setSelectedYouth(null);
-        }}
-      />
+      <Header />
       <main className="container mx-auto px-4 py-8">
         {showAdmin ? (
           <RapidPlacementAssessment />
@@ -71,6 +44,9 @@ const Profiles = () => {
                 Youth Profiles
               </h1>
               <p className="text-red-700 text-lg">Manage and view detailed youth profiles</p>
+              <div className="mt-4 flex justify-center">
+                <PasteYouthProfileDialog onImported={() => loadYouths()} />
+              </div>
             </div>
             
             {selectedYouth ? (

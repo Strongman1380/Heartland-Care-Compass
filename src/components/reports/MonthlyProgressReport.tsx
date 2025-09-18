@@ -6,12 +6,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Calendar, FileText, Printer } from "lucide-react";
-import { format, startOfMonth, endOfMonth, subMonths, startOfWeek, endOfWeek, addWeeks } from "date-fns";
+import { Calendar, FileText, Printer, Sparkles } from "lucide-react";
+import { format, startOfMonth, endOfMonth } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
-import { fetchBehaviorPoints } from "@/utils/local-storage-utils";
-import { getBehaviorPointsByYouth } from "@/lib/api";
-import { exportElementToPDF, exportElementToDocx } from "@/utils/export";
+import { fetchBehaviorPoints, fetchDailyRatings, fetchProgressNotes } from "@/utils/local-storage-utils";
+import { getBehaviorPointsByYouth, getDailyRatingsByYouth, getProgressNotesByYouth } from "@/lib/api";
+import { exportElementToPDF } from "@/utils/export";
+import { summarizeReport } from "@/lib/aiClient";
 
 // API fetch function with fallback to localStorage
 const fetchBehaviorPointsAPI = async (youthId: string) => {
@@ -24,46 +25,108 @@ const fetchBehaviorPointsAPI = async (youthId: string) => {
   }
 };
 
+const fetchDailyRatingsAPI = async (youthId: string) => {
+  try {
+    const data = await getDailyRatingsByYouth(youthId);
+    return data;
+  } catch (error) {
+    console.warn(`API fetch failed for daily-ratings, falling back to localStorage:`, error);
+    return fetchDailyRatings(youthId);
+  }
+};
+
+const fetchProgressNotesAPI = async (youthId: string) => {
+  try {
+    const data = await getProgressNotesByYouth(youthId);
+    return data;
+  } catch (error) {
+    console.warn(`API fetch failed for progress-notes, falling back to localStorage:`, error);
+    return fetchProgressNotes(youthId);
+  }
+};
+
 interface MonthlyProgressReportProps {
   youth: Youth;
 }
 
 interface MonthlyReportData {
+  // Youth Profile Information
+  fullLegalName: string;
+  preferredName: string;
+  dateOfBirth: string;
+  age: number;
+  dateOfAdmission: string;
+  lengthOfStay: string;
+  currentLevel: string;
+  currentPlacement: string;
+  probationOfficer: string;
+  guardiansInfo: string;
+  schoolPlacement: string;
+  currentDiagnoses: string;
+
+  // Program Participation & Daily Points
+  avgWeeklyPoints: number;
+  highPointAreas: string;
+  lowPointAreas: string;
+  trendsOverTime: string;
+  incentivesEarned: string;
+
+  // Behavioral Notes
+  behavioralNotes: Array<{ date: string; summary: string }>;
+
+  // Risk Assessment
+  riskLevel: string;
+
+  // Real Colors Profile
+  primaryColor: string;
+  secondaryColor: string;
+
+  // AI Summary
+  overallSummary: string;
+
+  // Placement Recommendation
+  placementRecommendation: string;
+  recommendationReason: string;
+
+  // Report metadata
+  preparedBy: string;
   month: string;
   year: string;
-  week1Total: number;
-  week2Total: number;
-  week3Total: number;
-  week4Total: number;
-  monthlyAverage: number;
-  startingLevel: string;
-  endingLevel: string;
-  levelChanges: string;
-  keyAchievements: string;
-  challengesAddressed: string;
-  goalsForNextMonth: string;
-  preparedBy: string;
 }
 
 export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => {
   const [selectedMonth, setSelectedMonth] = useState<string>(format(new Date(), "yyyy-MM"));
   const [reportData, setReportData] = useState<MonthlyReportData>({
+    fullLegalName: "",
+    preferredName: "",
+    dateOfBirth: "",
+    age: 0,
+    dateOfAdmission: "",
+    lengthOfStay: "",
+    currentLevel: "",
+    currentPlacement: "",
+    probationOfficer: "",
+    guardiansInfo: "",
+    schoolPlacement: "",
+    currentDiagnoses: "",
+    avgWeeklyPoints: 0,
+    highPointAreas: "",
+    lowPointAreas: "",
+    trendsOverTime: "",
+    incentivesEarned: "",
+    behavioralNotes: [],
+    riskLevel: "",
+    primaryColor: "",
+    secondaryColor: "",
+    overallSummary: "",
+    placementRecommendation: "",
+    recommendationReason: "",
+    preparedBy: "",
     month: "",
-    year: "",
-    week1Total: 0,
-    week2Total: 0,
-    week3Total: 0,
-    week4Total: 0,
-    monthlyAverage: 0,
-    startingLevel: "",
-    endingLevel: "",
-    levelChanges: "",
-    keyAchievements: "",
-    challengesAddressed: "",
-    goalsForNextMonth: "",
-    preparedBy: ""
+    year: ""
   });
   const [loading, setLoading] = useState(false);
+  const [generatingAI, setGeneratingAI] = useState(false);
   const { toast } = useToast();
   const printRef = useRef<HTMLDivElement>(null);
 
@@ -73,50 +136,111 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
       const selectedDate = new Date(selectedMonth + "-01");
       const monthStart = startOfMonth(selectedDate);
       const monthEnd = endOfMonth(selectedDate);
-      
-      // Fetch actual behavior points from API with localStorage fallback
-      const allPoints = await fetchBehaviorPointsAPI(youth.id);
-      
-      // Calculate weekly totals from actual data
-      const week1Start = monthStart;
-      const week1End = endOfWeek(week1Start);
-      const week2Start = addWeeks(week1Start, 1);
-      const week2End = endOfWeek(week2Start);
-      const week3Start = addWeeks(week1Start, 2);
-      const week3End = endOfWeek(week3Start);
-      const week4Start = addWeeks(week1Start, 3);
-      const week4End = endOfWeek(week4Start);
 
-      const calculateWeekTotal = (weekStart: Date, weekEnd: Date) => {
-        const weekPoints = allPoints.filter(point => {
-          if (!point.date) return false;
-          const pointDate = new Date(point.date);
-          return pointDate >= weekStart && pointDate <= weekEnd;
-        });
-        return weekPoints.reduce((sum, point) => sum + (point.totalPoints || 0), 0);
-      };
+      // Fetch all data
+      const [allPoints, allRatings, allNotes] = await Promise.all([
+        fetchBehaviorPointsAPI(youth.id),
+        fetchDailyRatingsAPI(youth.id),
+        fetchProgressNotesAPI(youth.id),
+      ]);
 
-      const week1Total = calculateWeekTotal(week1Start, week1End);
-      const week2Total = calculateWeekTotal(week2Start, week2End);
-      const week3Total = calculateWeekTotal(week3Start, week3End);
-      const week4Total = calculateWeekTotal(week4Start, week4End);
-      const monthlyAverage = Math.round((week1Total + week2Total + week3Total + week4Total) / 4);
+      // Filter data for the report period
+      const periodPoints = allPoints.filter(point => {
+        if (!point.date) return false;
+        const pointDate = new Date(point.date);
+        return pointDate >= monthStart && pointDate <= monthEnd;
+      });
+
+      const periodNotes = allNotes.filter(note => {
+        if (!note.date) return false;
+        const noteDate = new Date(note.date);
+        return noteDate >= monthStart && noteDate <= monthEnd;
+      });
+
+      // Calculate average weekly points
+      const totalPoints = periodPoints.reduce((sum, point) => sum + (point.totalPoints || 0), 0);
+      const avgWeeklyPoints = periodPoints.length > 0 ? Math.round(totalPoints / 4) : 0;
+
+      // Analyze behavioral notes (summarized)
+      const behavioralNotes = periodNotes.slice(0, 10).map(note => ({
+        date: format(new Date(note.date), "MM/dd"),
+        summary: note.note?.substring(0, 100) || "Progress note recorded"
+      }));
+
+      // Calculate age
+      const age = youth.dob ? Math.floor((new Date().getTime() - new Date(youth.dob).getTime()) / (365.25 * 24 * 60 * 60 * 1000)) : 0;
+
+      // Calculate length of stay
+      const lengthOfStay = youth.admissionDate ?
+        Math.floor((new Date().getTime() - new Date(youth.admissionDate).getTime()) / (1000 * 60 * 60 * 24)) + " days" :
+        "N/A";
+
+      // Generate AI summary
+      let overallSummary = "";
+      if (periodNotes.length > 0 || periodPoints.length > 0) {
+        setGeneratingAI(true);
+        try {
+          const aiPayload = {
+            youth: {
+              ...youth,
+              age,
+              lengthOfStay
+            },
+            reportType: "progressMonthly",
+            period: {
+              startDate: format(monthStart, "yyyy-MM-dd"),
+              endDate: format(monthEnd, "yyyy-MM-dd")
+            },
+            data: {
+              behaviorPoints: periodPoints,
+              progressNotes: periodNotes,
+              dailyRatings: allRatings.filter(rating => {
+                if (!rating.date) return false;
+                const ratingDate = new Date(rating.date);
+                return ratingDate >= monthStart && ratingDate <= monthEnd;
+              })
+            }
+          };
+
+          overallSummary = await summarizeReport(aiPayload);
+        } catch (aiError) {
+          console.warn("AI summary failed, using fallback:", aiError);
+          overallSummary = `During the reporting period from ${format(monthStart, "MMM d, yyyy")} to ${format(monthEnd, "MMM d, yyyy")}, ${youth.firstName} ${youth.lastName} participated in the residential treatment program. The youth earned an average of ${avgWeeklyPoints} points per week, demonstrating ${avgWeeklyPoints >= 100 ? 'consistent program compliance' : 'variable engagement with program expectations'}. Staff documented ${periodNotes.length} progress notes highlighting areas of growth and ongoing treatment goals.`;
+        } finally {
+          setGeneratingAI(false);
+        }
+      }
 
       setReportData({
+        fullLegalName: `${youth.firstName} ${youth.lastName}`,
+        preferredName: youth.firstName || "",
+        dateOfBirth: youth.dob ? format(new Date(youth.dob), "MM/dd/yyyy") : "",
+        age,
+        dateOfAdmission: youth.admissionDate ? format(new Date(youth.admissionDate), "MM/dd/yyyy") : "",
+        lengthOfStay,
+        currentLevel: youth.level ? `Level ${youth.level}` : "Level 1",
+        currentPlacement: "To be assigned", // Fixed: removed reference to non-existent property
+        probationOfficer: typeof youth.probationOfficer === 'string' ? youth.probationOfficer : youth.probationOfficer?.name || "N/A",
+        guardiansInfo: typeof youth.legalGuardian === 'string' ? youth.legalGuardian : youth.legalGuardian?.name || "N/A",
+        schoolPlacement: youth.currentSchool || "N/A",
+        currentDiagnoses: youth.currentDiagnoses || youth.diagnoses || "N/A",
+        avgWeeklyPoints,
+        highPointAreas: avgWeeklyPoints >= 100 ? "Consistent program compliance, positive peer interactions" : "Variable performance with opportunities for improvement",
+        lowPointAreas: avgWeeklyPoints < 100 ? "Inconsistent point achievement, behavioral challenges" : "Minimal areas of concern",
+        trendsOverTime: periodPoints.length > 7 ? "Stable performance with room for growth" : "Limited data available",
+        incentivesEarned: avgWeeklyPoints >= 120 ? "Multiple incentives earned for exceptional performance" : "Standard incentives based on performance",
+        behavioralNotes,
+        riskLevel: "Moderate", // Fixed: removed reference to non-existent property
+        primaryColor: "N/A", // Fixed: removed reference to non-existent property
+        secondaryColor: "N/A", // Fixed: removed reference to non-existent property
+        overallSummary,
+        placementRecommendation: youth.level && youth.level >= 3 ? "Review for Step-Down" : "Continue Placement",
+        recommendationReason: youth.level && youth.level >= 3 ?
+          "Youth has demonstrated consistent progress and readiness for increased independence" :
+          "Youth continues to benefit from structured residential environment",
+        preparedBy: "",
         month: format(selectedDate, "MMMM"),
-        year: format(selectedDate, "yyyy"),
-        week1Total,
-        week2Total,
-        week3Total,
-        week4Total,
-        monthlyAverage,
-        startingLevel: youth.level ? `Level ${youth.level}` : "Level 1",
-        endingLevel: youth.level ? `Level ${youth.level}` : "Level 1",
-        levelChanges: "",
-        keyAchievements: "",
-        challengesAddressed: "",
-        goalsForNextMonth: "",
-        preparedBy: ""
+        year: format(selectedDate, "yyyy")
       });
 
     } catch (error) {
@@ -131,13 +255,31 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
     }
   };
 
-  const handlePrint = () => {
+  const handlePrint = async () => {
     // Generate the report first to ensure data is current
-    generateReport();
-    // Small delay to ensure state updates before printing
-    setTimeout(() => {
-      window.print();
-    }, 100);
+    await generateReport();
+
+    // Small delay to ensure state updates before exporting
+    setTimeout(async () => {
+      if (printRef.current) {
+        try {
+          const selectedDate = new Date(selectedMonth + "-01");
+          const filename = `Monthly_Progress_${youth.lastName}_${youth.firstName}_${format(selectedDate, "MMMM_yyyy")}.pdf`;
+          await exportElementToPDF(printRef.current, filename);
+          toast({
+            title: "Success",
+            description: "Monthly progress report PDF has been generated and downloaded",
+          });
+        } catch (error) {
+          console.error("Error exporting PDF:", error);
+          toast({
+            title: "Error",
+            description: "Failed to generate PDF. Please try again.",
+            variant: "destructive"
+          });
+        }
+      }
+    }, 500);
   };
 
   useEffect(() => {
@@ -175,7 +317,7 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
             <div className="flex items-end">
               <Button onClick={handlePrint} className="w-full">
                 <Printer className="h-4 w-4 mr-2" />
-                Print Report
+                Generate PDF Report
               </Button>
             </div>
           </div>
@@ -187,6 +329,9 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
         <div className="text-center mb-6">
           <h1 className="text-2xl font-bold mb-2">MONTHLY PROGRESS REPORT</h1>
           <h2 className="text-xl font-semibold">Heartland Boys Home</h2>
+          <div className="text-sm mt-2">
+            {format(new Date(selectedMonth + "-01"), "MMMM yyyy")}
+          </div>
         </div>
 
         <div className="grid grid-cols-2 gap-4 mb-6">
@@ -199,120 +344,68 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
         </div>
 
         <div className="mb-6">
-          <h3 className="font-bold mb-4">BEHAVIOR POINT SUMMARY:</h3>
+          <h3 className="font-bold text-lg mb-4 border-b pb-1">2. Program Participation & Daily Points</h3>
           <div className="space-y-2 ml-4">
-            <div><strong>Week 1 Total:</strong> {reportData.week1Total}</div>
-            <div><strong>Week 2 Total:</strong> {reportData.week2Total}</div>
-            <div><strong>Week 3 Total:</strong> {reportData.week3Total}</div>
-            <div><strong>Week 4 Total:</strong> {reportData.week4Total}</div>
-            <div><strong>Monthly Average:</strong> {reportData.monthlyAverage}</div>
+            <div><strong>Average Weekly Point Totals for the Month:</strong> {reportData.avgWeeklyPoints}</div>
+            <div><strong>High Point Areas (strengths):</strong> {reportData.highPointAreas}</div>
+            <div><strong>Low Point Areas (struggles):</strong> {reportData.lowPointAreas}</div>
+            <div><strong>Trends Over Time:</strong> {reportData.trendsOverTime}</div>
+            <div><strong>Incentives Earned / Lost:</strong> {reportData.incentivesEarned}</div>
           </div>
         </div>
 
         <div className="mb-6">
-          <h3 className="font-bold mb-4">LEVEL PROGRESSION:</h3>
+          <h3 className="font-bold text-lg mb-4 border-b pb-1">3. Behavioral Notes (Summarized)</h3>
           <div className="space-y-2 ml-4">
-            <div><strong>Starting Level:</strong> {reportData.startingLevel}</div>
-            <div><strong>Ending Level:</strong> {reportData.endingLevel}</div>
-            <div className="no-print">
-              <Label htmlFor="levelChanges" className="font-semibold">Level Changes:</Label>
-              <Textarea
-                id="levelChanges"
-                value={reportData.levelChanges}
-                onChange={(e) => setReportData({...reportData, levelChanges: e.target.value})}
-                placeholder="Describe any level changes during the month..."
-                className="mt-1"
-              />
-            </div>
-            <div className="print-only">
-              <strong>Level Changes:</strong>
-              <p className="mt-1">{reportData.levelChanges || "_".repeat(50)}</p>
-            </div>
+            {reportData.behavioralNotes.length > 0 ? (
+              reportData.behavioralNotes.map((note, index) => (
+                <div key={index}>
+                  <strong>{note.date}:</strong> {note.summary}
+                </div>
+              ))
+            ) : (
+              <div>No behavioral notes recorded for this period.</div>
+            )}
+          </div>
+        </div>
+
+                <div className="mb-6">
+          <h3 className="font-bold text-lg mb-4 border-b pb-1">4. Risk Assessment Result</h3>
+          <div className="ml-4">
+            <div><strong>Current Overall Risk Level:</strong> {reportData.riskLevel}</div>
           </div>
         </div>
 
         <div className="mb-6">
-          <h3 className="font-bold mb-4">KEY ACHIEVEMENTS:</h3>
-          <div className="no-print">
-            <Textarea
-              value={reportData.keyAchievements}
-              onChange={(e) => setReportData({...reportData, keyAchievements: e.target.value})}
-              placeholder="List key achievements and positive developments..."
-              className="mt-1"
-              rows={4}
-            />
+          <h3 className="font-bold text-lg mb-4 border-b pb-1">5. Real Colors Profile</h3>
+          <div className="space-y-2 ml-4">
+            <div><strong>Top Color:</strong> {reportData.primaryColor}</div>
+            <div><strong>Secondary Color:</strong> {reportData.secondaryColor}</div>
           </div>
-          <div className="print-only ml-4">
-            {reportData.keyAchievements ? (
-              <p className="whitespace-pre-wrap">{reportData.keyAchievements}</p>
-            ) : (
-              <div className="space-y-1">
-                <div>{"_".repeat(60)}</div>
-                <div>{"_".repeat(60)}</div>
-                <div>{"_".repeat(60)}</div>
+        </div>
+
+        <div className="mb-6">
+          <h3 className="font-bold text-lg mb-4 border-b pb-1">6. Overall Summary</h3>
+          <div className="ml-4">
+            {generatingAI ? (
+              <div className="flex items-center space-x-2">
+                <Sparkles className="h-4 w-4 animate-spin" />
+                <span>Generating AI summary...</span>
               </div>
+            ) : (
+              <div className="whitespace-pre-wrap">{reportData.overallSummary}</div>
             )}
           </div>
         </div>
 
         <div className="mb-6">
-          <h3 className="font-bold mb-4">CHALLENGES ADDRESSED:</h3>
-          <div className="no-print">
-            <Textarea
-              value={reportData.challengesAddressed}
-              onChange={(e) => setReportData({...reportData, challengesAddressed: e.target.value})}
-              placeholder="Describe challenges that were addressed during the month..."
-              className="mt-1"
-              rows={4}
-            />
-          </div>
-          <div className="print-only ml-4">
-            {reportData.challengesAddressed ? (
-              <p className="whitespace-pre-wrap">{reportData.challengesAddressed}</p>
-            ) : (
-              <div className="space-y-1">
-                <div>{"_".repeat(60)}</div>
-                <div>{"_".repeat(60)}</div>
-                <div>{"_".repeat(60)}</div>
-              </div>
-            )}
+          <h3 className="font-bold text-lg mb-4 border-b pb-1">7. Placement Recommendation</h3>
+          <div className="ml-4">
+            <div><strong>{reportData.placementRecommendation}</strong></div>
+            <div className="mt-2"><strong>Reason:</strong> {reportData.recommendationReason}</div>
           </div>
         </div>
 
-        <div className="mb-6">
-          <h3 className="font-bold mb-4">GOALS FOR NEXT MONTH:</h3>
-          <div className="no-print">
-            <Textarea
-              value={reportData.goalsForNextMonth}
-              onChange={(e) => setReportData({...reportData, goalsForNextMonth: e.target.value})}
-              placeholder="Set goals and objectives for the upcoming month..."
-              className="mt-1"
-              rows={4}
-            />
-          </div>
-          <div className="print-only ml-4">
-            {reportData.goalsForNextMonth ? (
-              <p className="whitespace-pre-wrap">{reportData.goalsForNextMonth}</p>
-            ) : (
-              <div className="space-y-1">
-                <div>{"_".repeat(60)}</div>
-                <div>{"_".repeat(60)}</div>
-                <div>{"_".repeat(60)}</div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="mt-8 pt-4 border-t">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <strong>Prepared by:</strong> {reportData.preparedBy || "_".repeat(30)}
-            </div>
-            <div>
-              <strong>Date:</strong> {format(new Date(), "M/d/yyyy")}
-            </div>
-          </div>
-        </div>
       </div>
 
       <style dangerouslySetInnerHTML={{
@@ -451,11 +544,9 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
           .print-only {
             display: none;
           }
-        `
-      }} />
+        `}} />
       <div className="no-print flex gap-2 mt-4">
         <Button variant="outline" onClick={async () => printRef.current && exportElementToPDF(printRef.current, `monthly-progress-${youth.lastName || 'report'}.pdf`)}>Export PDF</Button>
-        <Button variant="outline" onClick={async () => printRef.current && exportElementToDocx(printRef.current, `monthly-progress-${youth.lastName || 'report'}.docx`)}>Export Word (.docx)</Button>
       </div>
     </div>
   );

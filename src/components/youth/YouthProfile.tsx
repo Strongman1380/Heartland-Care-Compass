@@ -5,16 +5,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowLeft, Edit } from "lucide-react";
 import { format } from "date-fns";
-import { Youth } from "@/types/app-types";
+import { Youth } from "@/integrations/supabase/services";
 import { PersonalInfoProfileTab } from "./PersonalInfoProfileTab";
 import { BackgroundProfileTab } from "./BackgroundProfileTab";
 import { EducationProfileTab } from "./EducationProfileTab";
 import { MedicalProfileTab } from "./MedicalProfileTab";
 import { MentalHealthProfileTab } from "./MentalHealthProfileTab";
 import { RatingsProfileTab } from "./RatingsProfileTab";
-import { DailyRatingsTab } from "./DailyRatingsTab";
 import { ConsolidatedScoringTab } from "./ConsolidatedScoringTab";
 import { ReportsTab } from "../reports/ReportsTab";
+import { SimpleCaseNotes } from "../notes/SimpleCaseNotes";
 import { EditYouthDialog } from "./EditYouthDialog";
 
 interface YouthProfileProps {
@@ -26,9 +26,10 @@ interface YouthProfileProps {
 export const YouthProfile = ({ youth, onBack, onYouthUpdated }: YouthProfileProps) => {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
 
-  const formatDate = (date: Date | null) => {
-    if (!date) return "Not specified";
+  const formatDate = (dateString: string | null) => {
+    if (!dateString) return "Not specified";
     try {
+      const date = new Date(dateString);
       return format(date, "MMMM d, yyyy");
     } catch {
       return "Invalid date";
@@ -91,7 +92,7 @@ export const YouthProfile = ({ youth, onBack, onYouthUpdated }: YouthProfileProp
 
         <CardContent className="p-6">
           <Tabs defaultValue="scoring" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-9">
+            <TabsList className="grid w-full grid-cols-8">
               <TabsTrigger value="scoring" className="bg-primary/10 text-primary font-medium">Quick Scoring</TabsTrigger>
               <TabsTrigger value="personal">Personal</TabsTrigger>
               <TabsTrigger value="background">Background</TabsTrigger>
@@ -99,8 +100,7 @@ export const YouthProfile = ({ youth, onBack, onYouthUpdated }: YouthProfileProp
               <TabsTrigger value="medical">Medical</TabsTrigger>
               <TabsTrigger value="mental-health">Mental Health</TabsTrigger>
               <TabsTrigger value="ratings">Ratings</TabsTrigger>
-              <TabsTrigger value="daily-ratings">Daily Scoring</TabsTrigger>
-              <TabsTrigger value="progress-reports">Progress Reports</TabsTrigger>
+              <TabsTrigger value="case-notes">Case Notes</TabsTrigger>
             </TabsList>
 
             <TabsContent value="scoring">
@@ -131,12 +131,8 @@ export const YouthProfile = ({ youth, onBack, onYouthUpdated }: YouthProfileProp
               <RatingsProfileTab youth={youth} />
             </TabsContent>
 
-            <TabsContent value="daily-ratings">
-              <DailyRatingsTab youth={youth} />
-            </TabsContent>
-
-            <TabsContent value="progress-reports">
-              <ReportsTab youth={youth} />
+            <TabsContent value="case-notes">
+              <SimpleCaseNotes youthId={youth.id} />
             </TabsContent>
           </Tabs>
         </CardContent>

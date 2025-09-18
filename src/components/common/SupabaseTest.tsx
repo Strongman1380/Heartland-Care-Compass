@@ -56,6 +56,162 @@ export const SupabaseTest: React.FC = () => {
     }
   }
 
+  const upsertChanceThaller = async () => {
+    try {
+      // Try to find existing youth by name
+      const existing = (await youthService.searchByName('Chance'))
+        .find(y => y.firstName.toLowerCase() === 'chance' && y.lastName.toLowerCase() === 'thaller') || null
+
+      const payload: any = {
+        firstName: 'Chance',
+        lastName: 'Thaller',
+        dob: '2010-02-15',
+        age: 15,
+        sex: 'M',
+        socialSecurityNumber: '505-57-1422',
+        placeOfBirth: 'Lincoln, NE',
+        race: 'Caucasian',
+        address: {
+          street: '6733 Francis St', city: 'Lincoln', state: 'NE', zip: '68505'
+        },
+        physicalDescription: {
+          height: "5'9\"", weight: '130 lbs', hairColor: 'Blonde', eyeColor: 'Blue', tattoosScars: 'None noted'
+        },
+        admissionDate: '2025-07-29',
+        admissionTime: '08:30 AM',
+        rcsIn: null,
+        dischargeDate: null,
+        dischargeTime: null,
+        rcsOut: null,
+        mother: { name: 'Kathy Thaller', phone: '(402) 450-4367' },
+        father: { name: 'Harry “Joe” Thaller', phone: '(402) 450-1470' },
+        legalGuardian: { name: 'Kathy Thaller', phone: '(402) 450-4367' },
+        nextOfKin: { name: 'Kathy Thaller', relationship: 'Mother', phone: '(402) 450-4367' },
+        placingAgencyCounty: 'Lancaster County Probation, District 3J',
+        probationOfficer: { name: 'Jared MacLeod', phone: '(402) 318-9666', email: 'jared.macleod@nejudicial.gov' },
+        caseworker: { name: null, phone: null },
+        guardianAdLitem: { name: null, phone: null },
+        attorney: 'Jacinta Dai-Klabunde',
+        judge: 'Judge Heideman',
+        allergies: 'None reported',
+        currentMedications: 'None',
+        significantHealthConditions: 'ADHD',
+        physician: null,
+        physicianPhone: null,
+        insuranceProvider: 'UMR / Molina Healthcare',
+        policyNumber: '27967601 / Medicaid# 01980250401',
+        medicalConditions: 'ADHD',
+        medicalRestrictions: 'None noted',
+        religion: 'Christian',
+        lastSchoolAttended: 'Lincoln Northeast High School (Transition Program)',
+        hasIEP: true,
+        currentGrade: '9th',
+        currentSchool: 'Lincoln Northeast HS',
+        academicStrengths: 'Math, Sports involvement',
+        academicChallenges: 'Focus, consistency, attendance',
+        educationGoals: 'Remain on track for graduation',
+        schoolContact: null,
+        schoolPhone: null,
+        getAlongWithOthers: 'Inconsistent; better when not peer-influenced',
+        strengthsTalents: 'Sports (baseball, football), personable, humorous',
+        interests: 'Fishing, cooking, video games',
+        behaviorProblems: 'ADHD-related impulsivity, verbal aggression, lying, hyperactivity, property destruction, manipulative tendencies',
+        dislikesAboutSelf: null,
+        angerTriggers: 'Repeated questions, people talking about him',
+        historyPhysicallyHurting: false,
+        historyVandalism: true,
+        gangInvolvement: false,
+        familyViolentCrimes: false,
+        tobaccoPast6To12Months: false,
+        alcoholPast6To12Months: false,
+        drugsVapingMarijuanaPast6To12Months: true,
+        drugTestingDates: 'Positive during probation (exact dates in PO file)',
+        communityResources: {
+          dayTreatmentServices: false,
+          intensiveInHomeServices: 'Yes (MST)',
+          daySchoolPlacement: 'Yes (alternative school program)',
+          oneOnOneSchoolCounselor: null,
+          mentalHealthSupportServices: 'Counseling via Bloom Counseling eval',
+          other: 'GPS monitoring (multiple times)'
+        },
+        // Mental health
+        currentDiagnoses: 'ADHD',
+        diagnoses: 'ADHD (formal)',
+        traumaHistory: null,
+        previousTreatment: 'Evaluated at Bloom Counseling',
+        currentCounseling: ['None active'],
+        therapistName: null,
+        therapistContact: null,
+        sessionFrequency: null,
+        sessionTime: null,
+        selfHarmHistory: [],
+        lastIncidentDate: null,
+        hasSafetyPlan: false,
+        // Treatment focus areas
+        treatmentFocus: {
+          excessiveDependency: false,
+          withdrawalIsolation: 'Occasional',
+          parentChildRelationship: 'Strained but engaged',
+          peerRelationship: 'Negative peer influence',
+          acceptanceOfAuthority: 'Struggles, defiant',
+          lying: true,
+          poorAcademicAchievement: true,
+          poorSelfEsteem: null,
+          manipulativeBehavior: true,
+          propertyDestruction: true,
+          hyperactivity: true,
+          anxiety: null,
+          verbalAggression: true,
+          assaultiveBehavior: false,
+          depression: null,
+          stealing: null
+        },
+        // Discharge plan
+        dischargePlan: {
+          parents: 'Return to mother (Kathy Thaller)',
+          relativeName: null,
+          relativeRelationship: null,
+          regularFosterCare: false,
+          estimatedLengthOfStayMonths: '6–8 months'
+        },
+        // Emergency shelter care
+        emergencyShelterCare: {
+          legalGuardianInfo: 'Kathy Thaller, (402) 450-4367',
+          parentsNotified: true,
+          immediateNeeds: 'Structure, accountability, educational stability',
+          placingAgencyIndividual: 'Jared MacLeod, Probation Officer',
+          placementDate: '2025-07-29',
+          placementTime: '08:30 AM',
+          reasonForPlacement: 'Non-compliance with probation/home placement; requires structured care',
+          intakeWorkerObservation: null,
+          orientationCompletedBy: null,
+          orientationDate: '2025-07-29',
+          orientationTime: null
+        },
+        estimatedStay: '6–8 months',
+        level: existing?.level ?? 1,
+        pointTotal: existing?.pointTotal ?? 0
+      }
+
+      let result
+      if (existing) {
+        result = await youthService.update(existing.id, payload)
+      } else {
+        result = await youthService.create(payload)
+      }
+
+      // Refresh stats
+      const dbStats = await supabaseUtils.getStats()
+      setStats(dbStats)
+
+      alert(`Chance Thaller ${existing ? 'updated' : 'created'} successfully.`)
+      console.log('Chance Thaller upsert:', result)
+    } catch (err) {
+      console.error('Failed to upsert Chance Thaller:', err)
+      alert('Failed to upsert Chance Thaller: ' + (err instanceof Error ? err.message : 'Unknown error'))
+    }
+  }
+
   useEffect(() => {
     // Auto-test connection on component mount
     testConnection()
@@ -138,6 +294,11 @@ export const SupabaseTest: React.FC = () => {
               size="sm"
             >
               Create Test Youth
+            </Button>
+          )}
+          {connectionStatus === 'connected' && (
+            <Button onClick={upsertChanceThaller} size="sm" variant="default">
+              Create/Update Chance Thaller
             </Button>
           )}
         </div>

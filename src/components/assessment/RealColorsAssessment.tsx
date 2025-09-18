@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 // Supabase removed - using local storage only
-import { Youth } from '@/types/app-types';
+import { Youth } from '@/integrations/supabase/services';
 import { fetchAllYouths, saveYouth } from '@/utils/local-storage-utils';
 import { User, Palette, FileText, Save } from 'lucide-react';
 

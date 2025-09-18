@@ -8,10 +8,7 @@ import { useEffect } from "react";
 import { initializeStorage } from "@/utils/local-storage-utils";
 import { initializePointSync } from "@/utils/pointSyncService";
 import Index from "./pages/Index";
-import Profiles from "./pages/Profiles";
-import DailyPoints from "./pages/DailyPoints";
 import ProgressNotesPage from "./pages/ProgressNotesPage";
-import CaseNotesPage from "./pages/CaseNotesPage";
 import Dashboard from "./pages/Dashboard";
 import Alerts from "./pages/Alerts";
 import Reports from "./pages/Reports";
@@ -39,10 +36,7 @@ const App = () => {
       <BrowserRouter basename={import.meta.env.BASE_URL}>
         <Routes>
           <Route path="/" element={<Index />} />
-          <Route path="/profiles" element={<Profiles />} />
-          <Route path="/daily-points" element={<DailyPoints />} />
           <Route path="/progress-notes" element={<ProgressNotesPage />} />
-          <Route path="/case-notes" element={<CaseNotesPage />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/alerts" element={<Alerts />} />
           <Route path="/reports" element={<Reports />} />

@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { AlertCircle, ChevronDown, ChevronRight, FileText, Search } from "lucide-react";
 import { toast } from "sonner";
@@ -20,31 +19,16 @@ interface ProgressNotesProps {
   youth: any;
 }
 
-const NOTE_CATEGORIES = [
-  { value: "School", label: "School" },
-  { value: "Behavior", label: "Behavior" },
-  { value: "Medical", label: "Medical" },
-  { value: "Incident", label: "Incident" },
-  { value: "Achievement", label: "Achievement" },
-  { value: "Family", label: "Family" },
-  { value: "Counseling Session", label: "Counseling Session" },
-  { value: "Therapy", label: "Therapy" },
-  { value: "Other", label: "Other" },
-];
-
 export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
   const [notes, setNotes] = useState<ProgressNote[]>([]);
   const [filteredNotes, setFilteredNotes] = useState<ProgressNote[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [expandedNote, setExpandedNote] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     date: format(new Date(), 'yyyy-MM-dd'),
-    category: "Behavior",
-    note: "",
-    rating: "3",
     staff: "",
+    note: "",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -54,7 +38,7 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
 
   useEffect(() => {
     filterNotes();
-  }, [notes, searchTerm, selectedCategory]);
+  }, [notes, searchTerm]);
 
   const fetchNotes = () => {
     try {
@@ -74,13 +58,8 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
     
     if (searchTerm) {
       filtered = filtered.filter(note => 
-        note.note.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        note.category.toLowerCase().includes(searchTerm.toLowerCase())
+        note.staff.toLowerCase().includes(searchTerm.toLowerCase())
       );
-    }
-    
-    if (selectedCategory) {
-      filtered = filtered.filter(note => note.category === selectedCategory);
     }
     
     setFilteredNotes(filtered);
@@ -91,15 +70,16 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleSelectChange = (name: string, value: string) => {
-    setFormData(prev => ({ ...prev, [name]: value }));
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    if (!formData.staff.trim()) {
+      toast.error("Staff name is required");
+      return;
+    }
+    
     if (!formData.note.trim()) {
-      toast.error("Note content is required");
+      toast.error("Progress note content is required");
       return;
     }
     
@@ -107,35 +87,24 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
       setIsSubmitting(true);
       
       const noteDate = new Date(formData.date);
-      const rating = parseInt(formData.rating);
       
       const newNote: Omit<ProgressNote, 'id' | 'createdAt'> = {
         youth_id: youthId,
         date: noteDate,
-        category: formData.category,
-        note: formData.note.trim(),
-        rating,
-        staff: formData.staff.trim() || "Staff Member",
+        category: "Progress Note",
+        note: formData.note.trim() || "Progress note recorded",
+        staff: formData.staff.trim(),
       };
       
       saveProgressNote(youthId, newNote);
       
       toast.success("Progress note added successfully");
       
-      // Trigger an alert for low ratings in certain categories
-      if ((formData.category === "School" || formData.category === "Behavior") && rating <= 2) {
-        toast.warning(`Low ${formData.category.toLowerCase()} rating recorded. May require attention.`, {
-          duration: 5000,
-        });
-      }
-      
-      // Reset form and refresh data
+      // Reset form
       setFormData({
         date: format(new Date(), 'yyyy-MM-dd'),
-        category: "Behavior",
-        note: "",
-        rating: "3",
         staff: "",
+        note: "",
       });
       
       fetchNotes();
@@ -146,35 +115,8 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
     }
   };
 
-  const handleCategoryFilter = (category: string | null) => {
-    setSelectedCategory(category);
-  };
-
   const toggleNoteExpansion = (noteId: string) => {
     setExpandedNote(expandedNote === noteId ? null : noteId);
-  };
-
-  const getCategoryColor = (category: string) => {
-    switch (category) {
-      case "School": return "bg-blue-100 text-blue-800";
-      case "Behavior": return "bg-purple-100 text-purple-800";
-      case "Medical": return "bg-green-100 text-green-800";
-      case "Incident": return "bg-red-100 text-red-800";
-      case "Achievement": return "bg-yellow-100 text-yellow-800";
-      case "Family": return "bg-pink-100 text-pink-800";
-      default: return "bg-gray-100 text-gray-800";
-    }
-  };
-
-  const getRatingColor = (rating: number) => {
-    switch (rating) {
-      case 1: return "text-red-600";
-      case 2: return "text-orange-600";
-      case 3: return "text-yellow-600";
-      case 4: return "text-blue-600";
-      case 5: return "text-green-600";
-      default: return "text-gray-600";
-    }
   };
 
   const handleExportNotes = () => {
@@ -204,7 +146,7 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
         <Card className="lg:col-span-1">
           <CardHeader>
             <CardTitle>Add Progress Note</CardTitle>
-            <CardDescription>Record observations or incidents</CardDescription>
+            <CardDescription>Record observations, progress, or incidents</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -221,58 +163,6 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
               </div>
               
               <div>
-                <Label htmlFor="category">Category</Label>
-                <Select name="category" defaultValue={formData.category} onValueChange={value => handleSelectChange("category", value)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select category" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {NOTE_CATEGORIES.map((category) => (
-                      <SelectItem key={category.value} value={category.value}>{category.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div>
-                <Label htmlFor="note">Note Content</Label>
-                <Textarea
-                  id="note"
-                  name="note"
-                  value={formData.note}
-                  onChange={handleInputChange}
-                  placeholder="Enter detailed observations, behaviors, or incidents..."
-                  rows={5}
-                  className="resize-none"
-                />
-              </div>
-              
-              <div>
-                <Label htmlFor="rating">Rating (1-4)</Label>
-                <Select name="rating" defaultValue={formData.rating} onValueChange={value => handleSelectChange("rating", value)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select rating" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="1">1 - Poor</SelectItem>
-                    <SelectItem value="2">2 - Below Average</SelectItem>
-                    <SelectItem value="3">3 - Good</SelectItem>
-                    <SelectItem value="4">4 - Excellent</SelectItem>
-                  </SelectContent>
-                </Select>
-                
-                {(formData.category === "School" || formData.category === "Behavior") && parseInt(formData.rating) <= 2 && (
-                  <Alert className="mt-2 bg-amber-50 border-amber-200">
-                    <AlertCircle className="h-4 w-4 text-amber-600" />
-                    <AlertTitle className="text-amber-800">Low Rating Alert</AlertTitle>
-                    <AlertDescription className="text-amber-700">
-                      Low ratings in this category will trigger notifications for staff attention.
-                    </AlertDescription>
-                  </Alert>
-                )}
-              </div>
-              
-              <div>
                 <Label htmlFor="staff">Staff Name</Label>
                 <Input
                   id="staff"
@@ -280,6 +170,18 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
                   value={formData.staff}
                   onChange={handleInputChange}
                   placeholder="Your name"
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="note">Progress Note</Label>
+                <Textarea
+                  id="note"
+                  name="note"
+                  value={formData.note}
+                  onChange={handleInputChange}
+                  placeholder="Enter your progress note here..."
+                  rows={4}
                 />
               </div>
               
@@ -295,31 +197,19 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between">
               <CardTitle>Note History</CardTitle>
               <div className="flex mt-2 sm:mt-0">
-                <div className="relative mr-2">
+                <div className="relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
                   <Input
-                    placeholder="Search notes..."
-                    className="pl-10 h-9 w-[150px] sm:w-auto"
+                    placeholder="Search by staff name..."
+                    className="pl-10 h-9 w-[200px] sm:w-auto"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                   />
                 </div>
-                <Select value={selectedCategory || "all"} onValueChange={(value) => handleCategoryFilter(value === "all" ? null : value)}>
-                  <SelectTrigger className="h-9 w-[130px]">
-                    <SelectValue placeholder="All Categories" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Categories</SelectItem>
-                    {NOTE_CATEGORIES.map((category) => (
-                      <SelectItem key={category.value} value={category.value}>{category.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
               </div>
             </div>
             <CardDescription>
               {filteredNotes.length} {filteredNotes.length === 1 ? "note" : "notes"} 
-              {selectedCategory ? ` in ${selectedCategory}` : ""}
               {searchTerm ? ` matching "${searchTerm}"` : ""}
             </CardDescription>
           </CardHeader>
@@ -351,11 +241,11 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
                       <div className="flex-1 ml-1">
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between">
                           <div className="flex items-center space-x-2">
-                            <Badge className={`${getCategoryColor(note.category)}`}>
-                              {note.category}
+                            <Badge className="bg-blue-100 text-blue-800">
+                              Progress Note
                             </Badge>
-                            <span className={`font-medium ${getRatingColor(note.rating)}`}>
-                              Rating: {note.rating}/5
+                            <span className="text-sm text-gray-600">
+                              by {note.staff}
                             </span>
                           </div>
                           <span className="text-sm text-gray-500 mt-1 sm:mt-0">
@@ -363,8 +253,8 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
                           </span>
                         </div>
                         
-                        <p className="mt-2 line-clamp-2 text-gray-700">
-                          {note.note}
+                        <p className="mt-2 text-gray-700">
+                          {note.note || "Progress note recorded"}
                         </p>
                       </div>
                     </div>
@@ -372,7 +262,7 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
                     <CollapsibleContent>
                       <div className="px-4 pb-3 pt-1">
                         <div className="pl-6 border-l-2 border-gray-200">
-                          <p className="whitespace-pre-line text-gray-800">{note.note}</p>
+                          <p className="text-gray-800">{note.note || "Progress note recorded for this date"}</p>
                           <div className="mt-3 text-sm text-gray-500">
                             <p>Recorded by: {note.staff}</p>
                             <p>Added: {format(note.createdAt as Date, 'MMM d, yyyy h:mm a')}</p>

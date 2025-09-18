@@ -1,5 +1,5 @@
 
-import { Youth } from "@/types/app-types";
+import { Youth } from "@/integrations/supabase/services";
 
 interface BackgroundProfileTabProps {
   youth: Youth;

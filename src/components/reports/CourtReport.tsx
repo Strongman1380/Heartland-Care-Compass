@@ -221,9 +221,9 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
       const aiAreasForImprovement = generateImprovementComments(avgDailyPoints, programInvestmentAvg, authorityResponseAvg, youth);
       
       // Extract counseling session notes
-      const counselingNotes = periodNotes.filter(note => 
-        note.category?.toLowerCase().includes('counseling') || 
-        note.category?.toLowerCase().includes('therapy') ||
+      const counselingNotes = periodNotes.filter(note =>
+        (note as any).category?.toLowerCase().includes('counseling') ||
+        (note as any).category?.toLowerCase().includes('therapy') ||
         note.note?.toLowerCase().includes('counseling') ||
         note.note?.toLowerCase().includes('therapy')
       );
@@ -271,7 +271,7 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
         }
 
         // Incident extraction from notes (by category match)
-        const incidents = periodNotes.filter(n => (n.category||'').toLowerCase().includes('incident')).slice(0, 6)
+        const incidents = periodNotes.filter(n => ((n as any).category||'').toLowerCase().includes('incident')).slice(0, 6)
           .map(n => ({ date: n.date ? format(new Date(n.date), 'M/d/yyyy') : '—', text: (n.note||'').slice(0,160) }));
 
         (window as any).__court_meta = { notesCount, attendanceDays: periodRatings.length, trendLabel, ratingsAvg: {
@@ -292,13 +292,30 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
     }
   };
 
-  const handlePrint = () => {
+  const handlePrint = async () => {
     // Generate the report first to ensure data is current
-    generateReport();
-    // Small delay to ensure state updates before printing
-    setTimeout(() => {
-      window.print();
-    }, 100);
+    await generateReport();
+
+    // Small delay to ensure state updates before exporting
+    setTimeout(async () => {
+      if (printRef.current) {
+        try {
+          const filename = `Court_Report_${youth.lastName}_${youth.firstName}_${format(new Date(), 'yyyy-MM-dd')}.pdf`;
+          await exportElementToPDF(printRef.current, filename);
+          toast({
+            title: "Success",
+            description: "Court report PDF has been generated and downloaded",
+          });
+        } catch (error) {
+          console.error("Error exporting PDF:", error);
+          toast({
+            title: "Error",
+            description: "Failed to generate PDF. Please try again.",
+            variant: "destructive"
+          });
+        }
+      }
+    }, 500);
   };
 
   const handleExportPDF = async () => {
@@ -386,7 +403,7 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
             <div className="flex items-end">
               <Button onClick={handlePrint} className="w-full">
                 <Printer className="h-4 w-4 mr-2" />
-                Print Report
+                Generate PDF Report
               </Button>
             </div>
           </div>

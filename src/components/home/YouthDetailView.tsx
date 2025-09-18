@@ -9,7 +9,7 @@ import { RiskAssessment } from "@/components/assessment/RiskAssessment";
 import { RealColorsAssessment } from "@/components/assessment/RealColorsAssessment";
 import { ReportCenter } from "@/components/reports/ReportCenter";
 import { User, CheckSquare, FileText, BarChart2, Shield, FileChartPie, ArrowLeft, ClipboardCheck, Palette } from "lucide-react";
-import { Youth } from "@/types/app-types";
+import { Youth } from "@/integrations/supabase/services";
 
 interface YouthDetailViewProps {
   selectedYouth: Youth;

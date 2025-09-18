@@ -1,6 +1,6 @@
 
 import { Card } from "@/components/ui/card";
-import { Youth } from "@/types/app-types";
+import { Youth } from "@/integrations/supabase/services";
 import { WelcomeSection } from "./WelcomeSection";
 import { YouthCard } from "./YouthCard";
 import { EmptyYouthState } from "./EmptyYouthState";
@@ -12,7 +12,7 @@ interface YouthSelectionViewProps {
   onEditYouth: (youth: Youth, event: React.MouseEvent) => void;
   onDeleteYouth: (youth: Youth, event: React.MouseEvent) => void;
   formatPoints: (points: number) => string;
-  formatDate: (date: Date | null) => string;
+  formatDate: (date: string | null) => string;
 }
 
 export const YouthSelectionView = ({

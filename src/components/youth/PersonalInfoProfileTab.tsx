@@ -1,5 +1,5 @@
 
-import { Youth } from "@/types/app-types";
+import { Youth } from "@/integrations/supabase/services";
 import { format } from "date-fns";
 
 interface PersonalInfoProfileTabProps {
@@ -7,9 +7,10 @@ interface PersonalInfoProfileTabProps {
 }
 
 export const PersonalInfoProfileTab = ({ youth }: PersonalInfoProfileTabProps) => {
-  const formatDate = (date: Date | null) => {
-    if (!date) return "Not specified";
+  const formatDate = (dateString: string | null) => {
+    if (!dateString) return "Not specified";
     try {
+      const date = new Date(dateString);
       return format(date, "MMMM d, yyyy");
     } catch {
       return "Invalid date";

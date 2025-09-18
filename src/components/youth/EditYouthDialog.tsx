@@ -1,6 +1,6 @@
 
 import { useState, useEffect } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
@@ -189,103 +189,115 @@ export const EditYouthDialog = ({ youth, open, onClose, onSuccess }: EditYouthDi
         formData.previousTreatment && `Previous treatment: ${formData.previousTreatment}`
       ].filter(Boolean).join('; ');
       
-      // Create the update data object
+      // Create the update data object - ensuring all dates are strings for Supabase
       const updateData = {
         firstName,
         lastName,
-        dob: dob ? new Date(dob) : undefined,
-        age,
-        admissionDate: admissionDate ? new Date(admissionDate) : undefined,
+        dob: dob || null,
+        age: age || null,
+        admissionDate: admissionDate || null,
         level: level ? parseInt(level) : 1,
-        referralSource,
-        referralReason,
-        educationInfo,
-        medicalInfo,
-        mentalHealthInfo,
-        legalStatus: formData.courtInvolvement?.join(', ') || undefined,
+        referralSource: referralSource || null,
+        referralReason: referralReason || null,
+        educationInfo: educationInfo || null,
+        medicalInfo: medicalInfo || null,
+        mentalHealthInfo: mentalHealthInfo || null,
+        legalStatus: formData.courtInvolvement?.join(', ') || null,
         
         // Additional personal details
-        sex: formData.sex || undefined,
-        race: formData.race || undefined,
-        religion: formData.religion || undefined,
-        placeOfBirth: formData.placeOfBirth || undefined,
-        socialSecurityNumber: formData.socialSecurityNumber || undefined,
-        address: formData.address ? {
-          street: formData.address.split(',')[0]?.trim() || undefined,
-          city: formData.address.split(',')[1]?.trim() || undefined,
-          state: formData.address.split(',')[2]?.trim().split(' ')[0] || undefined,
-          zip: formData.address.split(',')[2]?.trim().split(' ')[1] || undefined,
-        } : undefined,
+        sex: formData.sex || null,
+        race: formData.race || null,
+        religion: formData.religion || null,
+        placeOfBirth: formData.placeOfBirth || null,
+        socialSecurityNumber: formData.socialSecurityNumber || null,
+        address: formData.address ? (() => {
+          const parts = formData.address.split(',').map(p => p.trim());
+          const stateParts = parts[2]?.split(' ') || [];
+          return {
+            street: parts[0] || null,
+            city: parts[1] || null,
+            state: stateParts[0] || null,
+            zip: stateParts[1] || null,
+          };
+        })() : null,
         physicalDescription: {
-          height: formData.height || undefined,
-          weight: formData.weight || undefined,
-          hairColor: formData.hairColor || undefined,
-          eyeColor: formData.eyeColor || undefined,
-          tattoosScars: formData.tattoosScars || undefined,
+          height: formData.height || null,
+          weight: formData.weight || null,
+          hairColor: formData.hairColor || null,
+          eyeColor: formData.eyeColor || null,
+          tattoosScars: formData.tattoosScars || null,
         },
         
         // Store detailed fields for future use
-        legalGuardian: formData.legalGuardian,
-        guardianRelationship: formData.guardianRelationship,
-        guardianContact: formData.guardianContact,
-        guardianPhone: formData.guardianPhone,
-        guardianEmail: formData.guardianEmail,
-        probationOfficer: formData.probationOfficer,
-        probationContact: formData.probationContact,
-        probationPhone: formData.probationPhone,
-        placementAuthority: formData.placementAuthority?.[0],
-        estimatedStay: formData.estimatedStay,
+        legalGuardian: formData.legalGuardian || null,
+        guardianRelationship: formData.guardianRelationship || null,
+        guardianContact: formData.guardianContact || null,
+        guardianPhone: formData.guardianPhone || null,
+        guardianEmail: formData.guardianEmail || null,
+        probationOfficer: formData.probationOfficer || null,
+        probationContact: formData.probationContact || null,
+        probationPhone: formData.probationPhone || null,
+        placementAuthority: formData.placementAuthority?.[0] || null,
+        estimatedStay: formData.estimatedStay || null,
         
         // Education details
-        currentSchool: formData.currentSchool,
-        grade: formData.grade,
-        hasIEP: formData.hasIEP,
-        academicStrengths: formData.academicStrengths,
-        academicChallenges: formData.academicChallenges,
-        educationGoals: formData.educationGoals,
-        schoolContact: formData.schoolContact,
-        schoolPhone: formData.schoolPhone,
+        currentSchool: formData.currentSchool || null,
+        grade: formData.grade || null,
+        hasIEP: formData.hasIEP || false,
+        academicStrengths: formData.academicStrengths || null,
+        academicChallenges: formData.academicChallenges || null,
+        educationGoals: formData.educationGoals || null,
+        schoolContact: formData.schoolContact || null,
+        schoolPhone: formData.schoolPhone || null,
         
         // Medical details
-        physician: formData.physician,
-        physicianPhone: formData.physicianPhone,
-        insuranceProvider: formData.insuranceProvider,
-        policyNumber: formData.policyNumber,
-        allergies: formData.allergies,
-        medicalConditions: formData.medicalConditions,
-        medicalRestrictions: formData.medicalRestrictions,
+        physician: formData.physician || null,
+        physicianPhone: formData.physicianPhone || null,
+        insuranceProvider: formData.insuranceProvider || null,
+        policyNumber: formData.policyNumber || null,
+        allergies: formData.allergies || null,
+        medicalConditions: formData.medicalConditions || null,
+        medicalRestrictions: formData.medicalRestrictions || null,
         
         // Mental health details
-        currentDiagnoses: formData.currentDiagnoses || formData.diagnoses,
-        diagnoses: formData.currentDiagnoses || formData.diagnoses,
-        traumaHistory: formData.traumaHistory,
-        previousTreatment: formData.previousTreatment,
-        currentCounseling: formData.currentCounseling,
-        therapistName: formData.therapistName,
-        therapistContact: formData.therapistContact,
-        sessionFrequency: formData.sessionFrequency,
-        sessionTime: formData.sessionTime,
-        selfHarmHistory: formData.selfHarmHistory,
-        lastIncidentDate: formData.lastIncidentDate,
-        hasSafetyPlan: formData.hasSafetyPlan,
+        currentDiagnoses: formData.currentDiagnoses || formData.diagnoses || null,
+        diagnoses: formData.currentDiagnoses || formData.diagnoses || null,
+        traumaHistory: formData.traumaHistory || null,
+        previousTreatment: formData.previousTreatment || null,
+        currentCounseling: formData.currentCounseling || null,
+        therapistName: formData.therapistName || null,
+        therapistContact: formData.therapistContact || null,
+        sessionFrequency: formData.sessionFrequency || null,
+        sessionTime: formData.sessionTime || null,
+        selfHarmHistory: formData.selfHarmHistory || null,
+        lastIncidentDate: formData.lastIncidentDate || null,
+        hasSafetyPlan: formData.hasSafetyPlan || false,
         
         // Background details
-        priorPlacements: formData.priorPlacements,
-        numPriorPlacements: formData.numPriorPlacements,
-        lengthRecentPlacement: formData.lengthRecentPlacement,
-        courtInvolvement: formData.courtInvolvement,
+        priorPlacements: formData.priorPlacements || null,
+        numPriorPlacements: formData.numPriorPlacements || null,
+        lengthRecentPlacement: formData.lengthRecentPlacement || null,
+        courtInvolvement: formData.courtInvolvement || null,
         
         // Behavior tracking
-        onSubsystem: formData.onSubsystem,
-        pointsInCurrentLevel: formData.pointsInCurrentLevel,
-        dailyPointsForPrivileges: formData.dailyPointsForPrivileges,
+        onSubsystem: formData.onSubsystem || false,
+        pointsInCurrentLevel: formData.pointsInCurrentLevel || 0,
+        dailyPointsForPrivileges: formData.dailyPointsForPrivileges || 0,
         
-        updatedAt: new Date()
+        updatedAt: new Date().toISOString()
       };
       
+      // Validate required fields
+      if (!updateData.firstName || !updateData.lastName) {
+        toast.error("First name and last name are required");
+        return;
+      }
+
       // Update youth in Supabase
       await updateYouth(youth.id, updateData);
-      
+
+      toast.success(`Successfully updated ${updateData.firstName} ${updateData.lastName}'s profile`);
+
       // Call onSuccess callback
       if (onSuccess) {
         onSuccess();
@@ -293,7 +305,8 @@ export const EditYouthDialog = ({ youth, open, onClose, onSuccess }: EditYouthDi
       onClose();
     } catch (error) {
       console.error("Error updating youth:", error);
-      toast.error("Failed to update youth profile");
+      const errorMessage = error instanceof Error ? error.message : "Failed to update youth profile";
+      toast.error(`Update failed: ${errorMessage}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -313,6 +326,9 @@ export const EditYouthDialog = ({ youth, open, onClose, onSuccess }: EditYouthDi
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-xl font-semibold">Edit Youth Profile</DialogTitle>
+          <DialogDescription>
+            Update the profile information for {youth.firstName} {youth.lastName}. Make changes across different tabs and save when complete.
+          </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4 py-2">

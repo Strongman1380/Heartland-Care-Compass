@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { Youth, DailyRating } from "@/types/app-types";
+import { Youth } from "@/integrations/supabase/services";
+import { DailyRating } from "@/types/app-types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,10 +25,13 @@ export const ConsolidatedScoringTab = ({ youth }: ConsolidatedScoringTabProps) =
   // Daily Ratings State
   const [dailyRating, setDailyRating] = useState({
     peerInteraction: 0,
+    peerInteractionComment: "",
     adultInteraction: 0,
+    adultInteractionComment: "",
     investmentLevel: 0,
+    investmentLevelComment: "",
     dealAuthority: 0,
-    comments: ""
+    dealAuthorityComment: ""
   });
 
   // Daily Points State
@@ -42,10 +46,13 @@ export const ConsolidatedScoringTab = ({ youth }: ConsolidatedScoringTabProps) =
       // For now, just reset to defaults
       setDailyRating({
         peerInteraction: 0,
+        peerInteractionComment: "",
         adultInteraction: 0,
+        adultInteractionComment: "",
         investmentLevel: 0,
+        investmentLevelComment: "",
         dealAuthority: 0,
-        comments: ""
+        dealAuthorityComment: ""
       });
       setStaffName("");
       setDailyPoints({
@@ -62,7 +69,13 @@ export const ConsolidatedScoringTab = ({ youth }: ConsolidatedScoringTabProps) =
     fetchExistingData();
   }, [selectedDate, youth.id]);
 
-  const renderRatingInput = (label: string, value: number, onChange: (value: number) => void) => (
+  const renderRatingInput = (
+    label: string,
+    value: number,
+    onChange: (value: number) => void,
+    commentValue: string,
+    onCommentChange: (value: string) => void
+  ) => (
     <div className="space-y-2">
       <Label className="text-sm font-medium text-primary">{label}</Label>
       <div className="flex gap-2">
@@ -81,6 +94,13 @@ export const ConsolidatedScoringTab = ({ youth }: ConsolidatedScoringTabProps) =
           </button>
         ))}
       </div>
+      <Textarea
+        value={commentValue}
+        onChange={(e) => onCommentChange(e.target.value)}
+        placeholder={`Notes about ${label.toLowerCase()}...`}
+        rows={2}
+        className="text-sm"
+      />
     </div>
   );
 
@@ -92,11 +112,20 @@ export const ConsolidatedScoringTab = ({ youth }: ConsolidatedScoringTabProps) =
         youth_id: youth.id,
         date: selectedDate,
         peer_interaction: dailyRating.peerInteraction,
+        peer_comment: dailyRating.peerInteractionComment,
         adult_interaction: dailyRating.adultInteraction,
+        adult_comment: dailyRating.adultInteractionComment,
         investment_level: dailyRating.investmentLevel,
+        investment_comment: dailyRating.investmentLevelComment,
         deal_authority: dailyRating.dealAuthority,
+        authority_comment: dailyRating.dealAuthorityComment,
         staff: staffName,
-        comments: dailyRating.comments
+        comments: [
+          dailyRating.peerInteractionComment,
+          dailyRating.adultInteractionComment,
+          dailyRating.investmentLevelComment,
+          dailyRating.dealAuthorityComment
+        ].filter(Boolean).join(' | ')
       });
 
       toast({
@@ -107,10 +136,13 @@ export const ConsolidatedScoringTab = ({ youth }: ConsolidatedScoringTabProps) =
       // Reset daily ratings form only
       setDailyRating({
         peerInteraction: 0,
+        peerInteractionComment: "",
         adultInteraction: 0,
+        adultInteractionComment: "",
         investmentLevel: 0,
+        investmentLevelComment: "",
         dealAuthority: 0,
-        comments: ""
+        dealAuthorityComment: ""
       });
       setStaffName("");
 
@@ -207,24 +239,34 @@ export const ConsolidatedScoringTab = ({ youth }: ConsolidatedScoringTabProps) =
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {renderRatingInput("Peer Interaction", dailyRating.peerInteraction, 
-              (value) => setDailyRating({...dailyRating, peerInteraction: value}))}
-            {renderRatingInput("Adult Interaction", dailyRating.adultInteraction, 
-              (value) => setDailyRating({...dailyRating, adultInteraction: value}))}
-            {renderRatingInput("Investment Level", dailyRating.investmentLevel, 
-              (value) => setDailyRating({...dailyRating, investmentLevel: value}))}
-            {renderRatingInput("Deal Authority", dailyRating.dealAuthority, 
-              (value) => setDailyRating({...dailyRating, dealAuthority: value}))}
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="rating-comments">Behavioral Comments</Label>
-            <Textarea
-              id="rating-comments"
-              value={dailyRating.comments}
-              onChange={(e) => setDailyRating({...dailyRating, comments: e.target.value})}
-              placeholder="Comments about behavioral ratings..."
-              rows={2}
-            />
+            {renderRatingInput(
+              "Peer Interaction",
+              dailyRating.peerInteraction,
+              (value) => setDailyRating({...dailyRating, peerInteraction: value}),
+              dailyRating.peerInteractionComment,
+              (value) => setDailyRating({...dailyRating, peerInteractionComment: value})
+            )}
+            {renderRatingInput(
+              "Adult Interaction",
+              dailyRating.adultInteraction,
+              (value) => setDailyRating({...dailyRating, adultInteraction: value}),
+              dailyRating.adultInteractionComment,
+              (value) => setDailyRating({...dailyRating, adultInteractionComment: value})
+            )}
+            {renderRatingInput(
+              "Investment Level",
+              dailyRating.investmentLevel,
+              (value) => setDailyRating({...dailyRating, investmentLevel: value}),
+              dailyRating.investmentLevelComment,
+              (value) => setDailyRating({...dailyRating, investmentLevelComment: value})
+            )}
+            {renderRatingInput(
+              "Deal w/ Authority",
+              dailyRating.dealAuthority,
+              (value) => setDailyRating({...dailyRating, dealAuthority: value}),
+              dailyRating.dealAuthorityComment,
+              (value) => setDailyRating({...dailyRating, dealAuthorityComment: value})
+            )}
           </div>
           
           {/* DPN Submit Button */}

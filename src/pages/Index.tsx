@@ -4,8 +4,9 @@ import { EditYouthDialog } from "@/components/youth/EditYouthDialog";
 import { YouthSelectionView } from "@/components/home/YouthSelectionView";
 import { YouthDetailView } from "@/components/home/YouthDetailView";
 import { useYouth } from "@/hooks/useSupabase";
-import { type Youth } from "@/integrations/supabase/services";
+import type { Youth } from "@/integrations/supabase/services";
 import { useToast } from "@/hooks/use-toast";
+import { PasteYouthProfileDialog } from "@/components/youth/PasteYouthProfileDialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -21,9 +22,9 @@ import { toast } from "sonner";
 const Index = () => {
   const [selectedYouth, setSelectedYouth] = useState<Youth | null>(null);
   const [activeTab, setActiveTab] = useState("profile");
-  const [editingYouth, setEditingYouth] = useState<Youth | null>(null);
+  const [editingYouth, setEditingYouth] = useState<any | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-  const [youthToDelete, setYouthToDelete] = useState<Youth | null>(null);
+  const [youthToDelete, setYouthToDelete] = useState<any | null>(null);
   // Remove admin state - no longer needed
   const { toast: uiToast } = useToast();
   
@@ -33,6 +34,16 @@ const Index = () => {
   useEffect(() => {
     loadYouths();
   }, []);
+
+  // Refresh selected youth data when youths are updated
+  useEffect(() => {
+    if (selectedYouth && youths.length > 0) {
+      const updatedYouth = youths.find(y => y.id === selectedYouth.id);
+      if (updatedYouth) {
+        setSelectedYouth(updatedYouth as any);
+      }
+    }
+  }, [youths, selectedYouth?.id]);
 
 
   const handleYouthSelect = (youth: Youth) => {
@@ -80,9 +91,10 @@ const Index = () => {
     return points.toLocaleString();
   };
 
-  const formatDate = (date: Date | null) => {
-    if (!date) return "Not specified";
+  const formatDate = (dateString: string | null) => {
+    if (!dateString) return "Not specified";
     try {
+      const date = new Date(dateString);
       return new Intl.DateTimeFormat('en-US', { 
         year: 'numeric', 
         month: 'short', 
@@ -99,6 +111,9 @@ const Index = () => {
       <main className="container mx-auto px-4 py-8">
         {!selectedYouth ? (
           <>
+            <div className="flex justify-center mb-4">
+              <PasteYouthProfileDialog onImported={loadYouths} />
+            </div>
             <YouthSelectionView
               youths={youths}
               loading={loading}

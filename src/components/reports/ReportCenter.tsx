@@ -10,6 +10,8 @@ import { useToast } from "@/hooks/use-toast";
 import { CourtReport } from "./CourtReport";
 import { DpnReport } from "./DpnReport";
 import { summarizeReport } from "@/lib/aiClient";
+import { getBehaviorPointsByYouth, getDailyRatingsByYouth, getProgressNotesByYouth } from "@/lib/api";
+import { fetchBehaviorPoints, fetchDailyRatings, fetchProgressNotes } from "@/utils/local-storage-utils";
 
 interface ReportCenterProps {
   youthId: string;
@@ -22,6 +24,7 @@ export const ReportCenter = ({ youthId, youth }: ReportCenterProps) => {
   const exportRef = useRef<HTMLDivElement>(null);
   const [showCourtReport, setShowCourtReport] = useState(false);
   const [dpnVariant, setDpnVariant] = useState<null | 'weekly' | 'biweekly' | 'monthly'>(null);
+  const [formKey, setFormKey] = useState(0);
   
   const handleGenerateReport = async (options: ReportOptions) => {
     setIsGenerating(true);
@@ -51,13 +54,37 @@ export const ReportCenter = ({ youthId, youth }: ReportCenterProps) => {
         // Optional AI narrative
         if (options.useAI) {
           const now = new Date();
-          const start = new Date(now);
-          start.setDate(now.getDate() - (effectiveOptions.period === 'last30' ? 30 : effectiveOptions.period === 'last7' ? 7 : 90));
+          const range = (() => {
+            switch (effectiveOptions.period) {
+              case 'last7':
+                return { start: new Date(now.getTime() - 7*24*60*60*1000), end: now };
+              case 'last30':
+                return { start: new Date(now.getTime() - 30*24*60*60*1000), end: now };
+              case 'last90':
+                return { start: new Date(now.getTime() - 90*24*60*60*1000), end: now };
+              case 'custom':
+                return { start: effectiveOptions.customStartDate ? new Date(effectiveOptions.customStartDate) : new Date(now.getTime() - 30*24*60*60*1000), end: effectiveOptions.customEndDate ? new Date(effectiveOptions.customEndDate) : now };
+              case 'allTime':
+              default:
+                return { start: new Date('2020-01-01'), end: now };
+            }
+          })();
+          const [allPoints, allNotes, allRatings] = await Promise.all([
+            getBehaviorPointsByYouth(youth.id).catch(() => fetchBehaviorPoints(youth.id)),
+            getProgressNotesByYouth(youth.id).catch(() => fetchProgressNotes(youth.id) as any),
+            getDailyRatingsByYouth(youth.id).catch(() => fetchDailyRatings(youth.id) as any),
+          ]);
+          const inRange = (d?: any) => d && new Date(d) >= range.start && new Date(d) <= range.end;
+          const data = {
+            behaviorPoints: (allPoints || []).filter((p:any)=> inRange(p.date)),
+            progressNotes: (allNotes || []).filter((n:any)=> inRange(n.date)),
+            dailyRatings: (allRatings || []).filter((r:any)=> inRange(r.date)),
+          };
           const aiText = await summarizeReport({
             youth,
             reportType: effectiveType,
-            period: { startDate: start.toISOString(), endDate: now.toISOString() },
-            data: {},
+            period: { startDate: range.start.toISOString(), endDate: range.end.toISOString() },
+            data,
           });
           if (aiText) {
             const aiSection = `\n<div style="margin:12pt 0;">\n  <h3 style="font-size:12pt; margin:0 0 6pt;">AI-Assisted Narrative</h3>\n  <div style="font-size:11pt; white-space:pre-wrap;">${aiText.replace(/[&<>]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;'} as any)[c])}</div>\n</div>`;
@@ -102,6 +129,7 @@ export const ReportCenter = ({ youthId, youth }: ReportCenterProps) => {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <ReportGenerationForm 
+          key={formKey}
           onGenerateReport={handleGenerateReport}
           isGenerating={isGenerating}
         />
@@ -119,7 +147,18 @@ export const ReportCenter = ({ youthId, youth }: ReportCenterProps) => {
       )}
       {dpnVariant && (
         <div className="space-y-4">
-          <DpnReport youth={youth} variant={dpnVariant} />
+          <DpnReport 
+            youth={youth} 
+            variant={dpnVariant}
+            onAutoExportComplete={() => {
+              toast({
+                title: "DPN PDF Exported",
+                description: "Download complete. Resetting to generate another report.",
+              });
+              setDpnVariant(null);
+              setFormKey(k => k + 1);
+            }}
+          />
         </div>
       )}
 

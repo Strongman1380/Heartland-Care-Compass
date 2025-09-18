@@ -16,7 +16,7 @@ interface ReportGenerationFormProps {
 }
 
 export const ReportGenerationForm = ({ onGenerateReport, isGenerating }: ReportGenerationFormProps) => {
-  const [selectedReportType, setSelectedReportType] = useState<string>("comprehensive");
+  const [selectedReportType, setSelectedReportType] = useState<string>("progressMonthly");
   const [selectedPeriod, setSelectedPeriod] = useState<string>("last30");
   const [customStartDate, setCustomStartDate] = useState<string>("");
   const [customEndDate, setCustomEndDate] = useState<string>("");
@@ -65,9 +65,6 @@ export const ReportGenerationForm = ({ onGenerateReport, isGenerating }: ReportG
                   <SelectValue placeholder="Select report type" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="comprehensive">Comprehensive Report</SelectItem>
-                  <SelectItem value="summary">Summary Report</SelectItem>
-                  <SelectItem value="progress">Progress Report</SelectItem>
                   <SelectItem value="progressMonthly">Monthly Progress Report</SelectItem>
                   <SelectItem value="court">Court Report (auto-exports PDF)</SelectItem>
                   <SelectItem value="dpnWeekly">DPN Weekly Progress Evaluation (auto-exports PDF)</SelectItem>

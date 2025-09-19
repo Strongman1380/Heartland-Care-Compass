@@ -47,7 +47,7 @@ export const Header = () => {
 
   return (
     <>
-      <header className="sticky top-0 z-50 w-full border-b bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/60">
+      <header className="sticky top-0 z-50 w-full border-b bg-white/90 backdrop-blur-xl supports-[backdrop-filter]:bg-white/80 shadow-sm transition-all duration-300">
         <div className="container mx-auto px-4 lg:px-6">
           <div className="flex h-16 items-center justify-between">
             {/* Logo and Brand */}
@@ -79,10 +79,10 @@ export const Header = () => {
                       key={item.path}
                       to={item.path}
                       className={`
-                        relative flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex-1 justify-center
-                        ${isActive 
-                          ? 'bg-red-50 text-red-700 shadow-sm'
-                          : 'text-gray-600 hover:text-red-700 hover:bg-red-50'
+                        relative flex items-center space-x-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-300 flex-1 justify-center group
+                        ${isActive
+                          ? 'bg-red-50 text-red-700 shadow-md hover:shadow-lg'
+                          : 'text-gray-600 hover:text-red-700 hover:bg-red-50 hover:scale-105 hover:shadow-md'
                         }
                       `}
                     >

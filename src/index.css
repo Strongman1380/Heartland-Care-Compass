@@ -91,16 +91,28 @@
 
   body {
     @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background: linear-gradient(to bottom, hsl(var(--background)) 0%, hsl(var(--muted)) 50%, hsl(var(--background)) 100%);
+    min-height: 100vh;
+  }
+
+  html {
+    scroll-behavior: smooth;
   }
 }
 
-/* Custom Heartland branding styles */
+/* Custom Heartland branding styles - Modernized */
 .heartland-gradient {
-  background: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--secondary)) 100%);
+  background: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--secondary)) 70%, hsl(var(--secondary)) 100%);
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.1), 0 4px 6px -1px rgba(0,0,0,0.1);
 }
 
 .heartland-header {
-  background: linear-gradient(90deg, hsl(var(--primary)) 0%, hsl(0 45% 25%) 50%, hsl(var(--primary)) 100%);
+  background: linear-gradient(115deg, hsl(var(--primary)) 0%, hsl(0 45% 25%) 40%, hsl(var(--secondary)) 80%, hsl(var(--primary)) 100%);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid hsl(var(--border) / 0.2);
 }
 
 /* Print styles for behavior cards and reports */

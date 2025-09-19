@@ -24,6 +24,15 @@
     }
   ],
   "env": {
-    "NODE_ENV": "production"
+    "NODE_ENV": "production",
+    "VITE_FIREBASE_API_KEY": "AIzaSyBtgwWsM9uKbK1gTFmKL6prT9hyzgGoPPA",
+    "VITE_FIREBASE_AUTH_DOMAIN": "heartland-care-compass-506bf.firebaseapp.com",
+    "VITE_FIREBASE_PROJECT_ID": "heartland-care-compass-506bf",
+    "VITE_FIREBASE_STORAGE_BUCKET": "heartland-care-compass-506bf.firebasestorage.app",
+    "VITE_FIREBASE_MESSAGING_SENDER_ID": "415382629657",
+    "VITE_FIREBASE_APP_ID": "1:415382629657:web:013c5f08fae0d2529ca988",
+    "VITE_FIREBASE_MEASUREMENT_ID": "G-QY4NTS0LC5",
+    "VITE_SUPABASE_URL": "https://bxloqozxgptrfmjfsjsy.supabase.co",
+    "VITE_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ4bG9xb3p4Z3B0cmZtamZzanN5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTcxNDUzMTAsImV4cCI6MjA3MjcyMTMxMH0.wYitLj_Y5ymMpC8gZko1eCnafvEd56guijajhG-BR3Q"
   }
 }

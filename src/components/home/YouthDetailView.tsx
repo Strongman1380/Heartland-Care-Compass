@@ -8,7 +8,8 @@ import { BehaviorAnalysis } from "@/components/analysis/BehaviorAnalysis";
 import { RiskAssessment } from "@/components/assessment/RiskAssessment";
 import { RealColorsAssessment } from "@/components/assessment/RealColorsAssessment";
 import { ReportCenter } from "@/components/reports/ReportCenter";
-import { User, CheckSquare, FileText, BarChart2, Shield, FileChartPie, ArrowLeft, ClipboardCheck, Palette } from "lucide-react";
+import { SuccessPlan } from "@/components/planning/SuccessPlan";
+import { User, CheckSquare, FileText, BarChart2, Shield, FileChartPie, ArrowLeft, ClipboardCheck, Palette, Target } from "lucide-react";
 import { Youth } from "@/integrations/supabase/services";
 
 interface YouthDetailViewProps {
@@ -74,6 +75,10 @@ export const YouthDetailView = ({
             <Palette size={16} />
             <span>Real Colors</span>
           </TabsTrigger>
+          <TabsTrigger value="success-plan" className="flex items-center gap-2 data-[state=active]:bg-yellow-400 data-[state=active]:text-red-900">
+            <Target size={16} />
+            <span>Success Plan</span>
+          </TabsTrigger>
           <TabsTrigger value="reports" className="flex items-center gap-2 data-[state=active]:bg-yellow-400 data-[state=active]:text-red-900">
             <FileChartPie size={16} />
             <span>Reports</span>
@@ -106,6 +111,10 @@ export const YouthDetailView = ({
         
         <TabsContent value="colors">
           <RealColorsAssessment selectedYouth={selectedYouth} />
+        </TabsContent>
+        
+        <TabsContent value="success-plan">
+          <SuccessPlan youthId={selectedYouth.id} youth={selectedYouth} />
         </TabsContent>
         
         <TabsContent value="reports">

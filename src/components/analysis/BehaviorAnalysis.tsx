@@ -152,9 +152,104 @@ export const BehaviorAnalysis = ({ youthId, youth }: BehaviorAnalysisProps) => {
     window.print();
   };
   
-  const handleExportPdf = () => {
-    // PDF export functionality would be implemented here
-    console.log("Export PDF");
+  const handleExportPdf = async () => {
+    try {
+      const { exportHTMLToPDF } = await import('@/utils/export');
+      const { format } = await import('date-fns');
+
+      const exportData = {
+        youth: youth,
+        worksheet: worksheet,
+        exportDate: new Date().toLocaleDateString()
+      };
+
+      const html = generateBehaviorAnalysisHTML(exportData);
+      const filename = `${youth.firstName}_${youth.lastName}_Behavior_Analysis_${format(new Date(), 'yyyy-MM-dd')}.pdf`;
+
+      await exportHTMLToPDF(html, filename);
+      toast.success("Behavior analysis exported successfully!");
+    } catch (error) {
+      console.error("Error exporting behavior analysis:", error);
+      toast.error("Failed to export behavior analysis");
+    }
+  };
+
+  const generateBehaviorAnalysisHTML = (data: any) => {
+    return `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <title>Behavior Analysis Worksheet</title>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 20px; line-height: 1.6; }
+            .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 20px; }
+            .youth-info { background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
+            .event-section { margin-bottom: 30px; padding: 20px; border: 2px solid #ddd; border-radius: 5px; }
+            .event-title { font-weight: bold; font-size: 18px; margin-bottom: 15px; color: #333; }
+            .field { margin-bottom: 10px; }
+            .field-label { font-weight: bold; color: #555; }
+            .field-value { margin-left: 10px; }
+            .summary-section { background-color: #e8f4fd; padding: 20px; border-radius: 5px; margin-top: 30px; }
+            @media print { body { margin: 0; } }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>Heartland Care Compass</h1>
+            <h2>Behavior Analysis Worksheet</h2>
+            <p>Generated on ${data.exportDate}</p>
+          </div>
+
+          <div class="youth-info">
+            <h3>Youth Information</h3>
+            <p><strong>Name:</strong> ${data.youth.firstName} ${data.youth.lastName}</p>
+            <p><strong>Date of Birth:</strong> ${data.youth.dateOfBirth || 'Not specified'}</p>
+            <p><strong>Current Level:</strong> ${data.youth.currentLevel || 'Not specified'}</p>
+          </div>
+
+          <h3>Behavioral Events</h3>
+          ${data.worksheet.events.map((event: any, index: number) => `
+            <div class="event-section">
+              <div class="event-title">Event ${index + 1}</div>
+              <div class="field">
+                <span class="field-label">Description:</span>
+                <span class="field-value">${event.description || 'Not specified'}</span>
+              </div>
+              <div class="field">
+                <span class="field-label">Trigger:</span>
+                <span class="field-value">${event.trigger || 'Not specified'}</span>
+              </div>
+              <div class="field">
+                <span class="field-label">Thoughts:</span>
+                <span class="field-value">${event.thoughts || 'Not specified'}</span>
+              </div>
+              <div class="field">
+                <span class="field-label">Feelings:</span>
+                <span class="field-value">${event.feelings || 'Not specified'}</span>
+              </div>
+              <div class="field">
+                <span class="field-label">Behaviors:</span>
+                <span class="field-value">${event.behaviors || 'Not specified'}</span>
+              </div>
+              <div class="field">
+                <span class="field-label">Consequences:</span>
+                <span class="field-value">${event.consequences || 'Not specified'}</span>
+              </div>
+              <div class="field">
+                <span class="field-label">Alternative Responses:</span>
+                <span class="field-value">${event.alternativeResponses || 'Not specified'}</span>
+              </div>
+            </div>
+          `).join('')}
+
+          <div class="summary-section">
+            <h3>Analysis Summary</h3>
+            <p>${data.worksheet.summary || 'No summary provided'}</p>
+          </div>
+        </body>
+      </html>
+    `;
   };
   
   const isEventEmpty = (event: BehaviorEvent) => {

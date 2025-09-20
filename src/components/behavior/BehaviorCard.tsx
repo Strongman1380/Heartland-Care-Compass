@@ -59,14 +59,6 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
     comments: "",
     onSubsystem: false,
     staffName: "",
-    peerInteraction: 0,
-    adultInteraction: 0,
-    investmentLevel: 0,
-    dealAuthority: 0,
-    peerInteractionComment: "",
-    adultInteractionComment: "",
-    investmentLevelComment: "",
-    dealAuthorityComment: "",
   });
   const [pointsError, setPointsError] = useState("");
   const [weeklyAverages, setWeeklyAverages] = useState({
@@ -275,14 +267,6 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
       comments: "",
       onSubsystem: formData.onSubsystem,
       staffName: "",
-      peerInteraction: 0,
-      adultInteraction: 0,
-      investmentLevel: 0,
-      dealAuthority: 0,
-      peerInteractionComment: "",
-      adultInteractionComment: "",
-      investmentLevelComment: "",
-      dealAuthorityComment: "",
     });
     setPointsError("");
     
@@ -693,163 +677,9 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
                       </div>
                     )}
 
-                    {/* Peer Interaction and Adult Interaction Ratings */}
-                    <div className="space-y-4">
-                      <h4 className="text-lg font-semibold text-primary">Behavioral Ratings</h4>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="space-y-3">
-                          <Label className="text-sm font-medium text-primary">Peer Interaction</Label>
-                          <div className="flex gap-2">
-                            {[0, 1, 2, 3, 4].map(num => (
-                              <button
-                                key={num}
-                                type="button"
-                                onClick={() => setFormData({...formData, peerInteraction: num})}
-                                className={`w-8 h-8 rounded-full border-2 text-sm font-medium transition-colors ${
-                                  formData.peerInteraction === num
-                                    ? "bg-primary text-primary-foreground border-primary"
-                                    : "border-primary/20 hover:border-primary/40"
-                                }`}
-                              >
-                                {num}
-                              </button>
-                            ))}
-                          </div>
-                          {false && (
-                            <div>
-                              <Label htmlFor="peerInteractionComment" className="text-xs text-muted-foreground">
-                                Peer Interaction Comments
-                              </Label>
-                              <Textarea
-                                id="peerInteractionComment"
-                                name="peerInteractionComment"
-                                value={formData.peerInteractionComment || ''}
-                                onChange={handleInputChange}
-                                placeholder="Add notes about peer interaction..."
-                                rows={2}
-                                className="text-sm"
-                              />
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="space-y-3">
-                          <Label className="text-sm font-medium text-primary">Adult Interaction</Label>
-                          <div className="flex gap-2">
-                            {[0, 1, 2, 3, 4].map(num => (
-                              <button
-                                key={num}
-                                type="button"
-                                onClick={() => setFormData({...formData, adultInteraction: num})}
-                                className={`w-8 h-8 rounded-full border-2 text-sm font-medium transition-colors ${
-                                  formData.adultInteraction === num
-                                    ? "bg-primary text-primary-foreground border-primary"
-                                    : "border-primary/20 hover:border-primary/40"
-                                }`}
-                              >
-                                {num}
-                              </button>
-                            ))}
-                          </div>
-                          {false && (
-                            <div>
-                              <Label htmlFor="adultInteractionComment" className="text-xs text-muted-foreground">
-                                Adult Interaction Comments
-                              </Label>
-                              <Textarea
-                                id="adultInteractionComment"
-                                name="adultInteractionComment"
-                                value={formData.adultInteractionComment || ''}
-                                onChange={handleInputChange}
-                                placeholder="Add notes about adult interaction..."
-                                rows={2}
-                                className="text-sm"
-                              />
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Investment Level and Deal Authority */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="space-y-3">
-                          <Label className="text-sm font-medium text-primary">Investment Level</Label>
-                          <div className="flex gap-2">
-                            {[0, 1, 2, 3, 4].map(num => (
-                              <button
-                                key={num}
-                                type="button"
-                                onClick={() => setFormData({...formData, investmentLevel: num})}
-                                className={`w-8 h-8 rounded-full border-2 text-sm font-medium transition-colors ${
-                                  formData.investmentLevel === num
-                                    ? "bg-primary text-primary-foreground border-primary"
-                                    : "border-primary/20 hover:border-primary/40"
-                                }`}
-                              >
-                                {num}
-                              </button>
-                            ))}
-                          </div>
-                          {false && (
-                            <div>
-                              <Label htmlFor="investmentLevelComment" className="text-xs text-muted-foreground">
-                                Investment Level Comments
-                              </Label>
-                              <Textarea
-                                id="investmentLevelComment"
-                                name="investmentLevelComment"
-                                value={formData.investmentLevelComment || ''}
-                                onChange={handleInputChange}
-                                placeholder="Add notes about investment level..."
-                                rows={2}
-                                className="text-sm"
-                              />
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="space-y-3">
-                          <Label className="text-sm font-medium text-primary">Deal Authority</Label>
-                          <div className="flex gap-2">
-                            {[0, 1, 2, 3, 4].map(num => (
-                              <button
-                                key={num}
-                                type="button"
-                                onClick={() => setFormData({...formData, dealAuthority: num})}
-                                className={`w-8 h-8 rounded-full border-2 text-sm font-medium transition-colors ${
-                                  formData.dealAuthority === num
-                                    ? "bg-primary text-primary-foreground border-primary"
-                                    : "border-primary/20 hover:border-primary/40"
-                                }`}
-                              >
-                                {num}
-                              </button>
-                            ))}
-                          </div>
-                          {false && (
-                            <div>
-                              <Label htmlFor="dealAuthorityComment" className="text-xs text-muted-foreground">
-                                Deal Authority Comments
-                              </Label>
-                              <Textarea
-                                id="dealAuthorityComment"
-                                name="dealAuthorityComment"
-                                value={formData.dealAuthorityComment || ''}
-                                onChange={handleInputChange}
-                                placeholder="Add notes about dealing with authority..."
-                                rows={2}
-                                className="text-sm"
-                              />
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      <Button type="submit" disabled={isSubmitting || !!pointsError} className="w-full">
-                        {isSubmitting ? "Saving..." : "Submit Daily Points"}
-                      </Button>
-                    </div>
+                    <Button type="submit" disabled={isSubmitting || !!pointsError} className="w-full">
+                      {isSubmitting ? "Saving..." : "Submit Daily Points"}
+                    </Button>
                   </div>
                 </form>
               </TabsContent>

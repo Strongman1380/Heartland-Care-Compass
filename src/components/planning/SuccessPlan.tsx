@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -7,11 +7,22 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { FileText, Download, Save, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-// Note: Success plan saving/loading functionality will need to be implemented with local storage
+import { saveAssessment, fetchAssessment } from "@/utils/local-storage-utils";
 
 interface SuccessPlanProps {
   youthId: string;
   youth: any;
+}
+
+interface SuccessPlanData {
+  id?: string;
+  goals: Goal[];
+  strengths: string;
+  supportnetwork: Support[];
+  resources: Resource[];
+  challengestoaddress: string;
+  createdat: string;
+  updatedat: string;
 }
 
 interface Goal {
@@ -83,10 +94,48 @@ export const SuccessPlan = ({ youthId, youth }: SuccessPlanProps) => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<string>("goals");
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   
   useEffect(() => {
     fetchPlan();
   }, [youthId]);
+
+  // Auto-save functionality
+  const autoSave = useCallback(async (planData: Plan) => {
+    try {
+      setIsSaving(true);
+      
+      const formattedData = {
+        goals: planData.goals,
+        strengths: planData.strengths,
+        supportnetwork: planData.supportNetwork,
+        resources: planData.resources,
+        challengestoaddress: planData.challengesToAddress,
+        createdat: planData.createdAt.toISOString(),
+        updatedat: new Date().toISOString()
+      };
+      
+      await saveAssessment(
+        youthId,
+        'successplans',
+        'successPlan',
+        formattedData
+      );
+      
+      setHasUnsavedChanges(false);
+    } catch (error) {
+      console.error("Error auto-saving success plan:", error);
+    } finally {
+      setIsSaving(false);
+    }
+  }, [youthId]);
+
+  // Auto-save when plan changes (except during initial load)
+  useEffect(() => {
+    if (!isLoading && hasUnsavedChanges) {
+      autoSave(plan);
+    }
+  }, [plan, autoSave, isLoading, hasUnsavedChanges]);
   
   const fetchPlan = async () => {
     try {
@@ -167,6 +216,7 @@ export const SuccessPlan = ({ youthId, youth }: SuccessPlanProps) => {
       ...prev,
       goals: updatedGoals
     }));
+    setHasUnsavedChanges(true);
   };
   
   const addGoal = () => {
@@ -174,6 +224,7 @@ export const SuccessPlan = ({ youthId, youth }: SuccessPlanProps) => {
       ...prev,
       goals: [...prev.goals, { ...EMPTY_GOAL }]
     }));
+    setHasUnsavedChanges(true);
   };
   
   const removeGoal = (index: number) => {
@@ -183,6 +234,7 @@ export const SuccessPlan = ({ youthId, youth }: SuccessPlanProps) => {
       ...prev,
       goals: updatedGoals
     }));
+    setHasUnsavedChanges(true);
   };
   
   const handleSupportChange = (index: number, field: keyof Support, value: string) => {
@@ -195,6 +247,7 @@ export const SuccessPlan = ({ youthId, youth }: SuccessPlanProps) => {
       ...prev,
       supportNetwork: updatedSupport
     }));
+    setHasUnsavedChanges(true);
   };
   
   const addSupport = () => {
@@ -202,8 +255,9 @@ export const SuccessPlan = ({ youthId, youth }: SuccessPlanProps) => {
       ...prev,
       supportNetwork: [...prev.supportNetwork, { ...EMPTY_SUPPORT }]
     }));
+    setHasUnsavedChanges(true);
   };
-  
+
   const removeSupport = (index: number) => {
     const updatedSupport = [...plan.supportNetwork];
     updatedSupport.splice(index, 1);
@@ -211,6 +265,7 @@ export const SuccessPlan = ({ youthId, youth }: SuccessPlanProps) => {
       ...prev,
       supportNetwork: updatedSupport
     }));
+    setHasUnsavedChanges(true);
   };
   
   const handleResourceChange = (index: number, field: keyof Resource, value: string) => {
@@ -223,15 +278,17 @@ export const SuccessPlan = ({ youthId, youth }: SuccessPlanProps) => {
       ...prev,
       resources: updatedResources
     }));
+    setHasUnsavedChanges(true);
   };
-  
+
   const addResource = () => {
     setPlan(prev => ({
       ...prev,
       resources: [...prev.resources, { ...EMPTY_RESOURCE }]
     }));
+    setHasUnsavedChanges(true);
   };
-  
+
   const removeResource = (index: number) => {
     const updatedResources = [...plan.resources];
     updatedResources.splice(index, 1);
@@ -239,6 +296,7 @@ export const SuccessPlan = ({ youthId, youth }: SuccessPlanProps) => {
       ...prev,
       resources: updatedResources
     }));
+    setHasUnsavedChanges(true);
   };
   
   const handleInputChange = (field: keyof Plan, value: string) => {
@@ -246,15 +304,167 @@ export const SuccessPlan = ({ youthId, youth }: SuccessPlanProps) => {
       ...prev,
       [field]: value
     }));
+    setHasUnsavedChanges(true);
   };
   
   const handlePrintPlan = () => {
     window.print();
   };
   
-  const handleExportPdf = () => {
-    // PDF export functionality would be implemented here
-    console.log("Export PDF");
+  const handleExportPdf = async () => {
+    try {
+      const { exportHTMLToPDF } = await import('@/utils/export');
+      const { format } = await import('date-fns');
+
+      const exportData = {
+        youth: youth,
+        plan: plan,
+        exportDate: new Date().toLocaleDateString()
+      };
+
+      const html = generateSuccessPlanHTML(exportData);
+      const filename = `${youth.firstName}_${youth.lastName}_Success_Plan_${format(new Date(), 'yyyy-MM-dd')}.pdf`;
+
+      await exportHTMLToPDF(html, filename);
+      toast.success("Success plan exported successfully!");
+    } catch (error) {
+      console.error("Error exporting success plan:", error);
+      toast.error("Failed to export success plan");
+    }
+  };
+
+  const generateSuccessPlanHTML = (data: any) => {
+    return `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <title>Success Plan Report</title>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 20px; line-height: 1.6; }
+            .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 20px; }
+            .youth-info { background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
+            .section { margin-bottom: 30px; }
+            .section-title { font-weight: bold; font-size: 18px; margin-bottom: 15px; color: #333; border-bottom: 1px solid #ddd; padding-bottom: 5px; }
+            .goal-item { margin-bottom: 20px; padding: 15px; border: 1px solid #ddd; border-radius: 5px; background-color: #f9f9f9; }
+            .goal-title { font-weight: bold; font-size: 16px; margin-bottom: 10px; color: #333; }
+            .support-item { margin-bottom: 15px; padding: 10px; border-left: 4px solid #3b82f6; background-color: #eff6ff; }
+            .resource-item { margin-bottom: 15px; padding: 10px; border-left: 4px solid #10b981; background-color: #ecfdf5; }
+            .field { margin-bottom: 8px; }
+            .field-label { font-weight: bold; color: #555; }
+            .field-value { margin-left: 10px; }
+            .status-badge { padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; }
+            .status-not-started { background-color: #fee2e2; color: #991b1b; }
+            .status-in-progress { background-color: #fef3c7; color: #92400e; }
+            .status-completed { background-color: #dcfce7; color: #166534; }
+            @media print { body { margin: 0; } }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>Heartland Care Compass</h1>
+            <h2>Success Plan Report</h2>
+            <p>Generated on ${data.exportDate}</p>
+          </div>
+
+          <div class="youth-info">
+            <h3>Youth Information</h3>
+            <p><strong>Name:</strong> ${data.youth.firstName} ${data.youth.lastName}</p>
+            <p><strong>Date of Birth:</strong> ${data.youth.dateOfBirth || 'Not specified'}</p>
+            <p><strong>Current Level:</strong> ${data.youth.currentLevel || 'Not specified'}</p>
+          </div>
+
+          <div class="section">
+            <div class="section-title">Goals</div>
+            ${data.plan.goals.map((goal: any, index: number) => `
+              <div class="goal-item">
+                <div class="goal-title">Goal ${index + 1}: ${goal.title || 'Untitled Goal'}</div>
+                <div class="field">
+                  <span class="field-label">Description:</span>
+                  <span class="field-value">${goal.description || 'No description provided'}</span>
+                </div>
+                <div class="field">
+                  <span class="field-label">Timeline:</span>
+                  <span class="field-value">${goal.timeline || 'Not specified'}</span>
+                </div>
+                <div class="field">
+                  <span class="field-label">Resources:</span>
+                  <span class="field-value">${goal.resources || 'Not specified'}</span>
+                </div>
+                <div class="field">
+                  <span class="field-label">Status:</span>
+                  <span class="status-badge status-${goal.status.toLowerCase().replace(' ', '-')}">${goal.status}</span>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+
+          <div class="section">
+            <div class="section-title">Strengths</div>
+            <p>${data.plan.strengths || 'No strengths identified'}</p>
+          </div>
+
+          <div class="section">
+            <div class="section-title">Support Network</div>
+            ${data.plan.supportNetwork && data.plan.supportNetwork.length > 0 ?
+              data.plan.supportNetwork.map((support: any) => `
+                <div class="support-item">
+                  <div class="field">
+                    <span class="field-label">Name:</span>
+                    <span class="field-value">${support.name || 'Not specified'}</span>
+                  </div>
+                  <div class="field">
+                    <span class="field-label">Relationship:</span>
+                    <span class="field-value">${support.relationship || 'Not specified'}</span>
+                  </div>
+                  <div class="field">
+                    <span class="field-label">Contact:</span>
+                    <span class="field-value">${support.contact || 'Not specified'}</span>
+                  </div>
+                  <div class="field">
+                    <span class="field-label">Role:</span>
+                    <span class="field-value">${support.role || 'Not specified'}</span>
+                  </div>
+                </div>
+              `).join('') :
+              '<p>No support network members identified</p>'
+            }
+          </div>
+
+          <div class="section">
+            <div class="section-title">Resources</div>
+            ${data.plan.resources && data.plan.resources.length > 0 ?
+              data.plan.resources.map((resource: any) => `
+                <div class="resource-item">
+                  <div class="field">
+                    <span class="field-label">Name:</span>
+                    <span class="field-value">${resource.name || 'Not specified'}</span>
+                  </div>
+                  <div class="field">
+                    <span class="field-label">Type:</span>
+                    <span class="field-value">${resource.type || 'Not specified'}</span>
+                  </div>
+                  <div class="field">
+                    <span class="field-label">Details:</span>
+                    <span class="field-value">${resource.details || 'Not specified'}</span>
+                  </div>
+                  <div class="field">
+                    <span class="field-label">Contact Info:</span>
+                    <span class="field-value">${resource.contactInfo || 'Not specified'}</span>
+                  </div>
+                </div>
+              `).join('') :
+              '<p>No resources identified</p>'
+            }
+          </div>
+
+          <div class="section">
+            <div class="section-title">Challenges to Address</div>
+            <p>${data.plan.challengesToAddress || 'No challenges identified'}</p>
+          </div>
+        </body>
+      </html>
+    `;
   };
   
   if (isLoading) {
@@ -287,9 +497,9 @@ export const SuccessPlan = ({ youthId, youth }: SuccessPlanProps) => {
             <Download size={16} className="mr-2" />
             Export PDF
           </Button>
-          <Button onClick={handleSavePlan} disabled={isSaving}>
+          <Button onClick={handleSavePlan} disabled={isSaving} variant={hasUnsavedChanges ? "default" : "outline"}>
             <Save size={16} className="mr-2" />
-            {isSaving ? "Saving..." : "Save"}
+            {isSaving ? "Auto-saving..." : hasUnsavedChanges ? "Save" : "Saved"}
           </Button>
         </div>
       </div>

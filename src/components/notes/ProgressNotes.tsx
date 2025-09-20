@@ -119,11 +119,82 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
     setExpandedNote(expandedNote === noteId ? null : noteId);
   };
 
-  const handleExportNotes = () => {
-    // PDF export functionality
-    toast.info("Export Feature Coming Soon", {
-      description: "The PDF export feature will be available in the next update."
-    });
+  const handleExportNotes = async () => {
+    try {
+      const { exportHTMLToPDF } = await import('@/utils/export');
+
+      const exportData = {
+        youth: youth,
+        notes: filteredNotes,
+        exportDate: new Date().toLocaleDateString(),
+        totalNotes: filteredNotes.length
+      };
+
+      const html = generateProgressNotesHTML(exportData);
+      const filename = `${youth.firstName}_${youth.lastName}_Progress_Notes_${format(new Date(), 'yyyy-MM-dd')}.pdf`;
+
+      await exportHTMLToPDF(html, filename);
+      toast.success("Progress notes exported successfully!");
+    } catch (error) {
+      console.error("Error exporting progress notes:", error);
+      toast.error("Failed to export progress notes");
+    }
+  };
+
+  const generateProgressNotesHTML = (data: any) => {
+    return `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <title>Progress Notes Report</title>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 20px; line-height: 1.6; }
+            .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 20px; }
+            .youth-info { background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
+            .note-item { margin-bottom: 20px; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+            .note-date { font-weight: bold; color: #333; }
+            .note-staff { color: #666; font-style: italic; }
+            .note-content { margin-top: 10px; }
+            .summary { background-color: #e8f4fd; padding: 15px; border-radius: 5px; margin-top: 20px; }
+            @media print { body { margin: 0; } }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>Heartland Care Compass</h1>
+            <h2>Progress Notes Report</h2>
+            <p>Generated on ${data.exportDate}</p>
+          </div>
+
+          <div class="youth-info">
+            <h3>Youth Information</h3>
+            <p><strong>Name:</strong> ${data.youth.firstName} ${data.youth.lastName}</p>
+            <p><strong>Date of Birth:</strong> ${data.youth.dateOfBirth || 'Not specified'}</p>
+            <p><strong>Current Level:</strong> ${data.youth.currentLevel || 'Not specified'}</p>
+          </div>
+
+          <div class="summary">
+            <h3>Summary</h3>
+            <p><strong>Total Progress Notes:</strong> ${data.totalNotes}</p>
+            <p><strong>Date Range:</strong> ${data.notes.length > 0 ?
+              `${data.notes[data.notes.length - 1].date} to ${data.notes[0].date}` :
+              'No notes available'}</p>
+          </div>
+
+          <div class="notes-section">
+            <h3>Progress Notes</h3>
+            ${data.notes.map((note: any) => `
+              <div class="note-item">
+                <div class="note-date">Date: ${note.date}</div>
+                <div class="note-staff">Staff: ${note.staff}</div>
+                <div class="note-content">${note.note}</div>
+              </div>
+            `).join('')}
+          </div>
+        </body>
+      </html>
+    `;
   };
 
   return (

@@ -8,10 +8,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
-// Supabase removed - using local storage only
 import { Youth } from '@/integrations/supabase/services';
-import { fetchAllYouths, saveYouth } from '@/utils/local-storage-utils';
-import { User, Palette, FileText, Save } from 'lucide-react';
+import { useYouth } from "@/hooks/useSupabase";
+import { User, Palette, FileText, Save, Download, Printer } from 'lucide-react';
 
 const COLOR_PROFILES = {
   Gold: {
@@ -89,32 +88,18 @@ export const RealColorsAssessment = ({ selectedYouth }: RealColorsAssessmentProp
   const [completedBy, setCompletedBy] = useState("");
   const [youthSelection, setYouthSelection] = useState<'existing' | 'new'>('existing');
   const [selectedYouthId, setSelectedYouthId] = useState<string>("");
-  const [youths, setYouths] = useState<Youth[]>([]);
   const [newYouthName, setNewYouthName] = useState("");
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
+  const { youths, loadYouths, createYouth } = useYouth();
 
   useEffect(() => {
-    fetchYouths();
+    loadYouths();
     if (selectedYouth) {
       setSelectedYouthId(selectedYouth.id);
       setYouthSelection('existing');
     }
-  }, [selectedYouth]);
-
-  const fetchYouths = () => {
-    try {
-      const data = fetchAllYouths();
-      setYouths(data || []);
-    } catch (error) {
-      console.error('Error fetching youths:', error);
-      toast({
-        title: "Error",
-        description: "Failed to fetch youth data",
-        variant: "destructive",
-      });
-    }
-  };
+  }, [selectedYouth, loadYouths]);
 
   const resetForm = () => {
     setPrimaryColor("");
@@ -125,6 +110,173 @@ export const RealColorsAssessment = ({ selectedYouth }: RealColorsAssessmentProp
     setIsScreening(false);
     setCompletedBy("");
     setNewYouthName("");
+  };
+
+  const handlePrintAssessment = () => {
+    window.print();
+  };
+
+  const handleExportPdf = async () => {
+    try {
+      const { exportHTMLToPDF } = await import('@/utils/export');
+      const { format } = await import('date-fns');
+
+      const currentYouth = youthSelection === 'existing' ?
+        youths.find(y => y.id === selectedYouthId) :
+        { firstName: newYouthName.split(' ')[0], lastName: newYouthName.split(' ').slice(1).join(' ') };
+
+      if (!currentYouth) {
+        toast({
+          title: "Error",
+          description: "Please select a youth before exporting",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      const exportData = {
+        youth: currentYouth,
+        assessment: {
+          primaryColor,
+          secondaryColor,
+          insights,
+          comments,
+          observations,
+          completedBy,
+          assessmentDate: new Date().toLocaleDateString()
+        },
+        exportDate: new Date().toLocaleDateString()
+      };
+
+      const html = generateRealColorsHTML(exportData);
+      const filename = `${currentYouth.firstName}_${currentYouth.lastName}_Real_Colors_Assessment_${format(new Date(), 'yyyy-MM-dd')}.pdf`;
+
+      await exportHTMLToPDF(html, filename);
+      toast({
+        title: "Success",
+        description: "Real Colors assessment exported successfully!"
+      });
+    } catch (error) {
+      console.error("Error exporting Real Colors assessment:", error);
+      toast({
+        title: "Error",
+        description: "Failed to export Real Colors assessment",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const generateRealColorsHTML = (data: any) => {
+    const primaryProfile = data.assessment.primaryColor ? COLOR_PROFILES[data.assessment.primaryColor as keyof typeof COLOR_PROFILES] : null;
+    const secondaryProfile = data.assessment.secondaryColor ? COLOR_PROFILES[data.assessment.secondaryColor as keyof typeof COLOR_PROFILES] : null;
+
+    return `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <title>Real Colors Assessment Report</title>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 20px; line-height: 1.6; }
+            .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 20px; }
+            .youth-info { background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
+            .color-section { margin-bottom: 30px; padding: 20px; border: 2px solid #ddd; border-radius: 5px; }
+            .color-title { font-weight: bold; font-size: 18px; margin-bottom: 15px; }
+            .gold { border-color: #f59e0b; background-color: #fffbeb; }
+            .blue { border-color: #3b82f6; background-color: #eff6ff; }
+            .green { border-color: #10b981; background-color: #ecfdf5; }
+            .orange { border-color: #f97316; background-color: #fff7ed; }
+            .traits { display: flex; flex-wrap: wrap; gap: 5px; margin: 10px 0; }
+            .trait { background-color: #e5e7eb; padding: 3px 8px; border-radius: 12px; font-size: 12px; }
+            .field { margin-bottom: 15px; }
+            .field-label { font-weight: bold; color: #555; }
+            .field-value { margin-top: 5px; }
+            .characteristics { margin-top: 15px; }
+            .characteristic { margin-bottom: 8px; }
+            @media print { body { margin: 0; } }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>Heartland Care Compass</h1>
+            <h2>Real Colors Assessment Report</h2>
+            <p>Generated on ${data.exportDate}</p>
+          </div>
+
+          <div class="youth-info">
+            <h3>Youth Information</h3>
+            <p><strong>Name:</strong> ${data.youth.firstName} ${data.youth.lastName}</p>
+            <p><strong>Assessment Date:</strong> ${data.assessment.assessmentDate}</p>
+            <p><strong>Completed By:</strong> ${data.assessment.completedBy}</p>
+          </div>
+
+          ${primaryProfile ? `
+            <div class="color-section ${data.assessment.primaryColor.toLowerCase()}">
+              <div class="color-title">Primary Color: ${data.assessment.primaryColor}</div>
+              <div class="field">
+                <div class="field-label">Description:</div>
+                <div class="field-value">${primaryProfile.description}</div>
+              </div>
+              <div class="field">
+                <div class="field-label">Key Traits:</div>
+                <div class="traits">
+                  ${primaryProfile.traits.map((trait: string) => `<span class="trait">${trait}</span>`).join('')}
+                </div>
+              </div>
+              <div class="characteristics">
+                <div class="field-label">Characteristics:</div>
+                ${Object.entries(primaryProfile.characteristics).map(([key, value]) => `
+                  <div class="characteristic"><strong>${key}:</strong> ${value}</div>
+                `).join('')}
+              </div>
+            </div>
+          ` : ''}
+
+          ${secondaryProfile ? `
+            <div class="color-section ${data.assessment.secondaryColor.toLowerCase()}">
+              <div class="color-title">Secondary Color: ${data.assessment.secondaryColor}</div>
+              <div class="field">
+                <div class="field-label">Description:</div>
+                <div class="field-value">${secondaryProfile.description}</div>
+              </div>
+              <div class="field">
+                <div class="field-label">Key Traits:</div>
+                <div class="traits">
+                  ${secondaryProfile.traits.map((trait: string) => `<span class="trait">${trait}</span>`).join('')}
+                </div>
+              </div>
+              <div class="characteristics">
+                <div class="field-label">Characteristics:</div>
+                ${Object.entries(secondaryProfile.characteristics).map(([key, value]) => `
+                  <div class="characteristic"><strong>${key}:</strong> ${value}</div>
+                `).join('')}
+              </div>
+            </div>
+          ` : ''}
+
+          ${data.assessment.insights ? `
+            <div class="field">
+              <div class="field-label">Assessment Insights:</div>
+              <div class="field-value">${data.assessment.insights}</div>
+            </div>
+          ` : ''}
+
+          ${data.assessment.comments ? `
+            <div class="field">
+              <div class="field-label">Comments:</div>
+              <div class="field-value">${data.assessment.comments}</div>
+            </div>
+          ` : ''}
+
+          ${data.assessment.observations ? `
+            <div class="field">
+              <div class="field-label">Observations:</div>
+              <div class="field-value">${data.assessment.observations}</div>
+            </div>
+          ` : ''}
+        </body>
+      </html>
+    `;
   };
 
   const handleSubmit = async () => {
@@ -164,19 +316,16 @@ export const RealColorsAssessment = ({ selectedYouth }: RealColorsAssessmentProp
         const lastName = lastNameParts.join(' ');
 
         const newYouth = {
-          id: Date.now().toString(),
           firstName,
           lastName: lastName || '',
           age: 0,
           level: 0,
           pointTotal: 0,
-          createdAt: new Date(),
-          updatedAt: new Date()
         };
 
-        saveYouth(newYouth);
-        youthId = newYouth.id;
-        fetchYouths(); // Refresh the list
+        const createdYouth = await createYouth(newYouth);
+        youthId = createdYouth.id;
+        await loadYouths(); // Refresh the list
       }
 
       // TODO: Implement Real Colors assessment storage in local storage
@@ -197,7 +346,6 @@ export const RealColorsAssessment = ({ selectedYouth }: RealColorsAssessmentProp
       });
 
       resetForm();
-      fetchYouths();
 
     } catch (error) {
       console.error('Error saving assessment:', error);
@@ -418,15 +566,33 @@ export const RealColorsAssessment = ({ selectedYouth }: RealColorsAssessmentProp
             </div>
           </div>
 
-          {/* Submit Button */}
-          <Button 
-            onClick={handleSubmit} 
-            disabled={loading}
-            className="w-full"
-          >
-            <Save className="h-4 w-4 mr-2" />
-            {loading ? 'Saving...' : 'Save Assessment'}
-          </Button>
+          {/* Action Buttons */}
+          <div className="flex gap-2 flex-col sm:flex-row">
+            <Button
+              variant="outline"
+              onClick={handlePrintAssessment}
+              className="flex-1"
+            >
+              <Printer className="h-4 w-4 mr-2" />
+              Print
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleExportPdf}
+              className="flex-1"
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Export PDF
+            </Button>
+            <Button
+              onClick={handleSubmit}
+              disabled={loading}
+              className="flex-1"
+            >
+              <Save className="h-4 w-4 mr-2" />
+              {loading ? 'Saving...' : 'Save Assessment'}
+            </Button>
+          </div>
         </CardContent>
       </Card>
     </div>

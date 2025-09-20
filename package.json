@@ -13,18 +13,13 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "dev:full": "concurrently -n api,web -c magenta,cyan \"npm run start\" \"vite --port 8080\"",
-    "dev:local": "concurrently -n api,web -c magenta,cyan \"npm run start:local\" \"vite --port 8080\"",
     "preview:gh": "vite preview --outDir dist --base /Heartland-Care-Compass/ --host --port 4173 --strictPort",
-    "start": "node server-mongodb.js",
-    "start:local": "node server-local.js",
-    "start:old": "node server.js",
+    "start": "node server.js",
     "predeploy": "npm run build",
     "deploy": "gh-pages -d dist",
     "deploy:gh": "GH_PAGES_BASE=/Heartland-Care-Compass/ npm run build && gh-pages -d dist",
     "build:watch:gh": "GH_PAGES_BASE=/Heartland-Care-Compass/ vite build --watch",
-    "preview:watch:gh": "concurrently -c green,blue -n build,serve \"npm:build:watch:gh\" \"npm:preview:gh\"",
-    "troubleshoot": "node troubleshoot.js",
-    "seed": "node server-local.js && curl http://localhost:3000/api/seed"
+    "preview:watch:gh": "concurrently -c green,blue -n build,serve \"npm:build:watch:gh\" \"npm:preview:gh\""
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
@@ -73,7 +68,6 @@
     "input-otp": "^1.2.4",
     "jsonwebtoken": "^9.0.2",
     "lucide-react": "^0.462.0",
-    "mongodb": "^6.19.0",
     "next-themes": "^0.3.0",
     "react": "^18.3.1",
     "react-day-picker": "^8.10.1",

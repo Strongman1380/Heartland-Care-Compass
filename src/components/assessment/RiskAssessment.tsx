@@ -374,9 +374,129 @@ export const RiskAssessment = ({ youthId, youth }: RiskAssessmentProps) => {
     window.print();
   };
   
-  const handleExportPdf = () => {
-    // PDF export functionality would be implemented here
-    console.log("Export PDF");
+  const handleExportPdf = async () => {
+    try {
+      const { exportHTMLToPDF } = await import('@/utils/export');
+      const { format } = await import('date-fns');
+
+      const exportData = {
+        youth: youth,
+        assessment: assessment,
+        exportDate: new Date().toLocaleDateString(),
+        totalScore: getTotalScore(),
+        maxPossibleScore: getMaxPossibleScore()
+      };
+
+      const html = generateRiskAssessmentHTML(exportData);
+      const filename = `${youth.firstName}_${youth.lastName}_Risk_Assessment_${format(new Date(), 'yyyy-MM-dd')}.pdf`;
+
+      await exportHTMLToPDF(html, filename);
+      toast.success("Risk assessment exported successfully!");
+    } catch (error) {
+      console.error("Error exporting risk assessment:", error);
+      toast.error("Failed to export risk assessment");
+    }
+  };
+
+  const generateRiskAssessmentHTML = (data: any) => {
+    const getDomainName = (key: string) => {
+      const names: any = {
+        priorOffending: 'Prior Offending',
+        familyCircumstances: 'Family Circumstances',
+        education: 'Education',
+        peerRelations: 'Peer Relations',
+        substanceUse: 'Substance Use',
+        recreation: 'Recreation',
+        personality: 'Personality',
+        attitudes: 'Attitudes'
+      };
+      return names[key] || key;
+    };
+
+    return `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <title>Risk Assessment Report</title>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 20px; line-height: 1.6; }
+            .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 20px; }
+            .youth-info { background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
+            .score-summary { background-color: #e8f4fd; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
+            .domain-section { margin-bottom: 20px; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+            .domain-title { font-weight: bold; font-size: 16px; margin-bottom: 10px; color: #333; }
+            .score-bar { background-color: #e0e0e0; height: 20px; border-radius: 10px; margin: 5px 0; }
+            .score-fill { background-color: #3b82f6; height: 100%; border-radius: 10px; }
+            .field { margin-bottom: 10px; }
+            .field-label { font-weight: bold; color: #555; }
+            .field-value { margin-left: 10px; }
+            .risk-level { padding: 5px 10px; border-radius: 15px; color: white; font-weight: bold; }
+            .risk-low { background-color: #22c55e; }
+            .risk-moderate { background-color: #f59e0b; }
+            .risk-high { background-color: #ef4444; }
+            @media print { body { margin: 0; } }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>Heartland Care Compass</h1>
+            <h2>Risk Assessment Report</h2>
+            <p>Generated on ${data.exportDate}</p>
+          </div>
+
+          <div class="youth-info">
+            <h3>Youth Information</h3>
+            <p><strong>Name:</strong> ${data.youth.firstName} ${data.youth.lastName}</p>
+            <p><strong>Date of Birth:</strong> ${data.youth.dateOfBirth || 'Not specified'}</p>
+            <p><strong>Assessment Date:</strong> ${data.assessment.assessmentDate.toLocaleDateString()}</p>
+            <p><strong>Completed By:</strong> ${data.assessment.completedBy}</p>
+          </div>
+
+          <div class="score-summary">
+            <h3>Overall Assessment Summary</h3>
+            <p><strong>Total Score:</strong> ${data.totalScore} / ${data.maxPossibleScore}</p>
+            <p><strong>Overall Risk Level:</strong>
+              <span class="risk-level risk-${data.assessment.overallRiskLevel.toLowerCase()}">${data.assessment.overallRiskLevel}</span>
+            </p>
+            <p><strong>Recommended Level:</strong> ${data.assessment.recommendedLevel}</p>
+          </div>
+
+          <h3>Domain Scores</h3>
+          ${Object.entries(data.assessment.domains).map(([key, domain]: [string, any]) => `
+            <div class="domain-section">
+              <div class="domain-title">${getDomainName(key)}</div>
+              <div class="field">
+                <span class="field-label">Score:</span>
+                <span class="field-value">${domain.score} / ${domain.maxScore}</span>
+              </div>
+              <div class="score-bar">
+                <div class="score-fill" style="width: ${(domain.score / domain.maxScore) * 100}%"></div>
+              </div>
+              <div class="field">
+                <span class="field-label">Notes:</span>
+                <span class="field-value">${domain.notes || 'No notes provided'}</span>
+              </div>
+            </div>
+          `).join('')}
+
+          <div class="field">
+            <div class="field-label">Trauma History:</div>
+            <div class="field-value">${data.assessment.traumaHistory || 'Not specified'}</div>
+          </div>
+
+          <div class="field">
+            <div class="field-label">Strengths:</div>
+            <div class="field-value">${data.assessment.strengths || 'Not specified'}</div>
+          </div>
+
+          <div class="field">
+            <div class="field-label">Intervention Targets:</div>
+            <div class="field-value">${data.assessment.interventionTargets.join(', ') || 'None specified'}</div>
+          </div>
+        </body>
+      </html>
+    `;
   };
   
   const getTotalScore = () => {

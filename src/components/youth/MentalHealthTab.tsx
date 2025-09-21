@@ -2,16 +2,18 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { YouthFormData } from "@/hooks/useYouthForm";
 
 interface MentalHealthTabProps {
   formData: YouthFormData;
   handleChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
   handleCheckboxChange: (name: string, checked: boolean) => void;
+  handleSelectChange: (name: string, value: string) => void;
   setFormData: React.Dispatch<React.SetStateAction<YouthFormData>>;
 }
 
-export const MentalHealthTab = ({ formData, handleChange, handleCheckboxChange, setFormData }: MentalHealthTabProps) => {
+export const MentalHealthTab = ({ formData, handleChange, handleCheckboxChange, handleSelectChange, setFormData }: MentalHealthTabProps) => {
   return (
     <div className="space-y-4">
       <div className="space-y-2">
@@ -185,6 +187,59 @@ export const MentalHealthTab = ({ formData, handleChange, handleCheckboxChange, 
             }}
           />
           <Label htmlFor="hasSafetyPlan">Safety Plan in Place</Label>
+        </div>
+      </div>
+
+      {/* HYRNA Risk Assessment */}
+      <div className="border-t pt-4">
+        <h3 className="text-lg font-semibold mb-4">HYRNA Risk Assessment</h3>
+        
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="hyrnaRiskLevel">Risk Level</Label>
+            <Select value={formData.hyrnaRiskLevel} onValueChange={(value) => handleSelectChange("hyrnaRiskLevel", value)}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select risk level" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="not-assessed">Not Assessed</SelectItem>
+                <SelectItem value="Low">Low</SelectItem>
+                <SelectItem value="Medium">Medium</SelectItem>
+                <SelectItem value="High">High</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          
+          <div className="space-y-2">
+            <Label htmlFor="hyrnaScore">HYRNA Score</Label>
+            <Input 
+              id="hyrnaScore" 
+              name="hyrnaScore" 
+              type="number"
+              min="0"
+              max="100"
+              value={formData.hyrnaScore} 
+              onChange={(e) => {
+                // Ensure it's a valid number or empty string
+                const value = e.target.value;
+                if (value === '' || (parseInt(value) >= 0 && parseInt(value) <= 100)) {
+                  handleChange(e);
+                }
+              }}
+              placeholder="Enter score (0-100)"
+            />
+          </div>
+          
+          <div className="space-y-2">
+            <Label htmlFor="hyrnaAssessmentDate">Assessment Date</Label>
+            <Input 
+              id="hyrnaAssessmentDate" 
+              name="hyrnaAssessmentDate" 
+              type="date"
+              value={formData.hyrnaAssessmentDate} 
+              onChange={handleChange} 
+            />
+          </div>
         </div>
       </div>
 

@@ -60,6 +60,8 @@ export const youthService = {
 
   // Update youth
   async update(id: string, updates: YouthUpdate): Promise<Youth> {
+    console.log('Attempting to update youth:', { id, updates })
+    
     const { data, error } = await supabase
       .from('youth')
       .update(updates)
@@ -67,7 +69,17 @@ export const youthService = {
       .select()
       .single()
     
-    if (error) throw error
+    if (error) {
+      console.error('Supabase update error:', {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code
+      })
+      throw error
+    }
+    
+    console.log('Youth updated successfully:', data)
     return data
   },
 
@@ -159,7 +171,17 @@ export const behaviorPointsService = {
       .from('behavior_points')
       .delete()
       .eq('id', id)
-    
+
+    if (error) throw error
+  },
+
+  // Delete all behavior points for a youth
+  async deleteAllForYouth(youthId: string): Promise<void> {
+    const { error } = await supabase
+      .from('behavior_points')
+      .delete()
+      .eq('youth_id', youthId)
+
     if (error) throw error
   }
 }
@@ -285,7 +307,29 @@ export const dailyRatingsService = {
       .from('daily_ratings')
       .delete()
       .eq('id', id)
-    
+
+    if (error) throw error
+  },
+
+  // Delete daily ratings for a youth within a date range (for monthly reset)
+  async deleteByDateRange(youthId: string, startDate: Date, endDate: Date): Promise<void> {
+    const { error } = await supabase
+      .from('daily_ratings')
+      .delete()
+      .eq('youth_id', youthId)
+      .gte('date', startDate.toISOString().split('T')[0])
+      .lte('date', endDate.toISOString().split('T')[0])
+
+    if (error) throw error
+  },
+
+  // Delete all daily ratings for a youth
+  async deleteAllForYouth(youthId: string): Promise<void> {
+    const { error } = await supabase
+      .from('daily_ratings')
+      .delete()
+      .eq('youth_id', youthId)
+
     if (error) throw error
   }
 }
@@ -303,6 +347,43 @@ export const supabaseUtils = {
       return !error
     } catch {
       return false
+    }
+  },
+
+  // Test if realColorsResult field exists
+  async testRealColorsField(): Promise<boolean> {
+    try {
+      const { data, error } = await supabase
+        .from('youth')
+        .select('realColorsResult')
+        .limit(1)
+      
+      console.log('Real Colors field test:', { data, error })
+      return !error
+    } catch (err) {
+      console.error('Real Colors field test failed:', err)
+      return false
+    }
+  },
+
+  // Get table schema information
+  async getTableInfo(): Promise<any> {
+    try {
+      const { data, error } = await supabase
+        .from('youth')
+        .select('*')
+        .limit(1)
+      
+      if (error) {
+        console.error('Table info error:', error)
+        return null
+      }
+      
+      console.log('Sample youth record structure:', data?.[0] ? Object.keys(data[0]) : 'No records found')
+      return data?.[0] || null
+    } catch (err) {
+      console.error('Failed to get table info:', err)
+      return null
     }
   },
 

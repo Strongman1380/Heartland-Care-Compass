@@ -2,11 +2,11 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { PlusCircle, BarChart3, Home, Users, LineChart, LogOut, Menu, X, LogIn } from "lucide-react";
+import { PlusCircle, BarChart3, LogOut, Menu, X, LogIn } from "lucide-react";
 import { AddYouthDialog } from "@/components/youth/AddYouthDialog";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/contexts/SupabaseAuthContext";
 
 interface HeaderProps {
   // Remove admin-related props
@@ -21,10 +21,7 @@ export const Header = () => {
   const { user, signOutUser } = useAuth();
 
   // Navigation items configuration
-  const navigationItems = [
-    { path: '/', label: 'Dashboard', icon: Home },
-    { path: '/reports', label: 'Reports', icon: LineChart },
-  ];
+  const navigationItems = [];
 
   const isActiveRoute = (path: string) => {
     if (path === '/') return location.pathname === '/';
@@ -149,6 +146,17 @@ export const Header = () => {
                 </Button>
               </Link>
 
+              {/* Debug Tools Link */}
+              <Link to="/supabase-test">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-gray-600 hover:text-red-700 hover:bg-red-50"
+                >
+                  🔧 Debug
+                </Button>
+              </Link>
+
               {/* Primary CTA */}
               <Button 
                 onClick={() => setIsAddYouthDialogOpen(true)}
@@ -265,6 +273,16 @@ export const Header = () => {
                     >
                       <BarChart3 className="h-4 w-4 mr-2" />
                       KPI Dashboard
+                    </Button>
+                  </Link>
+
+                  <Link to="/supabase-test">
+                    <Button
+                      onClick={() => setIsMobileMenuOpen(false)}
+                      variant="outline"
+                      className="justify-start w-full"
+                    >
+                      🔧 Debug Tools
                     </Button>
                   </Link>
 

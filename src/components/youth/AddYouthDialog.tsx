@@ -222,6 +222,7 @@ export const AddYouthDialog = ({ onClose, onSuccess }: AddYouthDialogProps) => {
                 formData={formData}
                 handleChange={handleChange}
                 handleCheckboxChange={handleCheckboxChange}
+                handleSelectChange={handleSelectChange}
                 setFormData={setFormData}
               />
             </TabsContent>

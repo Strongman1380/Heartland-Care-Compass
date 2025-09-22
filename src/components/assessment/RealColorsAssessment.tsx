@@ -91,7 +91,7 @@ export const RealColorsAssessment = ({ selectedYouth }: RealColorsAssessmentProp
   const [newYouthName, setNewYouthName] = useState("");
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
-  const { youths, loadYouths, createYouth } = useYouth();
+  const { youths, loadYouths, createYouth, updateYouth } = useYouth();
 
   useEffect(() => {
     loadYouths();
@@ -121,9 +121,15 @@ export const RealColorsAssessment = ({ selectedYouth }: RealColorsAssessmentProp
       const { exportHTMLToPDF } = await import('@/utils/export');
       const { format } = await import('date-fns');
 
-      const currentYouth = youthSelection === 'existing' ?
-        youths.find(y => y.id === selectedYouthId) :
-        { firstName: newYouthName.split(' ')[0], lastName: newYouthName.split(' ').slice(1).join(' ') };
+      // Use selectedYouth if provided, otherwise use form selection
+      let currentYouth;
+      if (selectedYouth) {
+        currentYouth = selectedYouth;
+      } else if (youthSelection === 'existing') {
+        currentYouth = youths.find(y => y.id === selectedYouthId);
+      } else {
+        currentYouth = { firstName: newYouthName.split(' ')[0], lastName: newYouthName.split(' ').slice(1).join(' ') };
+      }
 
       if (!currentYouth) {
         toast({
@@ -175,11 +181,21 @@ export const RealColorsAssessment = ({ selectedYouth }: RealColorsAssessmentProp
       <html>
         <head>
           <meta charset="utf-8">
-          <title>Real Colors Assessment Report</title>
+          <title>Real Colors Assessment Report - Heartland Boys Home</title>
           <style>
-            body { font-family: Arial, sans-serif; margin: 20px; line-height: 1.6; }
-            .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 20px; }
-            .youth-info { background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
+            body { font-family: Arial, sans-serif; margin: 20px; line-height: 1.6; color: #333; }
+            .header {
+              text-align: center;
+              margin-bottom: 30px;
+              border-bottom: 3px solid #b91c1c;
+              padding-bottom: 20px;
+              background: linear-gradient(135deg, #b91c1c 0%, #dc2626 50%, #d97706 100%);
+              color: white;
+              padding: 20px;
+              border-radius: 8px 8px 0 0;
+            }
+            .logo { height: 60px; margin-bottom: 15px; }
+            .youth-info { background-color: #fef2f2; padding: 15px; border-radius: 5px; margin-bottom: 20px; border-left: 4px solid #dc2626; }
             .color-section { margin-bottom: 30px; padding: 20px; border: 2px solid #ddd; border-radius: 5px; }
             .color-title { font-weight: bold; font-size: 18px; margin-bottom: 15px; }
             .gold { border-color: #f59e0b; background-color: #fffbeb; }
@@ -198,7 +214,8 @@ export const RealColorsAssessment = ({ selectedYouth }: RealColorsAssessmentProp
         </head>
         <body>
           <div class="header">
-            <h1>Heartland Care Compass</h1>
+            <img src="${import.meta.env.BASE_URL}files/BoysHomeLogo.png" alt="Heartland Boys Home Logo" class="logo" />
+            <h1>Heartland Boys Home</h1>
             <h2>Real Colors Assessment Report</h2>
             <p>Generated on ${data.exportDate}</p>
           </div>
@@ -289,29 +306,38 @@ export const RealColorsAssessment = ({ selectedYouth }: RealColorsAssessmentProp
       return;
     }
 
-    if (youthSelection === 'existing' && !selectedYouthId) {
-      toast({
-        title: "Validation Error", 
-        description: "Please select a youth",
-        variant: "destructive",
-      });
-      return;
-    }
+    // Only validate youth selection if no selectedYouth is provided
+    if (!selectedYouth) {
+      if (youthSelection === 'existing' && !selectedYouthId) {
+        toast({
+          title: "Validation Error", 
+          description: "Please select a youth",
+          variant: "destructive",
+        });
+        return;
+      }
 
-    if (youthSelection === 'new' && !newYouthName.trim()) {
-      toast({
-        title: "Validation Error",
-        description: "Please enter youth name for new assessment",
-        variant: "destructive",
-      });
-      return;
+      if (youthSelection === 'new' && !newYouthName.trim()) {
+        toast({
+          title: "Validation Error",
+          description: "Please enter youth name for new assessment",
+          variant: "destructive",
+        });
+        return;
+      }
     }
 
     setLoading(true);
     try {
-      let youthId = selectedYouthId;
+      let youthId: string;
 
-      if (youthSelection === 'new') {
+      // Use selectedYouth if provided, otherwise use the form selection
+      if (selectedYouth) {
+        youthId = selectedYouth.id;
+      } else if (youthSelection === 'existing') {
+        youthId = selectedYouthId;
+      } else {
+        // Create new youth
         const [firstName, ...lastNameParts] = newYouthName.trim().split(' ');
         const lastName = lastNameParts.join(' ');
 
@@ -328,11 +354,21 @@ export const RealColorsAssessment = ({ selectedYouth }: RealColorsAssessmentProp
         await loadYouths(); // Refresh the list
       }
 
-      // TODO: Implement Real Colors assessment storage in local storage
-      console.log('Saving Real Colors assessment:', {
+      // Save Real Colors result to youth record
+      const realColorsResult = secondaryColor && secondaryColor !== 'none' 
+        ? `${primaryColor}/${secondaryColor}`
+        : primaryColor;
+      
+      // Save Real Colors result (updatedAt will be handled by database trigger)
+      await updateYouth(youthId, {
+        realColorsResult: realColorsResult
+      });
+
+      console.log('Saved Real Colors assessment:', {
         youth_id: youthId,
         primary_color: primaryColor,
         secondary_color: secondaryColor === 'none' ? null : secondaryColor || null,
+        real_colors_result: realColorsResult,
         insights: insights || null,
         comments: comments || null,
         observations: observations || null,
@@ -348,10 +384,25 @@ export const RealColorsAssessment = ({ selectedYouth }: RealColorsAssessmentProp
       resetForm();
 
     } catch (error) {
-      console.error('Error saving assessment:', error);
+      console.error('Error saving Real Colors assessment:', error);
+      
+      // Enhanced error logging for debugging
+      if (error && typeof error === 'object' && 'message' in error) {
+        const supabaseError = error as any;
+        console.error('Detailed Real Colors save error:', {
+          message: supabaseError.message,
+          details: supabaseError.details,
+          hint: supabaseError.hint,
+          code: supabaseError.code,
+          youthId: youthId,
+          realColorsResult: realColorsResult,
+          timestamp: new Date().toISOString()
+        });
+      }
+      
       toast({
         title: "Error",
-        description: "Failed to save assessment",
+        description: `Failed to save Real Colors assessment: ${error instanceof Error ? error.message : 'Unknown error'}`,
         variant: "destructive",
       });
     } finally {
@@ -371,51 +422,63 @@ export const RealColorsAssessment = ({ selectedYouth }: RealColorsAssessmentProp
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
-          {/* Youth Selection */}
-          <div className="space-y-4">
-            <Label className="text-base font-medium">Youth Selection</Label>
-            <div className="flex gap-4">
-              <label className="flex items-center space-x-2">
-                <input
-                  type="radio"
-                  checked={youthSelection === 'existing'}
-                  onChange={() => setYouthSelection('existing')}
-                  className="form-radio"
-                />
-                <span>Existing Youth</span>
-              </label>
-              <label className="flex items-center space-x-2">
-                <input
-                  type="radio"
-                  checked={youthSelection === 'new'}
-                  onChange={() => setYouthSelection('new')}
-                  className="form-radio"
-                />
-                <span>New Youth</span>
-              </label>
-            </div>
+          {/* Youth Selection - Only show when no selectedYouth is provided */}
+          {!selectedYouth && (
+            <div className="space-y-4">
+              <Label className="text-base font-medium">Youth Selection</Label>
+              <div className="flex gap-4">
+                <label className="flex items-center space-x-2">
+                  <input
+                    type="radio"
+                    checked={youthSelection === 'existing'}
+                    onChange={() => setYouthSelection('existing')}
+                    className="form-radio"
+                  />
+                  <span>Existing Youth</span>
+                </label>
+                <label className="flex items-center space-x-2">
+                  <input
+                    type="radio"
+                    checked={youthSelection === 'new'}
+                    onChange={() => setYouthSelection('new')}
+                    className="form-radio"
+                  />
+                  <span>New Youth</span>
+                </label>
+              </div>
 
-            {youthSelection === 'existing' ? (
-              <Select value={selectedYouthId} onValueChange={setSelectedYouthId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a youth" />
-                </SelectTrigger>
-                <SelectContent>
-                  {youths.map((youth) => (
-                    <SelectItem key={youth.id} value={youth.id}>
-                      {youth.firstName} {youth.lastName}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : (
-              <Input
-                placeholder="Enter youth name"
-                value={newYouthName}
-                onChange={(e) => setNewYouthName(e.target.value)}
-              />
-            )}
-          </div>
+              {youthSelection === 'existing' ? (
+                <Select value={selectedYouthId} onValueChange={setSelectedYouthId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a youth" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {youths.map((youth) => (
+                      <SelectItem key={youth.id} value={youth.id}>
+                        {youth.firstName} {youth.lastName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input
+                  placeholder="Enter youth name"
+                  value={newYouthName}
+                  onChange={(e) => setNewYouthName(e.target.value)}
+                />
+              )}
+            </div>
+          )}
+
+          {/* Show current youth info when selectedYouth is provided */}
+          {selectedYouth && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="flex items-center gap-2 text-blue-800">
+                <User className="h-4 w-4" />
+                <span className="font-medium">Assessment for: {selectedYouth.firstName} {selectedYouth.lastName}</span>
+              </div>
+            </div>
+          )}
 
           {/* Assessment Type */}
           <div className="flex items-center space-x-2">

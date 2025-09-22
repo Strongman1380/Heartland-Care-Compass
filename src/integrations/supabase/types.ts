@@ -122,6 +122,7 @@ export interface Database {
           onSubsystem: boolean | null
           pointsInCurrentLevel: number | null
           dailyPointsForPrivileges: number | null
+          realColorsResult: string | null
         }
         Insert: {
           id?: string
@@ -235,6 +236,7 @@ export interface Database {
           onSubsystem?: boolean | null
           pointsInCurrentLevel?: number | null
           dailyPointsForPrivileges?: number | null
+          realColorsResult?: string | null
         }
         Update: {
           id?: string
@@ -348,6 +350,7 @@ export interface Database {
           onSubsystem?: boolean | null
           pointsInCurrentLevel?: number | null
           dailyPointsForPrivileges?: number | null
+          realColorsResult?: string | null
         }
         Relationships: []
       }

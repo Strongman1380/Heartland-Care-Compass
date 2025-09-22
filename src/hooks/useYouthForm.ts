@@ -80,6 +80,11 @@ export interface YouthFormData {
   onSubsystem: boolean;
   pointsInCurrentLevel: number;
   dailyPointsForPrivileges: number;
+
+  // HYRNA Risk Assessment
+  hyrnaRiskLevel: string;
+  hyrnaScore: string;
+  hyrnaAssessmentDate: string;
 }
 
 export const useYouthForm = () => {
@@ -162,6 +167,11 @@ export const useYouthForm = () => {
     onSubsystem: false,
     pointsInCurrentLevel: 0,
     dailyPointsForPrivileges: 10,
+
+    // HYRNA Risk Assessment
+    hyrnaRiskLevel: "",
+    hyrnaScore: "",
+    hyrnaAssessmentDate: "",
   });
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {

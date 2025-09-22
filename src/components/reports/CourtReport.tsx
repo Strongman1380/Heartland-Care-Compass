@@ -412,10 +412,10 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
 
       {/* Printable Report */}
       <div ref={printRef} className="print-section bg-white text-black p-8 rounded-lg border">
-        <div className="text-center mb-6">
-          <img src={`${import.meta.env.BASE_URL}files/BoysHomeLogo.png`} alt="Heartland Boys Home Logo" className="h-14 mx-auto mb-2 object-contain" />
-          <h1 className="text-2xl font-bold mb-2">COURT REPORT</h1>
-          <h2 className="text-xl font-semibold">Heartland Boys Home</h2>
+        <div className="text-center mb-6 bg-gradient-to-r from-red-800 via-red-700 to-amber-600 text-white p-6 rounded-lg">
+          <img src={`${import.meta.env.BASE_URL}files/BoysHomeLogo.png`} alt="Heartland Boys Home Logo" className="h-16 mx-auto mb-4 object-contain" />
+          <h1 className="text-3xl font-bold mb-2">Heartland Boys Home</h1>
+          <h2 className="text-xl font-semibold">Court Report</h2>
         </div>
 
         {/* 1. Legal and Behavioral History Summary */}

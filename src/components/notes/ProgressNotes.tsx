@@ -6,7 +6,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { AlertCircle, ChevronDown, ChevronRight, FileText, Search } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { AlertCircle, ChevronDown, ChevronRight, FileText, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -25,12 +26,17 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [expandedNote, setExpandedNote] = useState<string | null>(null);
+  const [selectedNotes, setSelectedNotes] = useState<Set<string>>(new Set());
+  const [isDeleting, setIsDeleting] = useState(false);
   const [formData, setFormData] = useState({
     date: format(new Date(), 'yyyy-MM-dd'),
     staff: "",
     note: "",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [autoSaveTimer, setAutoSaveTimer] = useState<NodeJS.Timeout | null>(null);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [isAutoSaving, setIsAutoSaving] = useState(false);
 
   useEffect(() => {
     fetchNotes();
@@ -47,7 +53,7 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
       setNotes(fetchedNotes);
       setFilteredNotes(fetchedNotes);
     } catch (error) {
-      toast.error("Failed to load progress notes");
+      toast.error("Failed to load case notes");
     } finally {
       setIsLoading(false);
     }
@@ -68,7 +74,83 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+    
+    // Mark as having unsaved changes and trigger auto-save
+    setHasUnsavedChanges(true);
+    triggerAutoSave();
   };
+
+  // Auto-save functionality
+  const triggerAutoSave = () => {
+    // Clear existing timer
+    if (autoSaveTimer) {
+      clearTimeout(autoSaveTimer);
+    }
+    
+    // Set new timer for 2 seconds after user stops typing
+    const timer = setTimeout(() => {
+      autoSave();
+    }, 2000);
+    
+    setAutoSaveTimer(timer);
+  };
+
+  const autoSave = async () => {
+    if (!hasUnsavedChanges || isAutoSaving) return;
+    
+    // Don't auto-save if required fields are empty
+    if (!formData.staff.trim() || !formData.note.trim()) return;
+    
+    try {
+      setIsAutoSaving(true);
+      
+      // Save to localStorage as draft
+      const draftKey = `notes-draft-${youthId}`;
+      localStorage.setItem(draftKey, JSON.stringify({
+        ...formData,
+        savedAt: new Date().toISOString()
+      }));
+      
+      setHasUnsavedChanges(false);
+      
+      // Show subtle success indicator
+      toast.success("Draft auto-saved", { duration: 1000 });
+    } catch (error) {
+      console.error("Auto-save failed:", error);
+    } finally {
+      setIsAutoSaving(false);
+    }
+  };
+
+  // Load draft on component mount
+  useEffect(() => {
+    const draftKey = `notes-draft-${youthId}`;
+    const draft = localStorage.getItem(draftKey);
+    
+    if (draft) {
+      try {
+        const draftData = JSON.parse(draft);
+        setFormData(prev => ({
+          ...prev,
+          staff: draftData.staff || "",
+          note: draftData.note || ""
+        }));
+        setHasUnsavedChanges(true);
+        toast.info("Draft loaded from auto-save", { duration: 2000 });
+      } catch (error) {
+        console.error("Failed to load draft:", error);
+      }
+    }
+  }, [youthId]);
+
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => {
+      if (autoSaveTimer) {
+        clearTimeout(autoSaveTimer);
+      }
+    };
+  }, [autoSaveTimer]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -79,7 +161,7 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
     }
     
     if (!formData.note.trim()) {
-      toast.error("Progress note content is required");
+      toast.error("Case note content is required");
       return;
     }
     
@@ -98,18 +180,22 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
       
       saveProgressNote(youthId, newNote);
       
-      toast.success("Progress note added successfully");
+      toast.success("Case note added successfully");
       
-      // Reset form
+      // Clear draft and reset form
+      const draftKey = `notes-draft-${youthId}`;
+      localStorage.removeItem(draftKey);
+      
       setFormData({
         date: format(new Date(), 'yyyy-MM-dd'),
         staff: "",
         note: "",
       });
+      setHasUnsavedChanges(false);
       
       fetchNotes();
     } catch (error) {
-      toast.error("Failed to add progress note");
+      toast.error("Failed to add case note");
     } finally {
       setIsSubmitting(false);
     }
@@ -117,6 +203,55 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
 
   const toggleNoteExpansion = (noteId: string) => {
     setExpandedNote(expandedNote === noteId ? null : noteId);
+  };
+
+  const handleNoteSelection = (noteId: string, checked: boolean) => {
+    const newSelected = new Set(selectedNotes);
+    if (checked) {
+      newSelected.add(noteId);
+    } else {
+      newSelected.delete(noteId);
+    }
+    setSelectedNotes(newSelected);
+  };
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      const allNoteIds = new Set(filteredNotes.map(note => note.id || ""));
+      setSelectedNotes(allNoteIds);
+    } else {
+      setSelectedNotes(new Set());
+    }
+  };
+
+  const handleDeleteSelected = async () => {
+    if (selectedNotes.size === 0) {
+      toast.error("No notes selected for deletion");
+      return;
+    }
+
+    try {
+      setIsDeleting(true);
+      
+      // Get all notes from localStorage (not just for this youth)
+      const allNotes = JSON.parse(localStorage.getItem('heartland_notes') || '[]');
+      
+      // Filter out selected notes
+      const remainingNotes = allNotes.filter((note: any) => !selectedNotes.has(note.id || ""));
+      
+      // Save the filtered notes back to localStorage
+      localStorage.setItem('heartland_notes', JSON.stringify(remainingNotes));
+      
+      toast.success(`${selectedNotes.size} note(s) deleted successfully`);
+      
+      // Clear selection and refresh notes
+      setSelectedNotes(new Set());
+      fetchNotes();
+    } catch (error) {
+      toast.error("Failed to delete selected notes");
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const handleExportNotes = async () => {
@@ -131,13 +266,13 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
       };
 
       const html = generateProgressNotesHTML(exportData);
-      const filename = `${youth.firstName}_${youth.lastName}_Progress_Notes_${format(new Date(), 'yyyy-MM-dd')}.pdf`;
+      const filename = `${youth.firstName}_${youth.lastName}_Case_Notes_${format(new Date(), 'yyyy-MM-dd')}.pdf`;
 
       await exportHTMLToPDF(html, filename);
-      toast.success("Progress notes exported successfully!");
+      toast.success("Case notes exported successfully!");
     } catch (error) {
-      console.error("Error exporting progress notes:", error);
-      toast.error("Failed to export progress notes");
+      console.error("Error exporting case notes:", error);
+      toast.error("Failed to export case notes");
     }
   };
 
@@ -147,7 +282,7 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
       <html>
         <head>
           <meta charset="utf-8">
-          <title>Progress Notes Report</title>
+          <title>Case Notes Report</title>
           <style>
             body { font-family: Arial, sans-serif; margin: 20px; line-height: 1.6; }
             .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 20px; }
@@ -163,7 +298,7 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
         <body>
           <div class="header">
             <h1>Heartland Care Compass</h1>
-            <h2>Progress Notes Report</h2>
+            <h2>Case Notes Report</h2>
             <p>Generated on ${data.exportDate}</p>
           </div>
 
@@ -176,14 +311,14 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
 
           <div class="summary">
             <h3>Summary</h3>
-            <p><strong>Total Progress Notes:</strong> ${data.totalNotes}</p>
+            <p><strong>Total Case Notes:</strong> ${data.totalNotes}</p>
             <p><strong>Date Range:</strong> ${data.notes.length > 0 ?
               `${data.notes[data.notes.length - 1].date} to ${data.notes[0].date}` :
               'No notes available'}</p>
           </div>
 
           <div class="notes-section">
-            <h3>Progress Notes</h3>
+            <h3>Case Notes</h3>
             ${data.notes.map((note: any) => `
               <div class="note-item">
                 <div class="note-date">Date: ${note.date}</div>
@@ -201,11 +336,22 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
     <div className="space-y-6">
       <div className="flex justify-between items-start flex-col sm:flex-row">
         <div>
-          <h2 className="text-2xl font-bold mb-2">Progress Notes</h2>
+          <h2 className="text-2xl font-bold mb-2">Case Notes</h2>
           <p className="text-gray-600 mb-4">Record and track observations, behaviors, and incidents.</p>
         </div>
         
         <div className="flex space-x-2 mb-4 sm:mb-0">
+          {selectedNotes.size > 0 && (
+            <Button 
+              variant="destructive" 
+              size="sm" 
+              onClick={handleDeleteSelected}
+              disabled={isDeleting}
+            >
+              <Trash2 size={16} className="mr-2" />
+              {isDeleting ? "Deleting..." : `Delete ${selectedNotes.size} Selected`}
+            </Button>
+          )}
           <Button variant="outline" size="sm" onClick={handleExportNotes}>
             <FileText size={16} className="mr-2" />
             Export Notes
@@ -216,8 +362,16 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="lg:col-span-1">
           <CardHeader>
-            <CardTitle>Add Progress Note</CardTitle>
-            <CardDescription>Record observations, progress, or incidents</CardDescription>
+            <CardTitle>Add Case Note</CardTitle>
+            <CardDescription className="flex items-center gap-2">
+              Record observations, progress, or incidents
+              {hasUnsavedChanges && (
+                <span className="text-orange-600 text-sm font-medium flex items-center gap-1">
+                  • Unsaved changes
+                  {isAutoSaving && <span className="text-xs">(saving...)</span>}
+                </span>
+              )}
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -245,19 +399,19 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
               </div>
               
               <div>
-                <Label htmlFor="note">Progress Note</Label>
+                <Label htmlFor="note">Case Note</Label>
                 <Textarea
                   id="note"
                   name="note"
                   value={formData.note}
                   onChange={handleInputChange}
-                  placeholder="Enter your progress note here..."
+                  placeholder="Enter your case note here..."
                   rows={4}
                 />
               </div>
               
               <Button type="submit" disabled={isSubmitting} className="w-full">
-                {isSubmitting ? "Saving..." : "Add Progress Note"}
+                {isSubmitting ? "Saving..." : "Add Case Note"}
               </Button>
             </form>
           </CardContent>
@@ -266,7 +420,21 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
         <Card className="lg:col-span-2">
           <CardHeader>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between">
-              <CardTitle>Note History</CardTitle>
+              <div className="flex items-center space-x-3">
+                <CardTitle>Note History</CardTitle>
+                {filteredNotes.length > 0 && (
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="select-all"
+                      checked={selectedNotes.size === filteredNotes.length && filteredNotes.length > 0}
+                      onCheckedChange={handleSelectAll}
+                    />
+                    <Label htmlFor="select-all" className="text-sm text-gray-600">
+                      Select All
+                    </Label>
+                  </div>
+                )}
+              </div>
               <div className="flex mt-2 sm:mt-0">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
@@ -282,6 +450,7 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
             <CardDescription>
               {filteredNotes.length} {filteredNotes.length === 1 ? "note" : "notes"} 
               {searchTerm ? ` matching "${searchTerm}"` : ""}
+              {selectedNotes.size > 0 && ` • ${selectedNotes.size} selected`}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -299,21 +468,27 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
                     onOpenChange={() => toggleNoteExpansion(note.id || "")}
                     className="border rounded-md hover:bg-gray-50 transition-colors"
                   >
-                    <div className="flex items-start p-3 cursor-pointer">
-                      <CollapsibleTrigger asChild>
-                        <Button variant="ghost" size="sm" className="p-1 h-auto">
-                          {expandedNote === note.id ? 
-                            <ChevronDown size={16} /> : 
-                            <ChevronRight size={16} />
-                          }
-                        </Button>
-                      </CollapsibleTrigger>
+                    <div className="flex items-start p-3">
+                      <div className="flex items-center space-x-2 mr-2">
+                        <Checkbox
+                          checked={selectedNotes.has(note.id || "")}
+                          onCheckedChange={(checked) => handleNoteSelection(note.id || "", checked as boolean)}
+                        />
+                        <CollapsibleTrigger asChild>
+                          <Button variant="ghost" size="sm" className="p-1 h-auto cursor-pointer">
+                            {expandedNote === note.id ? 
+                              <ChevronDown size={16} /> : 
+                              <ChevronRight size={16} />
+                            }
+                          </Button>
+                        </CollapsibleTrigger>
+                      </div>
                       
-                      <div className="flex-1 ml-1">
+                      <div className="flex-1">
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between">
                           <div className="flex items-center space-x-2">
                             <Badge className="bg-blue-100 text-blue-800">
-                              Progress Note
+                              Case Note
                             </Badge>
                             <span className="text-sm text-gray-600">
                               by {note.staff}
@@ -346,7 +521,7 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
               </div>
             ) : (
               <div className="text-center py-8 text-gray-500">
-                {notes.length === 0 ? "No progress notes have been added yet." : "No notes match your search criteria."}
+                {notes.length === 0 ? "No case notes have been added yet." : "No notes match your search criteria."}
               </div>
             )}
           </CardContent>

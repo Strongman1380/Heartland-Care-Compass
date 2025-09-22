@@ -121,6 +121,11 @@ export const EditYouthDialog = ({ youth, open, onClose, onSuccess }: EditYouthDi
         onSubsystem: youth.onSubsystem || false,
         pointsInCurrentLevel: youth.pointsInCurrentLevel || 0,
         dailyPointsForPrivileges: youth.dailyPointsForPrivileges || 10,
+
+        // HYRNA Risk Assessment
+        hyrnaRiskLevel: youth.hyrnaRiskLevel || "",
+        hyrnaScore: youth.hyrnaScore?.toString() || "",
+        hyrnaAssessmentDate: youth.hyrnaAssessmentDate || "",
       };
       
       setFormData(populatedData);
@@ -284,6 +289,14 @@ export const EditYouthDialog = ({ youth, open, onClose, onSuccess }: EditYouthDi
         pointsInCurrentLevel: formData.pointsInCurrentLevel || 0,
         dailyPointsForPrivileges: formData.dailyPointsForPrivileges || 0,
         
+        // HYRNA Risk Assessment
+        hyrnaRiskLevel: formData.hyrnaRiskLevel === '' ? null : formData.hyrnaRiskLevel,
+        hyrnaScore: formData.hyrnaScore === '' ? null : parseInt(formData.hyrnaScore) || null,
+        hyrnaAssessmentDate: formData.hyrnaAssessmentDate === '' ? null : formData.hyrnaAssessmentDate,
+        
+        // Preserve Real Colors assessment data
+        realColorsResult: youth.realColorsResult,
+        
         updatedAt: new Date().toISOString()
       };
       
@@ -375,6 +388,7 @@ export const EditYouthDialog = ({ youth, open, onClose, onSuccess }: EditYouthDi
                 formData={formData}
                 handleChange={handleChange}
                 handleCheckboxChange={handleCheckboxChange}
+                handleSelectChange={handleSelectChange}
                 setFormData={setFormData}
               />
             </TabsContent>

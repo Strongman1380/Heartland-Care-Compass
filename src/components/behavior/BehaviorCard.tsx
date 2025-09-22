@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,6 +21,7 @@ import { alertService } from "@/utils/alertService";
 interface BehaviorCardProps {
   youthId: string;
   youth: any;
+  onYouthUpdated?: () => void;
 }
 
 // Level system data - using full thousands for internal calculations
@@ -46,13 +47,13 @@ interface SubsystemHistoryEntry {
   recordedBy: string;
 }
 
-export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
+export const BehaviorCard = ({ youthId, youth, onYouthUpdated }: BehaviorCardProps) => {
   const [activeTab, setActiveTab] = useState("daily");
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [isLoading, setIsLoading] = useState(true);
   
   // Use Supabase hooks
-  const { behaviorPoints: pointEntries, saveBehaviorPoints, loadBehaviorPoints } = useBehaviorPoints(youthId);
+  const { behaviorPoints: pointEntries, saveBehaviorPoints, loadBehaviorPoints, getBehaviorPointsForDate, deleteAllBehaviorPoints, error: behaviorPointsError } = useBehaviorPoints(youthId);
   const { updateYouth } = useYouth();
   const [formData, setFormData] = useState({
     dailyPoints: 0, // This will now be in thousands (e.g., 15000)
@@ -71,6 +72,10 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
     { status: 'off', date: new Date().toLocaleString(), recordedBy: 'System' }
   ]);
   const [showSubsystemLog, setShowSubsystemLog] = useState(false);
+  const [autoSaveTimer, setAutoSaveTimer] = useState<NodeJS.Timeout | null>(null);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [isAutoSaving, setIsAutoSaving] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
 
   // Handle case where youth is null or undefined
   if (!youth) {
@@ -93,6 +98,36 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
             </p>
           </CardContent>
         </Card>
+
+        {/* Debug: latest 5 behavior_points rows and last error */}
+        <div className="col-span-1 md:col-span-3">
+          <div className="rounded-md border border-dashed bg-gray-50 p-3 text-xs text-gray-600">
+            <div className="flex items-center justify-between">
+              <span className="font-medium text-gray-700">Debug • behavior_points (latest 5)</span>
+              <Button variant="ghost" size="sm" onClick={() => loadBehaviorPoints(youthId, 5)}>
+                Refresh
+              </Button>
+            </div>
+            {behaviorPointsError && (
+              <div className="mt-2 text-red-600">Last error: {behaviorPointsError}</div>
+            )}
+            <div className="mt-2 grid gap-1">
+              {pointEntries.slice(0, 5).map((row) => (
+                <div key={row.id} className="flex flex-wrap items-center justify-between rounded bg-white/70 px-2 py-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-gray-800">{row.date ? format(new Date(row.date), 'yyyy-MM-dd') : '—'}</span>
+                    <span className="text-gray-500">•</span>
+                    <span>Total: {row.totalPoints ?? 0}</span>
+                  </div>
+                  <span className="text-gray-400">id: {row.id}</span>
+                </div>
+              ))}
+              {pointEntries.length === 0 && (
+                <div className="text-gray-500">No rows found for this youth.</div>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -109,6 +144,33 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
 
   const currentLevel = getCurrentLevel();
   const nextLevel = getNextLevel();
+
+  // Track current-level total points locally so UI updates immediately
+  const [currentTotal, setCurrentTotal] = useState<number>(youth.pointTotal || 0);
+  const totalEarned = useMemo(() => {
+    try {
+      return (pointEntries || []).reduce((sum, entry) => sum + (entry.totalPoints || 0), 0);
+    } catch {
+      return 0;
+    }
+  }, [pointEntries]);
+
+  useEffect(() => {
+    setCurrentTotal(youth.pointTotal || 0);
+  }, [youth.pointTotal]);
+
+  // If the stored currentTotal is 0 but we clearly have entries,
+  // reconcile by using the derived sum and persist it once.
+  // Skip this reconciliation if we just reset points to prevent conflicts
+  useEffect(() => {
+    if ((youth.pointTotal || 0) === 0 && totalEarned > 0 && currentTotal !== 0 && !isResetting) {
+      setCurrentTotal(totalEarned);
+      // Best-effort persist; ignore errors in UI
+      updateYouth(youthId, { pointTotal: totalEarned as any }).catch(() => {});
+    }
+  }, [totalEarned, currentTotal, isResetting]);
+
+  const displayTotal = currentTotal || totalEarned;
 
   // Format points for display (with commas)
   const formatPoints = (points: number) => {
@@ -152,10 +214,8 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
   }, [youthId, youth]);
 
   useEffect(() => {
-    if (pointEntries.length > 0) {
-      calculateWeeklyAverages(pointEntries);
-      setIsLoading(false);
-    }
+    calculateWeeklyAverages(pointEntries);
+    setIsLoading(false);
   }, [pointEntries]);
 
   const calculateWeeklyAverages = (entries: BehaviorPoints[]) => {
@@ -194,7 +254,85 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
     } else {
       setFormData(prev => ({ ...prev, [name]: value }));
     }
+    
+    // Mark as having unsaved changes and trigger auto-save
+    setHasUnsavedChanges(true);
+    triggerAutoSave();
   };
+
+  // Auto-save functionality
+  const triggerAutoSave = () => {
+    // Clear existing timer
+    if (autoSaveTimer) {
+      clearTimeout(autoSaveTimer);
+    }
+    
+    // Set new timer for 2 seconds after user stops typing
+    const timer = setTimeout(() => {
+      autoSave();
+    }, 2000);
+    
+    setAutoSaveTimer(timer);
+  };
+
+  const autoSave = async () => {
+    if (!hasUnsavedChanges || isAutoSaving) return;
+    
+    // Don't auto-save if there are validation errors
+    const error = validatePointsInput(formData.dailyPoints.toString());
+    if (error) return;
+    
+    try {
+      setIsAutoSaving(true);
+      
+      // Save to localStorage as draft
+      const draftKey = `behavior-draft-${youthId}-${format(selectedDate, 'yyyy-MM-dd')}`;
+      localStorage.setItem(draftKey, JSON.stringify({
+        ...formData,
+        savedAt: new Date().toISOString()
+      }));
+      
+      setHasUnsavedChanges(false);
+      
+      // Show subtle success indicator
+      toast.success("Draft auto-saved", { duration: 1000 });
+    } catch (error) {
+      console.error("Auto-save failed:", error);
+    } finally {
+      setIsAutoSaving(false);
+    }
+  };
+
+  // Load draft on component mount
+  useEffect(() => {
+    const draftKey = `behavior-draft-${youthId}-${format(selectedDate, 'yyyy-MM-dd')}`;
+    const draft = localStorage.getItem(draftKey);
+    
+    if (draft) {
+      try {
+        const draftData = JSON.parse(draft);
+        setFormData(prev => ({
+          ...prev,
+          dailyPoints: draftData.dailyPoints || 0,
+          comments: draftData.comments || "",
+          staffName: draftData.staffName || ""
+        }));
+        setHasUnsavedChanges(true);
+        toast.info("Draft loaded from auto-save", { duration: 2000 });
+      } catch (error) {
+        console.error("Failed to load draft:", error);
+      }
+    }
+  }, [youthId, selectedDate]);
+
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => {
+      if (autoSaveTimer) {
+        clearTimeout(autoSaveTimer);
+      }
+    };
+  }, [autoSaveTimer]);
 
   const handleSubsystemChange = (checked: boolean) => {
     const newStatusText = checked ? 'ON' : 'OFF';
@@ -228,30 +366,45 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
     try {
       setIsSubmitting(true);
       
+      const dateString = format(selectedDate, 'yyyy-MM-dd')
+      const prevForDate = await getBehaviorPointsForDate(youthId, dateString)
+
       const pointEntry = {
         youth_id: youthId,
-        date: format(selectedDate, 'yyyy-MM-dd'),
+        date: dateString,
         morningPoints: 0,
         afternoonPoints: 0,
         eveningPoints: 0,
-        totalPoints: formData.dailyPoints, // Direct thousands input
+        totalPoints: Number(formData.dailyPoints) || 0, // Ensure numeric
         comments: formData.comments,
       };
       
-      await saveBehaviorPoints(pointEntry);
+      const saved = await saveBehaviorPoints(pointEntry);
+      // Update youth's in-level total based on delta for the date
+      const old = prevForDate?.totalPoints || 0
+      const delta = (saved?.totalPoints || 0) - old
+      if (delta !== 0) {
+        const current = youth.pointTotal || 0
+        const nextTotal = Math.max(0, current + delta)
+        setCurrentTotal(nextTotal)
+        await updateYouth(youthId, { pointTotal: nextTotal as any })
+        // Trigger parent component refresh
+        onYouthUpdated?.()
+      }
+      // Ensure UI reflects latest data
+      await loadBehaviorPoints(youthId);
       
       // Update youth's subsystem status if changed
       if (formData.onSubsystem !== youth.onSubsystem) {
         await updateYouth(youthId, { onSubsystem: formData.onSubsystem });
       }
     } catch (error) {
-      console.error("Error syncing youth points:", error);
-      
-      // Fallback to manual update if sync service fails
-      const currentTotal = youth.pointTotal || 0;
-      const newTotal = currentTotal + formData.dailyPoints;
-      updateYouth(youthId, { pointTotal: newTotal });
-      youth.pointTotal = newTotal;
+      const message = error instanceof Error ? error.message : String(error);
+      console.error("Error saving behavior points:", message);
+      toast.error(`Failed to save behavior points: ${message}`);
+      return; // Exit early on error
+    } finally {
+      setIsSubmitting(false);
     }
     
     // Check if points meet privilege requirement
@@ -261,7 +414,10 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
       toast.warning(`Points saved (${formatPoints(formData.dailyPoints)}), but below privilege requirement of ${formatPoints(currentLevel.dailyPointsForPrivileges)} points.`);
     }
     
-    // Reset form
+    // Clear draft and reset form
+    const draftKey = `behavior-draft-${youthId}-${format(selectedDate, 'yyyy-MM-dd')}`;
+    localStorage.removeItem(draftKey);
+    
     setFormData({
       dailyPoints: 0,
       comments: "",
@@ -269,6 +425,7 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
       staffName: "",
     });
     setPointsError("");
+    setHasUnsavedChanges(false);
     
     loadBehaviorPoints(youthId);
   };
@@ -277,19 +434,22 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
     if (nextLevel) {
       try {
         // Update youth level and reset points
-        updateYouth(youthId, { 
+        updateYouth(youthId, {
           level: youth.level + 1,
           pointTotal: 0  // Reset points to 0 when leveling up
         });
 
         toast.success(`Congratulations! Advanced to ${nextLevel.name}! Points reset to 0.`);
-        
+
         // Update the local youth object to reflect the changes
         youth.level = youth.level + 1;
         youth.pointTotal = 0;
-        
+
         // Force component re-render by updating form data
         setFormData(prev => ({ ...prev, dailyPoints: 0 }));
+
+        // Trigger parent component refresh
+        onYouthUpdated?.();
       } catch (error) {
         console.error("Error updating level:", error);
         toast.error("Failed to update level");
@@ -301,20 +461,23 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
     if (youth.level > 1) {
       try {
         // Update youth level and reset points
-        updateYouth(youthId, { 
+        updateYouth(youthId, {
           level: youth.level - 1,
           pointTotal: 0  // Reset points to 0 when demoting
         });
 
         const previousLevel = levelsData.find(level => level.level === youth.level - 1);
         toast.warning(`Demoted to ${previousLevel?.name || `Level ${youth.level - 1}`}. Points reset to 0.`);
-        
+
         // Update the local youth object to reflect the changes
         youth.level = youth.level - 1;
         youth.pointTotal = 0;
-        
+
         // Force component re-render by updating form data
         setFormData(prev => ({ ...prev, dailyPoints: 0 }));
+
+        // Trigger parent component refresh
+        onYouthUpdated?.();
       } catch (error) {
         console.error("Error updating level:", error);
         toast.error("Failed to update level");
@@ -411,9 +574,7 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
   };
 
   const isEligibleForLevelUp = () => {
-    // Points are already stored in thousands in the database
-    const youthTotal = youth.pointtotal || 0;
-    return youthTotal >= currentLevel.cumulativePointsRequired;
+    return displayTotal >= currentLevel.cumulativePointsRequired;
   };
 
   const renderSubsystemLog = () => {
@@ -510,7 +671,7 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
                 <div>
                   <Label className="text-sm font-medium text-gray-500">Points for Next Level</Label>
                   <p className="text-lg font-semibold">
-                    {formatPoints(youth.pointtotal || 0)} / {formatPoints(currentLevel.cumulativePointsRequired)}
+                    {formatPoints(displayTotal)} / {formatPoints(currentLevel.cumulativePointsRequired)}
                   </p>
                   <div className="w-full bg-gray-200 rounded-full h-2 mt-1">
                     <div 
@@ -518,7 +679,7 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
                         isEligibleForLevelUp() ? 'bg-green-500 animate-pulse' : 'bg-blue-500'
                       }`}
                       style={{ 
-                        width: `${Math.min(100, ((youth.pointtotal || 0) / currentLevel.cumulativePointsRequired) * 100)}%` 
+                        width: `${Math.min(100, (displayTotal / currentLevel.cumulativePointsRequired) * 100)}%` 
                       }}
                     ></div>
                   </div>
@@ -560,6 +721,53 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
                   <TrendingDown size={14} className="mr-1" />
                   Demote
                 </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={async () => {
+                    if (confirm(`Reset ALL points for ${youth.firstName} ${youth.lastName} to 0? This will delete all behavior point entries and cannot be undone.`)) {
+                      try {
+                        setIsResetting(true);
+                        setCurrentTotal(0);
+                        
+                        // Delete all behavior point entries
+                        await deleteAllBehaviorPoints(youthId);
+                        
+                        // Reset youth total points
+                        await updateYouth(youthId, { pointTotal: 0 as any });
+                        
+                        // Clear any auto-save drafts
+                        const draftKey = `behavior-draft-${youthId}-${format(new Date(), 'yyyy-MM-dd')}`;
+                        localStorage.removeItem(draftKey);
+                        
+                        // Reset form data
+                        setFormData(prev => ({
+                          ...prev,
+                          dailyPoints: 0,
+                          comments: "",
+                          staffName: ""
+                        }));
+                        
+                        // Reload behavior points to refresh the display
+                        await loadBehaviorPoints(youthId);
+                        
+                        // Trigger parent component refresh
+                        onYouthUpdated?.();
+                        
+                        toast.success('All points have been reset to 0.');
+                      } catch (err) {
+                        console.error('Failed to reset points:', err);
+                        toast.error('Failed to reset points.');
+                      } finally {
+                        // Clear reset flag after a short delay to ensure state has settled
+                        setTimeout(() => setIsResetting(false), 1000);
+                      }
+                    }
+                  }}
+                  className="flex-1"
+                >
+                  Reset Points
+                </Button>
               </div>
             </div>
           </CardContent>
@@ -575,10 +783,16 @@ export const BehaviorCard = ({ youthId, youth }: BehaviorCardProps) => {
                   <TabsTrigger value="weekly">Weekly View</TabsTrigger>
                 </TabsList>
               </div>
-              <CardDescription>
+              <CardDescription className="flex items-center gap-2">
                 {activeTab === "daily" 
                   ? "Record points earned for the day" 
                   : "View point trends over the past week"}
+                {hasUnsavedChanges && (
+                  <span className="text-orange-600 text-sm font-medium flex items-center gap-1">
+                    • Unsaved changes
+                    {isAutoSaving && <span className="text-xs">(saving...)</span>}
+                  </span>
+                )}
               </CardDescription>
             </CardHeader>
             <CardContent>

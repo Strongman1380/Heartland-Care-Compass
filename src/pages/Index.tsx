@@ -6,7 +6,6 @@ import { YouthDetailView } from "@/components/home/YouthDetailView";
 import { useYouth } from "@/hooks/useSupabase";
 import type { Youth } from "@/integrations/supabase/services";
 import { useToast } from "@/hooks/use-toast";
-import { PasteYouthProfileDialog } from "@/components/youth/PasteYouthProfileDialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -111,9 +110,6 @@ const Index = () => {
       <main className="container mx-auto px-4 py-8">
         {!selectedYouth ? (
           <>
-            <div className="flex justify-center mb-4">
-              <PasteYouthProfileDialog onImported={loadYouths} />
-            </div>
             <YouthSelectionView
               youths={youths}
               loading={loading}

@@ -17,7 +17,7 @@ const ProgressNotesPage = () => {
       <main className="container mx-auto px-4 py-8">
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold bg-gradient-to-r from-red-800 via-red-700 to-yellow-600 bg-clip-text text-transparent mb-4">
-            Progress Notes
+            Case Notes
           </h1>
           <p className="text-red-700 text-lg">Document and track youth progress and observations</p>
         </div>

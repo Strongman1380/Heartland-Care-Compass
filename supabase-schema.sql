@@ -116,7 +116,8 @@ CREATE TABLE IF NOT EXISTS public.youth (
     "hasSafetyPlan" BOOLEAN,
     "onSubsystem" BOOLEAN,
     "pointsInCurrentLevel" INTEGER,
-    "dailyPointsForPrivileges" INTEGER
+    "dailyPointsForPrivileges" INTEGER,
+    "realColorsResult" TEXT
 );
 
 -- Create behavior_points table

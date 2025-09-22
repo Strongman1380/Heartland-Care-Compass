@@ -1,6 +1,7 @@
 import React from 'react'
 import { Header } from '@/components/layout/Header'
 import SupabaseTest from '@/components/common/SupabaseTest'
+import { SupabaseDiagnostic } from '@/components/debug/SupabaseDiagnostic'
 
 const SupabaseTestPage: React.FC = () => {
   return (
@@ -17,8 +18,15 @@ const SupabaseTestPage: React.FC = () => {
             </p>
           </div>
           
-          <div className="flex justify-center">
+          <div className="flex justify-center mb-8">
             <SupabaseTest />
+          </div>
+          
+          <div className="mb-8">
+            <h2 className="text-2xl font-bold text-gray-900 mb-4">
+              Advanced Diagnostics
+            </h2>
+            <SupabaseDiagnostic />
           </div>
           
           <div className="mt-8 p-6 bg-white rounded-lg shadow-sm">

@@ -141,7 +141,7 @@ export const ReportGenerationForm = ({ onGenerateReport, isGenerating }: ReportG
                   checked={includeOptions.notes} 
                   onCheckedChange={() => handleIncludeOptionChange("notes")}
                 />
-                <Label htmlFor="includeNotes">Progress Notes</Label>
+                <Label htmlFor="includeNotes">Case Notes</Label>
               </div>
               
               <div className="flex items-center space-x-2">

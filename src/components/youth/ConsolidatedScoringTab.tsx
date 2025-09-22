@@ -9,18 +9,22 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Calendar, Save, Plus } from "lucide-react";
 import { format } from "date-fns";
-// Supabase removed - using local storage only
 import { useToast } from "@/hooks/use-toast";
+import { useDailyRatings } from "@/hooks/useSupabase";
 
 interface ConsolidatedScoringTabProps {
   youth: Youth;
+  onRatingsUpdated?: () => void;
 }
 
-export const ConsolidatedScoringTab = ({ youth }: ConsolidatedScoringTabProps) => {
+export const ConsolidatedScoringTab = ({ youth, onRatingsUpdated }: ConsolidatedScoringTabProps) => {
   const [selectedDate, setSelectedDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [loading, setLoading] = useState(false);
   const [staffName, setStaffName] = useState("");
   const { toast } = useToast();
+  const { saveDailyRating } = useDailyRatings();
+
+
 
   // Daily Ratings State
   const [dailyRating, setDailyRating] = useState({
@@ -34,11 +38,6 @@ export const ConsolidatedScoringTab = ({ youth }: ConsolidatedScoringTabProps) =
     dealAuthorityComment: ""
   });
 
-  // Daily Points State
-  const [dailyPoints, setDailyPoints] = useState({
-    totalPoints: 0,
-    comments: ""
-  });
 
   const fetchExistingData = () => {
     try {
@@ -55,10 +54,6 @@ export const ConsolidatedScoringTab = ({ youth }: ConsolidatedScoringTabProps) =
         dealAuthorityComment: ""
       });
       setStaffName("");
-      setDailyPoints({
-        totalPoints: 0,
-        comments: ""
-      });
     } catch (error) {
       // No existing data found, which is fine
       console.log("No existing data for selected date");
@@ -66,6 +61,7 @@ export const ConsolidatedScoringTab = ({ youth }: ConsolidatedScoringTabProps) =
   };
 
   useEffect(() => {
+    // Only fetch existing data when date or youth changes, not on every render
     fetchExistingData();
   }, [selectedDate, youth.id]);
 
@@ -104,21 +100,17 @@ export const ConsolidatedScoringTab = ({ youth }: ConsolidatedScoringTabProps) =
     </div>
   );
 
-  const handleSaveDPN = () => {
+  const handleSaveDPN = async () => {
     setLoading(true);
     try {
-      // TODO: Save daily ratings to local storage
-      console.log('Saving DPN:', {
+      // Save daily ratings to Supabase
+      const ratingData = {
         youth_id: youth.id,
         date: selectedDate,
-        peer_interaction: dailyRating.peerInteraction,
-        peer_comment: dailyRating.peerInteractionComment,
-        adult_interaction: dailyRating.adultInteraction,
-        adult_comment: dailyRating.adultInteractionComment,
-        investment_level: dailyRating.investmentLevel,
-        investment_comment: dailyRating.investmentLevelComment,
-        deal_authority: dailyRating.dealAuthority,
-        authority_comment: dailyRating.dealAuthorityComment,
+        peerInteraction: dailyRating.peerInteraction,
+        adultInteraction: dailyRating.adultInteraction,
+        investmentLevel: dailyRating.investmentLevel,
+        dealAuthority: dailyRating.dealAuthority,
         staff: staffName,
         comments: [
           dailyRating.peerInteractionComment,
@@ -126,12 +118,14 @@ export const ConsolidatedScoringTab = ({ youth }: ConsolidatedScoringTabProps) =
           dailyRating.investmentLevelComment,
           dailyRating.dealAuthorityComment
         ].filter(Boolean).join(' | ')
-      });
+      };
 
-      toast({
-        title: "Success",
-        description: "DPN (Daily Point Number) saved successfully"
-      });
+      await saveDailyRating(ratingData);
+
+      // Call the callback to refresh behavioral averages in parent component
+      if (onRatingsUpdated) {
+        onRatingsUpdated();
+      }
 
       // Reset daily ratings form only
       setDailyRating({
@@ -158,45 +152,6 @@ export const ConsolidatedScoringTab = ({ youth }: ConsolidatedScoringTabProps) =
     }
   };
 
-  const handleSaveDailyPoints = () => {
-    setLoading(true);
-    try {
-      // TODO: Save daily points to local storage
-      console.log('Saving daily points:', {
-        youth_id: youth.id,
-        date: selectedDate,
-        morningpoints: 0,
-        afternoonpoints: 0,
-        eveningpoints: 0,
-        totalpoints: dailyPoints.totalPoints,
-        comments: dailyPoints.comments
-      });
-
-      // TODO: Update youth's total points in local storage
-      console.log('Updating youth total points:', (youth.pointTotal || 0) + dailyPoints.totalPoints);
-
-      toast({
-        title: "Success",
-        description: "Daily Points Total saved successfully"
-      });
-
-      // Reset daily points form only
-      setDailyPoints({
-        totalPoints: 0,
-        comments: ""
-      });
-
-    } catch (error) {
-      console.error("Error saving daily points:", error);
-      toast({
-        title: "Error",
-        description: "Failed to save daily points data",
-        variant: "destructive"
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
 
   return (
     <div className="space-y-6">
@@ -285,49 +240,6 @@ export const ConsolidatedScoringTab = ({ youth }: ConsolidatedScoringTabProps) =
         </CardContent>
       </Card>
 
-      {/* Daily Points */}
-      <Card className="border-2 border-primary/20">
-        <CardHeader>
-          <CardTitle className="text-lg text-primary">Daily Points</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="total-points">Total Day Points</Label>
-            <Input
-              id="total-points"
-              type="number"
-              min="0"
-              max="300"
-              value={dailyPoints.totalPoints}
-              onChange={(e) => setDailyPoints({...dailyPoints, totalPoints: parseInt(e.target.value) || 0})}
-              className="text-lg font-medium"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="points-comments">Points Comments</Label>
-            <Textarea
-              id="points-comments"
-              value={dailyPoints.comments}
-              onChange={(e) => setDailyPoints({...dailyPoints, comments: e.target.value})}
-              placeholder="Comments about daily points..."
-              rows={2}
-            />
-          </div>
-          
-          {/* Daily Points Submit Button */}
-          <div className="flex justify-end pt-4 border-t">
-            <Button 
-              onClick={handleSaveDailyPoints} 
-              disabled={loading || dailyPoints.totalPoints === 0} 
-              size="lg"
-              className="min-w-[180px]"
-            >
-              <Save className="mr-2 h-4 w-4" />
-              {loading ? "Saving..." : "Submit Daily Points"}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
     </div>
   );
 };

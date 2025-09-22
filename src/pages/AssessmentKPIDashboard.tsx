@@ -108,18 +108,33 @@ const GroupHomeKPIDashboard = () => {
     const totalYouth = youths.length;
     
     // Risk level distribution from HYRNA assessments
-    const riskCounts = { Low: 0, Medium: 0, High: 0 };
+    const riskCounts = { 
+      'Very Low': 0, 
+      'Low': 0, 
+      'Low Medium': 0, 
+      'Medium': 0, 
+      'Medium High': 0, 
+      'High': 0, 
+      'Very High': 0 
+    };
+    
     youths.forEach(youth => {
       const riskLevel = youth.hyrnaRiskLevel || 'Medium'; // Default to Medium if not set
-      if (riskLevel in riskCounts) {
-        riskCounts[riskLevel as keyof typeof riskCounts]++;
+      // Handle legacy "Moderate" level
+      const normalizedLevel = riskLevel === 'Moderate' ? 'Medium' : riskLevel;
+      if (normalizedLevel in riskCounts) {
+        riskCounts[normalizedLevel as keyof typeof riskCounts]++;
       }
     });
     
     const riskLevelDistribution = [
-      { name: 'Low', value: riskCounts.Low, percentage: totalYouth > 0 ? ((riskCounts.Low / totalYouth) * 100).toFixed(1) : '0' },
-      { name: 'Medium', value: riskCounts.Medium, percentage: totalYouth > 0 ? ((riskCounts.Medium / totalYouth) * 100).toFixed(1) : '0' },
-      { name: 'High', value: riskCounts.High, percentage: totalYouth > 0 ? ((riskCounts.High / totalYouth) * 100).toFixed(1) : '0' }
+      { name: 'Very Low', value: riskCounts['Very Low'], percentage: totalYouth > 0 ? ((riskCounts['Very Low'] / totalYouth) * 100).toFixed(1) : '0' },
+      { name: 'Low', value: riskCounts['Low'], percentage: totalYouth > 0 ? ((riskCounts['Low'] / totalYouth) * 100).toFixed(1) : '0' },
+      { name: 'Low Medium', value: riskCounts['Low Medium'], percentage: totalYouth > 0 ? ((riskCounts['Low Medium'] / totalYouth) * 100).toFixed(1) : '0' },
+      { name: 'Medium', value: riskCounts['Medium'], percentage: totalYouth > 0 ? ((riskCounts['Medium'] / totalYouth) * 100).toFixed(1) : '0' },
+      { name: 'Medium High', value: riskCounts['Medium High'], percentage: totalYouth > 0 ? ((riskCounts['Medium High'] / totalYouth) * 100).toFixed(1) : '0' },
+      { name: 'High', value: riskCounts['High'], percentage: totalYouth > 0 ? ((riskCounts['High'] / totalYouth) * 100).toFixed(1) : '0' },
+      { name: 'Very High', value: riskCounts['Very High'], percentage: totalYouth > 0 ? ((riskCounts['Very High'] / totalYouth) * 100).toFixed(1) : '0' }
     ];
 
     // Assessment trends over time (using case notes as proxy for assessments)
@@ -205,10 +220,15 @@ const GroupHomeKPIDashboard = () => {
 
   const getRiskLevelColor = (level: string) => {
     switch (level.toLowerCase()) {
-      case 'low': return '#10b981';
+      case 'very low': return '#22c55e';
+      case 'low': return '#3b82f6';
+      case 'low medium': return '#eab308';
       case 'medium': return '#f59e0b';
+      case 'medium high': return '#ea580c';
       case 'high': return '#ef4444';
       case 'very high': return '#dc2626';
+      // Legacy support
+      case 'moderate': return '#f59e0b';
       default: return '#6b7280';
     }
   };

@@ -71,12 +71,31 @@ export const useYouth = () => {
     try {
       setLoading(true)
       console.log('Updating youth with ID:', id, 'Updates:', updates)
+      
+      // Validate that the youth exists first
+      const existingYouth = youths.find(y => y.id === id)
+      if (!existingYouth) {
+        console.warn('Youth not found in local state, attempting update anyway')
+      }
+      
       const updatedYouth = await youthService.update(id, updates)
       setYouths(prev => prev.map(y => y.id === id ? updatedYouth : y))
       console.log('Youth updated successfully:', updatedYouth)
       return updatedYouth
     } catch (err) {
       console.error('Update youth error:', err)
+      
+      // Provide more detailed error information
+      if (err && typeof err === 'object' && 'message' in err) {
+        const supabaseError = err as any
+        console.error('Detailed error info:', {
+          message: supabaseError.message,
+          details: supabaseError.details,
+          hint: supabaseError.hint,
+          code: supabaseError.code
+        })
+      }
+      
       const errorMessage = err instanceof Error ? err.message : 'Failed to update youth profile'
       throw new Error(errorMessage)
     } finally {
@@ -201,6 +220,28 @@ export const useBehaviorPoints = (youthId?: string) => {
     }
   }
 
+  const deleteAllBehaviorPoints = async (id: string) => {
+    try {
+      setLoading(true)
+      await behaviorPointsService.deleteAllForYouth(id)
+      setBehaviorPoints([])
+      toast({
+        title: "Success",
+        description: "All behavior points have been deleted.",
+      })
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to delete behavior points'
+      toast({
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
+      })
+      throw err
+    } finally {
+      setLoading(false)
+    }
+  }
+
   useEffect(() => {
     if (youthId) {
       loadBehaviorPoints(youthId)
@@ -213,7 +254,8 @@ export const useBehaviorPoints = (youthId?: string) => {
     error,
     loadBehaviorPoints,
     saveBehaviorPoints,
-    getBehaviorPointsForDate
+    getBehaviorPointsForDate,
+    deleteAllBehaviorPoints
   }
 }
 
@@ -387,6 +429,39 @@ export const useDailyRatings = (youthId?: string) => {
     }
   }
 
+  const clearDailyRatings = async (id: string, startDate: Date, endDate: Date) => {
+    try {
+      setLoading(true)
+      await dailyRatingsService.deleteByDateRange(id, startDate, endDate)
+
+      // Update local state by filtering out deleted ratings
+      const startDateStr = startDate.toISOString().split('T')[0]
+      const endDateStr = endDate.toISOString().split('T')[0]
+
+      setDailyRatings(prev =>
+        prev.filter(rating => {
+          const ratingDate = new Date(rating.date).toISOString().split('T')[0]
+          return ratingDate < startDateStr || ratingDate > endDateStr
+        })
+      )
+
+      toast({
+        title: "Success",
+        description: "Daily ratings have been cleared for the specified period.",
+      })
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to clear daily ratings'
+      toast({
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
+      })
+      throw err
+    } finally {
+      setLoading(false)
+    }
+  }
+
   useEffect(() => {
     if (youthId) {
       loadDailyRatings(youthId)
@@ -399,6 +474,7 @@ export const useDailyRatings = (youthId?: string) => {
     error,
     loadDailyRatings,
     saveDailyRating,
-    getDailyRatingForDate
+    getDailyRatingForDate,
+    clearDailyRatings
   }
 }

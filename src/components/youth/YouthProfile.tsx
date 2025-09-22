@@ -269,7 +269,7 @@ export const YouthProfile = ({ youth, onBack, onYouthUpdated, onRatingsUpdated }
             </TabsContent>
 
             <TabsContent value="assessments">
-              <AssessmentResultsTab youth={youth} />
+              <AssessmentResultsTab youth={youth} onYouthUpdated={onYouthUpdated} />
             </TabsContent>
 
             <TabsContent value="personal">

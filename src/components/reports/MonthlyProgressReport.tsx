@@ -205,7 +205,7 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
           overallSummary = await summarizeReport(aiPayload);
         } catch (aiError) {
           console.warn("AI summary failed, using fallback:", aiError);
-          overallSummary = `During the reporting period from ${format(monthStart, "MMM d, yyyy")} to ${format(monthEnd, "MMM d, yyyy")}, ${youth.firstName} ${youth.lastName} participated in the residential treatment program. The youth earned an average of ${avgWeeklyPoints} points per week, demonstrating ${avgWeeklyPoints >= 100 ? 'consistent program compliance' : 'variable engagement with program expectations'}. Staff documented ${periodNotes.length} progress notes highlighting areas of growth and ongoing treatment goals.`;
+          overallSummary = `During the reporting period from ${format(monthStart, "MMM d, yyyy")} to ${format(monthEnd, "MMM d, yyyy")}, ${youth.firstName} ${youth.lastName} participated in the residential treatment program. The youth earned an average of ${avgWeeklyPoints} points per week, demonstrating ${avgWeeklyPoints >= 100 ? 'consistent program compliance' : 'variable engagement with program expectations'}. Staff documented ${periodNotes.length} case notes highlighting areas of growth and ongoing treatment goals.`;
         } finally {
           setGeneratingAI(false);
         }
@@ -326,10 +326,11 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
 
       {/* Printable Report */}
       <div ref={printRef} className="print-section bg-white text-black p-8 rounded-lg border">
-        <div className="text-center mb-6">
-          <h1 className="text-2xl font-bold mb-2">MONTHLY PROGRESS REPORT</h1>
-          <h2 className="text-xl font-semibold">Heartland Boys Home</h2>
-          <div className="text-sm mt-2">
+        <div className="text-center mb-6 bg-gradient-to-r from-red-800 via-red-700 to-amber-600 text-white p-6 rounded-lg">
+          <img src={`${import.meta.env.BASE_URL}files/BoysHomeLogo.png`} alt="Heartland Boys Home Logo" className="h-16 mx-auto mb-4 object-contain" />
+          <h1 className="text-3xl font-bold mb-2">Heartland Boys Home</h1>
+          <h2 className="text-xl font-semibold mb-2">Monthly Progress Report</h2>
+          <div className="text-lg mt-2">
             {format(new Date(selectedMonth + "-01"), "MMMM yyyy")}
           </div>
         </div>

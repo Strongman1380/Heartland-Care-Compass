@@ -110,7 +110,7 @@ export const YouthDashboard = ({ youthId }: YouthDashboardProps) => {
         <TabsList className="bg-white p-1 shadow-sm rounded-lg overflow-x-auto flex w-full justify-start md:justify-center">
           <TabsTrigger value="profile">Profile</TabsTrigger>
           <TabsTrigger value="behavior">Daily Points</TabsTrigger>
-          <TabsTrigger value="notes">Progress Notes</TabsTrigger>
+          <TabsTrigger value="notes">Case Notes</TabsTrigger>
           <TabsTrigger value="analysis">Behavior Analysis</TabsTrigger>
           <TabsTrigger value="assessment">Risk Assessment</TabsTrigger>
           <TabsTrigger value="kpi">Dashboard</TabsTrigger>

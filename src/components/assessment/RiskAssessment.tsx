@@ -9,12 +9,13 @@ import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { FileText, Download, Save } from "lucide-react";
 import { toast } from "sonner";
-import { Youth } from "@/integrations/supabase/services";
-// Note: Risk assessment saving/loading functionality will need to be implemented with local storage
+import { Youth, youthService } from "@/integrations/supabase/services";
+import { fetchAssessment, saveAssessment } from "@/utils/local-storage-utils";
 
 interface RiskAssessmentProps {
   youthId: string;
   youth: Youth;
+  onAssessmentUpdated?: () => void;
 }
 
 interface DomainScore {
@@ -44,6 +45,29 @@ interface RiskAssessment {
   interventionTargets: string[];
   createdAt: Date;
   updatedAt: Date;
+}
+
+interface RiskAssessmentData {
+  id?: string;
+  assessmentdate?: string;
+  completedby?: string;
+  domains?: {
+    priorOffending: DomainScore;
+    familyCircumstances: DomainScore;
+    education: DomainScore;
+    peerRelations: DomainScore;
+    substanceUse: DomainScore;
+    recreation: DomainScore;
+    personality: DomainScore;
+    attitudes: DomainScore;
+  };
+  traumahistory?: string;
+  strengths?: string;
+  recommendedlevel?: number;
+  overallrisklevel?: string;
+  interventiontargets?: string[];
+  createdat?: string;
+  updatedat?: string;
 }
 
 const DOMAIN_QUESTIONS = {
@@ -134,7 +158,39 @@ const INTERVENTION_TARGETS = [
   "Peer Association Management"
 ];
 
-export const RiskAssessment = ({ youthId, youth }: RiskAssessmentProps) => {
+// Helper function to calculate risk level and recommended level from score percentage
+const calculateRiskLevelFromPercentage = (scorePercentage: number) => {
+  let riskLevel = "Very Low";
+  let recommendedLevel = 4;
+  
+  // 7-level risk assessment with equal intervals (~14% each)
+  if (scorePercentage >= 0.86) {
+    riskLevel = "Very High";
+    recommendedLevel = 1;
+  } else if (scorePercentage >= 0.72) {
+    riskLevel = "High";
+    recommendedLevel = 1;
+  } else if (scorePercentage >= 0.58) {
+    riskLevel = "Medium High";
+    recommendedLevel = 1;
+  } else if (scorePercentage >= 0.44) {
+    riskLevel = "Medium";
+    recommendedLevel = 2;
+  } else if (scorePercentage >= 0.30) {
+    riskLevel = "Low Medium";
+    recommendedLevel = 2;
+  } else if (scorePercentage >= 0.16) {
+    riskLevel = "Low";
+    recommendedLevel = 3;
+  } else {
+    riskLevel = "Very Low";
+    recommendedLevel = 4;
+  }
+  
+  return { riskLevel, recommendedLevel };
+};
+
+export const RiskAssessment = ({ youthId, youth, onAssessmentUpdated }: RiskAssessmentProps) => {
   const [assessment, setAssessment] = useState<RiskAssessment>({
     assessmentDate: new Date(),
     completedBy: "",
@@ -161,6 +217,9 @@ export const RiskAssessment = ({ youthId, youth }: RiskAssessmentProps) => {
   const [isSaving, setIsSaving] = useState(false);
   const [activeDomain, setActiveDomain] = useState<keyof typeof assessment.domains>("priorOffending");
   const [questionResponses, setQuestionResponses] = useState<Record<string, boolean>>({});
+  const [autoSaveTimer, setAutoSaveTimer] = useState<NodeJS.Timeout | null>(null);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [isAutoSaving, setIsAutoSaving] = useState(false);
   
   useEffect(() => {
     fetchAssessmentData();
@@ -169,12 +228,56 @@ export const RiskAssessment = ({ youthId, youth }: RiskAssessmentProps) => {
   const fetchAssessmentData = async () => {
     try {
       setIsLoading(true);
-      
-      // Changed 'assessments' to 'riskassessments' to match the AssessmentTable type
+
+      // First try to get assessment data from localStorage
       const assessmentData = await fetchAssessment(youthId, 'riskassessments', 'riskNeeds') as RiskAssessmentData | null;
-      
-      if (assessmentData) {
-        // Map the data from Supabase to our RiskAssessment interface
+
+      // Try to get HYRNA data from the youth record in Supabase
+      let youthData = null;
+      try {
+        youthData = await youthService.getById(youthId);
+      } catch (error) {
+        console.log("Could not fetch youth data from Supabase:", error);
+      }
+
+      // Determine which data source to use - prioritize localStorage if it exists and is more recent
+      let useSupabaseData = false;
+      if (youthData?.hyrnaAssessmentDate && (!assessmentData || !assessmentData.updatedat)) {
+        useSupabaseData = true;
+      } else if (youthData?.hyrnaAssessmentDate && assessmentData?.updatedat) {
+        const supabaseDate = new Date(youthData.hyrnaAssessmentDate);
+        const localDate = new Date(assessmentData.updatedat);
+        useSupabaseData = supabaseDate > localDate;
+      }
+
+      if (useSupabaseData && youthData) {
+        // Use data from youth record
+        setAssessment({
+          id: `youth-${youthId}`,
+          assessmentDate: youthData.hyrnaAssessmentDate ? new Date(youthData.hyrnaAssessmentDate) : new Date(),
+          completedBy: "",
+          domains: {
+            priorOffending: { score: 0, notes: "", maxScore: 10 },
+            familyCircumstances: { score: 0, notes: "", maxScore: 10 },
+            education: { score: 0, notes: "", maxScore: 10 },
+            peerRelations: { score: 0, notes: "", maxScore: 10 },
+            substanceUse: { score: 0, notes: "", maxScore: 10 },
+            recreation: { score: 0, notes: "", maxScore: 10 },
+            personality: { score: 0, notes: "", maxScore: 10 },
+            attitudes: { score: 0, notes: "", maxScore: 10 }
+          },
+          traumaHistory: "",
+          strengths: "",
+          recommendedLevel: youthData.level || 1,
+          overallRiskLevel: youthData.hyrnaRiskLevel || "Low",
+          interventionTargets: [],
+          createdAt: new Date(youthData.createdAt || new Date()),
+          updatedAt: new Date(youthData.updatedAt || new Date())
+        });
+
+        setQuestionResponses({});
+      } else if (assessmentData) {
+        // Use data from localStorage
         setAssessment({
           id: assessmentData.id,
           assessmentDate: assessmentData.assessmentdate ? new Date(assessmentData.assessmentdate) : new Date(),
@@ -197,18 +300,27 @@ export const RiskAssessment = ({ youthId, youth }: RiskAssessmentProps) => {
           createdAt: assessmentData.createdat ? new Date(assessmentData.createdat) : new Date(),
           updatedAt: assessmentData.updatedat ? new Date(assessmentData.updatedat) : new Date()
         });
-        
+
         // Reconstruct question responses from scores
         const responses: Record<string, boolean> = {};
-        
-        Object.entries(DOMAIN_QUESTIONS).forEach(([domain, questions]) => {
+        Object.entries(DOMAIN_QUESTIONS).forEach(([, questions]) => {
           questions.forEach(question => {
-            // If the domain's score includes this question's score, mark it as yes
             responses[question.id] = false; // Default to No
           });
         });
-        
         setQuestionResponses(responses);
+      } else {
+        // No existing assessment, create new one
+        const totalScore = Object.values(assessment.domains).reduce((sum, domain) => sum + domain.score, 0);
+        const maxPossibleScore = Object.values(assessment.domains).reduce((sum, domain) => sum + domain.maxScore, 0);
+        const scorePercentage = maxPossibleScore > 0 ? (totalScore / maxPossibleScore) : 0;
+        const { riskLevel, recommendedLevel } = calculateRiskLevelFromPercentage(scorePercentage);
+
+        setAssessment(prev => ({
+          ...prev,
+          overallRiskLevel: riskLevel,
+          recommendedLevel: recommendedLevel
+        }));
       }
     } catch (error) {
       console.error("Error fetching risk assessment:", error);
@@ -240,16 +352,35 @@ export const RiskAssessment = ({ youthId, youth }: RiskAssessmentProps) => {
     });
     
     // Update assessment with new domain score
-    setAssessment(prev => ({
-      ...prev,
+    const updatedAssessment = {
+      ...assessment,
       domains: {
-        ...prev.domains,
+        ...assessment.domains,
         [domain]: {
-          ...prev.domains[domain],
+          ...assessment.domains[domain],
           score: newScore
         }
       }
-    }));
+    };
+    
+    // Calculate the new overall risk level based on updated scores
+    const totalScore = Object.values(updatedAssessment.domains).reduce((sum, domain) => sum + domain.score, 0);
+    const maxPossibleScore = Object.values(updatedAssessment.domains).reduce((sum, domain) => sum + domain.maxScore, 0);
+    const scorePercentage = maxPossibleScore > 0 ? (totalScore / maxPossibleScore) : 0;
+    
+    // Calculate risk level using the helper function
+    const { riskLevel, recommendedLevel } = calculateRiskLevelFromPercentage(scorePercentage);
+    
+    // Update assessment with new domain score and calculated risk level
+    setAssessment({
+      ...updatedAssessment,
+      overallRiskLevel: riskLevel,
+      recommendedLevel: recommendedLevel
+    });
+    
+    // Mark as having unsaved changes and trigger auto-save
+    setHasUnsavedChanges(true);
+    triggerAutoSave();
   };
   
   const handleDomainNotesChange = (domain: keyof typeof assessment.domains, notes: string) => {
@@ -263,6 +394,10 @@ export const RiskAssessment = ({ youthId, youth }: RiskAssessmentProps) => {
         }
       }
     }));
+    
+    // Mark as having unsaved changes and trigger auto-save
+    setHasUnsavedChanges(true);
+    triggerAutoSave();
   };
   
   const handleGeneralInputChange = (field: keyof RiskAssessment, value: string) => {
@@ -270,7 +405,100 @@ export const RiskAssessment = ({ youthId, youth }: RiskAssessmentProps) => {
       ...prev,
       [field]: value
     }));
+    
+    // Mark as having unsaved changes and trigger auto-save
+    setHasUnsavedChanges(true);
+    triggerAutoSave();
   };
+
+  // Auto-save functionality
+  const triggerAutoSave = () => {
+    // Clear existing timer
+    if (autoSaveTimer) {
+      clearTimeout(autoSaveTimer);
+    }
+    
+    // Set new timer for 10 seconds after user stops typing
+    const timer = setTimeout(() => {
+      autoSave();
+    }, 10000);
+    
+    setAutoSaveTimer(timer);
+  };
+
+  const autoSave = async () => {
+    if (!hasUnsavedChanges || isAutoSaving) return;
+    
+    try {
+      setIsAutoSaving(true);
+      
+      // Save to localStorage as draft
+      const draftKey = `risk-assessment-draft-${youthId}`;
+      localStorage.setItem(draftKey, JSON.stringify({
+        ...assessment,
+        questionResponses,
+        savedAt: new Date().toISOString()
+      }));
+      
+      setHasUnsavedChanges(false);
+
+      // Auto-save silently without toast notification
+    } catch (error) {
+      console.error("Auto-save failed:", error);
+    } finally {
+      setIsAutoSaving(false);
+    }
+  };
+
+  // Load draft on component mount
+  useEffect(() => {
+    const draftKey = `risk-assessment-draft-${youthId}`;
+    const draft = localStorage.getItem(draftKey);
+    
+    if (draft && !isLoading) {
+      try {
+        const draftData = JSON.parse(draft);
+        setAssessment(prev => ({
+          ...prev,
+          ...draftData,
+          assessmentDate: new Date(draftData.assessmentDate),
+          createdAt: new Date(draftData.createdAt),
+          updatedAt: new Date(draftData.updatedAt)
+        }));
+        setQuestionResponses(draftData.questionResponses || {});
+        setHasUnsavedChanges(true);
+        toast.info("Draft loaded from auto-save", { duration: 2000 });
+      } catch (error) {
+        console.error("Failed to load draft:", error);
+      }
+    }
+  }, [youthId, isLoading]);
+
+  // Auto-save on unmount or when leaving the component
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (hasUnsavedChanges) {
+        autoSave();
+      }
+    };
+
+    // Save when component unmounts or user navigates away
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    
+    return () => {
+      // Auto-save any unsaved changes when component unmounts
+      if (hasUnsavedChanges) {
+        autoSave();
+      }
+      
+      // Cleanup timer
+      if (autoSaveTimer) {
+        clearTimeout(autoSaveTimer);
+      }
+      
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [hasUnsavedChanges, autoSaveTimer]);
   
   const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const dateValue = e.target.value;
@@ -282,6 +510,10 @@ export const RiskAssessment = ({ youthId, youth }: RiskAssessmentProps) => {
         ...prev,
         assessmentDate: localDate
       }));
+      
+      // Mark as having unsaved changes and trigger auto-save
+      setHasUnsavedChanges(true);
+      triggerAutoSave();
     }
   };
   
@@ -301,44 +533,34 @@ export const RiskAssessment = ({ youthId, youth }: RiskAssessmentProps) => {
         };
       }
     });
+    
+    // Mark as having unsaved changes and trigger auto-save
+    setHasUnsavedChanges(true);
+    triggerAutoSave();
   };
   
   const handleSaveAssessment = async () => {
     try {
       setIsSaving(true);
-      
+
       // Calculate total score and risk level
       const totalScore = Object.values(assessment.domains).reduce((sum, domain) => sum + domain.score, 0);
       const maxPossibleScore = Object.values(assessment.domains).reduce((sum, domain) => sum + domain.maxScore, 0);
-      
-      let riskLevel = "Low";
-      let recommendedLevel = 1;
-      
-      if (totalScore >= maxPossibleScore * 0.7) {
-        riskLevel = "Very High";
-        recommendedLevel = 1;
-      } else if (totalScore >= maxPossibleScore * 0.5) {
-        riskLevel = "High";
-        recommendedLevel = 1;
-      } else if (totalScore >= maxPossibleScore * 0.3) {
-        riskLevel = "Moderate";
-        recommendedLevel = 2;
-      } else if (totalScore >= maxPossibleScore * 0.15) {
-        riskLevel = "Low";
-        recommendedLevel = 3;
-      } else {
-        riskLevel = "Very Low";
-        recommendedLevel = 4;
-      }
-      
+
+      // Calculate percentage score
+      const scorePercentage = maxPossibleScore > 0 ? (totalScore / maxPossibleScore) : 0;
+
+      // Calculate risk level using the helper function
+      const { riskLevel, recommendedLevel } = calculateRiskLevelFromPercentage(scorePercentage);
+
       const updatedAssessment = {
         ...assessment,
         overallRiskLevel: riskLevel,
         recommendedLevel,
         updatedAt: new Date()
       };
-      
-      // Format the data for Supabase
+
+      // Save to localStorage for local storage
       const formattedData = {
         assessmentdate: updatedAssessment.assessmentDate.toISOString(),
         completedby: updatedAssessment.completedBy,
@@ -351,17 +573,40 @@ export const RiskAssessment = ({ youthId, youth }: RiskAssessmentProps) => {
         createdat: updatedAssessment.createdAt.toISOString(),
         updatedat: new Date().toISOString()
       };
-      
-      // Changed 'assessments' to 'riskassessments' to match the AssessmentTable type
-      await saveAssessment(
+
+      saveAssessment(
         youthId,
         'riskassessments',
         'riskNeeds',
         formattedData
       );
-      
+
+      // Save HYRNA data to youth record in Supabase
+      try {
+        await youthService.update(youthId, {
+          hyrnaRiskLevel: riskLevel,
+          hyrnaScore: totalScore,
+          hyrnaAssessmentDate: updatedAssessment.assessmentDate.toISOString(),
+          level: recommendedLevel,
+          updatedAt: new Date().toISOString()
+        });
+
+        toast.success("Risk assessment saved successfully to database");
+      } catch (supabaseError) {
+        console.error("Error saving to Supabase:", supabaseError);
+        toast.warning("Assessment saved locally, but failed to sync to database");
+      }
+
       setAssessment(updatedAssessment);
-      toast.success("Risk assessment saved successfully");
+
+      // Clear draft after successful save
+      const draftKey = `risk-assessment-draft-${youthId}`;
+      localStorage.removeItem(draftKey);
+      setHasUnsavedChanges(false);
+
+      // Trigger callback to refresh parent component
+      onAssessmentUpdated?.();
+
     } catch (error) {
       console.error("Error saving risk assessment:", error);
       toast.error("Failed to save risk assessment");
@@ -418,30 +663,45 @@ export const RiskAssessment = ({ youthId, youth }: RiskAssessmentProps) => {
       <html>
         <head>
           <meta charset="utf-8">
-          <title>Risk Assessment Report</title>
+          <title>HYRNA Risk Assessment Report - Heartland Boys Home</title>
           <style>
-            body { font-family: Arial, sans-serif; margin: 20px; line-height: 1.6; }
-            .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 20px; }
-            .youth-info { background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
-            .score-summary { background-color: #e8f4fd; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
-            .domain-section { margin-bottom: 20px; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
-            .domain-title { font-weight: bold; font-size: 16px; margin-bottom: 10px; color: #333; }
-            .score-bar { background-color: #e0e0e0; height: 20px; border-radius: 10px; margin: 5px 0; }
-            .score-fill { background-color: #3b82f6; height: 100%; border-radius: 10px; }
+            body { font-family: Arial, sans-serif; margin: 20px; line-height: 1.6; color: #333; }
+            .header {
+              text-align: center;
+              margin-bottom: 30px;
+              border-bottom: 3px solid #b91c1c;
+              padding-bottom: 20px;
+              background: linear-gradient(135deg, #b91c1c 0%, #dc2626 50%, #d97706 100%);
+              color: white;
+              padding: 20px;
+              border-radius: 8px 8px 0 0;
+            }
+            .logo { height: 60px; margin-bottom: 15px; }
+            .youth-info { background-color: #fef2f2; padding: 15px; border-radius: 5px; margin-bottom: 20px; border-left: 4px solid #dc2626; }
+            .score-summary { background-color: #fef2f2; padding: 15px; border-radius: 5px; margin-bottom: 20px; border-left: 4px solid #dc2626; }
+            .domain-section { margin-bottom: 20px; padding: 15px; border: 1px solid #dc2626; border-radius: 5px; }
+            .domain-title { font-weight: bold; font-size: 16px; margin-bottom: 10px; color: #b91c1c; }
+            .score-bar { background-color: #fee2e2; height: 20px; border-radius: 10px; margin: 5px 0; border: 1px solid #fecaca; }
+            .score-fill { background: linear-gradient(90deg, #dc2626, #d97706); height: 100%; border-radius: 10px; }
             .field { margin-bottom: 10px; }
-            .field-label { font-weight: bold; color: #555; }
-            .field-value { margin-left: 10px; }
+            .field-label { font-weight: bold; color: #b91c1c; }
+            .field-value { margin-left: 10px; color: #374151; }
             .risk-level { padding: 5px 10px; border-radius: 15px; color: white; font-weight: bold; }
             .risk-low { background-color: #22c55e; }
             .risk-moderate { background-color: #f59e0b; }
             .risk-high { background-color: #ef4444; }
-            @media print { body { margin: 0; } }
+            .risk-very-high { background-color: #dc2626; }
+            @media print {
+              body { margin: 0; }
+              .header { background: #b91c1c !important; color: white !important; }
+            }
           </style>
         </head>
         <body>
           <div class="header">
-            <h1>Heartland Care Compass</h1>
-            <h2>Risk Assessment Report</h2>
+            <img src="${import.meta.env.BASE_URL}files/BoysHomeLogo.png" alt="Heartland Boys Home Logo" class="logo" />
+            <h1>Heartland Boys Home</h1>
+            <h2>HYRNA Risk Assessment Report</h2>
             <p>Generated on ${data.exportDate}</p>
           </div>
 
@@ -513,6 +773,7 @@ export const RiskAssessment = ({ youthId, youth }: RiskAssessmentProps) => {
     return (total / max) * 100;
   };
   
+
   const getRiskColor = () => {
     const percentage = getScorePercentage();
     
@@ -627,14 +888,6 @@ export const RiskAssessment = ({ youthId, youth }: RiskAssessmentProps) => {
                 ))}
               </div>
             </div>
-            
-            <div className="p-4 border rounded-md bg-gray-50">
-              <h3 className="font-semibold mb-2">Placement Recommendation</h3>
-              <p className="font-bold text-xl">Level {assessment.recommendedLevel}</p>
-              <p className="text-sm text-gray-600 mt-1">
-                Based on {assessment.overallRiskLevel} risk assessment
-              </p>
-            </div>
           </CardContent>
         </Card>
 
@@ -643,8 +896,14 @@ export const RiskAssessment = ({ youthId, youth }: RiskAssessmentProps) => {
             <div className="flex items-center justify-between">
               <CardTitle>Risk Domain Assessment</CardTitle>
             </div>
-            <CardDescription>
+            <CardDescription className="flex items-center gap-2">
               Complete each domain to generate a comprehensive risk profile
+              {hasUnsavedChanges && (
+                <span className="text-orange-600 text-sm font-medium flex items-center gap-1">
+                  • Unsaved changes
+                  {isAutoSaving && <span className="text-xs">(saving...)</span>}
+                </span>
+              )}
             </CardDescription>
           </CardHeader>
           <CardContent>

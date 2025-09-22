@@ -2,7 +2,7 @@
   "version": 2,
   "builds": [
     {
-      "src": "server-mongodb.js",
+      "src": "server-new.js",
       "use": "@vercel/node"
     },
     {
@@ -16,7 +16,7 @@
   "routes": [
     {
       "src": "/api/(.*)",
-      "dest": "/server-mongodb.js"
+      "dest": "/server-new.js"
     },
     {
       "src": "/(.*)",
@@ -34,5 +34,10 @@
     "VITE_FIREBASE_MEASUREMENT_ID": "G-QY4NTS0LC5",
     "VITE_SUPABASE_URL": "https://bxloqozxgptrfmjfsjsy.supabase.co",
     "VITE_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ4bG9xb3p4Z3B0cmZtamZzanN5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTcxNDUzMTAsImV4cCI6MjA3MjcyMTMxMH0.wYitLj_Y5ymMpC8gZko1eCnafvEd56guijajhG-BR3Q"
+  },
+  "functions": {
+    "server-new.js": {
+      "maxDuration": 10
+    }
   }
 }

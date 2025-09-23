@@ -7,10 +7,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Calendar, Save, Plus } from "lucide-react";
-import { format } from "date-fns";
+import { Calendar, Save, Plus, Download, FileText } from "lucide-react";
+import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { useDailyRatings } from "@/hooks/useSupabase";
+import { DpnReport } from "@/components/reports/DpnReport";
 
 interface ConsolidatedScoringTabProps {
   youth: Youth;
@@ -23,6 +24,12 @@ export const ConsolidatedScoringTab = ({ youth, onRatingsUpdated }: Consolidated
   const [staffName, setStaffName] = useState("");
   const { toast } = useToast();
   const { saveDailyRating } = useDailyRatings();
+
+  // DPN Export State
+  const [showDpnExport, setShowDpnExport] = useState(false);
+  const [dpnStartDate, setDpnStartDate] = useState(format(startOfWeek(new Date()), "yyyy-MM-dd"));
+  const [dpnEndDate, setDpnEndDate] = useState(format(endOfWeek(new Date()), "yyyy-MM-dd"));
+  const [dpnVariant, setDpnVariant] = useState<'weekly' | 'biweekly' | 'monthly'>('weekly');
 
 
 
@@ -236,6 +243,79 @@ export const ConsolidatedScoringTab = ({ youth, onRatingsUpdated }: Consolidated
               <Save className="mr-2 h-4 w-4" />
               {loading ? "Saving..." : "Submit DPN"}
             </Button>
+          </div>
+
+          {/* DPN Export Section */}
+          <div className="mt-6 pt-6 border-t">
+            <div className="flex items-center justify-between mb-4">
+              <h4 className="text-sm font-medium text-gray-900">Export DPN Report</h4>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowDpnExport(!showDpnExport)}
+                className="text-xs"
+              >
+                <FileText className="mr-2 h-3 w-3" />
+                {showDpnExport ? 'Hide Export' : 'Show Export Options'}
+              </Button>
+            </div>
+
+            {showDpnExport && (
+              <div className="space-y-4 bg-gray-50 p-4 rounded-lg">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div>
+                    <Label htmlFor="dpn-start-date" className="text-xs font-medium">Start Date</Label>
+                    <Input
+                      id="dpn-start-date"
+                      type="date"
+                      value={dpnStartDate}
+                      onChange={(e) => setDpnStartDate(e.target.value)}
+                      className="text-sm h-8"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="dpn-end-date" className="text-xs font-medium">End Date</Label>
+                    <Input
+                      id="dpn-end-date"
+                      type="date"
+                      value={dpnEndDate}
+                      onChange={(e) => setDpnEndDate(e.target.value)}
+                      className="text-sm h-8"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="dpn-variant" className="text-xs font-medium">Report Type</Label>
+                    <Select value={dpnVariant} onValueChange={(value: 'weekly' | 'biweekly' | 'monthly') => setDpnVariant(value)}>
+                      <SelectTrigger className="text-sm h-8">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="weekly">Weekly</SelectItem>
+                        <SelectItem value="biweekly">Bi-Weekly</SelectItem>
+                        <SelectItem value="monthly">Monthly</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                
+                <div className="flex justify-end">
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      // This will trigger the DPN export
+                      toast({
+                        title: "Generating DPN Report",
+                        description: `Creating ${dpnVariant} report for ${format(new Date(dpnStartDate), 'MMM d')} - ${format(new Date(dpnEndDate), 'MMM d, yyyy')}`,
+                      });
+                    }}
+                    className="text-xs"
+                  >
+                    <Download className="mr-2 h-3 w-3" />
+                    Export DPN Report
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>

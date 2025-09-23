@@ -15,6 +15,10 @@ import Reports from "./pages/Reports";
 import AssessmentKPIDashboard from "./pages/AssessmentKPIDashboard";
 import SupabaseTestPage from "./pages/SupabaseTest";
 import DataMigrationPage from "./pages/DataMigrationPage";
+import { MonthlyProgressReportPage } from "./pages/MonthlyProgressReportPage";
+import { CourtReportPage } from "./pages/CourtReportPage";
+import DailyPoints from "./pages/DailyPoints";
+import BehaviorAnalysisPage from "./pages/BehaviorAnalysisPage";
 import NotFound from "./pages/NotFound";
 import Auth from "./pages/Auth";
 import { ProtectedRoute } from "@/components/layout/ProtectedRoute";
@@ -43,6 +47,10 @@ const App = () => {
           <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
           <Route path="/alerts" element={<ProtectedRoute><Alerts /></ProtectedRoute>} />
           <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
+          <Route path="/monthly-progress" element={<ProtectedRoute><MonthlyProgressReportPage /></ProtectedRoute>} />
+          <Route path="/court-report" element={<ProtectedRoute><CourtReportPage /></ProtectedRoute>} />
+          <Route path="/daily-points" element={<ProtectedRoute><DailyPoints /></ProtectedRoute>} />
+          <Route path="/behavior-analysis" element={<ProtectedRoute><BehaviorAnalysisPage /></ProtectedRoute>} />
           <Route path="/assessment-kpi" element={<ProtectedRoute><AssessmentKPIDashboard /></ProtectedRoute>} />
           <Route path="/supabase-test" element={<ProtectedRoute><SupabaseTestPage /></ProtectedRoute>} />
           <Route path="/migrate-data" element={<ProtectedRoute><DataMigrationPage /></ProtectedRoute>} />

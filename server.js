@@ -12,10 +12,16 @@ app.use(express.json());
 
 // Serve static files from the dist directory
 const distPath = resolve('dist');
-app.use(express.static(distPath));
+// Mount static files at the base path to match the built assets
+app.use('/Heartland-Care-Compass', express.static(distPath));
 
-// Serve the index.html for all routes to support SPA routing
-app.get('*', (req, res) => {
+// Redirect root to the base path
+app.get('/', (req, res) => {
+  res.redirect('/Heartland-Care-Compass/');
+});
+
+// Serve the index.html for all routes under the base path to support SPA routing
+app.get('/Heartland-Care-Compass/*', (req, res) => {
   res.sendFile(join(distPath, 'index.html'));
 });
 

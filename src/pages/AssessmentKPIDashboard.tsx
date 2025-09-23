@@ -4,11 +4,11 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { TrendingUp, TrendingDown, Users, FileText, AlertTriangle, CheckCircle, ArrowLeft, Palette } from 'lucide-react';
+import { TrendingUp, TrendingDown, Users, FileText, AlertTriangle, Heart, Brain, MessageSquare, Shield, ArrowLeft, Palette } from 'lucide-react';
 import { Header } from '@/components/layout/Header';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
-import { youthService, behaviorPointsService, caseNotesService, type Youth, type BehaviorPoints, type CaseNotes } from '@/integrations/supabase/services';
+import { youthService, behaviorPointsService, caseNotesService, dailyRatingsService, type Youth, type BehaviorPoints, type CaseNotes, type DailyRatings } from '@/integrations/supabase/services';
 
 interface AssessmentData {
   worksheets: any[];
@@ -24,10 +24,17 @@ interface KPIMetrics {
   totalAssessments: number;
   totalYouth: number;
   averageRiskLevel: string;
-  completionRate: number;
   improvementTrend: number;
   lastMonthAssessments: number;
   realColorsAssessments: number;
+  behavioralAverages: {
+    peerInteraction: number;
+    adultInteraction: number;
+    investmentLevel: number;
+    dealAuthority: number;
+  };
+  averagePointsPerDay: number;
+  activeIncidents: number;
 }
 
 const GroupHomeKPIDashboard = () => {
@@ -37,16 +44,24 @@ const GroupHomeKPIDashboard = () => {
   const [youths, setYouths] = useState<Youth[]>([]);
   const [allBehaviorPoints, setAllBehaviorPoints] = useState<BehaviorPoints[]>([]);
   const [allCaseNotes, setAllCaseNotes] = useState<CaseNotes[]>([]);
+  const [allDailyRatings, setAllDailyRatings] = useState<DailyRatings[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   
   const [kpiMetrics, setKpiMetrics] = useState<KPIMetrics>({
     totalAssessments: 0,
     totalYouth: 0,
     averageRiskLevel: 'Low',
-    completionRate: 0,
     improvementTrend: 0,
     lastMonthAssessments: 0,
-    realColorsAssessments: 0
+    realColorsAssessments: 0,
+    behavioralAverages: {
+      peerInteraction: 0,
+      adultInteraction: 0,
+      investmentLevel: 0,
+      dealAuthority: 0
+    },
+    averagePointsPerDay: 0,
+    activeIncidents: 0
   });
   const [timeframe, setTimeframe] = useState('month');
   const [chartData, setChartData] = useState({
@@ -71,6 +86,15 @@ const GroupHomeKPIDashboard = () => {
       setYouths(youthData);
       setAllBehaviorPoints(pointsData);
       setAllCaseNotes(notesData);
+
+      // Fetch daily ratings for all youth
+      const ratingsPromises = youthData.map(youth => 
+        dailyRatingsService.getByYouthId(youth.id).catch(() => [])
+      );
+      const ratingsResults = await Promise.all(ratingsPromises);
+      const allRatings = ratingsResults.flat();
+      setAllDailyRatings(allRatings);
+      
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
@@ -86,7 +110,7 @@ const GroupHomeKPIDashboard = () => {
     if (!isLoading && youths.length > 0) {
       processKPIData();
     }
-  }, [youths, allBehaviorPoints, allCaseNotes, timeframe, isLoading]);
+  }, [youths, allBehaviorPoints, allCaseNotes, allDailyRatings, timeframe, isLoading]);
 
 
   const processKPIData = () => {
@@ -102,6 +126,32 @@ const GroupHomeKPIDashboard = () => {
     };
 
     const timeframeDate = getTimeframeDate();
+    
+    // Calculate behavioral rating averages across all youth
+    const behavioralTotals = {
+      peerInteraction: 0,
+      adultInteraction: 0,
+      investmentLevel: 0,
+      dealAuthority: 0,
+      count: 0
+    };
+
+    allDailyRatings.forEach(rating => {
+      if (rating.peerInteraction !== null && rating.peerInteraction !== undefined) {
+        behavioralTotals.peerInteraction += rating.peerInteraction;
+        behavioralTotals.adultInteraction += rating.adultInteraction || 0;
+        behavioralTotals.investmentLevel += rating.investmentLevel || 0;
+        behavioralTotals.dealAuthority += rating.dealAuthority || 0;
+        behavioralTotals.count++;
+      }
+    });
+
+    const behavioralAverages = {
+      peerInteraction: behavioralTotals.count > 0 ? Math.round((behavioralTotals.peerInteraction / behavioralTotals.count) * 10) / 10 : 0,
+      adultInteraction: behavioralTotals.count > 0 ? Math.round((behavioralTotals.adultInteraction / behavioralTotals.count) * 10) / 10 : 0,
+      investmentLevel: behavioralTotals.count > 0 ? Math.round((behavioralTotals.investmentLevel / behavioralTotals.count) * 10) / 10 : 0,
+      dealAuthority: behavioralTotals.count > 0 ? Math.round((behavioralTotals.dealAuthority / behavioralTotals.count) * 10) / 10 : 0
+    };
     
     // Calculate KPI metrics using real Supabase data
     const totalAssessments = allCaseNotes.length; // Use case notes as proxy for assessments
@@ -173,9 +223,24 @@ const GroupHomeKPIDashboard = () => {
         averagePoints: data.count > 0 ? ((data.total / data.count) / 1000).toFixed(1) : '0' // Convert to thousands
       }));
 
-    // Completion stats (using case notes as proxy for completed assessments)
-    const youthWithAssessments = new Set(allCaseNotes.map(n => n.youth_id));
-    const completionRate = totalYouth > 0 ? (youthWithAssessments.size / totalYouth) * 100 : 0;
+    // Calculate average points per day for current timeframe
+    const recentPoints = allBehaviorPoints.filter(point => 
+      new Date(point.createdAt || point.date) >= timeframeDate
+    );
+    const averagePointsPerDay = recentPoints.length > 0 
+      ? Math.round(recentPoints.reduce((sum, point) => sum + (point.totalPoints || 0), 0) / recentPoints.length)
+      : 0;
+
+    // Count active incidents (case notes in last 30 days that might indicate incidents)
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const activeIncidents = allCaseNotes.filter(note => 
+      new Date(note.createdAt || note.date) >= thirtyDaysAgo &&
+      (note.note?.toLowerCase().includes('incident') || 
+       note.note?.toLowerCase().includes('behavior') ||
+       note.note?.toLowerCase().includes('issue') ||
+       note.summary?.toLowerCase().includes('incident'))
+    ).length;
 
     // Real Colors distribution (empty for now)
     const colorDistribution = [];
@@ -187,9 +252,9 @@ const GroupHomeKPIDashboard = () => {
       .filter(note => new Date(note.createdAt || note.date) >= lastMonth).length;
 
     // Calculate improvement trend
-    const recentPoints = pointTrends.slice(-2);
-    const improvementTrend = recentPoints.length === 2 
-      ? ((parseFloat(String(recentPoints[1].averagePoints)) - parseFloat(String(recentPoints[0].averagePoints))) / parseFloat(String(recentPoints[0].averagePoints))) * 100
+    const recentPointsData = pointTrends.slice(-2);
+    const improvementTrend = recentPointsData.length === 2 
+      ? ((parseFloat(String(recentPointsData[1].averagePoints)) - parseFloat(String(recentPointsData[0].averagePoints))) / parseFloat(String(recentPointsData[0].averagePoints))) * 100
       : 0;
 
     // Level trends - track level ups and downs by week
@@ -199,20 +264,19 @@ const GroupHomeKPIDashboard = () => {
       totalAssessments: allCaseNotes.length, // Using case notes as proxy
       totalYouth,
       averageRiskLevel: Object.keys(riskCounts).reduce((a, b) => riskCounts[a] > riskCounts[b] ? a : b, 'Low'),
-      completionRate,
       improvementTrend,
       lastMonthAssessments,
-      realColorsAssessments: 0 // No real colors assessments yet
+      realColorsAssessments: 0, // No real colors assessments yet
+      behavioralAverages,
+      averagePointsPerDay,
+      activeIncidents
     });
 
     setChartData({
       assessmentTrends: assessmentTrends as any,
       riskLevelDistribution: riskLevelDistribution as any,
       pointTrends: pointTrends as any,
-      completionStats: [
-        { name: 'Completed Assessments', value: youthWithAssessments.size },
-        { name: 'Pending Assessments', value: totalYouth - youthWithAssessments.size }
-      ] as any,
+      completionStats: [] as any, // Remove completion stats
       levelTrends: levelTrends as any,
       colorDistribution: colorDistribution as any
     });
@@ -279,7 +343,7 @@ const GroupHomeKPIDashboard = () => {
         </div>
 
         {/* KPI Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-6 mb-8">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total Assessments</CardTitle>
@@ -301,7 +365,59 @@ const GroupHomeKPIDashboard = () => {
             <CardContent>
               <div className="text-2xl font-bold">{kpiMetrics.totalYouth}</div>
               <p className="text-xs text-muted-foreground">
-                {kpiMetrics.completionRate.toFixed(1)}% assessed
+                Group home residents
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Peer Interaction</CardTitle>
+              <Users className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{kpiMetrics.behavioralAverages.peerInteraction.toFixed(1)}</div>
+              <p className="text-xs text-muted-foreground">
+                Group average (0-4 scale)
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Adult Interaction</CardTitle>
+              <MessageSquare className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{kpiMetrics.behavioralAverages.adultInteraction.toFixed(1)}</div>
+              <p className="text-xs text-muted-foreground">
+                Group average (0-4 scale)
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Investment Level</CardTitle>
+              <Heart className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{kpiMetrics.behavioralAverages.investmentLevel.toFixed(1)}</div>
+              <p className="text-xs text-muted-foreground">
+                Group average (0-4 scale)
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Deal with Authority</CardTitle>
+              <Shield className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{kpiMetrics.behavioralAverages.dealAuthority.toFixed(1)}</div>
+              <p className="text-xs text-muted-foreground">
+                Group average (0-4 scale)
               </p>
             </CardContent>
           </Card>
@@ -332,20 +448,7 @@ const GroupHomeKPIDashboard = () => {
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Completion Rate</CardTitle>
-              <CheckCircle className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{kpiMetrics.completionRate.toFixed(1)}%</div>
-              <p className="text-xs text-muted-foreground">
-                Youth with assessments
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Improvement Trend</CardTitle>
+              <CardTitle className="text-sm font-medium">Points Trend</CardTitle>
               {kpiMetrics.improvementTrend >= 0 ? 
                 <TrendingUp className="h-4 w-4 text-green-600" /> : 
                 <TrendingDown className="h-4 w-4 text-red-600" />
@@ -356,36 +459,40 @@ const GroupHomeKPIDashboard = () => {
                 {kpiMetrics.improvementTrend >= 0 ? '+' : ''}{kpiMetrics.improvementTrend.toFixed(1)}%
               </div>
               <p className="text-xs text-muted-foreground">
-                Point average change
+                Month over month
               </p>
             </CardContent>
           </Card>
         </div>
 
         {/* Charts */}
-        <Tabs defaultValue="trends" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="trends">Assessment Trends</TabsTrigger>
+        <Tabs defaultValue="behavioral" className="space-y-6">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="behavioral">Behavioral Ratings</TabsTrigger>
             <TabsTrigger value="risk">Risk Distribution</TabsTrigger>
             <TabsTrigger value="points">Point Trends</TabsTrigger>
-            <TabsTrigger value="completion">Completion Stats</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="trends" className="space-y-6">
+          <TabsContent value="behavioral" className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle>Assessment Trends Over Time</CardTitle>
+                <CardTitle>Group Home Behavioral Rating Averages</CardTitle>
+                <p className="text-sm text-muted-foreground">Average ratings across all youth for the four behavioral categories (0-4 scale)</p>
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={chartData.assessmentTrends}>
+                  <BarChart data={[
+                    { category: 'Peer Interaction', value: kpiMetrics.behavioralAverages.peerInteraction },
+                    { category: 'Adult Interaction', value: kpiMetrics.behavioralAverages.adultInteraction },
+                    { category: 'Investment Level', value: kpiMetrics.behavioralAverages.investmentLevel },
+                    { category: 'Deal with Authority', value: kpiMetrics.behavioralAverages.dealAuthority }
+                  ]}>
                     <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="month" />
-                    <YAxis />
+                    <XAxis dataKey="category" />
+                    <YAxis domain={[0, 4]} />
                     <Tooltip />
-                    <Legend />
-                    <Line type="monotone" dataKey="assessments" stroke="#8884d8" strokeWidth={2} />
-                  </LineChart>
+                    <Bar dataKey="value" fill="#8884d8" />
+                  </BarChart>
                 </ResponsiveContainer>
               </CardContent>
             </Card>
@@ -435,34 +542,6 @@ const GroupHomeKPIDashboard = () => {
                     <Legend />
                     <Line type="monotone" dataKey="averagePoints" stroke="#82ca9d" strokeWidth={2} />
                   </LineChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="completion" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Assessment Completion Status</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <PieChart>
-                    <Pie
-                      data={chartData.completionStats}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      label={({ name, value }) => `${name}: ${value}`}
-                      outerRadius={80}
-                      fill="#8884d8"
-                      dataKey="value"
-                    >
-                      <Cell fill="#10b981" />
-                      <Cell fill="#f59e0b" />
-                    </Pie>
-                    <Tooltip />
-                  </PieChart>
                 </ResponsiveContainer>
               </CardContent>
             </Card>

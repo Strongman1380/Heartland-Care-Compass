@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -225,36 +225,25 @@ export const RiskAssessment = ({ youthId, youth, onAssessmentUpdated }: RiskAsse
     fetchAssessmentData();
   }, [youthId]);
   
-  const fetchAssessmentData = async () => {
+  const fetchAssessmentData = useCallback(async () => {
+    setIsLoading(true);
+
     try {
-      setIsLoading(true);
+      // Fetch both data sources in parallel for better performance
+      const [assessmentData, youthData] = await Promise.allSettled([
+        Promise.resolve(fetchAssessment(youthId, 'riskassessments', 'riskNeeds')),
+        youthService.getById(youthId)
+      ]);
 
-      // First try to get assessment data from localStorage
-      const assessmentData = await fetchAssessment(youthId, 'riskassessments', 'riskNeeds') as RiskAssessmentData | null;
+      const localAssessment = assessmentData.status === 'fulfilled' ? assessmentData.value as RiskAssessmentData | null : null;
+      const supabaseYouth = youthData.status === 'fulfilled' ? youthData.value : null;
 
-      // Try to get HYRNA data from the youth record in Supabase
-      let youthData = null;
-      try {
-        youthData = await youthService.getById(youthId);
-      } catch (error) {
-        console.log("Could not fetch youth data from Supabase:", error);
-      }
-
-      // Determine which data source to use - prioritize localStorage if it exists and is more recent
-      let useSupabaseData = false;
-      if (youthData?.hyrnaAssessmentDate && (!assessmentData || !assessmentData.updatedat)) {
-        useSupabaseData = true;
-      } else if (youthData?.hyrnaAssessmentDate && assessmentData?.updatedat) {
-        const supabaseDate = new Date(youthData.hyrnaAssessmentDate);
-        const localDate = new Date(assessmentData.updatedat);
-        useSupabaseData = supabaseDate > localDate;
-      }
-
-      if (useSupabaseData && youthData) {
-        // Use data from youth record
+      // Prioritize Supabase youth data, fall back to localStorage
+      if (supabaseYouth?.hyrnaRiskLevel) {
+        // Use Hygiene Risk data from Supabase
         setAssessment({
           id: `youth-${youthId}`,
-          assessmentDate: youthData.hyrnaAssessmentDate ? new Date(youthData.hyrnaAssessmentDate) : new Date(),
+          assessmentDate: supabaseYouth.hyrnaAssessmentDate ? new Date(supabaseYouth.hyrnaAssessmentDate) : new Date(),
           completedBy: "",
           domains: {
             priorOffending: { score: 0, notes: "", maxScore: 10 },
@@ -268,21 +257,20 @@ export const RiskAssessment = ({ youthId, youth, onAssessmentUpdated }: RiskAsse
           },
           traumaHistory: "",
           strengths: "",
-          recommendedLevel: youthData.level || 1,
-          overallRiskLevel: youthData.hyrnaRiskLevel || "Low",
+          recommendedLevel: supabaseYouth.level || 1,
+          overallRiskLevel: supabaseYouth.hyrnaRiskLevel || "Low",
           interventionTargets: [],
-          createdAt: new Date(youthData.createdAt || new Date()),
-          updatedAt: new Date(youthData.updatedAt || new Date())
+          createdAt: new Date(supabaseYouth.createdAt || new Date()),
+          updatedAt: new Date(supabaseYouth.updatedAt || new Date())
         });
-
         setQuestionResponses({});
-      } else if (assessmentData) {
+      } else if (localAssessment) {
         // Use data from localStorage
         setAssessment({
-          id: assessmentData.id,
-          assessmentDate: assessmentData.assessmentdate ? new Date(assessmentData.assessmentdate) : new Date(),
-          completedBy: assessmentData.completedby || "",
-          domains: assessmentData.domains || {
+          id: localAssessment.id,
+          assessmentDate: localAssessment.assessmentdate ? new Date(localAssessment.assessmentdate) : new Date(),
+          completedBy: localAssessment.completedby || "",
+          domains: localAssessment.domains || {
             priorOffending: { score: 0, notes: "", maxScore: 10 },
             familyCircumstances: { score: 0, notes: "", maxScore: 10 },
             education: { score: 0, notes: "", maxScore: 10 },
@@ -292,25 +280,17 @@ export const RiskAssessment = ({ youthId, youth, onAssessmentUpdated }: RiskAsse
             personality: { score: 0, notes: "", maxScore: 10 },
             attitudes: { score: 0, notes: "", maxScore: 10 }
           },
-          traumaHistory: assessmentData.traumahistory || "",
-          strengths: assessmentData.strengths || "",
-          recommendedLevel: assessmentData.recommendedlevel || 1,
-          overallRiskLevel: assessmentData.overallrisklevel || "Low",
-          interventionTargets: assessmentData.interventiontargets || [],
-          createdAt: assessmentData.createdat ? new Date(assessmentData.createdat) : new Date(),
-          updatedAt: assessmentData.updatedat ? new Date(assessmentData.updatedat) : new Date()
+          traumaHistory: localAssessment.traumahistory || "",
+          strengths: localAssessment.strengths || "",
+          recommendedLevel: localAssessment.recommendedlevel || 1,
+          overallRiskLevel: localAssessment.overallrisklevel || "Low",
+          interventionTargets: localAssessment.interventiontargets || [],
+          createdAt: localAssessment.createdat ? new Date(localAssessment.createdat) : new Date(),
+          updatedAt: localAssessment.updatedat ? new Date(localAssessment.updatedat) : new Date()
         });
-
-        // Reconstruct question responses from scores
-        const responses: Record<string, boolean> = {};
-        Object.entries(DOMAIN_QUESTIONS).forEach(([, questions]) => {
-          questions.forEach(question => {
-            responses[question.id] = false; // Default to No
-          });
-        });
-        setQuestionResponses(responses);
+        setQuestionResponses({});
       } else {
-        // No existing assessment, create new one
+        // Initialize empty assessment
         const totalScore = Object.values(assessment.domains).reduce((sum, domain) => sum + domain.score, 0);
         const maxPossibleScore = Object.values(assessment.domains).reduce((sum, domain) => sum + domain.maxScore, 0);
         const scorePercentage = maxPossibleScore > 0 ? (totalScore / maxPossibleScore) : 0;
@@ -328,60 +308,57 @@ export const RiskAssessment = ({ youthId, youth, onAssessmentUpdated }: RiskAsse
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [youthId]);
   
-  const handleQuestionChange = (questionId: string, domain: keyof typeof assessment.domains, value: boolean) => {
-    // Update responses
-    setQuestionResponses(prev => ({
-      ...prev,
-      [questionId]: value
-    }));
-    
-    // Recalculate domain score
+  const handleQuestionChange = useCallback((questionId: string, domain: keyof typeof assessment.domains, value: boolean) => {
     const domainQuestions = DOMAIN_QUESTIONS[domain];
-    let newScore = 0;
-    
-    domainQuestions.forEach(question => {
-      if (questionId === question.id) {
-        if (value) {
+
+    setQuestionResponses(prev => {
+      const newResponses = { ...prev, [questionId]: value };
+
+      // Recalculate domain score immediately
+      let newScore = 0;
+      domainQuestions.forEach(question => {
+        if (newResponses[question.id]) {
           newScore += question.score;
         }
-      } else if (questionResponses[question.id]) {
-        newScore += question.score;
-      }
+      });
+
+      // Update assessment with new domain score and calculate overall risk level
+      setAssessment(currentAssessment => {
+        const updatedAssessment = {
+          ...currentAssessment,
+          domains: {
+            ...currentAssessment.domains,
+            [domain]: {
+              ...currentAssessment.domains[domain],
+              score: newScore
+            }
+          }
+        };
+
+        // Calculate the new overall risk level based on updated scores
+        const totalScore = Object.values(updatedAssessment.domains).reduce((sum, domain) => sum + domain.score, 0);
+        const maxPossibleScore = Object.values(updatedAssessment.domains).reduce((sum, domain) => sum + domain.maxScore, 0);
+        const scorePercentage = maxPossibleScore > 0 ? (totalScore / maxPossibleScore) : 0;
+
+        // Calculate risk level using the helper function
+        const { riskLevel, recommendedLevel } = calculateRiskLevelFromPercentage(scorePercentage);
+
+        return {
+          ...updatedAssessment,
+          overallRiskLevel: riskLevel,
+          recommendedLevel: recommendedLevel
+        };
+      });
+
+      // Mark as having unsaved changes and trigger auto-save
+      setHasUnsavedChanges(true);
+      triggerAutoSave();
+
+      return newResponses;
     });
-    
-    // Update assessment with new domain score
-    const updatedAssessment = {
-      ...assessment,
-      domains: {
-        ...assessment.domains,
-        [domain]: {
-          ...assessment.domains[domain],
-          score: newScore
-        }
-      }
-    };
-    
-    // Calculate the new overall risk level based on updated scores
-    const totalScore = Object.values(updatedAssessment.domains).reduce((sum, domain) => sum + domain.score, 0);
-    const maxPossibleScore = Object.values(updatedAssessment.domains).reduce((sum, domain) => sum + domain.maxScore, 0);
-    const scorePercentage = maxPossibleScore > 0 ? (totalScore / maxPossibleScore) : 0;
-    
-    // Calculate risk level using the helper function
-    const { riskLevel, recommendedLevel } = calculateRiskLevelFromPercentage(scorePercentage);
-    
-    // Update assessment with new domain score and calculated risk level
-    setAssessment({
-      ...updatedAssessment,
-      overallRiskLevel: riskLevel,
-      recommendedLevel: recommendedLevel
-    });
-    
-    // Mark as having unsaved changes and trigger auto-save
-    setHasUnsavedChanges(true);
-    triggerAutoSave();
-  };
+  }, [assessment]);
   
   const handleDomainNotesChange = (domain: keyof typeof assessment.domains, notes: string) => {
     setAssessment(prev => ({
@@ -411,20 +388,20 @@ export const RiskAssessment = ({ youthId, youth, onAssessmentUpdated }: RiskAsse
     triggerAutoSave();
   };
 
-  // Auto-save functionality
-  const triggerAutoSave = () => {
+  // Auto-save functionality - reduced frequency for better performance
+  const triggerAutoSave = useCallback(() => {
     // Clear existing timer
     if (autoSaveTimer) {
       clearTimeout(autoSaveTimer);
     }
-    
-    // Set new timer for 10 seconds after user stops typing
+
+    // Set new timer for 30 seconds after user stops typing (increased from 10s for performance)
     const timer = setTimeout(() => {
       autoSave();
-    }, 10000);
-    
+    }, 30000);
+
     setAutoSaveTimer(timer);
-  };
+  }, [autoSaveTimer]);
 
   const autoSave = async () => {
     if (!hasUnsavedChanges || isAutoSaving) return;
@@ -628,8 +605,8 @@ export const RiskAssessment = ({ youthId, youth, onAssessmentUpdated }: RiskAsse
         youth: youth,
         assessment: assessment,
         exportDate: new Date().toLocaleDateString(),
-        totalScore: getTotalScore(),
-        maxPossibleScore: getMaxPossibleScore()
+        totalScore,
+        maxPossibleScore
       };
 
       const html = generateRiskAssessmentHTML(exportData);
@@ -759,41 +736,39 @@ export const RiskAssessment = ({ youthId, youth, onAssessmentUpdated }: RiskAsse
     `;
   };
   
-  const getTotalScore = () => {
+  const totalScore = useMemo(() => {
     return Object.values(assessment.domains).reduce((sum, domain) => sum + domain.score, 0);
-  };
-  
-  const getMaxPossibleScore = () => {
-    return Object.values(assessment.domains).reduce((sum, domain) => sum + domain.maxScore, 0);
-  };
-  
-  const getScorePercentage = () => {
-    const total = getTotalScore();
-    const max = getMaxPossibleScore();
-    return (total / max) * 100;
-  };
-  
+  }, [assessment.domains]);
 
-  const getRiskColor = () => {
-    const percentage = getScorePercentage();
-    
-    if (percentage >= 70) return "bg-red-500";
-    if (percentage >= 50) return "bg-orange-500";
-    if (percentage >= 30) return "bg-yellow-500";
-    if (percentage >= 15) return "bg-blue-500";
-    return "bg-green-500";
-  };
-  
-  const formatDate = (date: Date) => {
-    if (!date) return "";
-    
+  const maxPossibleScore = useMemo(() => {
+    return Object.values(assessment.domains).reduce((sum, domain) => sum + domain.maxScore, 0);
+  }, [assessment.domains]);
+
+  const scorePercentage = useMemo(() => {
+    return (totalScore / maxPossibleScore) * 100;
+  }, [totalScore, maxPossibleScore]);
+
+
+  const formattedDate = useMemo(() => {
+    if (!assessment.assessmentDate) return "";
+
     try {
-      return date.toISOString().split('T')[0];
+      return assessment.assessmentDate.toISOString().split('T')[0];
     } catch (error) {
       console.error("Error formatting date:", error);
       return "";
     }
-  };
+  }, [assessment.assessmentDate]);
+
+  const riskColor = useMemo(() => {
+    if (scorePercentage >= 70) return "bg-red-500";
+    if (scorePercentage >= 50) return "bg-orange-500";
+    if (scorePercentage >= 30) return "bg-yellow-500";
+    if (scorePercentage >= 15) return "bg-blue-500";
+    return "bg-green-500";
+  }, [scorePercentage]);
+
+
   
   if (isLoading) {
     return (
@@ -845,7 +820,7 @@ export const RiskAssessment = ({ youthId, youth, onAssessmentUpdated }: RiskAsse
                 <Input
                   id="assessmentDate"
                   type="date"
-                  value={formatDate(assessment.assessmentDate)}
+                  value={formattedDate}
                   onChange={handleDateChange}
                   className="max-w-full"
                 />
@@ -866,11 +841,11 @@ export const RiskAssessment = ({ youthId, youth, onAssessmentUpdated }: RiskAsse
               <h3 className="font-semibold">Overall Risk Score</h3>
               <div className="flex items-center justify-between mb-1">
                 <span className="text-sm text-gray-600">
-                  {getTotalScore()} out of {getMaxPossibleScore()} points
+                  {totalScore} out of {maxPossibleScore} points
                 </span>
                 <span className="text-sm font-medium">{assessment.overallRiskLevel} Risk</span>
               </div>
-              <Progress value={getScorePercentage()} className={getRiskColor()} />
+              <Progress value={scorePercentage} className={riskColor} />
             </div>
             
             <div className="space-y-2">

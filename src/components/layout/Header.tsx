@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { PlusCircle, BarChart3, LogOut, Menu, X, LogIn, Users, StickyNote, Activity, FileText, Calendar, Gavel, LayoutDashboard, Bell } from "lucide-react";
+import { PlusCircle, BarChart3, LogOut, Menu, X, LogIn, Users, StickyNote, Calendar, Gavel } from "lucide-react";
 import { AddYouthDialog } from "@/components/youth/AddYouthDialog";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
@@ -23,12 +23,7 @@ export const Header = () => {
   // Navigation items configuration
   const navigationItems = [
     { path: '/', label: 'Profile', icon: Users },
-    { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { path: '/daily-points', label: 'Daily Points', icon: Activity },
     { path: '/progress-notes', label: 'Case Notes', icon: StickyNote },
-    { path: '/behavior-analysis', label: 'Behavior Analysis', icon: BarChart3 },
-    { path: '/reports', label: 'Reports', icon: FileText },
-    { path: '/alerts', label: 'Alerts', icon: Bell },
     { path: '/monthly-progress', label: 'Monthly Progress Report', icon: Calendar },
     { path: '/court-report', label: 'Court Report', icon: Gavel }
   ];
@@ -75,27 +70,27 @@ export const Header = () => {
             </Link>
 
             {/* Desktop Navigation */}
-            <nav className="hidden lg:flex items-center justify-center flex-1 mx-4">
-              <div className="flex items-center space-x-1">
+            <nav className="hidden lg:flex items-center justify-center flex-1 mx-6">
+              <div className="flex items-center space-x-3">
                 {navigationItems.map((item) => {
                   const Icon = item.icon;
                   const isActive = isActiveRoute(item.path);
-                  
+
                   return (
                     <Link
                       key={item.path}
                       to={item.path}
                       className={`
-                        relative flex items-center space-x-1 px-2 py-2 rounded-lg text-xs font-medium transition-all duration-300 group whitespace-nowrap
+                        relative flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 group whitespace-nowrap
                         ${isActive
                           ? 'bg-red-50 text-red-700 shadow-sm'
                           : 'text-gray-600 hover:text-red-700 hover:bg-red-50'
                         }
                       `}
                     >
-                      <Icon className="h-3.5 w-3.5" />
-                      <span className="hidden xl:block text-xs">{item.label}</span>
-                      <span className="xl:hidden text-xs">{item.label.split(' ')[0]}</span>
+                      <Icon className="h-4 w-4" />
+                      <span className="hidden xl:block">{item.label}</span>
+                      <span className="xl:hidden">{item.label.split(' ')[0]}</span>
                       {isActive && (
                         <div className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-red-600" />
                       )}

@@ -6,44 +6,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Calendar, FileText, Printer, Sparkles } from "lucide-react";
-import { format, startOfMonth, endOfMonth } from "date-fns";
+import { Calendar, FileText, Printer, Save, FileDown, RotateCcw } from "lucide-react";
+import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
-import { fetchBehaviorPoints, fetchDailyRatings, fetchProgressNotes } from "@/utils/local-storage-utils";
-import { getBehaviorPointsByYouth, getDailyRatingsByYouth, getProgressNotesByYouth } from "@/lib/api";
-import { exportElementToPDF } from "@/utils/export";
-import { summarizeReport } from "@/lib/aiClient";
-
-// API fetch function with fallback to localStorage
-const fetchBehaviorPointsAPI = async (youthId: string) => {
-  try {
-    const data = await getBehaviorPointsByYouth(youthId);
-    return data;
-  } catch (error) {
-    console.warn(`API fetch failed for behavior-points, falling back to localStorage:`, error);
-    return fetchBehaviorPoints(youthId);
-  }
-};
-
-const fetchDailyRatingsAPI = async (youthId: string) => {
-  try {
-    const data = await getDailyRatingsByYouth(youthId);
-    return data;
-  } catch (error) {
-    console.warn(`API fetch failed for daily-ratings, falling back to localStorage:`, error);
-    return fetchDailyRatings(youthId);
-  }
-};
-
-const fetchProgressNotesAPI = async (youthId: string) => {
-  try {
-    const data = await getProgressNotesByYouth(youthId);
-    return data;
-  } catch (error) {
-    console.warn(`API fetch failed for progress-notes, falling back to localStorage:`, error);
-    return fetchProgressNotes(youthId);
-  }
-};
+import { exportElementToPDF, exportElementToDocx } from "@/utils/export";
 
 interface MonthlyProgressReportProps {
   youth: Youth;
@@ -54,7 +20,7 @@ interface MonthlyReportData {
   fullLegalName: string;
   preferredName: string;
   dateOfBirth: string;
-  age: number;
+  age: string;
   dateOfAdmission: string;
   lengthOfStay: string;
   currentLevel: string;
@@ -65,31 +31,47 @@ interface MonthlyReportData {
   currentDiagnoses: string;
 
   // Program Participation & Daily Points
-  avgWeeklyPoints: number;
+  avgWeeklyPoints: string;
   highPointAreas: string;
   lowPointAreas: string;
   trendsOverTime: string;
   incentivesEarned: string;
 
-  // Behavioral Notes
-  behavioralNotes: Array<{ date: string; summary: string }>;
+  // Behavioral Summary
+  behavioralSummary: string;
+
+  // Academic Progress
+  academicProgress: string;
+  schoolPerformance: string;
+  educationalGoals: string;
+
+  // Social/Emotional Development
+  socialProgress: string;
+  emotionalRegulation: string;
+  peerRelationships: string;
+
+  // Treatment Progress
+  treatmentGoals: string;
+  treatmentProgress: string;
+  therapyParticipation: string;
 
   // Risk Assessment
   riskLevel: string;
+  riskFactors: string;
 
   // Real Colors Profile
   primaryColor: string;
   secondaryColor: string;
-
-  // AI Summary
-  overallSummary: string;
+  colorProfile: string;
 
   // Placement Recommendation
   placementRecommendation: string;
   recommendationReason: string;
+  futureGoals: string;
 
   // Report metadata
   preparedBy: string;
+  reportDate: string;
   month: string;
   year: string;
 }
@@ -100,7 +82,7 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
     fullLegalName: "",
     preferredName: "",
     dateOfBirth: "",
-    age: 0,
+    age: "",
     dateOfAdmission: "",
     lengthOfStay: "",
     currentLevel: "",
@@ -109,194 +91,213 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
     guardiansInfo: "",
     schoolPlacement: "",
     currentDiagnoses: "",
-    avgWeeklyPoints: 0,
+    avgWeeklyPoints: "",
     highPointAreas: "",
     lowPointAreas: "",
     trendsOverTime: "",
     incentivesEarned: "",
-    behavioralNotes: [],
+    behavioralSummary: "",
+    academicProgress: "",
+    schoolPerformance: "",
+    educationalGoals: "",
+    socialProgress: "",
+    emotionalRegulation: "",
+    peerRelationships: "",
+    treatmentGoals: "",
+    treatmentProgress: "",
+    therapyParticipation: "",
     riskLevel: "",
+    riskFactors: "",
     primaryColor: "",
     secondaryColor: "",
-    overallSummary: "",
+    colorProfile: "",
     placementRecommendation: "",
     recommendationReason: "",
+    futureGoals: "",
     preparedBy: "",
-    month: "",
-    year: ""
+    reportDate: format(new Date(), "yyyy-MM-dd"),
+    month: format(new Date(), "MMMM"),
+    year: format(new Date(), "yyyy")
   });
-  const [loading, setLoading] = useState(false);
-  const [generatingAI, setGeneratingAI] = useState(false);
+
   const { toast } = useToast();
   const printRef = useRef<HTMLDivElement>(null);
 
-  const generateReport = async () => {
-    setLoading(true);
-    try {
-      const selectedDate = new Date(selectedMonth + "-01");
-      const monthStart = startOfMonth(selectedDate);
-      const monthEnd = endOfMonth(selectedDate);
-
-      // Fetch all data
-      const [allPoints, allRatings, allNotes] = await Promise.all([
-        fetchBehaviorPointsAPI(youth.id),
-        fetchDailyRatingsAPI(youth.id),
-        fetchProgressNotesAPI(youth.id),
-      ]);
-
-      // Filter data for the report period
-      const periodPoints = allPoints.filter(point => {
-        if (!point.date) return false;
-        const pointDate = new Date(point.date);
-        return pointDate >= monthStart && pointDate <= monthEnd;
-      });
-
-      const periodNotes = allNotes.filter(note => {
-        if (!note.date) return false;
-        const noteDate = new Date(note.date);
-        return noteDate >= monthStart && noteDate <= monthEnd;
-      });
-
-      // Calculate average weekly points
-      const totalPoints = periodPoints.reduce((sum, point) => sum + (point.totalPoints || 0), 0);
-      const avgWeeklyPoints = periodPoints.length > 0 ? Math.round(totalPoints / 4) : 0;
-
-      // Analyze behavioral notes (summarized)
-      const behavioralNotes = periodNotes.slice(0, 10).map(note => ({
-        date: format(new Date(note.date), "MM/dd"),
-        summary: note.note?.substring(0, 100) || "Progress note recorded"
-      }));
-
-      // Calculate age
-      const age = youth.dob ? Math.floor((new Date().getTime() - new Date(youth.dob).getTime()) / (365.25 * 24 * 60 * 60 * 1000)) : 0;
-
-      // Calculate length of stay
-      const lengthOfStay = youth.admissionDate ?
-        Math.floor((new Date().getTime() - new Date(youth.admissionDate).getTime()) / (1000 * 60 * 60 * 24)) + " days" :
-        "N/A";
-
-      // Generate AI summary
-      let overallSummary = "";
-      if (periodNotes.length > 0 || periodPoints.length > 0) {
-        setGeneratingAI(true);
+  // Load saved data on component mount
+  useEffect(() => {
+    const loadSavedData = () => {
+      const saveKey = `monthly-progress-${youth?.id}-${selectedMonth}`;
+      const saved = localStorage.getItem(saveKey);
+      if (saved) {
         try {
-          const aiPayload = {
-            youth: {
-              ...youth,
-              age,
-              lengthOfStay
-            },
-            reportType: "progressMonthly",
-            period: {
-              startDate: format(monthStart, "yyyy-MM-dd"),
-              endDate: format(monthEnd, "yyyy-MM-dd")
-            },
-            data: {
-              behaviorPoints: periodPoints,
-              progressNotes: periodNotes,
-              dailyRatings: allRatings.filter(rating => {
-                if (!rating.date) return false;
-                const ratingDate = new Date(rating.date);
-                return ratingDate >= monthStart && ratingDate <= monthEnd;
-              })
-            }
-          };
-
-          overallSummary = await summarizeReport(aiPayload);
-        } catch (aiError) {
-          console.warn("AI summary failed, using fallback:", aiError);
-          overallSummary = `During the reporting period from ${format(monthStart, "MMM d, yyyy")} to ${format(monthEnd, "MMM d, yyyy")}, ${youth.firstName} ${youth.lastName} participated in the residential treatment program. The youth earned an average of ${avgWeeklyPoints} points per week, demonstrating ${avgWeeklyPoints >= 100 ? 'consistent program compliance' : 'variable engagement with program expectations'}. Staff documented ${periodNotes.length} case notes highlighting areas of growth and ongoing treatment goals.`;
-        } finally {
-          setGeneratingAI(false);
+          const savedData = JSON.parse(saved);
+          setReportData({ ...reportData, ...savedData });
+        } catch (error) {
+          console.error("Error loading saved data:", error);
         }
       }
+    };
 
-      setReportData({
-        fullLegalName: `${youth.firstName} ${youth.lastName}`,
-        preferredName: youth.firstName || "",
-        dateOfBirth: youth.dob ? format(new Date(youth.dob), "MM/dd/yyyy") : "",
-        age,
-        dateOfAdmission: youth.admissionDate ? format(new Date(youth.admissionDate), "MM/dd/yyyy") : "",
-        lengthOfStay,
-        currentLevel: youth.level ? `Level ${youth.level}` : "Level 1",
-        currentPlacement: "To be assigned", // Fixed: removed reference to non-existent property
-        probationOfficer: typeof youth.probationOfficer === 'string' ? youth.probationOfficer : youth.probationOfficer?.name || "N/A",
-        guardiansInfo: typeof youth.legalGuardian === 'string' ? youth.legalGuardian : youth.legalGuardian?.name || "N/A",
-        schoolPlacement: youth.currentSchool || "N/A",
-        currentDiagnoses: youth.currentDiagnoses || youth.diagnoses || "N/A",
-        avgWeeklyPoints,
-        highPointAreas: avgWeeklyPoints >= 100 ? "Consistent program compliance, positive peer interactions" : "Variable performance with opportunities for improvement",
-        lowPointAreas: avgWeeklyPoints < 100 ? "Inconsistent point achievement, behavioral challenges" : "Minimal areas of concern",
-        trendsOverTime: periodPoints.length > 7 ? "Stable performance with room for growth" : "Limited data available",
-        incentivesEarned: avgWeeklyPoints >= 120 ? "Multiple incentives earned for exceptional performance" : "Standard incentives based on performance",
-        behavioralNotes,
-        riskLevel: "Moderate", // Fixed: removed reference to non-existent property
-        primaryColor: "N/A", // Fixed: removed reference to non-existent property
-        secondaryColor: "N/A", // Fixed: removed reference to non-existent property
-        overallSummary,
-        placementRecommendation: youth.level && youth.level >= 3 ? "Review for Step-Down" : "Continue Placement",
-        recommendationReason: youth.level && youth.level >= 3 ?
-          "Youth has demonstrated consistent progress and readiness for increased independence" :
-          "Youth continues to benefit from structured residential environment",
-        preparedBy: "",
-        month: format(selectedDate, "MMMM"),
-        year: format(selectedDate, "yyyy")
-      });
+    if (youth?.id) {
+      loadSavedData();
+    }
+  }, [youth?.id, selectedMonth]);
 
-    } catch (error) {
-      console.error("Error generating monthly report:", error);
+  // Auto-save functionality
+  useEffect(() => {
+    const autoSave = () => {
+      if (youth?.id) {
+        const saveKey = `monthly-progress-${youth.id}-${selectedMonth}`;
+        localStorage.setItem(saveKey, JSON.stringify(reportData));
+      }
+    };
+
+    const timeoutId = setTimeout(autoSave, 2000);
+    return () => clearTimeout(timeoutId);
+  }, [reportData, youth?.id, selectedMonth]);
+
+  const handleFieldChange = (field: keyof MonthlyReportData, value: string) => {
+    setReportData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleSave = () => {
+    try {
+      const saveKey = `monthly-progress-${youth.id}-${selectedMonth}`;
+      localStorage.setItem(saveKey, JSON.stringify(reportData));
       toast({
-        title: "Error",
-        description: "Failed to generate monthly report",
+        title: "Report Saved",
+        description: "Monthly progress report has been saved successfully",
+      });
+    } catch (error) {
+      toast({
+        title: "Save Error",
+        description: "Failed to save the report",
         variant: "destructive"
       });
-    } finally {
-      setLoading(false);
     }
   };
 
   const handlePrint = async () => {
-    // Generate the report first to ensure data is current
-    await generateReport();
-
-    // Small delay to ensure state updates before exporting
-    setTimeout(async () => {
-      if (printRef.current) {
-        try {
-          const selectedDate = new Date(selectedMonth + "-01");
-          const filename = `Monthly_Progress_${youth.lastName}_${youth.firstName}_${format(selectedDate, "MMMM_yyyy")}.pdf`;
-          await exportElementToPDF(printRef.current, filename);
-          toast({
-            title: "Success",
-            description: "Monthly progress report PDF has been generated and downloaded",
-          });
-        } catch (error) {
-          console.error("Error exporting PDF:", error);
-          toast({
-            title: "Error",
-            description: "Failed to generate PDF. Please try again.",
-            variant: "destructive"
-          });
-        }
+    if (printRef.current) {
+      try {
+        const selectedDate = new Date(selectedMonth + "-01");
+        const filename = `Monthly_Progress_${youth.lastName}_${youth.firstName}_${format(selectedDate, "MMMM_yyyy")}.pdf`;
+        await exportElementToPDF(printRef.current, filename);
+        toast({
+          title: "Success",
+          description: "Monthly progress report PDF has been generated and downloaded",
+        });
+      } catch (error) {
+        console.error("Error exporting PDF:", error);
+        toast({
+          title: "Error",
+          description: "Failed to generate PDF. Please try again.",
+          variant: "destructive"
+        });
       }
-    }, 500);
+    }
   };
 
-  useEffect(() => {
-    generateReport();
-  }, [selectedMonth, youth.id]);
+  const handleExportDOCX = async () => {
+    if (printRef.current) {
+      try {
+        const selectedDate = new Date(selectedMonth + "-01");
+        const filename = `Monthly_Progress_${youth.lastName}_${youth.firstName}_${format(selectedDate, "MMMM_yyyy")}.docx`;
+        await exportElementToDocx(printRef.current, filename);
+        toast({
+          title: "Success",
+          description: "Monthly progress report DOCX has been generated and downloaded",
+        });
+      } catch (error) {
+        console.error("Error exporting DOCX:", error);
+        toast({
+          title: "Error",
+          description: "Failed to generate DOCX. Please try again.",
+          variant: "destructive"
+        });
+      }
+    }
+  };
+
+  const handleReset = () => {
+    setReportData({
+      fullLegalName: "",
+      preferredName: "",
+      dateOfBirth: "",
+      age: "",
+      dateOfAdmission: "",
+      lengthOfStay: "",
+      currentLevel: "",
+      currentPlacement: "",
+      probationOfficer: "",
+      guardiansInfo: "",
+      schoolPlacement: "",
+      currentDiagnoses: "",
+      avgWeeklyPoints: "",
+      highPointAreas: "",
+      lowPointAreas: "",
+      trendsOverTime: "",
+      incentivesEarned: "",
+      behavioralSummary: "",
+      academicProgress: "",
+      schoolPerformance: "",
+      educationalGoals: "",
+      socialProgress: "",
+      emotionalRegulation: "",
+      peerRelationships: "",
+      treatmentGoals: "",
+      treatmentProgress: "",
+      therapyParticipation: "",
+      riskLevel: "",
+      riskFactors: "",
+      primaryColor: "",
+      secondaryColor: "",
+      colorProfile: "",
+      placementRecommendation: "",
+      recommendationReason: "",
+      futureGoals: "",
+      preparedBy: "",
+      reportDate: format(new Date(), "yyyy-MM-dd"),
+      month: format(new Date(), "MMMM"),
+      year: format(new Date(), "yyyy")
+    });
+    
+    // Clear saved data
+    if (youth?.id) {
+      const saveKey = `monthly-progress-${youth.id}-${selectedMonth}`;
+      localStorage.removeItem(saveKey);
+    }
+    
+    toast({
+      title: "Form Reset",
+      description: "All form data has been cleared",
+    });
+  };
+
+  if (!youth) {
+    return (
+      <Card>
+        <CardContent className="p-6">
+          <div className="text-center text-gray-500">
+            Please select a youth to generate a monthly progress report.
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <div className="space-y-6">
-      {/* Report Generation Controls */}
-      <Card className="border-2 border-primary/20 no-print">
+      {/* Form Controls */}
+      <Card>
         <CardHeader>
-          <CardTitle className="text-xl text-primary flex items-center gap-2">
-            <FileText className="h-5 w-5" />
-            Monthly Progress Report
+          <CardTitle className="flex items-center gap-2">
+            <Calendar className="h-5 w-5" />
+            Monthly Progress Report - {youth.firstName} {youth.lastName}
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-6">
+          {/* Report Settings */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-2">
               <Label>Report Month</Label>
@@ -310,16 +311,443 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
               <Label>Prepared By</Label>
               <Input
                 value={reportData.preparedBy}
-                onChange={(e) => setReportData({...reportData, preparedBy: e.target.value})}
+                onChange={(e) => handleFieldChange('preparedBy', e.target.value)}
                 placeholder="Staff name"
               />
             </div>
-            <div className="flex items-end">
-              <Button onClick={handlePrint} className="w-full">
-                <Printer className="h-4 w-4 mr-2" />
-                Generate PDF Report
-              </Button>
+            <div className="space-y-2">
+              <Label>Report Date</Label>
+              <Input
+                type="date"
+                value={reportData.reportDate}
+                onChange={(e) => handleFieldChange('reportDate', e.target.value)}
+              />
             </div>
+          </div>
+
+          {/* Youth Profile Information */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold border-b pb-2">Youth Profile Information</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Full Legal Name</Label>
+                <Input
+                  value={reportData.fullLegalName}
+                  onChange={(e) => handleFieldChange('fullLegalName', e.target.value)}
+                  placeholder="Full legal name"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Preferred Name</Label>
+                <Input
+                  value={reportData.preferredName}
+                  onChange={(e) => handleFieldChange('preferredName', e.target.value)}
+                  placeholder="Preferred name"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Date of Birth</Label>
+                <Input
+                  type="date"
+                  value={reportData.dateOfBirth}
+                  onChange={(e) => handleFieldChange('dateOfBirth', e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Age</Label>
+                <Input
+                  value={reportData.age}
+                  onChange={(e) => handleFieldChange('age', e.target.value)}
+                  placeholder="Age"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Date of Admission</Label>
+                <Input
+                  type="date"
+                  value={reportData.dateOfAdmission}
+                  onChange={(e) => handleFieldChange('dateOfAdmission', e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Length of Stay</Label>
+                <Input
+                  value={reportData.lengthOfStay}
+                  onChange={(e) => handleFieldChange('lengthOfStay', e.target.value)}
+                  placeholder="e.g., 6 months"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Current Level</Label>
+                <Select value={reportData.currentLevel} onValueChange={(value) => handleFieldChange('currentLevel', value)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select level" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Intake">Intake</SelectItem>
+                    <SelectItem value="Level 1">Level 1</SelectItem>
+                    <SelectItem value="Level 2">Level 2</SelectItem>
+                    <SelectItem value="Level 3">Level 3</SelectItem>
+                    <SelectItem value="Level 4">Level 4</SelectItem>
+                    <SelectItem value="Level 5">Level 5</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Current Placement</Label>
+                <Input
+                  value={reportData.currentPlacement}
+                  onChange={(e) => handleFieldChange('currentPlacement', e.target.value)}
+                  placeholder="Current placement"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Probation Officer</Label>
+                <Input
+                  value={reportData.probationOfficer}
+                  onChange={(e) => handleFieldChange('probationOfficer', e.target.value)}
+                  placeholder="Probation officer name"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>School Placement</Label>
+                <Input
+                  value={reportData.schoolPlacement}
+                  onChange={(e) => handleFieldChange('schoolPlacement', e.target.value)}
+                  placeholder="School placement"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Guardians Information</Label>
+              <Textarea
+                value={reportData.guardiansInfo}
+                onChange={(e) => handleFieldChange('guardiansInfo', e.target.value)}
+                placeholder="Guardian/parent information"
+                className="min-h-[80px]"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Current Diagnoses</Label>
+              <Textarea
+                value={reportData.currentDiagnoses}
+                onChange={(e) => handleFieldChange('currentDiagnoses', e.target.value)}
+                placeholder="Current diagnoses and treatment needs"
+                className="min-h-[80px]"
+              />
+            </div>
+          </div>
+
+          {/* Program Participation & Daily Points */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold border-b pb-2">Program Participation & Daily Points</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Average Weekly Points</Label>
+                <Input
+                  value={reportData.avgWeeklyPoints}
+                  onChange={(e) => handleFieldChange('avgWeeklyPoints', e.target.value)}
+                  placeholder="Average weekly point totals"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Incentives Earned</Label>
+                <Input
+                  value={reportData.incentivesEarned}
+                  onChange={(e) => handleFieldChange('incentivesEarned', e.target.value)}
+                  placeholder="Incentives earned/lost"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>High Point Areas (Strengths)</Label>
+              <Textarea
+                value={reportData.highPointAreas}
+                onChange={(e) => handleFieldChange('highPointAreas', e.target.value)}
+                placeholder="Areas where youth performs well"
+                className="min-h-[80px]"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Low Point Areas (Struggles)</Label>
+              <Textarea
+                value={reportData.lowPointAreas}
+                onChange={(e) => handleFieldChange('lowPointAreas', e.target.value)}
+                placeholder="Areas where youth struggles"
+                className="min-h-[80px]"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Trends Over Time</Label>
+              <Textarea
+                value={reportData.trendsOverTime}
+                onChange={(e) => handleFieldChange('trendsOverTime', e.target.value)}
+                placeholder="Progress trends and patterns"
+                className="min-h-[80px]"
+              />
+            </div>
+          </div>
+
+          {/* Academic Progress */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold border-b pb-2">Academic Progress</h3>
+            <div className="space-y-2">
+              <Label>Academic Progress</Label>
+              <Textarea
+                value={reportData.academicProgress}
+                onChange={(e) => handleFieldChange('academicProgress', e.target.value)}
+                placeholder="Overall academic progress and achievements"
+                className="min-h-[100px]"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>School Performance</Label>
+              <Textarea
+                value={reportData.schoolPerformance}
+                onChange={(e) => handleFieldChange('schoolPerformance', e.target.value)}
+                placeholder="Specific school performance details"
+                className="min-h-[80px]"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Educational Goals</Label>
+              <Textarea
+                value={reportData.educationalGoals}
+                onChange={(e) => handleFieldChange('educationalGoals', e.target.value)}
+                placeholder="Educational goals and objectives"
+                className="min-h-[80px]"
+              />
+            </div>
+          </div>
+
+          {/* Behavioral Summary */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold border-b pb-2">Behavioral Summary</h3>
+            <div className="space-y-2">
+              <Label>Behavioral Summary</Label>
+              <Textarea
+                value={reportData.behavioralSummary}
+                onChange={(e) => handleFieldChange('behavioralSummary', e.target.value)}
+                placeholder="Summary of behavioral progress and incidents"
+                className="min-h-[120px]"
+              />
+            </div>
+          </div>
+
+          {/* Social/Emotional Development */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold border-b pb-2">Social/Emotional Development</h3>
+            <div className="space-y-2">
+              <Label>Social Progress</Label>
+              <Textarea
+                value={reportData.socialProgress}
+                onChange={(e) => handleFieldChange('socialProgress', e.target.value)}
+                placeholder="Social development and skills progress"
+                className="min-h-[80px]"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Emotional Regulation</Label>
+              <Textarea
+                value={reportData.emotionalRegulation}
+                onChange={(e) => handleFieldChange('emotionalRegulation', e.target.value)}
+                placeholder="Emotional regulation progress and strategies"
+                className="min-h-[80px]"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Peer Relationships</Label>
+              <Textarea
+                value={reportData.peerRelationships}
+                onChange={(e) => handleFieldChange('peerRelationships', e.target.value)}
+                placeholder="Peer relationships and social interactions"
+                className="min-h-[80px]"
+              />
+            </div>
+          </div>
+
+          {/* Treatment Progress */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold border-b pb-2">Treatment Progress</h3>
+            <div className="space-y-2">
+              <Label>Treatment Goals</Label>
+              <Textarea
+                value={reportData.treatmentGoals}
+                onChange={(e) => handleFieldChange('treatmentGoals', e.target.value)}
+                placeholder="Current treatment goals and objectives"
+                className="min-h-[80px]"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Treatment Progress</Label>
+              <Textarea
+                value={reportData.treatmentProgress}
+                onChange={(e) => handleFieldChange('treatmentProgress', e.target.value)}
+                placeholder="Progress toward treatment goals"
+                className="min-h-[80px]"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Therapy Participation</Label>
+              <Textarea
+                value={reportData.therapyParticipation}
+                onChange={(e) => handleFieldChange('therapyParticipation', e.target.value)}
+                placeholder="Participation in therapy and counseling sessions"
+                className="min-h-[80px]"
+              />
+            </div>
+          </div>
+
+          {/* Risk Assessment */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold border-b pb-2">Risk Assessment</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Risk Level</Label>
+                <Select value={reportData.riskLevel} onValueChange={(value) => handleFieldChange('riskLevel', value)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select risk level" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Low">Low</SelectItem>
+                    <SelectItem value="Moderate">Moderate</SelectItem>
+                    <SelectItem value="High">High</SelectItem>
+                    <SelectItem value="Very High">Very High</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Risk Factors</Label>
+              <Textarea
+                value={reportData.riskFactors}
+                onChange={(e) => handleFieldChange('riskFactors', e.target.value)}
+                placeholder="Identified risk factors and mitigation strategies"
+                className="min-h-[80px]"
+              />
+            </div>
+          </div>
+
+          {/* Real Colors Profile */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold border-b pb-2">Real Colors Profile</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Primary Color</Label>
+                <Select value={reportData.primaryColor} onValueChange={(value) => handleFieldChange('primaryColor', value)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select primary color" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Orange">Orange</SelectItem>
+                    <SelectItem value="Gold">Gold</SelectItem>
+                    <SelectItem value="Green">Green</SelectItem>
+                    <SelectItem value="Blue">Blue</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Secondary Color</Label>
+                <Select value={reportData.secondaryColor} onValueChange={(value) => handleFieldChange('secondaryColor', value)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select secondary color" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Orange">Orange</SelectItem>
+                    <SelectItem value="Gold">Gold</SelectItem>
+                    <SelectItem value="Green">Green</SelectItem>
+                    <SelectItem value="Blue">Blue</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Color Profile Analysis</Label>
+              <Textarea
+                value={reportData.colorProfile}
+                onChange={(e) => handleFieldChange('colorProfile', e.target.value)}
+                placeholder="Real Colors profile analysis and implications"
+                className="min-h-[80px]"
+              />
+            </div>
+          </div>
+
+          {/* Placement Recommendation */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold border-b pb-2">Placement Recommendation</h3>
+            <div className="space-y-2">
+              <Label>Placement Recommendation</Label>
+              <Textarea
+                value={reportData.placementRecommendation}
+                onChange={(e) => handleFieldChange('placementRecommendation', e.target.value)}
+                placeholder="Recommended placement or next steps"
+                className="min-h-[80px]"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Recommendation Rationale</Label>
+              <Textarea
+                value={reportData.recommendationReason}
+                onChange={(e) => handleFieldChange('recommendationReason', e.target.value)}
+                placeholder="Rationale for placement recommendation"
+                className="min-h-[80px]"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Future Goals</Label>
+              <Textarea
+                value={reportData.futureGoals}
+                onChange={(e) => handleFieldChange('futureGoals', e.target.value)}
+                placeholder="Future goals and objectives"
+                className="min-h-[80px]"
+              />
+            </div>
+          </div>
+          
+          {/* Action Buttons */}
+          <div className="flex flex-wrap gap-2 mt-6">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleSave}
+              className="flex items-center gap-2"
+            >
+              <Save className="h-4 w-4" />
+              Save Progress
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handlePrint}
+            >
+              <FileDown className="h-4 w-4" />
+              Export PDF
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExportDOCX}
+            >
+              <FileDown className="h-4 w-4" />
+              Export DOCX
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => window.print()}
+            >
+              <Printer className="h-4 w-4" />
+              Print
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleReset}
+              className="text-red-600 hover:text-red-700"
+            >
+              <RotateCcw className="h-4 w-4" />
+              Reset Form
+            </Button>
           </div>
         </CardContent>
       </Card>
@@ -336,141 +764,169 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
         </div>
 
         <div className="grid grid-cols-2 gap-4 mb-6">
-          <div>
-            <strong>Youth:</strong> {youth.firstName} {youth.lastName}
-          </div>
-          <div>
-            <strong>Month/Year:</strong> {reportData.month} {reportData.year}
+          <div><strong>Report Date:</strong> {reportData.reportDate}</div>
+          <div><strong>Prepared By:</strong> {reportData.preparedBy}</div>
+        </div>
+
+        {/* Youth Information */}
+        <div className="mb-6">
+          <h3 className="font-bold text-lg mb-4 border-b pb-1">1. Youth Profile Information</h3>
+          <div className="space-y-2 ml-4">
+            <div><strong>Full Legal Name:</strong> {reportData.fullLegalName || `${youth.firstName} ${youth.lastName}`}</div>
+            <div><strong>Preferred Name:</strong> {reportData.preferredName}</div>
+            <div><strong>Date of Birth:</strong> {reportData.dateOfBirth}</div>
+            <div><strong>Age:</strong> {reportData.age}</div>
+            <div><strong>Date of Admission:</strong> {reportData.dateOfAdmission}</div>
+            <div><strong>Length of Stay:</strong> {reportData.lengthOfStay}</div>
+            <div><strong>Current Level:</strong> {reportData.currentLevel}</div>
+            <div><strong>Current Placement:</strong> {reportData.currentPlacement}</div>
+            <div><strong>Probation Officer:</strong> {reportData.probationOfficer}</div>
+            <div><strong>School Placement:</strong> {reportData.schoolPlacement}</div>
+            <div><strong>Guardians Information:</strong> {reportData.guardiansInfo}</div>
+            <div><strong>Current Diagnoses:</strong> {reportData.currentDiagnoses}</div>
           </div>
         </div>
 
+        {/* Program Participation */}
         <div className="mb-6">
           <h3 className="font-bold text-lg mb-4 border-b pb-1">2. Program Participation & Daily Points</h3>
           <div className="space-y-2 ml-4">
-            <div><strong>Average Weekly Point Totals for the Month:</strong> {reportData.avgWeeklyPoints}</div>
-            <div><strong>High Point Areas (strengths):</strong> {reportData.highPointAreas}</div>
-            <div><strong>Low Point Areas (struggles):</strong> {reportData.lowPointAreas}</div>
+            <div><strong>Average Weekly Points:</strong> {reportData.avgWeeklyPoints}</div>
+            <div><strong>High Point Areas (Strengths):</strong> {reportData.highPointAreas}</div>
+            <div><strong>Low Point Areas (Struggles):</strong> {reportData.lowPointAreas}</div>
             <div><strong>Trends Over Time:</strong> {reportData.trendsOverTime}</div>
-            <div><strong>Incentives Earned / Lost:</strong> {reportData.incentivesEarned}</div>
+            <div><strong>Incentives Earned:</strong> {reportData.incentivesEarned}</div>
           </div>
         </div>
 
+        {/* Academic Progress */}
         <div className="mb-6">
-          <h3 className="font-bold text-lg mb-4 border-b pb-1">3. Behavioral Notes (Summarized)</h3>
+          <h3 className="font-bold text-lg mb-4 border-b pb-1">3. Academic Progress</h3>
           <div className="space-y-2 ml-4">
-            {reportData.behavioralNotes.length > 0 ? (
-              reportData.behavioralNotes.map((note, index) => (
-                <div key={index}>
-                  <strong>{note.date}:</strong> {note.summary}
-                </div>
-              ))
-            ) : (
-              <div>No behavioral notes recorded for this period.</div>
-            )}
+            <div><strong>Academic Progress:</strong> {reportData.academicProgress}</div>
+            <div><strong>School Performance:</strong> {reportData.schoolPerformance}</div>
+            <div><strong>Educational Goals:</strong> {reportData.educationalGoals}</div>
           </div>
         </div>
 
-                <div className="mb-6">
-          <h3 className="font-bold text-lg mb-4 border-b pb-1">4. Risk Assessment Result</h3>
-          <div className="ml-4">
-            <div><strong>Current Overall Risk Level:</strong> {reportData.riskLevel}</div>
-          </div>
-        </div>
-
+        {/* Behavioral Summary */}
         <div className="mb-6">
-          <h3 className="font-bold text-lg mb-4 border-b pb-1">5. Real Colors Profile</h3>
+          <h3 className="font-bold text-lg mb-4 border-b pb-1">4. Behavioral Summary</h3>
           <div className="space-y-2 ml-4">
-            <div><strong>Top Color:</strong> {reportData.primaryColor}</div>
+            <div>{reportData.behavioralSummary}</div>
+          </div>
+        </div>
+
+        {/* Social/Emotional Development */}
+        <div className="mb-6">
+          <h3 className="font-bold text-lg mb-4 border-b pb-1">5. Social/Emotional Development</h3>
+          <div className="space-y-2 ml-4">
+            <div><strong>Social Progress:</strong> {reportData.socialProgress}</div>
+            <div><strong>Emotional Regulation:</strong> {reportData.emotionalRegulation}</div>
+            <div><strong>Peer Relationships:</strong> {reportData.peerRelationships}</div>
+          </div>
+        </div>
+
+        {/* Treatment Progress */}
+        <div className="mb-6">
+          <h3 className="font-bold text-lg mb-4 border-b pb-1">6. Treatment Progress</h3>
+          <div className="space-y-2 ml-4">
+            <div><strong>Treatment Goals:</strong> {reportData.treatmentGoals}</div>
+            <div><strong>Treatment Progress:</strong> {reportData.treatmentProgress}</div>
+            <div><strong>Therapy Participation:</strong> {reportData.therapyParticipation}</div>
+          </div>
+        </div>
+
+        {/* Risk Assessment */}
+        <div className="mb-6">
+          <h3 className="font-bold text-lg mb-4 border-b pb-1">7. Risk Assessment</h3>
+          <div className="space-y-2 ml-4">
+            <div><strong>Risk Level:</strong> {reportData.riskLevel}</div>
+            <div><strong>Risk Factors:</strong> {reportData.riskFactors}</div>
+          </div>
+        </div>
+
+        {/* Real Colors Profile */}
+        <div className="mb-6">
+          <h3 className="font-bold text-lg mb-4 border-b pb-1">8. Real Colors Profile</h3>
+          <div className="space-y-2 ml-4">
+            <div><strong>Primary Color:</strong> {reportData.primaryColor}</div>
             <div><strong>Secondary Color:</strong> {reportData.secondaryColor}</div>
+            <div><strong>Color Profile Analysis:</strong> {reportData.colorProfile}</div>
           </div>
         </div>
 
+        {/* Placement Recommendation */}
         <div className="mb-6">
-          <h3 className="font-bold text-lg mb-4 border-b pb-1">6. Overall Summary</h3>
-          <div className="ml-4">
-            {generatingAI ? (
-              <div className="flex items-center space-x-2">
-                <Sparkles className="h-4 w-4 animate-spin" />
-                <span>Generating AI summary...</span>
-              </div>
-            ) : (
-              <div className="whitespace-pre-wrap">{reportData.overallSummary}</div>
-            )}
+          <h3 className="font-bold text-lg mb-4 border-b pb-1">9. Placement Recommendation</h3>
+          <div className="space-y-2 ml-4">
+            <div><strong>Placement Recommendation:</strong> {reportData.placementRecommendation}</div>
+            <div><strong>Recommendation Rationale:</strong> {reportData.recommendationReason}</div>
+            <div><strong>Future Goals:</strong> {reportData.futureGoals}</div>
           </div>
         </div>
 
-        <div className="mb-6">
-          <h3 className="font-bold text-lg mb-4 border-b pb-1">7. Placement Recommendation</h3>
-          <div className="ml-4">
-            <div><strong>{reportData.placementRecommendation}</strong></div>
-            <div className="mt-2"><strong>Reason:</strong> {reportData.recommendationReason}</div>
+        {/* Footer */}
+        <div className="border-t pt-4 mt-8">
+          <div className="text-center text-sm text-gray-600">
+            <p>Report generated on {reportData.reportDate}</p>
+            <p>Prepared by: {reportData.preparedBy}</p>
+            <p>Heartland Boys Home - Monthly Progress Report</p>
           </div>
         </div>
-
       </div>
 
+      {/* Print Styles */}
       <style dangerouslySetInnerHTML={{
         __html: `
           @media print {
-            * {
-              -webkit-print-color-adjust: exact !important;
-              color-adjust: exact !important;
+            body * {
+              visibility: hidden;
             }
             
-            body {
-              background: white !important;
-              color: black !important;
-              font-family: 'Times New Roman', serif !important;
-              line-height: 1.4 !important;
-            }
-            
-            .no-print {
-              display: none !important;
+            .print-section,
+            .print-section * {
+              visibility: visible;
             }
             
             .print-section {
-              box-shadow: none !important;
-              border: none !important;
-              border-radius: 0 !important;
+              position: absolute !important;
+              left: 0 !important;
+              top: 0 !important;
+              width: 100% !important;
+              padding: 20pt !important;
               margin: 0 !important;
-              padding: 0 !important;
               background: white !important;
               color: black !important;
               font-size: 12pt !important;
               line-height: 1.4 !important;
-              width: 100% !important;
-              max-width: none !important;
+              box-shadow: none !important;
+              border: none !important;
             }
             
             .print-section h1 {
-              font-size: 18pt !important;
-              font-weight: bold !important;
-              margin-bottom: 8pt !important;
+              font-size: 20pt !important;
+              margin-bottom: 12pt !important;
               color: black !important;
-              text-align: center !important;
             }
             
             .print-section h2 {
-              font-size: 14pt !important;
-              font-weight: bold !important;
-              margin-bottom: 12pt !important;
+              font-size: 16pt !important;
+              margin-bottom: 10pt !important;
               color: black !important;
-              text-align: center !important;
             }
             
             .print-section h3 {
-              font-size: 12pt !important;
-              font-weight: bold !important;
+              font-size: 14pt !important;
               margin-bottom: 6pt !important;
               margin-top: 12pt !important;
               color: black !important;
             }
             
-            .print-section p {
+            .print-section p, .print-section div {
               font-size: 11pt !important;
               margin-bottom: 6pt !important;
               color: black !important;
-              text-align: justify !important;
             }
             
             .print-section .grid {
@@ -500,6 +956,12 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
               margin-top: 18pt !important;
             }
             
+            .print-section .border-b {
+              border-bottom: 1pt solid black !important;
+              padding-bottom: 6pt !important;
+              margin-bottom: 12pt !important;
+            }
+            
             .print-section .border-t {
               border-top: 1pt solid black !important;
               padding-top: 12pt !important;
@@ -511,15 +973,6 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
               color: black !important;
             }
             
-            .print-only {
-              display: block !important;
-            }
-            
-            .print-only > div {
-              margin-bottom: 12pt !important;
-              page-break-inside: avoid !important;
-            }
-            
             .print-section .ml-4 {
               margin-left: 24pt !important;
             }
@@ -529,26 +982,12 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
               size: letter !important;
             }
             
-            /* Ensure content flows properly */
             .print-section > div {
               page-break-inside: avoid !important;
             }
-            
-            /* Make sure text areas content appears properly */
-            .print-section .print-only p {
-              white-space: pre-wrap !important;
-              word-wrap: break-word !important;
-              margin-top: 4pt !important;
-            }
           }
-          
-          .print-only {
-            display: none;
-          }
-        `}} />
-      <div className="no-print flex gap-2 mt-4">
-        <Button variant="outline" onClick={async () => printRef.current && exportElementToPDF(printRef.current, `monthly-progress-${youth.lastName || 'report'}.pdf`)}>Export PDF</Button>
-      </div>
+        `
+      }} />
     </div>
   );
 };

@@ -90,6 +90,9 @@ export const RealColorsAssessment = ({ selectedYouth }: RealColorsAssessmentProp
   const [selectedYouthId, setSelectedYouthId] = useState<string>("");
   const [newYouthName, setNewYouthName] = useState("");
   const [loading, setLoading] = useState(false);
+  const [autoSaveTimer, setAutoSaveTimer] = useState<NodeJS.Timeout | null>(null);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [isAutoSaving, setIsAutoSaving] = useState(false);
   const { toast } = useToast();
   const { youths, loadYouths, createYouth, updateYouth } = useYouth();
 
@@ -99,7 +102,19 @@ export const RealColorsAssessment = ({ selectedYouth }: RealColorsAssessmentProp
       setSelectedYouthId(selectedYouth.id);
       setYouthSelection('existing');
     }
+
+    // Load draft data on component mount
+    loadDraft();
   }, [selectedYouth, loadYouths]);
+
+  // Cleanup autosave timer on unmount
+  useEffect(() => {
+    return () => {
+      if (autoSaveTimer) {
+        clearTimeout(autoSaveTimer);
+      }
+    };
+  }, [autoSaveTimer]);
 
   const resetForm = () => {
     setPrimaryColor("");
@@ -110,6 +125,123 @@ export const RealColorsAssessment = ({ selectedYouth }: RealColorsAssessmentProp
     setIsScreening(false);
     setCompletedBy("");
     setNewYouthName("");
+    setHasUnsavedChanges(false);
+
+    // Clear draft from localStorage
+    clearDraft();
+  };
+
+  // Auto-save functionality
+  const triggerAutoSave = () => {
+    // Clear existing timer
+    if (autoSaveTimer) {
+      clearTimeout(autoSaveTimer);
+    }
+
+    // Set new timer for 10 seconds after user stops typing
+    const timer = setTimeout(() => {
+      autoSave();
+    }, 10000);
+
+    setAutoSaveTimer(timer);
+  };
+
+  const autoSave = async () => {
+    if (!hasUnsavedChanges || isAutoSaving) return;
+
+    // Don't auto-save if required fields are empty
+    if (!primaryColor) return;
+
+    try {
+      setIsAutoSaving(true);
+
+      // Save to localStorage as draft
+      const draftData = {
+        primaryColor,
+        secondaryColor,
+        insights,
+        comments,
+        observations,
+        isScreening,
+        completedBy,
+        youthSelection,
+        selectedYouthId,
+        newYouthName,
+        timestamp: Date.now()
+      };
+
+      const draftKey = getDraftKey();
+      localStorage.setItem(draftKey, JSON.stringify(draftData));
+
+      setHasUnsavedChanges(false);
+
+      // Show subtle success indicator
+      toast({
+        title: "Draft auto-saved",
+        description: "Your progress has been saved",
+        duration: 2000
+      });
+    } catch (error) {
+      console.error("Auto-save failed:", error);
+    } finally {
+      setIsAutoSaving(false);
+    }
+  };
+
+  const getDraftKey = () => {
+    const youthId = selectedYouth?.id || selectedYouthId || 'new';
+    return `real-colors-draft-${youthId}`;
+  };
+
+  const loadDraft = () => {
+    try {
+      const draftKey = getDraftKey();
+      const draftData = localStorage.getItem(draftKey);
+
+      if (draftData) {
+        const parsed = JSON.parse(draftData);
+
+        // Only load draft if it's less than 24 hours old
+        const dayInMs = 24 * 60 * 60 * 1000;
+        if (parsed.timestamp && (Date.now() - parsed.timestamp < dayInMs)) {
+          setPrimaryColor(parsed.primaryColor || "");
+          setSecondaryColor(parsed.secondaryColor || "");
+          setInsights(parsed.insights || "");
+          setComments(parsed.comments || "");
+          setObservations(parsed.observations || "");
+          setIsScreening(parsed.isScreening || false);
+          setCompletedBy(parsed.completedBy || "");
+
+          if (!selectedYouth) {
+            setYouthSelection(parsed.youthSelection || 'existing');
+            setSelectedYouthId(parsed.selectedYouthId || "");
+            setNewYouthName(parsed.newYouthName || "");
+          }
+
+          setHasUnsavedChanges(true);
+
+          toast({
+            title: "Draft loaded",
+            description: "Your previous work has been restored",
+            duration: 2000
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Failed to load draft:", error);
+    }
+  };
+
+  const clearDraft = () => {
+    const draftKey = getDraftKey();
+    localStorage.removeItem(draftKey);
+  };
+
+  // Form change handlers that trigger autosave
+  const handleFormChange = (setter: (value: any) => void, value: any) => {
+    setter(value);
+    setHasUnsavedChanges(true);
+    triggerAutoSave();
   };
 
   const handlePrintAssessment = () => {
@@ -382,6 +514,7 @@ export const RealColorsAssessment = ({ selectedYouth }: RealColorsAssessmentProp
       });
 
       resetForm();
+      clearDraft();
 
     } catch (error) {
       console.error('Error saving Real Colors assessment:', error);
@@ -431,7 +564,7 @@ export const RealColorsAssessment = ({ selectedYouth }: RealColorsAssessmentProp
                   <input
                     type="radio"
                     checked={youthSelection === 'existing'}
-                    onChange={() => setYouthSelection('existing')}
+                    onChange={() => handleFormChange(setYouthSelection, 'existing')}
                     className="form-radio"
                   />
                   <span>Existing Youth</span>
@@ -440,7 +573,7 @@ export const RealColorsAssessment = ({ selectedYouth }: RealColorsAssessmentProp
                   <input
                     type="radio"
                     checked={youthSelection === 'new'}
-                    onChange={() => setYouthSelection('new')}
+                    onChange={() => handleFormChange(setYouthSelection, 'new')}
                     className="form-radio"
                   />
                   <span>New Youth</span>
@@ -448,7 +581,7 @@ export const RealColorsAssessment = ({ selectedYouth }: RealColorsAssessmentProp
               </div>
 
               {youthSelection === 'existing' ? (
-                <Select value={selectedYouthId} onValueChange={setSelectedYouthId}>
+                <Select value={selectedYouthId} onValueChange={(value) => handleFormChange(setSelectedYouthId, value)}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select a youth" />
                   </SelectTrigger>
@@ -464,7 +597,7 @@ export const RealColorsAssessment = ({ selectedYouth }: RealColorsAssessmentProp
                 <Input
                   placeholder="Enter youth name"
                   value={newYouthName}
-                  onChange={(e) => setNewYouthName(e.target.value)}
+                  onChange={(e) => handleFormChange(setNewYouthName, e.target.value)}
                 />
               )}
             </div>
@@ -485,7 +618,7 @@ export const RealColorsAssessment = ({ selectedYouth }: RealColorsAssessmentProp
             <Checkbox
               id="screening"
               checked={isScreening}
-              onCheckedChange={(checked) => setIsScreening(checked === true)}
+              onCheckedChange={(checked) => handleFormChange(setIsScreening, checked === true)}
             />
             <Label htmlFor="screening">Quick Screening (for follow-up assessments)</Label>
           </div>
@@ -493,7 +626,7 @@ export const RealColorsAssessment = ({ selectedYouth }: RealColorsAssessmentProp
           {/* Primary Color */}
           <div className="space-y-2">
             <Label className="text-base font-medium">Primary Color *</Label>
-            <Select value={primaryColor} onValueChange={setPrimaryColor}>
+            <Select value={primaryColor} onValueChange={(value) => handleFormChange(setPrimaryColor, value)}>
               <SelectTrigger>
                 <SelectValue placeholder="Select primary color" />
               </SelectTrigger>
@@ -517,7 +650,7 @@ export const RealColorsAssessment = ({ selectedYouth }: RealColorsAssessmentProp
           {/* Secondary Color */}
           <div className="space-y-2">
             <Label className="text-base font-medium">Secondary Color</Label>
-            <Select value={secondaryColor} onValueChange={setSecondaryColor}>
+            <Select value={secondaryColor} onValueChange={(value) => handleFormChange(setSecondaryColor, value)}>
               <SelectTrigger>
                 <SelectValue placeholder="Select secondary color (optional)" />
               </SelectTrigger>
@@ -591,7 +724,7 @@ export const RealColorsAssessment = ({ selectedYouth }: RealColorsAssessmentProp
                 id="insights"
                 placeholder="Key insights from the assessment..."
                 value={insights}
-                onChange={(e) => setInsights(e.target.value)}
+                onChange={(e) => handleFormChange(setInsights, e.target.value)}
                 rows={3}
               />
             </div>
@@ -602,7 +735,7 @@ export const RealColorsAssessment = ({ selectedYouth }: RealColorsAssessmentProp
                 id="comments"
                 placeholder="Additional comments..."
                 value={comments}
-                onChange={(e) => setComments(e.target.value)}
+                onChange={(e) => handleFormChange(setComments, e.target.value)}
                 rows={3}
               />
             </div>
@@ -613,7 +746,7 @@ export const RealColorsAssessment = ({ selectedYouth }: RealColorsAssessmentProp
                 id="observations"
                 placeholder="Behavioral observations during assessment..."
                 value={observations}
-                onChange={(e) => setObservations(e.target.value)}
+                onChange={(e) => handleFormChange(setObservations, e.target.value)}
                 rows={3}
               />
             </div>
@@ -624,10 +757,27 @@ export const RealColorsAssessment = ({ selectedYouth }: RealColorsAssessmentProp
                 id="completedBy"
                 placeholder="Staff member name"
                 value={completedBy}
-                onChange={(e) => setCompletedBy(e.target.value)}
+                onChange={(e) => handleFormChange(setCompletedBy, e.target.value)}
               />
             </div>
           </div>
+
+          {/* Auto-save status */}
+          {hasUnsavedChanges && (
+            <div className="flex items-center gap-2 text-sm text-amber-600 bg-amber-50 p-2 rounded-md border border-amber-200">
+              {isAutoSaving ? (
+                <>
+                  <div className="animate-spin h-3 w-3 border border-amber-600 border-t-transparent rounded-full" />
+                  <span>Auto-saving...</span>
+                </>
+              ) : (
+                <>
+                  <div className="h-2 w-2 bg-amber-500 rounded-full" />
+                  <span>Unsaved changes (auto-saves in 10 seconds)</span>
+                </>
+              )}
+            </div>
+          )}
 
           {/* Action Buttons */}
           <div className="flex gap-2 flex-col sm:flex-row">

@@ -154,10 +154,24 @@ export const RapidPlacementAssessment = () => {
   const [youths, setYouths] = useState<any[]>([]);
   const [showAssessment, setShowAssessment] = useState(false);
   const [assessmentData, setAssessmentData] = useState<AssessmentData>(initialData);
+  const [autoSaveTimer, setAutoSaveTimer] = useState<NodeJS.Timeout | null>(null);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [isAutoSaving, setIsAutoSaving] = useState(false);
 
   useEffect(() => {
     fetchYouths();
+    // Load draft data on component mount
+    loadDraft();
   }, []);
+
+  // Cleanup autosave timer on unmount
+  useEffect(() => {
+    return () => {
+      if (autoSaveTimer) {
+        clearTimeout(autoSaveTimer);
+      }
+    };
+  }, [autoSaveTimer]);
 
   const fetchYouths = () => {
     try {
@@ -171,6 +185,95 @@ export const RapidPlacementAssessment = () => {
         variant: "destructive",
       });
     }
+  };
+
+  // Auto-save functionality
+  const triggerAutoSave = () => {
+    // Clear existing timer
+    if (autoSaveTimer) {
+      clearTimeout(autoSaveTimer);
+    }
+
+    // Set new timer for 10 seconds after user stops typing
+    const timer = setTimeout(() => {
+      autoSave();
+    }, 10000);
+
+    setAutoSaveTimer(timer);
+  };
+
+  const autoSave = async () => {
+    if (!hasUnsavedChanges || isAutoSaving) return;
+
+    // Don't auto-save if basic info is not filled
+    if (!assessmentData.youthName.trim() || !showAssessment) return;
+
+    try {
+      setIsAutoSaving(true);
+
+      // Save to localStorage as draft
+      const draftData = {
+        assessmentType,
+        youthSelection,
+        selectedYouthId,
+        assessmentData,
+        showAssessment,
+        timestamp: Date.now()
+      };
+
+      const draftKey = getDraftKey();
+      localStorage.setItem(draftKey, JSON.stringify(draftData));
+
+      setHasUnsavedChanges(false);
+
+      // Show subtle success indicator
+      toast({
+        title: "Draft auto-saved",
+        description: "Your assessment progress has been saved",
+      });
+    } catch (error) {
+      console.error("Auto-save failed:", error);
+    } finally {
+      setIsAutoSaving(false);
+    }
+  };
+
+  const getDraftKey = () => {
+    return `rpat-assessment-draft-${selectedYouthId || 'new'}-${assessmentType}`;
+  };
+
+  const loadDraft = () => {
+    try {
+      const draftKey = getDraftKey();
+      const draftData = localStorage.getItem(draftKey);
+
+      if (draftData) {
+        const parsed = JSON.parse(draftData);
+
+        // Only load draft if it's less than 24 hours old
+        const dayInMs = 24 * 60 * 60 * 1000;
+        if (parsed.timestamp && (Date.now() - parsed.timestamp < dayInMs)) {
+          setAssessmentType(parsed.assessmentType || '');
+          setYouthSelection(parsed.youthSelection || '');
+          setSelectedYouthId(parsed.selectedYouthId || '');
+          setAssessmentData(parsed.assessmentData || initialData);
+          setShowAssessment(parsed.showAssessment || false);
+          setHasUnsavedChanges(true);
+
+          toast({
+            title: "Draft loaded",
+            description: "Your previous assessment has been restored",
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Failed to load draft:", error);
+    }
+  };
+
+  const clearDraft = () => {
+    const draftKey = getDraftKey();
+    localStorage.removeItem(draftKey);
   };
 
   const handleStartAssessment = () => {
@@ -253,6 +356,8 @@ export const RapidPlacementAssessment = () => {
         }
       };
     });
+    setHasUnsavedChanges(true);
+    triggerAutoSave();
   };
 
   const handleNotesChange = (section: string, field: string, notes: string) => {
@@ -269,6 +374,8 @@ export const RapidPlacementAssessment = () => {
         }
       };
     });
+    setHasUnsavedChanges(true);
+    triggerAutoSave();
   };
 
   const handlePrint = () => {
@@ -282,6 +389,8 @@ export const RapidPlacementAssessment = () => {
   const handleSave = () => {
     // Here you would typically save to database
     localStorage.setItem('rpat-assessment', JSON.stringify(assessmentData));
+    setHasUnsavedChanges(false);
+    clearDraft();
     toast({
       title: "Assessment Saved",
       description: "Assessment data has been saved successfully",
@@ -589,6 +698,23 @@ export const RapidPlacementAssessment = () => {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Auto-save status */}
+            {hasUnsavedChanges && (
+              <div className="flex items-center justify-center gap-2 text-sm text-amber-600 bg-amber-50 p-3 rounded-lg border border-amber-200 mb-4">
+                {isAutoSaving ? (
+                  <>
+                    <div className="animate-spin h-4 w-4 border-2 border-amber-600 border-t-transparent rounded-full" />
+                    <span>Auto-saving assessment...</span>
+                  </>
+                ) : (
+                  <>
+                    <div className="h-2 w-2 bg-amber-500 rounded-full" />
+                    <span>Unsaved changes (auto-saves in 10 seconds)</span>
+                  </>
+                )}
+              </div>
+            )}
 
             {/* Action Buttons */}
             <div className="flex justify-center gap-4 mb-6 print:hidden">

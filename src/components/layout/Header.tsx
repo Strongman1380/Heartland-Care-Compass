@@ -22,7 +22,6 @@ export const Header = () => {
 
   // Navigation items configuration
   const navigationItems = [
-    { path: '/', label: 'Profile', icon: Users },
     { path: '/progress-notes', label: 'Case Notes', icon: StickyNote },
     { path: '/monthly-progress', label: 'Monthly Progress Report', icon: Calendar },
     { path: '/court-report', label: 'Court Report', icon: Gavel }

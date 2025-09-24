@@ -31,6 +31,10 @@ export const AddYouthDialog = ({ onClose, onSuccess }: AddYouthDialogProps) => {
     handleCheckboxChange,
     handleArrayItemChange,
     addArrayItem,
+    hasUnsavedChanges,
+    isAutoSaving,
+    clearDraft,
+    resetForm,
   } = useYouthForm();
 
   // Generate unique ID when dialog opens
@@ -147,7 +151,10 @@ export const AddYouthDialog = ({ onClose, onSuccess }: AddYouthDialogProps) => {
       
       // Save to Supabase
       await createYouth(youthData);
-      
+
+      // Clear draft after successful save
+      clearDraft();
+
       // Call onSuccess callback if provided, otherwise just close
       if (onSuccess) {
         onSuccess();
@@ -176,6 +183,22 @@ export const AddYouthDialog = ({ onClose, onSuccess }: AddYouthDialogProps) => {
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-xl font-semibold">Add New Youth</DialogTitle>
+          {/* Auto-save status */}
+          {hasUnsavedChanges && (
+            <div className="flex items-center gap-2 text-sm text-amber-600 bg-amber-50 p-2 rounded-md border border-amber-200 mt-2">
+              {isAutoSaving ? (
+                <>
+                  <div className="animate-spin h-3 w-3 border border-amber-600 border-t-transparent rounded-full" />
+                  <span>Auto-saving draft...</span>
+                </>
+              ) : (
+                <>
+                  <div className="h-2 w-2 bg-amber-500 rounded-full" />
+                  <span>Draft saved automatically (unsaved changes)</span>
+                </>
+              )}
+            </div>
+          )}
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4 py-2">

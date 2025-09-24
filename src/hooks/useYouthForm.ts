@@ -1,5 +1,6 @@
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
+import { toast } from "sonner";
 
 export interface YouthFormData {
   // Personal Information
@@ -174,6 +175,205 @@ export const useYouthForm = () => {
     hyrnaAssessmentDate: "",
   });
 
+  const [autoSaveTimer, setAutoSaveTimer] = useState<NodeJS.Timeout | null>(null);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [isAutoSaving, setIsAutoSaving] = useState(false);
+  const isInitialMount = useRef(true);
+
+  // Load draft on mount
+  useEffect(() => {
+    loadDraft();
+    isInitialMount.current = false;
+  }, []);
+
+  // Auto-save when form data changes
+  useEffect(() => {
+    if (isInitialMount.current) return;
+
+    setHasUnsavedChanges(true);
+    triggerAutoSave();
+  }, [formData]);
+
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => {
+      if (autoSaveTimer) {
+        clearTimeout(autoSaveTimer);
+      }
+    };
+  }, [autoSaveTimer]);
+
+  const triggerAutoSave = () => {
+    // Clear existing timer
+    if (autoSaveTimer) {
+      clearTimeout(autoSaveTimer);
+    }
+
+    // Set new timer for 10 seconds after user stops typing
+    const timer = setTimeout(() => {
+      autoSave();
+    }, 10000);
+
+    setAutoSaveTimer(timer);
+  };
+
+  const autoSave = async () => {
+    if (!hasUnsavedChanges || isAutoSaving) return;
+
+    // Don't auto-save if required fields are empty
+    if (!formData.firstName.trim() && !formData.lastName.trim()) return;
+
+    try {
+      setIsAutoSaving(true);
+
+      // Save to localStorage as draft
+      const draftData = {
+        ...formData,
+        timestamp: Date.now()
+      };
+
+      localStorage.setItem('youth-form-draft', JSON.stringify(draftData));
+      setHasUnsavedChanges(false);
+
+      // Show subtle success indicator
+      toast.success("Form auto-saved", { duration: 1500 });
+    } catch (error) {
+      console.error("Auto-save failed:", error);
+    } finally {
+      setIsAutoSaving(false);
+    }
+  };
+
+  const loadDraft = () => {
+    try {
+      const draftData = localStorage.getItem('youth-form-draft');
+
+      if (draftData) {
+        const parsed = JSON.parse(draftData);
+
+        // Only load draft if it's less than 24 hours old
+        const dayInMs = 24 * 60 * 60 * 1000;
+        if (parsed.timestamp && (Date.now() - parsed.timestamp < dayInMs)) {
+          const { timestamp, ...formDataWithoutTimestamp } = parsed;
+          setFormData(formDataWithoutTimestamp);
+          setHasUnsavedChanges(true);
+
+          toast.info("Previous draft loaded", { duration: 2000 });
+        }
+      }
+    } catch (error) {
+      console.error("Failed to load draft:", error);
+    }
+  };
+
+  const clearDraft = () => {
+    localStorage.removeItem('youth-form-draft');
+    setHasUnsavedChanges(false);
+  };
+
+  const resetForm = () => {
+    setFormData({
+      // Personal Information
+      firstName: "",
+      lastName: "",
+      dob: "",
+      age: "",
+      idNumber: "",
+      admissionDate: "",
+      currentLevel: 0,
+      level: "1", // Default to Level 1
+      legalGuardian: "",
+      guardianRelationship: "",
+      guardianContact: "",
+      guardianPhone: "",
+      guardianEmail: "",
+      probationOfficer: "",
+      probationContact: "",
+      probationPhone: "",
+      placementAuthority: [],
+      estimatedStay: "",
+      referralSource: "",
+
+      // Additional personal details
+      sex: "",
+      race: "",
+      religion: "",
+      placeOfBirth: "",
+      socialSecurityNumber: "",
+      address: "",
+      height: "",
+      weight: "",
+      hairColor: "",
+      eyeColor: "",
+      tattoosScars: "",
+
+      // Background Information
+      referralReason: "",
+      priorPlacements: [],
+      numPriorPlacements: "",
+      lengthRecentPlacement: "",
+      courtInvolvement: [],
+
+      // Education Information
+      currentSchool: "",
+      grade: "",
+      hasIEP: false,
+      academicStrengths: "",
+      academicChallenges: "",
+      behavioralConcerns: "",
+
+      // Medical Information
+      primaryPhysician: "",
+      allergies: "",
+      medications: "",
+      chronicConditions: "",
+      lastPhysicalExam: "",
+
+      // Mental Health Information
+      previousCounseling: false,
+      currentTherapist: "",
+      psychiatrist: "",
+      mentalHealthDiagnosis: "",
+      riskFactors: "",
+      copingStrategies: "",
+      triggerWarnings: "",
+      selfHarmHistory: false,
+      suicidalIdeation: false,
+
+      // Substance Use
+      substanceUse: false,
+      substanceDetails: "",
+      treatmentHistory: "",
+
+      // Family Information
+      familyStructure: "",
+      contactInfo: "",
+      emergencyContact: "",
+      familyDynamics: "",
+
+      // Behavioral Information
+      strengths: "",
+      interests: "",
+      goals: "",
+      concerns: "",
+
+      // Risk Assessment
+      riskLevel: "",
+      safetyPlan: "",
+
+      // New fields for behavior tracking
+      onSubsystem: false,
+      pointsInCurrentLevel: 0,
+      dailyPointsForPrivileges: 10,
+
+      // HYRNA Risk Assessment
+      hyrnaRiskLevel: "",
+      hyrnaScore: "",
+      hyrnaAssessmentDate: "",
+    });
+    clearDraft();
+  };
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target;
     
@@ -217,5 +417,9 @@ export const useYouthForm = () => {
     handleCheckboxChange,
     handleArrayItemChange,
     addArrayItem,
+    hasUnsavedChanges,
+    isAutoSaving,
+    clearDraft,
+    resetForm,
   };
 };

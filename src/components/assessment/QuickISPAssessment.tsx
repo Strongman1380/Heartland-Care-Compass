@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -6,7 +6,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
-import { Printer } from 'lucide-react';
+import { Printer, Save } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface ISPData {
   youthName: string;
@@ -86,6 +87,11 @@ const QuickISPAssessment: React.FC<QuickISPAssessmentProps> = ({ selectedYouth, 
     signatureDate: new Date().toLocaleDateString()
   });
 
+  const [autoSaveTimer, setAutoSaveTimer] = useState<NodeJS.Timeout | null>(null);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [isAutoSaving, setIsAutoSaving] = useState(false);
+  const isInitialMount = useRef(true);
+
   const teamMemberOptions = ['Case Manager', 'PO', 'Therapist', 'Teacher', 'Family'];
   const riskLevels = ['Low', 'Moderate', 'High', 'Very High'];
   const concernOptions = ['Aggression', 'Defiance', 'Substance Use', 'Peer Issues', 'Runaway Risk', 'School Problems', 'Family Conflict', 'Self-Harm'];
@@ -95,6 +101,105 @@ const QuickISPAssessment: React.FC<QuickISPAssessmentProps> = ({ selectedYouth, 
   const whatHelpsOptions = ['Space', 'Talk it Out', 'Deep Breathing', 'Physical Activity', 'Quiet Area', 'Music'];
   const staffApproachOptions = ['Direct', 'Calm/Quiet', 'Offer Choices', 'Provide Space'];
   const dailyMeasureOptions = ['Point Card', 'Behavior Chart', 'Check-ins'];
+
+  // Load draft on mount
+  useEffect(() => {
+    loadDraft();
+    isInitialMount.current = false;
+  }, []);
+
+  // Auto-save when form data changes
+  useEffect(() => {
+    if (isInitialMount.current) return;
+
+    setHasUnsavedChanges(true);
+    triggerAutoSave();
+  }, [ispData]);
+
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => {
+      if (autoSaveTimer) {
+        clearTimeout(autoSaveTimer);
+      }
+    };
+  }, [autoSaveTimer]);
+
+  const triggerAutoSave = () => {
+    // Clear existing timer
+    if (autoSaveTimer) {
+      clearTimeout(autoSaveTimer);
+    }
+
+    // Set new timer for 10 seconds after user stops typing
+    const timer = setTimeout(() => {
+      autoSave();
+    }, 10000);
+
+    setAutoSaveTimer(timer);
+  };
+
+  const autoSave = async () => {
+    if (!hasUnsavedChanges || isAutoSaving) return;
+
+    // Don't auto-save if basic info is not filled
+    if (!ispData.youthName.trim()) return;
+
+    try {
+      setIsAutoSaving(true);
+
+      // Save to localStorage as draft
+      const draftData = {
+        ...ispData,
+        timestamp: Date.now()
+      };
+
+      const draftKey = getDraftKey();
+      localStorage.setItem(draftKey, JSON.stringify(draftData));
+
+      setHasUnsavedChanges(false);
+
+      // Show subtle success indicator
+      toast.success("ISP draft auto-saved", { duration: 1500 });
+    } catch (error) {
+      console.error("Auto-save failed:", error);
+    } finally {
+      setIsAutoSaving(false);
+    }
+  };
+
+  const getDraftKey = () => {
+    return `isp-assessment-draft-${ispData.youthId || 'new'}`;
+  };
+
+  const loadDraft = () => {
+    try {
+      const draftKey = getDraftKey();
+      const draftData = localStorage.getItem(draftKey);
+
+      if (draftData) {
+        const parsed = JSON.parse(draftData);
+
+        // Only load draft if it's less than 24 hours old
+        const dayInMs = 24 * 60 * 60 * 1000;
+        if (parsed.timestamp && (Date.now() - parsed.timestamp < dayInMs)) {
+          const { timestamp, ...formDataWithoutTimestamp } = parsed;
+          setISPData(formDataWithoutTimestamp);
+          setHasUnsavedChanges(true);
+
+          toast.info("Previous ISP draft loaded", { duration: 2000 });
+        }
+      }
+    } catch (error) {
+      console.error("Failed to load draft:", error);
+    }
+  };
+
+  const clearDraft = () => {
+    const draftKey = getDraftKey();
+    localStorage.removeItem(draftKey);
+    setHasUnsavedChanges(false);
+  };
 
   const handleCheckboxChange = (field: keyof ISPData, value: string, checked: boolean) => {
     setISPData(prev => {
@@ -119,6 +224,8 @@ const QuickISPAssessment: React.FC<QuickISPAssessmentProps> = ({ selectedYouth, 
     if (onSave) {
       onSave(ispData);
     }
+    clearDraft();
+    toast.success("ISP Assessment saved successfully");
   };
 
   const renderPrintView = () => {
@@ -701,13 +808,33 @@ const QuickISPAssessment: React.FC<QuickISPAssessmentProps> = ({ selectedYouth, 
       <div className="flex justify-between items-center mb-6 print:hidden">
         <h1 className="text-2xl font-bold">Quick Individualized Service Plan (ISP)</h1>
         <div className="space-x-2">
-          <Button onClick={handleSave} variant="outline">Save</Button>
+          <Button onClick={handleSave} variant="outline" className="flex items-center gap-2">
+            <Save className="h-4 w-4" />
+            Save
+          </Button>
           <Button onClick={handlePrint} className="flex items-center gap-2">
             <Printer className="h-4 w-4" />
             Print
           </Button>
         </div>
       </div>
+
+      {/* Auto-save status */}
+      {hasUnsavedChanges && (
+        <div className="flex items-center justify-center gap-2 text-sm text-amber-600 bg-amber-50 p-2 rounded-md border border-amber-200 mb-4">
+          {isAutoSaving ? (
+            <>
+              <div className="animate-spin h-3 w-3 border border-amber-600 border-t-transparent rounded-full" />
+              <span>Auto-saving ISP draft...</span>
+            </>
+          ) : (
+            <>
+              <div className="h-2 w-2 bg-amber-500 rounded-full" />
+              <span>Unsaved changes (auto-saves in 10 seconds)</span>
+            </>
+          )}
+        </div>
+      )}
 
       <div className="print:hidden">
         {renderFormView()}

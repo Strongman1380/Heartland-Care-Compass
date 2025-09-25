@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -6,12 +6,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ChevronDown, ChevronRight, FileText, Search, Users, ArrowLeft } from "lucide-react";
+import { ChevronDown, ChevronRight, FileText, Search, Users, ArrowLeft, Download, Printer } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useCaseNotes, useYouth } from "@/hooks/useSupabase";
 import { type CaseNotes as CaseNote, type Youth } from "@/integrations/supabase/services";
+import { exportHTMLToPDF } from "@/utils/export";
 
 interface CaseNotesProps {
   youthId: string;
@@ -25,7 +26,8 @@ export const CaseNotes = ({ youthId, youth, onYouthChange, onBackToSelection }: 
   const [searchTerm, setSearchTerm] = useState("");
   const [expandedNote, setExpandedNote] = useState<string | null>(null);
   const [selectedYouth, setSelectedYouth] = useState<Youth | null>(null);
-  
+  const printRef = useRef<HTMLDivElement>(null);
+
   // Use Supabase hooks
   const { caseNotes: notes, loading: isLoading, createCaseNote } = useCaseNotes(youthId);
   const { youths } = useYouth();
@@ -112,11 +114,188 @@ export const CaseNotes = ({ youthId, youth, onYouthChange, onBackToSelection }: 
     }
   };
 
-  const handleExportNotes = () => {
-    // PDF export functionality
-    toast.info("Export Feature Coming Soon", {
-      description: "The PDF export feature will be available in the next update."
-    });
+  const handleExportNotes = async () => {
+    try {
+      const html = generateCaseNotesHTML();
+      const filename = `${selectedYouth?.firstName}_${selectedYouth?.lastName}_Case_Notes_${format(new Date(), 'yyyy-MM-dd')}.pdf`;
+      await exportHTMLToPDF(html, filename);
+      toast.success("Case notes exported successfully!");
+    } catch (error) {
+      toast.error("Failed to export case notes");
+    }
+  };
+
+  const handlePrintNotes = () => {
+    const html = generateCaseNotesHTML();
+    const printWindow = window.open('about:blank', '_blank', 'width=800,height=600,scrollbars=yes,resizable=yes');
+    if (!printWindow) {
+      toast.error("Please allow pop-ups to print case notes");
+      return;
+    }
+
+    printWindow.document.open();
+    printWindow.document.write(html);
+    printWindow.document.close();
+
+    const triggerPrint = () => {
+      try {
+        printWindow.focus();
+        printWindow.print();
+        setTimeout(() => {
+          printWindow.close();
+        }, 1000);
+      } catch (printError) {
+        console.warn('Print error:', printError);
+        printWindow.close();
+      }
+    };
+
+    if (printWindow.document.readyState === 'complete') {
+      setTimeout(triggerPrint, 500);
+    } else {
+      printWindow.addEventListener('load', () => {
+        setTimeout(triggerPrint, 500);
+      }, { once: true });
+    }
+  };
+
+  const generateCaseNotesHTML = () => {
+    const youthName = selectedYouth ? `${selectedYouth.firstName} ${selectedYouth.lastName}` : 'Unknown Youth';
+
+    return `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <title>Case Notes - ${youthName}</title>
+          <style>
+            body {
+              font-family: Arial, sans-serif;
+              margin: 20px;
+              line-height: 1.6;
+              color: #333;
+              background: white;
+            }
+            .header {
+              text-align: center;
+              margin-bottom: 30px;
+              border-bottom: 3px solid #b91c1c;
+              padding-bottom: 20px;
+              background: linear-gradient(135deg, #b91c1c 0%, #dc2626 50%, #d97706 100%);
+              color: white;
+              padding: 20px;
+              border-radius: 8px 8px 0 0;
+              margin: -20px -20px 30px -20px;
+            }
+            .youth-info {
+              background-color: #f5f5f5;
+              padding: 15px;
+              border-radius: 5px;
+              margin-bottom: 20px;
+            }
+            .case-note {
+              margin-bottom: 30px;
+              page-break-inside: avoid;
+              border: 1px solid #ddd;
+              border-radius: 8px;
+              padding: 20px;
+              background: white;
+              box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            }
+            .note-header {
+              font-weight: bold;
+              font-size: 16px;
+              margin-bottom: 10px;
+              color: #b91c1c;
+              border-bottom: 1px solid #eee;
+              padding-bottom: 8px;
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+            }
+            .note-meta {
+              font-size: 12px;
+              color: #666;
+              font-weight: normal;
+            }
+            .note-content {
+              white-space: pre-wrap;
+              line-height: 1.8;
+              font-size: 14px;
+              margin-top: 15px;
+              padding: 15px;
+              background: #fafafa;
+              border-left: 4px solid #b91c1c;
+              border-radius: 0 4px 4px 0;
+              word-wrap: break-word;
+              overflow-wrap: break-word;
+              font-family: 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', sans-serif;
+            }
+            .summary-stats {
+              background: #f0f9ff;
+              padding: 15px;
+              border-radius: 8px;
+              margin-bottom: 20px;
+              border-left: 4px solid #0ea5e9;
+            }
+            @media print {
+              body { margin: 0; font-size: 12px; }
+              .case-note {
+                page-break-inside: avoid;
+                margin-bottom: 20px;
+                box-shadow: none;
+                border: 1px solid #333;
+              }
+              .header { margin: 0 0 20px 0; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>Heartland Boys Home</h1>
+            <h2>Case Notes Report</h2>
+            <p>Generated on ${format(new Date(), 'MMMM d, yyyy')}</p>
+          </div>
+
+          <div class="youth-info">
+            <h3>Youth Information</h3>
+            <p><strong>Name:</strong> ${youthName}</p>
+            <p><strong>Report Date:</strong> ${format(new Date(), 'MMMM d, yyyy')}</p>
+            <p><strong>Total Notes:</strong> ${filteredNotes.length}</p>
+          </div>
+
+          <div class="summary-stats">
+            <h3>Summary</h3>
+            <p>This report contains ${filteredNotes.length} case note${filteredNotes.length !== 1 ? 's' : ''} for ${youthName}.</p>
+            <p>Date range: ${filteredNotes.length > 0 ?
+              `${format(new Date(filteredNotes[filteredNotes.length - 1].date), 'MMM d, yyyy')} to ${format(new Date(filteredNotes[0].date), 'MMM d, yyyy')}` :
+              'No notes available'
+            }</p>
+          </div>
+
+          ${filteredNotes.map((note) => `
+            <div class="case-note">
+              <div class="note-header">
+                <span>${note.summary || 'Case Note'}</span>
+                <div class="note-meta">
+                  <div>${format(new Date(note.date), 'MMMM d, yyyy')}</div>
+                  <div>by ${note.staff || 'Staff Member'}</div>
+                </div>
+              </div>
+              <div class="note-content">${(note.note || 'No content')
+                .replace(/\n/g, '<br>')
+                .replace(/  /g, '&nbsp;&nbsp;')
+                .replace(/\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;')}</div>
+            </div>
+          `).join('')}
+
+          <div style="margin-top: 40px; text-align: center; font-size: 12px; color: #666; border-top: 1px solid #ddd; padding-top: 20px;">
+            <p>Heartland Boys Home - Confidential Case Notes</p>
+            <p>Generated on ${format(new Date(), 'MMMM d, yyyy \'at\' h:mm a')}</p>
+          </div>
+        </body>
+      </html>
+    `;
   };
 
   return (
@@ -134,9 +313,13 @@ export const CaseNotes = ({ youthId, youth, onYouthChange, onBackToSelection }: 
               Back to Selection
             </Button>
           )}
+          <Button variant="outline" size="sm" onClick={handlePrintNotes}>
+            <Printer size={16} className="mr-2" />
+            Print
+          </Button>
           <Button variant="outline" size="sm" onClick={handleExportNotes}>
-            <FileText size={16} className="mr-2" />
-            Export Notes
+            <Download size={16} className="mr-2" />
+            Export PDF
           </Button>
         </div>
       </div>
@@ -205,10 +388,29 @@ export const CaseNotes = ({ youthId, youth, onYouthChange, onBackToSelection }: 
                   name="note"
                   value={formData.note}
                   onChange={handleInputChange}
-                  placeholder="Enter detailed case note information..."
-                  rows={8}
-                  className="resize-none"
+                  placeholder="Enter detailed case note information...
+
+Examples:
+• Behavioral observations
+• Treatment progress
+• Incident details
+• Family interactions
+• Academic updates
+
+Use proper spacing and formatting - all formatting will be preserved in reports and exports."
+                  rows={10}
+                  className="resize-none text-sm leading-relaxed"
+                  style={{
+                    fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+                    lineHeight: '1.7',
+                    padding: '12px',
+                    whiteSpace: 'pre-wrap'
+                  }}
                 />
+                <div className="text-xs text-gray-500 mt-2 flex items-start space-x-2">
+                  <span>💡</span>
+                  <span>All formatting including line breaks, spacing, and bullet points will be preserved in reports and exports</span>
+                </div>
               </div>
               
               <div>
@@ -291,11 +493,29 @@ export const CaseNotes = ({ youthId, youth, onYouthChange, onBackToSelection }: 
                         </div>
                         
                         <CollapsibleContent className="mt-2">
-                          <div className="bg-gray-50 p-3 rounded text-sm whitespace-pre-wrap">
-                            {note.note || 'No content'}
+                          <div className="bg-gray-50 p-4 rounded-md border-l-4 border-blue-500">
+                            <div className="prose prose-sm max-w-none">
+                              <div
+                                className="text-sm text-gray-800 leading-relaxed"
+                                style={{
+                                  fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+                                  lineHeight: '1.8',
+                                  whiteSpace: 'pre-wrap',
+                                  wordWrap: 'break-word',
+                                  overflowWrap: 'break-word'
+                                }}
+                                dangerouslySetInnerHTML={{
+                                  __html: (note.note || 'No content')
+                                    .replace(/\n/g, '<br>')
+                                    .replace(/  /g, '&nbsp;&nbsp;')
+                                    .replace(/\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;')
+                                }}
+                              />
+                            </div>
                           </div>
-                          <div className="text-xs text-gray-500 mt-2">
-                            Created: {note.createdAt ? format(new Date(note.createdAt), 'MMM dd, yyyy HH:mm') : 'Unknown'}
+                          <div className="text-xs text-gray-500 mt-3 flex justify-between">
+                            <span>Created: {note.createdAt ? format(new Date(note.createdAt), 'MMM dd, yyyy \'at\' h:mm a') : 'Unknown'}</span>
+                            <span>ID: {note.id?.substring(0, 8)}...</span>
                           </div>
                         </CollapsibleContent>
                       </div>

@@ -179,10 +179,29 @@ export const SimpleCaseNotes = ({ youthId }: SimpleCaseNotesProps) => {
                   name="note"
                   value={formData.note}
                   onChange={handleInputChange}
-                  placeholder="Enter detailed case note information..."
-                  rows={8}
-                  className="resize-none"
+                  placeholder="Enter detailed case note information...
+
+Examples:
+• Behavioral observations
+• Treatment progress
+• Incident details
+• Family interactions
+• Academic updates
+
+Use proper spacing and formatting - all formatting will be preserved in reports."
+                  rows={10}
+                  className="resize-none text-sm leading-relaxed"
+                  style={{
+                    fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+                    lineHeight: '1.7',
+                    padding: '12px',
+                    whiteSpace: 'pre-wrap'
+                  }}
                 />
+                <div className="text-xs text-gray-500 mt-2 flex items-start space-x-2">
+                  <span>💡</span>
+                  <span>All formatting including line breaks, spacing, and bullet points will be preserved</span>
+                </div>
               </div>
 
               <div>
@@ -328,7 +347,22 @@ export const SimpleCaseNotes = ({ youthId }: SimpleCaseNotesProps) => {
                         <CollapsibleContent>
                           <CardContent className="pt-0">
                             <div className="prose prose-sm max-w-none">
-                              <p className="whitespace-pre-wrap text-gray-700">{note.note}</p>
+                              <div
+                                className="text-gray-700 leading-relaxed"
+                                style={{
+                                  fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+                                  lineHeight: '1.8',
+                                  whiteSpace: 'pre-wrap',
+                                  wordWrap: 'break-word',
+                                  overflowWrap: 'break-word'
+                                }}
+                                dangerouslySetInnerHTML={{
+                                  __html: (note.note || 'No content')
+                                    .replace(/\n/g, '<br>')
+                                    .replace(/  /g, '&nbsp;&nbsp;')
+                                    .replace(/\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;')
+                                }}
+                              />
                             </div>
                           </CardContent>
                         </CollapsibleContent>

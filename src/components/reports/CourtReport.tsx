@@ -73,6 +73,202 @@ interface CourtReportData {
   additionalComments: string;
 }
 
+const formatDateForDisplay = (value?: string | null) => {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return format(date, 'MMMM d, yyyy');
+};
+
+const getDisplayValue = (value?: string | null) => {
+  if (!value) return 'Not provided';
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : 'Not provided';
+};
+
+interface CourtReportPreviewProps {
+  data: CourtReportData;
+}
+
+const CourtReportPreview = ({ data }: CourtReportPreviewProps) => {
+  const resolveValue = (value?: string | null, isDate = false) => {
+    if (isDate) {
+      const formatted = formatDateForDisplay(value);
+      return formatted ? formatted : 'Not provided';
+    }
+    return getDisplayValue(value);
+  };
+
+  const sectionClass = 'rounded-2xl border border-red-100 shadow-sm overflow-hidden bg-white';
+  const fieldValueClass = 'min-h-[48px] whitespace-pre-wrap rounded-md border border-amber-200 bg-amber-50/60 px-4 py-3 text-sm leading-relaxed text-slate-800';
+  const fieldLabelClass = 'text-xs font-semibold uppercase tracking-wide text-red-600';
+
+  const basicInfoFields = [
+    { label: 'Youth Name', value: data.youthName },
+    { label: 'Date of Birth', value: data.dateOfBirth },
+    { label: 'Case Number', value: data.caseNumber },
+    { label: 'Court Date', value: data.courtDate, isDate: true },
+    { label: 'Report Date', value: data.reportDate, isDate: true },
+    { label: 'Reporting Officer', value: data.reportingOfficer },
+  ];
+
+  const sections = [
+    {
+      title: 'Current Status',
+      columns: 2,
+      fields: [
+        { label: 'Current Placement', value: data.currentPlacement },
+        { label: 'Admission Date', value: data.admissionDate, isDate: true },
+        { label: 'Length of Stay', value: data.lengthOfStay },
+        { label: 'Current Level', value: data.currentLevel },
+        { label: 'Legal Status', value: data.legalStatus },
+      ],
+    },
+    {
+      title: 'Treatment Goals & Progress',
+      columns: 2,
+      fields: [
+        { label: 'Primary Treatment Goals', value: data.treatmentGoals },
+        { label: 'Progress Toward Goals', value: data.goalProgress },
+        { label: 'Therapeutic Participation', value: data.therapeuticParticipation },
+        { label: 'Medication Compliance', value: data.medicationCompliance },
+      ],
+    },
+    {
+      title: 'Behavioral Assessment',
+      columns: 2,
+      fields: [
+        { label: 'Behavioral Progress', value: data.behavioralProgress },
+        { label: 'Significant Incidents', value: data.significantIncidents },
+        { label: 'Behavioral Interventions', value: data.behavioralInterventions },
+        { label: 'Risk Assessment', value: data.riskAssessment },
+      ],
+    },
+    {
+      title: 'Educational Progress',
+      columns: 2,
+      fields: [
+        { label: 'School Placement', value: data.schoolPlacement },
+        { label: 'Academic Progress', value: data.academicProgress },
+        { label: 'Educational Challenges', value: data.educationalChallenges },
+        { label: 'Vocational Goals', value: data.vocationalGoals },
+      ],
+    },
+    {
+      title: 'Family & Social Relationships',
+      columns: 1,
+      fields: [
+        { label: 'Family Visitation', value: data.familyVisitation },
+        { label: 'Family Therapy', value: data.familyTherapy },
+        { label: 'Peer Relationships', value: data.peerRelationships },
+        { label: 'Community Contacts', value: data.communityContacts },
+      ],
+    },
+    {
+      title: 'Program Participation',
+      columns: 1,
+      fields: [
+        { label: 'Daily Structure Compliance', value: data.dailyStructure },
+        { label: 'Program Compliance', value: data.programCompliance },
+        { label: 'Skills Development', value: data.skillsDevelopment },
+        { label: 'Incentives and Consequences', value: data.incentivesEarned },
+      ],
+    },
+    {
+      title: 'Future Planning',
+      columns: 1,
+      fields: [
+        { label: 'Discharge Timeline', value: data.dischargeTimeline },
+        { label: 'Discharge Planning', value: data.dischargePlanning },
+        { label: 'Aftercare Recommendations', value: data.aftercareRecommendations },
+        { label: 'Transition Plan', value: data.transitionPlan },
+      ],
+    },
+  ];
+
+  const summaryFields = [
+    { label: 'Overall Assessment', value: data.overallAssessment },
+    { label: 'Court Recommendations', value: data.courtRecommendations },
+    { label: 'Additional Comments', value: data.additionalComments },
+  ];
+
+  return (
+    <div className="print-container space-y-6">
+      <div className="overflow-hidden rounded-3xl border border-red-200 bg-white shadow-xl print:shadow-none">
+        <div className="bg-gradient-to-r from-red-900 via-red-700 to-amber-600 px-8 py-10 text-center text-white">
+          <img
+            src={`${import.meta.env.BASE_URL}files/BoysHomeLogo.png`}
+            alt="Heartland Boys Home Logo"
+            className="mx-auto mb-6 h-20 w-auto object-contain"
+          />
+          <p className="text-sm uppercase tracking-[0.35em] text-amber-200/80">Heartland Boys Home</p>
+          <h1 className="mt-3 text-4xl font-black tracking-wide">Court Report</h1>
+          <p className="mt-2 text-sm font-medium text-amber-100/90">
+            Comprehensive status update for court review
+          </p>
+        </div>
+
+        <div className="space-y-8 px-8 py-8">
+          <section className={sectionClass}>
+            <div className="bg-red-50 px-6 py-4">
+              <h2 className="text-lg font-semibold text-red-800">Basic Information</h2>
+            </div>
+            <div className="grid gap-4 px-6 py-6 md:grid-cols-2">
+              {basicInfoFields.map((field) => (
+                <div key={field.label} className="space-y-2">
+                  <span className={fieldLabelClass}>{field.label}</span>
+                  <p className={fieldValueClass}>{resolveValue(field.value, field.isDate)}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          {sections.map((section) => (
+            <section key={section.title} className={sectionClass}>
+              <div className="bg-red-50 px-6 py-4">
+                <h3 className="text-lg font-semibold text-red-800">{section.title}</h3>
+              </div>
+              <div
+                className={`px-6 py-6 grid gap-4 ${
+                  section.columns === 2 ? 'md:grid-cols-2' : 'grid-cols-1'
+                }`}
+              >
+                {section.fields.map((field) => (
+                  <div key={field.label} className="space-y-2">
+                    <span className={fieldLabelClass}>{field.label}</span>
+                    <p className={fieldValueClass}>{resolveValue(field.value, field.isDate)}</p>
+                  </div>
+                ))}
+              </div>
+            </section>
+          ))}
+
+          <section className={sectionClass}>
+            <div className="bg-red-50 px-6 py-4">
+              <h3 className="text-lg font-semibold text-red-800">Summary & Recommendations</h3>
+            </div>
+            <div className="space-y-4 px-6 py-6">
+              {summaryFields.map((field) => (
+                <div key={field.label} className="space-y-2">
+                  <span className={fieldLabelClass}>{field.label}</span>
+                  <p className={fieldValueClass}>{resolveValue(field.value)}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <div className="flex flex-col items-start gap-1 border-t border-red-100 pt-6 text-xs text-slate-500">
+            <span>Court report generated on {format(new Date(), 'MMMM d, yyyy')}.</span>
+            <span>
+              For questions regarding this report, please contact Heartland Boys Home Treatment Team.
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export const CourtReport = ({ youth }: CourtReportProps) => {
   const [reportData, setReportData] = useState<CourtReportData>({
     youthName: youth ? `${youth.firstName} ${youth.lastName}` : '',
@@ -128,19 +324,33 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
   const printRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
-  // Load saved data on component mount
+  // Sync report data when youth changes or saved data exists
   useEffect(() => {
-    if (youth) {
-      const savedData = localStorage.getItem(`court-report-${youth.id}`);
-      if (savedData) {
-        try {
-          const parsed = JSON.parse(savedData);
-          setReportData({ ...reportData, ...parsed });
-        } catch (error) {
-          console.error('Error loading saved court report data:', error);
-        }
+    if (!youth) {
+      return;
+    }
+
+    const baseData: Partial<CourtReportData> = {
+      youthName: `${youth.firstName} ${youth.lastName}`,
+      dateOfBirth: youth.dob ? format(new Date(youth.dob), 'MM/dd/yyyy') : '',
+      admissionDate: youth.admissionDate ? format(new Date(youth.admissionDate), 'MM/dd/yyyy') : '',
+      currentLevel: youth.level ? `Level ${youth.level}` : '',
+      schoolPlacement: youth.currentSchool || '',
+    };
+
+    const savedData = localStorage.getItem(`court-report-${youth.id}`);
+
+    if (savedData) {
+      try {
+        const parsed = JSON.parse(savedData);
+        setReportData(prev => ({ ...prev, ...baseData, ...parsed }));
+        return;
+      } catch (error) {
+        console.error('Error loading saved court report data:', error);
       }
     }
+
+    setReportData(prev => ({ ...prev, ...baseData }));
   }, [youth]);
 
   const handleInputChange = (field: keyof CourtReportData, value: string) => {
@@ -348,8 +558,27 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
         </CardHeader>
       </Card>
 
-      {/* Report Content */}
-      <div ref={printRef} className="print-section bg-white text-black p-8 rounded-lg border">
+      {/* Print adjustments */}
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
+            @media print {
+              body { background: #fff !important; }
+              .no-print { display: none !important; }
+              .print-root { display: block !important; }
+              .print-container { padding: 0 !important; }
+              .print-container * {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+              }
+            }
+          `,
+        }}
+      />
+
+      {/* Report editing form and printable preview */}
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] items-start">
+        <div className="no-print rounded-3xl border border-red-200 bg-white p-8 shadow-sm">
         {/* Header */}
         <div className="text-center mb-6 bg-gradient-to-r from-red-800 via-red-700 to-amber-600 text-white p-6 rounded-lg">
           <img 
@@ -837,6 +1066,10 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
             </div>
           </div>
         </div>
+      </div>
+      <div ref={printRef} className="print-root print-container">
+        <CourtReportPreview data={reportData} />
+      </div>
       </div>
     </div>
   );

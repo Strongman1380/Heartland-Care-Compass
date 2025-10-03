@@ -4,12 +4,45 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { FormattedText } from "@/components/ui/formatted-text";
+import { ReportHeader } from "@/components/reports/ReportHeader";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Calendar, FileText, Printer, Save, FileDown, RotateCcw } from "lucide-react";
-import { format } from "date-fns";
+import { Calendar, FileText, Save, FileDown, RotateCcw } from "lucide-react";
+import { format, differenceInDays, differenceInWeeks, differenceInMonths } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
-import { exportElementToPDF, exportElementToDocx } from "@/utils/export";
+import { exportElementToPDF } from "@/utils/export";
+import { fetchBehaviorPoints, fetchDailyRatings, fetchProgressNotes } from "@/utils/local-storage-utils";
+import { getBehaviorPointsByYouth, getDailyRatingsByYouth, getProgressNotesByYouth } from "@/lib/api";
+import { calculateTotalPoints, calculatePointsForPeriod } from "@/utils/pointCalculations";
+
+// API fetch functions with fallback to localStorage
+const fetchBehaviorPointsAPI = async (youthId: string) => {
+  try {
+    return await getBehaviorPointsByYouth(youthId);
+  } catch (e) {
+    console.warn('API fetch failed for behavior-points; falling back to localStorage:', e);
+    return fetchBehaviorPoints(youthId);
+  }
+};
+
+const fetchProgressNotesAPI = async (youthId: string) => {
+  try {
+    return await getProgressNotesByYouth(youthId);
+  } catch (e) {
+    console.warn('API fetch failed for progress-notes; falling back to localStorage:', e);
+    return fetchProgressNotes(youthId);
+  }
+};
+
+const fetchDailyRatingsAPI = async (youthId: string) => {
+  try {
+    return await getDailyRatingsByYouth(youthId);
+  } catch (e) {
+    console.warn('API fetch failed for daily-ratings; falling back to localStorage:', e);
+    return fetchDailyRatings(youthId);
+  }
+};
 
 interface MonthlyProgressReportProps {
   youth: Youth;
@@ -31,7 +64,6 @@ interface MonthlyReportData {
   currentDiagnoses: string;
 
   // Program Participation & Daily Points
-  avgWeeklyPoints: string;
   highPointAreas: string;
   lowPointAreas: string;
   trendsOverTime: string;
@@ -91,7 +123,6 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
     guardiansInfo: "",
     schoolPlacement: "",
     currentDiagnoses: "",
-    avgWeeklyPoints: "",
     highPointAreas: "",
     lowPointAreas: "",
     trendsOverTime: "",
@@ -123,24 +154,355 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
   const { toast } = useToast();
   const printRef = useRef<HTMLDivElement>(null);
 
-  // Load saved data on component mount
+  // Auto-populate form with youth data
+  const autoPopulateForm = async () => {
+    if (!youth?.id) {
+      console.log('No youth ID provided');
+      return;
+    }
+
+    console.log('Auto-populating form for youth:', youth.firstName, youth.lastName, 'ID:', youth.id);
+
+    try {
+      // Calculate date range for the selected month
+      const monthStart = new Date(selectedMonth + "-01");
+      const monthEnd = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0);
+
+      console.log('Selected month range:', format(monthStart, 'yyyy-MM-dd'), 'to', format(monthEnd, 'yyyy-MM-dd'));
+
+      // Fetch data for the selected month
+      const [behaviorPoints, progressNotes, dailyRatings] = await Promise.all([
+        fetchBehaviorPointsAPI(youth.id).catch(() => fetchBehaviorPoints(youth.id)),
+        fetchProgressNotesAPI(youth.id).catch(() => fetchProgressNotes(youth.id)),
+        fetchDailyRatingsAPI(youth.id).catch(() => fetchDailyRatings(youth.id))
+      ]);
+
+      console.log('Fetched data:', {
+        behaviorPoints: behaviorPoints.length,
+        progressNotes: progressNotes.length,
+        dailyRatings: dailyRatings.length
+      });
+
+      // Filter data for the selected month
+      const monthBehaviorPoints = behaviorPoints.filter(point => {
+        if (!point.date) return false;
+        const pointDate = new Date(point.date);
+        return pointDate >= monthStart && pointDate <= monthEnd;
+      });
+
+      const monthProgressNotes = progressNotes.filter(note => {
+        if (!note.date) return false;
+        const noteDate = new Date(note.date);
+        return noteDate >= monthStart && noteDate <= monthEnd;
+      });
+
+      const monthDailyRatings = dailyRatings.filter(rating => {
+        if (!rating.date) return false;
+        const ratingDate = new Date(rating.date);
+        return ratingDate >= monthStart && ratingDate <= monthEnd;
+      });
+
+      // Calculate statistics
+      const totalPoints = monthBehaviorPoints.reduce((sum, point) => sum + (point.totalPoints || 0), 0);
+      const avgPoints = monthBehaviorPoints.length > 0 ? Math.round(totalPoints / monthBehaviorPoints.length) : 0;
+
+      const avgPeerInteraction = monthDailyRatings.length > 0
+        ? Math.round((monthDailyRatings.reduce((sum, r) => sum + (r.peerInteraction || 0), 0) / monthDailyRatings.length) * 10) / 10
+        : 0;
+      const avgAdultInteraction = monthDailyRatings.length > 0
+        ? Math.round((monthDailyRatings.reduce((sum, r) => sum + (r.adultInteraction || 0), 0) / monthDailyRatings.length) * 10) / 10
+        : 0;
+      const avgInvestmentLevel = monthDailyRatings.length > 0
+        ? Math.round((monthDailyRatings.reduce((sum, r) => sum + (r.investmentLevel || 0), 0) / monthDailyRatings.length) * 10) / 10
+        : 0;
+      const avgAuthorityRating = monthDailyRatings.length > 0
+        ? Math.round((monthDailyRatings.reduce((sum, r) => sum + (r.dealAuthority || 0), 0) / monthDailyRatings.length) * 10) / 10
+        : 0;
+
+      // Calculate length of stay
+      let lengthOfStay = "";
+      if (youth.admissionDate) {
+        const admissionDate = new Date(youth.admissionDate);
+        const months = differenceInMonths(new Date(), admissionDate);
+        if (months >= 12) {
+          const years = Math.floor(months / 12);
+          const remainingMonths = months % 12;
+          lengthOfStay = `${years} year${years > 1 ? 's' : ''}${remainingMonths > 0 ? `, ${remainingMonths} month${remainingMonths > 1 ? 's' : ''}` : ''}`;
+        } else {
+          lengthOfStay = `${months} month${months > 1 ? 's' : ''}`;
+        }
+      }
+
+      // Calculate age
+      let age = "";
+      if (youth.dob) {
+        const dob = new Date(youth.dob as any);
+        const today = new Date();
+        age = Math.floor(differenceInDays(today, dob) / 365.25).toString();
+      }
+
+      // Map youth data to form fields
+      const autoPopulatedData = {
+        // Youth Profile Information
+        fullLegalName: `${youth.firstName} ${youth.lastName}`,
+        preferredName: youth.firstName,
+        dateOfBirth: youth.dob ? format(new Date(youth.dob as any), "yyyy-MM-dd") : "",
+        age,
+        dateOfAdmission: youth.admissionDate ? format(new Date(youth.admissionDate as any), "yyyy-MM-dd") : "",
+        lengthOfStay,
+        currentLevel: typeof youth.level === 'number' ? `Level ${youth.level}` : `Level ${youth.level}`,
+        currentPlacement: "Heartland Boys Home",
+        probationOfficer: typeof youth.probationOfficer === 'object'
+          ? youth.probationOfficer?.name || ""
+          : youth.probationOfficer || "",
+        guardiansInfo: formatGuardiansInfo(youth),
+        schoolPlacement: youth.currentSchool || youth.lastSchoolAttended || "",
+        currentDiagnoses: youth.currentDiagnoses || youth.diagnoses || "",
+
+        // Program Participation & Daily Points
+        incentivesEarned: `${totalPoints} total points, ${avgPoints} avg/day over ${monthBehaviorPoints.length} days`,
+        highPointAreas: generateHighPointAreas(avgPeerInteraction, avgAdultInteraction, avgInvestmentLevel, avgAuthorityRating),
+        lowPointAreas: generateLowPointAreas(avgPeerInteraction, avgAdultInteraction, avgInvestmentLevel, avgAuthorityRating),
+        trendsOverTime: generateTrendsAnalysis(monthBehaviorPoints, monthDailyRatings),
+
+        // Academic Progress
+        academicProgress: generateAcademicProgress(youth),
+        schoolPerformance: generateSchoolPerformance(youth),
+        educationalGoals: youth.educationGoals || "",
+
+        // Behavioral Summary
+        behavioralSummary: generateBehavioralSummary(monthBehaviorPoints, monthProgressNotes),
+
+        // Social/Emotional Development
+        socialProgress: generateSocialProgress(avgPeerInteraction, avgAdultInteraction),
+        emotionalRegulation: generateEmotionalRegulation(avgAuthorityRating),
+        peerRelationships: generatePeerRelationships(avgPeerInteraction),
+
+        // Treatment Progress
+        treatmentGoals: generateTreatmentGoals(youth),
+        treatmentProgress: generateTreatmentProgress(monthProgressNotes),
+        therapyParticipation: generateTherapyParticipation(youth),
+
+        // Risk Assessment
+        riskLevel: (typeof youth.level === 'number' && youth.level <= 2) ||
+                   (typeof youth.level === 'string' && (youth.level === "I" || youth.level === "II")) ? "Low" : "Moderate",
+        riskFactors: generateRiskFactors(youth),
+
+        // Real Colors Profile (needs assessment data)
+        primaryColor: "",
+        secondaryColor: "",
+        colorProfile: "",
+
+        // Placement Recommendation
+        placementRecommendation: generatePlacementRecommendation(youth),
+        recommendationReason: generateRecommendationReason(youth),
+        futureGoals: generateFutureGoals(youth)
+      };
+
+      // Only update fields that are currently empty to preserve user edits
+      setReportData(prev => {
+        const updates: Partial<typeof reportData> = {};
+
+        // Update each field only if it's currently empty
+        Object.entries(autoPopulatedData).forEach(([key, value]) => {
+          if (!prev[key as keyof typeof reportData] && value) {
+            updates[key as keyof typeof reportData] = value as any;
+          }
+        });
+
+        return { ...prev, ...updates };
+      });
+
+    } catch (error) {
+      console.error("Error auto-populating form:", error);
+    }
+  };
+
+  // Helper functions for generating content
+  const formatGuardiansInfo = (youth: Youth): string => {
+    const guardians = [];
+    if (youth.legalGuardian) {
+      if (typeof youth.legalGuardian === 'object') {
+        guardians.push(`${youth.legalGuardian.name || 'Legal Guardian'} (Relationship: ${youth.guardianRelationship || 'Unknown'})`);
+      } else {
+        guardians.push(`${youth.legalGuardian} (Legal Guardian)`);
+      }
+    }
+    if (youth.mother?.name) guardians.push(`${youth.mother.name} (Mother)`);
+    if (youth.father?.name) guardians.push(`${youth.father.name} (Father)`);
+    if (youth.nextOfKin?.name) guardians.push(`${youth.nextOfKin.name} (Next of Kin: ${youth.nextOfKin.relationship || 'Unknown'})`);
+
+    return guardians.length > 0 ? guardians.join('; ') : "No guardian information available";
+  };
+
+  const generateHighPointAreas = (peer: number, adult: number, investment: number, authority: number): string => {
+    const strengths = [];
+    if (peer >= 4) strengths.push("peer relationships");
+    if (adult >= 4) strengths.push("staff relationships");
+    if (investment >= 4) strengths.push("program engagement");
+    if (authority >= 4) strengths.push("rule compliance");
+    return strengths.length > 0 ? `Strong in: ${strengths.join(', ')}` : "Areas of strength to be identified";
+  };
+
+  const generateLowPointAreas = (peer: number, adult: number, investment: number, authority: number): string => {
+    const struggles = [];
+    if (peer < 3) struggles.push("peer relationships");
+    if (adult < 3) struggles.push("staff relationships");
+    if (investment < 3) struggles.push("program engagement");
+    if (authority < 3) struggles.push("rule compliance");
+    return struggles.length > 0 ? `Areas needing improvement: ${struggles.join(', ')}` : "No significant struggle areas identified";
+  };
+
+  const generateTrendsAnalysis = (behaviorPoints: any[], dailyRatings: any[]): string => {
+    if (behaviorPoints.length < 2) return "Insufficient data for trend analysis";
+
+    const recentAvg = behaviorPoints.slice(-7).reduce((sum, p) => sum + (p.totalPoints || 0), 0) /
+                      Math.max(1, behaviorPoints.slice(-7).length);
+    const earlierAvg = behaviorPoints.slice(0, -7).reduce((sum, p) => sum + (p.totalPoints || 0), 0) /
+                       Math.max(1, behaviorPoints.slice(0, -7).length);
+
+    if (earlierAvg === 0) return "Positive trend established this reporting period";
+
+    const trend = recentAvg > earlierAvg ? "improving" : recentAvg < earlierAvg ? "needs improvement" : "stable";
+    return `Point earning trending ${trend} (Recent avg: ${Math.round(recentAvg)}, Overall avg: ${Math.round(earlierAvg)})`;
+  };
+
+  const generateAcademicProgress = (youth: Youth): string => {
+    if (youth.academicStrengths || youth.academicChallenges) {
+      return `${youth.academicStrengths ? `Strengths: ${youth.academicStrengths}. ` : ''}${youth.academicChallenges ? `Areas for growth: ${youth.academicChallenges}.` : ''}`;
+    }
+    return `${youth.firstName} is enrolled in ${youth.currentGrade || 'education program'}. Academic progress monitoring ongoing.`;
+  };
+
+  const generateSchoolPerformance = (youth: Youth): string => {
+    return `Current school: ${youth.currentSchool || youth.lastSchoolAttended || 'Not specified'}. ${youth.schoolContact ? `Contact: ${youth.schoolContact}` : ''} ${youth.schoolPhone ? `Phone: ${youth.schoolPhone}` : ''}`.trim();
+  };
+
+  const generateBehavioralSummary = (behaviorPoints: any[], progressNotes: any[]): string => {
+    const totalPoints = behaviorPoints.reduce((sum, p) => sum + (p.totalPoints || 0), 0);
+    const avgPoints = behaviorPoints.length > 0 ? Math.round(totalPoints / behaviorPoints.length) : 0;
+
+    let summary = `${behaviorPoints.length} days tracked with ${totalPoints} total points earned (average: ${avgPoints} points/day). `;
+
+    if (progressNotes.length > 0) {
+      const recentNotes = progressNotes.slice(-3);
+      summary += `Recent progress notes indicate ${recentNotes.length} documented activities/interactions.`;
+    } else {
+      summary += "Regular program participation observed.";
+    }
+
+    return summary;
+  };
+
+  const generateSocialProgress = (peerAvg: number, adultAvg: number): string => {
+    const peerDesc = peerAvg >= 4 ? "excellent" : peerAvg >= 3 ? "good" : peerAvg >= 2 ? "developing" : "needs improvement";
+    const adultDesc = adultAvg >= 4 ? "excellent" : adultAvg >= 3 ? "good" : adultAvg >= 2 ? "developing" : "needs improvement";
+    return `Peer interactions rated ${peerDesc} (avg: ${peerAvg}/5). Staff relationships rated ${adultDesc} (avg: ${adultAvg}/5).`;
+  };
+
+  const generateEmotionalRegulation = (authorityAvg: number): string => {
+    const level = authorityAvg >= 4 ? "high" : authorityAvg >= 3 ? "moderate" : "developing";
+    return `${level} level of emotional regulation and rule compliance observed (avg rating: ${authorityAvg}/5).`;
+  };
+
+  const generatePeerRelationships = (peerAvg: number): string => {
+    const desc = peerAvg >= 4 ? "strong positive relationships" : peerAvg >= 3 ? "generally positive" : "areas for development";
+    return `Demonstrates ${desc} with peers (avg rating: ${peerAvg}/5).`;
+  };
+
+  const generateTreatmentGoals = (youth: Youth): string => {
+    if (youth.treatmentFocus) {
+      const goals = [];
+      if (youth.treatmentFocus.excessiveDependency) goals.push("Reduce excessive dependency");
+      if (youth.treatmentFocus.withdrawalIsolation) goals.push("Increase social engagement");
+      if (youth.treatmentFocus.parentChildRelationship) goals.push("Improve parent-child relationships");
+      if (youth.treatmentFocus.peerRelationship) goals.push("Develop positive peer relationships");
+      if (youth.treatmentFocus.acceptanceOfAuthority) goals.push("Accept authority figures");
+      if (youth.treatmentFocus.lying) goals.push("Address dishonest behavior");
+      if (youth.treatmentFocus.poorAcademicAchievement) goals.push("Improve academic performance");
+      if (youth.treatmentFocus.poorSelfEsteem) goals.push("Build self-esteem");
+      if (youth.treatmentFocus.manipulative) goals.push("Address manipulative behaviors");
+      return goals.length > 0 ? `Treatment focuses on: ${goals.join(', ')}` : "Individualized treatment plan in development";
+    }
+    return "Treatment goals focused on behavioral modification, skill development, and emotional regulation";
+  };
+
+  const generateTreatmentProgress = (progressNotes: any[]): string => {
+    if (progressNotes.length === 0) return "Progress notes documenting treatment engagement and goal achievement";
+    const recentProgress = progressNotes.slice(-5);
+    return `${recentProgress.length} recent progress notes documenting treatment progress and skill building`;
+  };
+
+  const generateTherapyParticipation = (youth: Youth): string => {
+    if (youth.currentCounseling && youth.currentCounseling.length > 0) {
+      return `Participating in: ${youth.currentCounseling.join(', ')}. ${youth.therapistName ? `Therapist: ${youth.therapistName}` : ''}`;
+    }
+    return "Regular therapy participation as scheduled by treatment team";
+  };
+
+  const generateRiskFactors = (youth: Youth): string => {
+    const factors = [];
+    if (youth.gangInvolvement) factors.push("gang involvement");
+    if (youth.historyVandalism) factors.push("history of vandalism");
+    if (youth.familyViolentCrimes) factors.push("family history of violent crimes");
+    if (youth.selfHarmHistory?.length > 0) factors.push("self-harm history");
+    if (youth.historyPhysicallyHurting) factors.push("history of physical harm to others");
+
+    if (factors.length > 0) {
+      return `Identified risk factors: ${factors.join(', ')}. Risk mitigation strategies include close supervision, skill-building activities, and therapeutic interventions.`;
+    }
+    return "Regular risk assessment with no elevated risk factors identified";
+  };
+
+  const generatePlacementRecommendation = (youth: Youth): string => {
+    const level = typeof youth.level === 'number' ? youth.level : parseInt(youth.level || '5');
+    if (level <= 2) {
+      return "Continue current placement with regular progress monitoring";
+    } else if (level === 3) {
+      return "Prepare for transition to less restrictive environment";
+    } else {
+      return "Continue intensive level of care with gradual privilege increases";
+    }
+  };
+
+  const generateRecommendationReason = (youth: Youth): string => {
+    return "Based on current behavioral performance, participation in therapeutic activities, and achievement of treatment goals";
+  };
+
+  const generateFutureGoals = (youth: Youth): string => {
+    return "Continue skill development, academic progress, and positive relationships to prepare for next phase of care";
+  };
+
+  // Load saved data or auto-populate on component mount
   useEffect(() => {
-    const loadSavedData = () => {
-      const saveKey = `monthly-progress-${youth?.id}-${selectedMonth}`;
+    const loadData = async () => {
+      if (!youth?.id) return;
+
+      const saveKey = `monthly-progress-${youth.id}-${selectedMonth}`;
       const saved = localStorage.getItem(saveKey);
+
       if (saved) {
+        // If saved data exists, load it first
         try {
           const savedData = JSON.parse(saved);
-          setReportData({ ...reportData, ...savedData });
+
+          // Auto-populate to get fresh data from youth profile
+          await autoPopulateForm();
+
+          // Then merge saved data on top, preserving user edits
+          // Saved data takes priority over auto-populated data
+          setReportData(prev => ({ ...prev, ...savedData }));
         } catch (error) {
           console.error("Error loading saved data:", error);
+          await autoPopulateForm();
         }
+      } else {
+        // No saved data, auto-populate form with youth profile data
+        await autoPopulateForm();
       }
     };
 
-    if (youth?.id) {
-      loadSavedData();
-    }
+    loadData();
   }, [youth?.id, selectedMonth]);
 
   // Auto-save functionality
@@ -177,45 +539,24 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
     }
   };
 
-  const handlePrint = async () => {
-    if (printRef.current) {
-      try {
-        const selectedDate = new Date(selectedMonth + "-01");
-        const filename = `Monthly_Progress_${youth.lastName}_${youth.firstName}_${format(selectedDate, "MMMM_yyyy")}.pdf`;
-        await exportElementToPDF(printRef.current, filename);
-        toast({
-          title: "Success",
-          description: "Monthly progress report PDF has been generated and downloaded",
-        });
-      } catch (error) {
-        console.error("Error exporting PDF:", error);
-        toast({
-          title: "Error",
-          description: "Failed to generate PDF. Please try again.",
-          variant: "destructive"
-        });
-      }
-    }
-  };
+  const handleExportPDF = async () => {
+    if (!printRef.current) return;
 
-  const handleExportDOCX = async () => {
-    if (printRef.current) {
-      try {
-        const selectedDate = new Date(selectedMonth + "-01");
-        const filename = `Monthly_Progress_${youth.lastName}_${youth.firstName}_${format(selectedDate, "MMMM_yyyy")}.docx`;
-        await exportElementToDocx(printRef.current, filename);
-        toast({
-          title: "Success",
-          description: "Monthly progress report DOCX has been generated and downloaded",
-        });
-      } catch (error) {
-        console.error("Error exporting DOCX:", error);
-        toast({
-          title: "Error",
-          description: "Failed to generate DOCX. Please try again.",
-          variant: "destructive"
-        });
-      }
+    try {
+      const selectedDate = new Date(selectedMonth + "-01");
+      const filename = `Monthly_Progress_${youth.lastName}_${youth.firstName}_${format(selectedDate, "MMMM_yyyy")}.pdf`;
+      await exportElementToPDF(printRef.current, filename);
+      toast({
+        title: "Success",
+        description: "Monthly progress report PDF has been generated and downloaded",
+      });
+    } catch (error) {
+      console.error("Error exporting PDF:", error);
+      toast({
+        title: "Error",
+        description: "Failed to generate PDF. Please try again.",
+        variant: "destructive"
+      });
     }
   };
 
@@ -233,7 +574,6 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
       guardiansInfo: "",
       schoolPlacement: "",
       currentDiagnoses: "",
-      avgWeeklyPoints: "",
       highPointAreas: "",
       lowPointAreas: "",
       trendsOverTime: "",
@@ -291,9 +631,39 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
       {/* Form Controls */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Calendar className="h-5 w-5" />
-            Monthly Progress Report - {youth.firstName} {youth.lastName}
+          <CardTitle className="flex items-center justify-between gap-4 flex-wrap">
+            <span className="flex items-center gap-2">
+              <Calendar className="h-5 w-5" />
+              Monthly Progress Report - {youth.firstName} {youth.lastName}
+            </span>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleSave}
+                className="flex items-center gap-2"
+              >
+                <Save className="h-4 w-4" />
+                Save Progress
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExportPDF}
+              >
+                <FileDown className="h-4 w-4" />
+                Export PDF
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleReset}
+                className="text-red-600 hover:text-red-700"
+              >
+                <RotateCcw className="h-4 w-4" />
+                Reset Form
+              </Button>
+            </div>
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -441,23 +811,13 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
           {/* Program Participation & Daily Points */}
           <div className="space-y-4">
             <h3 className="text-lg font-semibold border-b pb-2">Program Participation & Daily Points</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Average Weekly Points</Label>
-                <Input
-                  value={reportData.avgWeeklyPoints}
-                  onChange={(e) => handleFieldChange('avgWeeklyPoints', e.target.value)}
-                  placeholder="Average weekly point totals"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Incentives Earned</Label>
-                <Input
-                  value={reportData.incentivesEarned}
-                  onChange={(e) => handleFieldChange('incentivesEarned', e.target.value)}
-                  placeholder="Incentives earned/lost"
-                />
-              </div>
+            <div className="space-y-2">
+              <Label>Incentives Earned</Label>
+              <Input
+                value={reportData.incentivesEarned}
+                onChange={(e) => handleFieldChange('incentivesEarned', e.target.value)}
+                placeholder="Incentives earned/lost"
+              />
             </div>
             <div className="space-y-2">
               <Label>High Point Areas (Strengths)</Label>
@@ -704,86 +1064,79 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
             </div>
           </div>
           
-          {/* Action Buttons */}
-          <div className="flex flex-wrap gap-2 mt-6">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleSave}
-              className="flex items-center gap-2"
-            >
-              <Save className="h-4 w-4" />
-              Save Progress
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handlePrint}
-            >
-              <FileDown className="h-4 w-4" />
-              Export PDF
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleExportDOCX}
-            >
-              <FileDown className="h-4 w-4" />
-              Export DOCX
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => window.print()}
-            >
-              <Printer className="h-4 w-4" />
-              Print
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleReset}
-              className="text-red-600 hover:text-red-700"
-            >
-              <RotateCcw className="h-4 w-4" />
-              Reset Form
-            </Button>
-          </div>
         </CardContent>
       </Card>
 
       {/* Printable Report */}
       <div ref={printRef} className="print-section bg-white text-black p-8 rounded-lg border">
-        <div className="text-center mb-6 bg-gradient-to-r from-red-800 via-red-700 to-amber-600 text-white p-6 rounded-lg">
-          <img src={`${import.meta.env.BASE_URL}files/BoysHomeLogo.png`} alt="Heartland Boys Home Logo" className="h-16 mx-auto mb-4 object-contain" />
-          <h1 className="text-3xl font-bold mb-2">Heartland Boys Home</h1>
-          <h2 className="text-xl font-semibold mb-2">Monthly Progress Report</h2>
-          <div className="text-lg mt-2">
-            {format(new Date(selectedMonth + "-01"), "MMMM yyyy")}
-          </div>
-        </div>
+        <ReportHeader
+          subtitle="Monthly Progress Report"
+          detail={format(new Date(selectedMonth + "-01"), "MMMM yyyy")}
+        />
 
         <div className="grid grid-cols-2 gap-4 mb-6">
-          <div><strong>Report Date:</strong> {reportData.reportDate}</div>
-          <div><strong>Prepared By:</strong> {reportData.preparedBy}</div>
+          <div>
+            <strong>Report Date:</strong>{" "}
+            <FormattedText text={reportData.reportDate} />
+          </div>
+          <div>
+            <strong>Prepared By:</strong>{" "}
+            <FormattedText text={reportData.preparedBy} />
+          </div>
         </div>
 
         {/* Youth Information */}
         <div className="mb-6">
           <h3 className="font-bold text-lg mb-4 border-b pb-1">1. Youth Profile Information</h3>
           <div className="space-y-2 ml-4">
-            <div><strong>Full Legal Name:</strong> {reportData.fullLegalName || `${youth.firstName} ${youth.lastName}`}</div>
-            <div><strong>Preferred Name:</strong> {reportData.preferredName}</div>
-            <div><strong>Date of Birth:</strong> {reportData.dateOfBirth}</div>
-            <div><strong>Age:</strong> {reportData.age}</div>
-            <div><strong>Date of Admission:</strong> {reportData.dateOfAdmission}</div>
-            <div><strong>Length of Stay:</strong> {reportData.lengthOfStay}</div>
-            <div><strong>Current Level:</strong> {reportData.currentLevel}</div>
-            <div><strong>Current Placement:</strong> {reportData.currentPlacement}</div>
-            <div><strong>Probation Officer:</strong> {reportData.probationOfficer}</div>
-            <div><strong>School Placement:</strong> {reportData.schoolPlacement}</div>
-            <div><strong>Guardians Information:</strong> {reportData.guardiansInfo}</div>
-            <div><strong>Current Diagnoses:</strong> {reportData.currentDiagnoses}</div>
+            <div>
+              <strong>Full Legal Name:</strong>{" "}
+              <FormattedText text={reportData.fullLegalName || `${youth.firstName} ${youth.lastName}`} />
+            </div>
+            <div>
+              <strong>Preferred Name:</strong>{" "}
+              <FormattedText text={reportData.preferredName} />
+            </div>
+            <div>
+              <strong>Date of Birth:</strong>{" "}
+              <FormattedText text={reportData.dateOfBirth} />
+            </div>
+            <div>
+              <strong>Age:</strong>{" "}
+              <FormattedText text={reportData.age} />
+            </div>
+            <div>
+              <strong>Date of Admission:</strong>{" "}
+              <FormattedText text={reportData.dateOfAdmission} />
+            </div>
+            <div>
+              <strong>Length of Stay:</strong>{" "}
+              <FormattedText text={reportData.lengthOfStay} />
+            </div>
+            <div>
+              <strong>Current Level:</strong>{" "}
+              <FormattedText text={reportData.currentLevel} />
+            </div>
+            <div>
+              <strong>Current Placement:</strong>{" "}
+              <FormattedText text={reportData.currentPlacement} />
+            </div>
+            <div>
+              <strong>Probation Officer:</strong>{" "}
+              <FormattedText text={reportData.probationOfficer} />
+            </div>
+            <div>
+              <strong>School Placement:</strong>{" "}
+              <FormattedText text={reportData.schoolPlacement} />
+            </div>
+            <div>
+              <strong>Guardians Information:</strong>{" "}
+              <FormattedText text={reportData.guardiansInfo} />
+            </div>
+            <div>
+              <strong>Current Diagnoses:</strong>{" "}
+              <FormattedText text={reportData.currentDiagnoses} />
+            </div>
           </div>
         </div>
 
@@ -791,11 +1144,22 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
         <div className="mb-6">
           <h3 className="font-bold text-lg mb-4 border-b pb-1">2. Program Participation & Daily Points</h3>
           <div className="space-y-2 ml-4">
-            <div><strong>Average Weekly Points:</strong> {reportData.avgWeeklyPoints}</div>
-            <div><strong>High Point Areas (Strengths):</strong> {reportData.highPointAreas}</div>
-            <div><strong>Low Point Areas (Struggles):</strong> {reportData.lowPointAreas}</div>
-            <div><strong>Trends Over Time:</strong> {reportData.trendsOverTime}</div>
-            <div><strong>Incentives Earned:</strong> {reportData.incentivesEarned}</div>
+            <div>
+              <strong>High Point Areas (Strengths):</strong>{" "}
+              <FormattedText text={reportData.highPointAreas} />
+            </div>
+            <div>
+              <strong>Low Point Areas (Struggles):</strong>{" "}
+              <FormattedText text={reportData.lowPointAreas} />
+            </div>
+            <div>
+              <strong>Trends Over Time:</strong>{" "}
+              <FormattedText text={reportData.trendsOverTime} />
+            </div>
+            <div>
+              <strong>Incentives Earned:</strong>{" "}
+              <FormattedText text={reportData.incentivesEarned} />
+            </div>
           </div>
         </div>
 
@@ -803,27 +1167,43 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
         <div className="mb-6">
           <h3 className="font-bold text-lg mb-4 border-b pb-1">3. Academic Progress</h3>
           <div className="space-y-2 ml-4">
-            <div><strong>Academic Progress:</strong> {reportData.academicProgress}</div>
-            <div><strong>School Performance:</strong> {reportData.schoolPerformance}</div>
-            <div><strong>Educational Goals:</strong> {reportData.educationalGoals}</div>
+            <div>
+              <strong>Academic Progress:</strong>{" "}
+              <FormattedText text={reportData.academicProgress} />
+            </div>
+            <div>
+              <strong>School Performance:</strong>{" "}
+              <FormattedText text={reportData.schoolPerformance} />
+            </div>
+            <div>
+              <strong>Educational Goals:</strong>{" "}
+              <FormattedText text={reportData.educationalGoals} />
+            </div>
           </div>
         </div>
 
         {/* Behavioral Summary */}
         <div className="mb-6">
           <h3 className="font-bold text-lg mb-4 border-b pb-1">4. Behavioral Summary</h3>
-          <div className="space-y-2 ml-4">
-            <div>{reportData.behavioralSummary}</div>
-          </div>
+          <FormattedText text={reportData.behavioralSummary} as="div" className="ml-4" />
         </div>
 
         {/* Social/Emotional Development */}
         <div className="mb-6">
           <h3 className="font-bold text-lg mb-4 border-b pb-1">5. Social/Emotional Development</h3>
           <div className="space-y-2 ml-4">
-            <div><strong>Social Progress:</strong> {reportData.socialProgress}</div>
-            <div><strong>Emotional Regulation:</strong> {reportData.emotionalRegulation}</div>
-            <div><strong>Peer Relationships:</strong> {reportData.peerRelationships}</div>
+            <div>
+              <strong>Social Progress:</strong>{" "}
+              <FormattedText text={reportData.socialProgress} />
+            </div>
+            <div>
+              <strong>Emotional Regulation:</strong>{" "}
+              <FormattedText text={reportData.emotionalRegulation} />
+            </div>
+            <div>
+              <strong>Peer Relationships:</strong>{" "}
+              <FormattedText text={reportData.peerRelationships} />
+            </div>
           </div>
         </div>
 
@@ -831,9 +1211,18 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
         <div className="mb-6">
           <h3 className="font-bold text-lg mb-4 border-b pb-1">6. Treatment Progress</h3>
           <div className="space-y-2 ml-4">
-            <div><strong>Treatment Goals:</strong> {reportData.treatmentGoals}</div>
-            <div><strong>Treatment Progress:</strong> {reportData.treatmentProgress}</div>
-            <div><strong>Therapy Participation:</strong> {reportData.therapyParticipation}</div>
+            <div>
+              <strong>Treatment Goals:</strong>{" "}
+              <FormattedText text={reportData.treatmentGoals} />
+            </div>
+            <div>
+              <strong>Treatment Progress:</strong>{" "}
+              <FormattedText text={reportData.treatmentProgress} />
+            </div>
+            <div>
+              <strong>Therapy Participation:</strong>{" "}
+              <FormattedText text={reportData.therapyParticipation} />
+            </div>
           </div>
         </div>
 
@@ -841,8 +1230,14 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
         <div className="mb-6">
           <h3 className="font-bold text-lg mb-4 border-b pb-1">7. Risk Assessment</h3>
           <div className="space-y-2 ml-4">
-            <div><strong>Risk Level:</strong> {reportData.riskLevel}</div>
-            <div><strong>Risk Factors:</strong> {reportData.riskFactors}</div>
+            <div>
+              <strong>Risk Level:</strong>{" "}
+              <FormattedText text={reportData.riskLevel} />
+            </div>
+            <div>
+              <strong>Risk Factors:</strong>{" "}
+              <FormattedText text={reportData.riskFactors} />
+            </div>
           </div>
         </div>
 
@@ -850,9 +1245,18 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
         <div className="mb-6">
           <h3 className="font-bold text-lg mb-4 border-b pb-1">8. Real Colors Profile</h3>
           <div className="space-y-2 ml-4">
-            <div><strong>Primary Color:</strong> {reportData.primaryColor}</div>
-            <div><strong>Secondary Color:</strong> {reportData.secondaryColor}</div>
-            <div><strong>Color Profile Analysis:</strong> {reportData.colorProfile}</div>
+            <div>
+              <strong>Primary Color:</strong>{" "}
+              <FormattedText text={reportData.primaryColor} />
+            </div>
+            <div>
+              <strong>Secondary Color:</strong>{" "}
+              <FormattedText text={reportData.secondaryColor} />
+            </div>
+            <div>
+              <strong>Color Profile Analysis:</strong>{" "}
+              <FormattedText text={reportData.colorProfile} />
+            </div>
           </div>
         </div>
 
@@ -860,9 +1264,18 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
         <div className="mb-6">
           <h3 className="font-bold text-lg mb-4 border-b pb-1">9. Placement Recommendation</h3>
           <div className="space-y-2 ml-4">
-            <div><strong>Placement Recommendation:</strong> {reportData.placementRecommendation}</div>
-            <div><strong>Recommendation Rationale:</strong> {reportData.recommendationReason}</div>
-            <div><strong>Future Goals:</strong> {reportData.futureGoals}</div>
+            <div>
+              <strong>Placement Recommendation:</strong>{" "}
+              <FormattedText text={reportData.placementRecommendation} />
+            </div>
+            <div>
+              <strong>Recommendation Rationale:</strong>{" "}
+              <FormattedText text={reportData.recommendationReason} />
+            </div>
+            <div>
+              <strong>Future Goals:</strong>{" "}
+              <FormattedText text={reportData.futureGoals} />
+            </div>
           </div>
         </div>
 

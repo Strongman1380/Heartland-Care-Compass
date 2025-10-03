@@ -9,6 +9,8 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Printer, Save, Calculator, FileText, ClipboardCheck } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+import { draftsService } from '@/integrations/supabase/draftsService'
+import { useAuth } from '@/contexts/SupabaseAuthContext'
 // Supabase removed - using local storage only
 import { fetchAllYouths } from '@/utils/local-storage-utils';
 import { Youth } from '@/types/app-types';
@@ -157,6 +159,7 @@ export const RapidPlacementAssessment = () => {
   const [autoSaveTimer, setAutoSaveTimer] = useState<NodeJS.Timeout | null>(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isAutoSaving, setIsAutoSaving] = useState(false);
+  const { user } = useAuth();
 
   useEffect(() => {
     fetchYouths();
@@ -222,6 +225,7 @@ export const RapidPlacementAssessment = () => {
       };
 
       const draftKey = getDraftKey();
+      try { await draftsService.save(selectedYouthId || null, 'rapid_placement', (user as any)?.id || null, draftData) } catch {}
       localStorage.setItem(draftKey, JSON.stringify(draftData));
 
       setHasUnsavedChanges(false);
@@ -242,8 +246,20 @@ export const RapidPlacementAssessment = () => {
     return `rpat-assessment-draft-${selectedYouthId || 'new'}-${assessmentType}`;
   };
 
-  const loadDraft = () => {
+  const loadDraft = async () => {
     try {
+      try {
+        const remote = await draftsService.get(selectedYouthId || null, 'rapid_placement', (user as any)?.id || null)
+        if (remote?.data) {
+          const parsed: any = remote.data
+          setAssessmentType(parsed.assessmentType || '');
+          setYouthSelection(parsed.youthSelection || '');
+          setSelectedYouthId(parsed.selectedYouthId || '');
+          setAssessmentData(parsed.assessmentData || initialData);
+          setShowAssessment(parsed.showAssessment || false);
+          return
+        }
+      } catch {}
       const draftKey = getDraftKey();
       const draftData = localStorage.getItem(draftKey);
 
@@ -273,6 +289,7 @@ export const RapidPlacementAssessment = () => {
 
   const clearDraft = () => {
     const draftKey = getDraftKey();
+    try { void draftsService.delete(selectedYouthId || null, 'rapid_placement', (user as any)?.id || null) } catch {}
     localStorage.removeItem(draftKey);
   };
 

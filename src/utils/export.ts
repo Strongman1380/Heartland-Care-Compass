@@ -42,7 +42,7 @@ export async function exportElementToDocx(element: HTMLElement, filename: string
 
 // Prefer exporting from an HTML string to avoid layout/visibility issues when the
 // export container is off-screen or hidden.
-export async function exportHTMLToPDF(html: string, filename: string) {
+export async function exportHTMLToPDF(content: string | HTMLElement, filename: string) {
   const mod: any = await import('html2pdf.js');
   const html2pdf: any = mod.default || mod;
   const opt = {
@@ -59,7 +59,30 @@ export async function exportHTMLToPDF(html: string, filename: string) {
     pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
   } as any;
 
-  await (html2pdf() as any).set(opt).from(html).save();
+  let source: HTMLElement;
+  let cleanup: (() => void) | undefined;
+
+  if (typeof content === 'string') {
+    const tempContainer = document.createElement('div');
+    tempContainer.style.position = 'fixed';
+    tempContainer.style.left = '-9999px';
+    tempContainer.style.top = '-9999px';
+    tempContainer.style.width = '210mm';
+    tempContainer.innerHTML = content;
+    document.body.appendChild(tempContainer);
+    source = tempContainer;
+    cleanup = () => {
+      document.body.removeChild(tempContainer);
+    };
+  } else {
+    source = content;
+  }
+
+  try {
+    await (html2pdf() as any).set(opt).from(source).save();
+  } finally {
+    cleanup?.();
+  }
 }
 
 export async function exportHTMLToDocx(htmlBody: string, filename: string) {
@@ -79,4 +102,3 @@ export async function exportHTMLToDocx(htmlBody: string, filename: string) {
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
-

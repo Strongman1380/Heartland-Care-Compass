@@ -24,7 +24,8 @@ export const Header = () => {
   const navigationItems = [
     { path: '/progress-notes', label: 'Case Notes', icon: StickyNote },
     { path: '/monthly-progress', label: 'Monthly Progress Report', icon: Calendar },
-    { path: '/court-report', label: 'Court Report', icon: Gavel }
+    { path: '/court-report', label: 'Court Report', icon: Gavel },
+    { path: '/school', label: 'School', icon: Calendar },
   ];
 
   const isActiveRoute = (path: string) => {

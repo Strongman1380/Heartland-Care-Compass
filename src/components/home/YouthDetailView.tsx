@@ -3,13 +3,11 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { YouthProfile } from "@/components/youth/YouthProfile";
 import { BehaviorCard } from "@/components/behavior/BehaviorCard";
-import { ProgressNotes } from "@/components/notes/ProgressNotes";
-import { BehaviorAnalysis } from "@/components/analysis/BehaviorAnalysis";
+import { EnhancedCaseNotes } from "@/components/notes/EnhancedCaseNotes";
 import { RiskAssessment } from "@/components/assessment/RiskAssessment";
 import { RealColorsAssessment } from "@/components/assessment/RealColorsAssessment";
-import { ReportCenter } from "@/components/reports/ReportCenter";
 import { SuccessPlan } from "@/components/planning/SuccessPlan";
-import { User, CheckSquare, FileText, BarChart2, Shield, FileChartPie, ArrowLeft, ClipboardCheck, Palette, Target } from "lucide-react";
+import { User, CheckSquare, FileText, Shield, ArrowLeft, ClipboardCheck, Palette, Target } from "lucide-react";
 import { Youth } from "@/integrations/supabase/services";
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { fetchAssessment } from "@/utils/local-storage-utils";
@@ -64,7 +62,7 @@ export const YouthDetailView = ({
   const [riskLevel, setRiskLevel] = useState<string | null>(null);
 
   // Use the daily ratings hook to get actual data
-  const { dailyRatings, loadDailyRatings } = useDailyRatings(selectedYouth.id);
+  const { dailyRatings, loadDailyRatings, loading: ratingsLoading } = useDailyRatings(selectedYouth.id);
 
   // Memoized calculation of behavioral averages - only recalculates when dailyRatings actually change
   const behavioralAverages = useMemo(() => {
@@ -169,7 +167,11 @@ export const YouthDetailView = ({
 
               {/* Behavioral Ratings Averages */}
               <div className="flex items-center gap-4 text-sm text-gray-600">
-                {hasRatingsData ? (
+                {ratingsLoading ? (
+                  <span className="text-xs text-gray-500 italic">
+                    Loading behavioral averages...
+                  </span>
+                ) : (
                   <>
                     <span className="flex items-center gap-1">
                       <span className="font-medium">Peer:</span>
@@ -188,13 +190,11 @@ export const YouthDetailView = ({
                       <span className="text-orange-600 font-semibold">{formattedAverages.dealAuthority}</span>
                     </span>
                     <span className="text-xs text-gray-500">
-                      Averages based on {dailyRatings.length} recent daily rating{dailyRatings.length === 1 ? '' : 's'} (0-4 scale)
+                      {hasRatingsData
+                        ? `Averages based on ${dailyRatings.length} recent daily rating${dailyRatings.length === 1 ? '' : 's'} (0-4 scale)`
+                        : 'No daily ratings yet — showing baseline averages (0-4 scale)'}
                     </span>
                   </>
-                ) : (
-                  <span className="text-xs text-gray-500 italic">
-                    Loading behavioral averages...
-                  </span>
                 )}
               </div>
             </div>
@@ -217,10 +217,6 @@ export const YouthDetailView = ({
             <FileText size={16} />
             <span>Case Notes</span>
           </TabsTrigger>
-          <TabsTrigger value="analysis" className="flex items-center gap-2 data-[state=active]:bg-yellow-400 data-[state=active]:text-red-900">
-            <BarChart2 size={16} />
-            <span>Behavior Analysis</span>
-          </TabsTrigger>
           <TabsTrigger value="assessment" className="flex items-center gap-2 data-[state=active]:bg-yellow-400 data-[state=active]:text-red-900">
             <Shield size={16} />
             <span>Risk Assessment</span>
@@ -232,10 +228,6 @@ export const YouthDetailView = ({
           <TabsTrigger value="success-plan" className="flex items-center gap-2 data-[state=active]:bg-yellow-400 data-[state=active]:text-red-900">
             <Target size={16} />
             <span>Success Plan</span>
-          </TabsTrigger>
-          <TabsTrigger value="reports" className="flex items-center gap-2 data-[state=active]:bg-yellow-400 data-[state=active]:text-red-900">
-            <FileChartPie size={16} />
-            <span>Reports</span>
           </TabsTrigger>
         </TabsList>
 
@@ -253,11 +245,7 @@ export const YouthDetailView = ({
         </TabsContent>
         
         <TabsContent value="notes">
-          <ProgressNotes youthId={selectedYouth.id} youth={selectedYouth} />
-        </TabsContent>
-        
-        <TabsContent value="analysis">
-          <BehaviorAnalysis youthId={selectedYouth.id} youth={selectedYouth} />
+          <EnhancedCaseNotes youthId={selectedYouth.id} youth={selectedYouth} />
         </TabsContent>
         
         <TabsContent value="assessment">
@@ -287,9 +275,6 @@ export const YouthDetailView = ({
           <SuccessPlan youthId={selectedYouth.id} youth={selectedYouth} />
         </TabsContent>
         
-        <TabsContent value="reports">
-          <ReportCenter youthId={selectedYouth.id} youth={selectedYouth} />
-        </TabsContent>
       </Tabs>
     </>
   );

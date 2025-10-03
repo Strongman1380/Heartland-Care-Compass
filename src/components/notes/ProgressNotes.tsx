@@ -7,20 +7,35 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { AlertCircle, ChevronDown, ChevronRight, FileText, Search, Trash2 } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { AlertCircle, ChevronDown, ChevronRight, FileText, Search, Trash2, Sparkles, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { fetchProgressNotes, saveProgressNote } from "@/utils/local-storage-utils";
+import { notesService } from '@/integrations/supabase/notesService'
 import { ProgressNote } from "@/types/app-types";
+import aiService from "@/services/aiService";
 
 interface ProgressNotesProps {
   youthId: string;
   youth: any;
 }
 
+type ProgressNoteSections = {
+  summary?: string;
+  strengthsChallenges?: string;
+  interventionsResponse?: string;
+  planNextSteps?: string;
+};
+
+type NoteType = 'session' | 'general' | 'shift';
+
 export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
+  const [noteType, setNoteType] = useState<NoteType>('session');
+  const [isEnhancing, setIsEnhancing] = useState<string | null>(null);
+  const [aiStatus, setAiStatus] = useState<any>(null);
   const [notes, setNotes] = useState<ProgressNote[]>([]);
   const [filteredNotes, setFilteredNotes] = useState<ProgressNote[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -31,7 +46,10 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
   const [formData, setFormData] = useState({
     date: format(new Date(), 'yyyy-MM-dd'),
     staff: "",
-    note: "",
+    summary: "",
+    strengthsChallenges: "",
+    interventionsResponse: "",
+    planNextSteps: "",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [autoSaveTimer, setAutoSaveTimer] = useState<NodeJS.Timeout | null>(null);
@@ -63,13 +81,28 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
     let filtered = [...notes];
     
     if (searchTerm) {
-      filtered = filtered.filter(note => 
-        note.staff.toLowerCase().includes(searchTerm.toLowerCase())
-      );
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter(note => {
+        const staffMatch = note.staff?.toLowerCase().includes(term);
+        const sections = parseStructuredNote(note.note);
+        const textBlob = sections
+          ? Object.values(sections).filter(Boolean).join(' ').toLowerCase()
+          : (note.note || '').toLowerCase();
+        return staffMatch || textBlob.includes(term);
+      });
     }
     
     setFilteredNotes(filtered);
   };
+
+  const sectionValues = () => [
+    formData.summary,
+    formData.strengthsChallenges,
+    formData.interventionsResponse,
+    formData.planNextSteps,
+  ];
+
+  const hasSectionContent = () => sectionValues().some(value => value.trim().length > 0);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -99,7 +132,7 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
     if (!hasUnsavedChanges || isAutoSaving) return;
     
     // Don't auto-save if required fields are empty
-    if (!formData.staff.trim() || !formData.note.trim()) return;
+    if (!formData.staff.trim() || !hasSectionContent()) return;
     
     try {
       setIsAutoSaving(true);
@@ -133,7 +166,10 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
         setFormData(prev => ({
           ...prev,
           staff: draftData.staff || "",
-          note: draftData.note || ""
+          summary: draftData.summary || "",
+          strengthsChallenges: draftData.strengthsChallenges || "",
+          interventionsResponse: draftData.interventionsResponse || "",
+          planNextSteps: draftData.planNextSteps || ""
         }));
         setHasUnsavedChanges(true);
         toast.info("Draft loaded from auto-save", { duration: 2000 });
@@ -159,9 +195,9 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
       toast.error("Staff name is required");
       return;
     }
-    
-    if (!formData.note.trim()) {
-      toast.error("Case note content is required");
+
+    if (!hasSectionContent()) {
+      toast.error("Please complete at least one section of the case note");
       return;
     }
     
@@ -170,11 +206,21 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
       
       const noteDate = new Date(formData.date);
       
+      const structuredNote = {
+        formatVersion: "v2",
+        sections: {
+          summary: formData.summary.trim(),
+          strengthsChallenges: formData.strengthsChallenges.trim(),
+          interventionsResponse: formData.interventionsResponse.trim(),
+          planNextSteps: formData.planNextSteps.trim(),
+        },
+      };
+
       const newNote: Omit<ProgressNote, 'id' | 'createdAt'> = {
         youth_id: youthId,
         date: noteDate,
         category: "Progress Note",
-        note: formData.note.trim() || "Progress note recorded",
+        note: JSON.stringify(structuredNote),
         staff: formData.staff.trim(),
       };
       
@@ -189,7 +235,10 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
       setFormData({
         date: format(new Date(), 'yyyy-MM-dd'),
         staff: "",
-        note: "",
+        summary: "",
+        strengthsChallenges: "",
+        interventionsResponse: "",
+        planNextSteps: "",
       });
       setHasUnsavedChanges(false);
       
@@ -232,19 +281,18 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
 
     try {
       setIsDeleting(true);
-      
-      // Get all notes from localStorage (not just for this youth)
+      // Attempt to delete from Supabase for each selected id
+      const ids = Array.from(selectedNotes);
+      for (const id of ids) {
+        if (id) {
+          try { await notesService.delete(id) } catch {}
+        }
+      }
+      // Also prune local cache
       const allNotes = JSON.parse(localStorage.getItem('heartland_notes') || '[]');
-      
-      // Filter out selected notes
       const remainingNotes = allNotes.filter((note: any) => !selectedNotes.has(note.id || ""));
-      
-      // Save the filtered notes back to localStorage
       localStorage.setItem('heartland_notes', JSON.stringify(remainingNotes));
-      
       toast.success(`${selectedNotes.size} note(s) deleted successfully`);
-      
-      // Clear selection and refresh notes
       setSelectedNotes(new Set());
       fetchNotes();
     } catch (error) {
@@ -276,7 +324,74 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
     }
   };
 
+  const parseStructuredNote = (content?: string | null): ProgressNoteSections | null => {
+    if (!content) return null;
+    try {
+      const parsed = JSON.parse(content);
+      if (parsed?.formatVersion === 'v2' && parsed.sections) {
+        return parsed.sections as ProgressNoteSections;
+      }
+      return null;
+    } catch (error) {
+      return null;
+    }
+  };
+
+  const renderNoteSections = (note: ProgressNote) => {
+    const sections = parseStructuredNote(note.note);
+    if (!sections) {
+      return (
+        <div className="text-gray-700 leading-relaxed whitespace-pre-wrap">
+          {note.note || 'No content'}
+        </div>
+      );
+    }
+
+    const ordered: Array<{ label: string; key: keyof ProgressNoteSections }> = [
+      { label: 'Summary of Discussion', key: 'summary' },
+      { label: 'Strengths & Challenges', key: 'strengthsChallenges' },
+      { label: 'Interventions / Response', key: 'interventionsResponse' },
+      { label: 'Plan / Next Steps', key: 'planNextSteps' },
+    ];
+
+    return (
+      <div className="space-y-4">
+        {ordered.map(({ label, key }) => {
+          const value = sections[key];
+          if (!value || value.trim().length === 0) return null;
+          return (
+            <div key={key}>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-red-700">
+                {label}
+              </p>
+              <div className="mt-1 rounded-md border border-red-100 bg-red-50/40 px-3 py-2 text-sm text-gray-800 whitespace-pre-wrap">
+                {value}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
   const generateProgressNotesHTML = (data: any) => {
+    const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+    const logoSrc = `${baseUrl}${import.meta.env.BASE_URL}files/BoysHomeLogo.png`;
+
+    const renderSectionHTML = (label: string, value?: string) => {
+      if (!value || value.trim().length === 0) return '';
+      return `
+        <div class="note-section">
+          <h4>${label}</h4>
+          <p>${value
+            .trim()
+            .replace(/\n/g, '<br>')
+            .replace(/  /g, '&nbsp;&nbsp;')
+            .replace(/\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;')}</p>
+        </div>
+      `;
+    };
+
     return `
       <!DOCTYPE html>
       <html>
@@ -284,20 +399,34 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
           <meta charset="utf-8">
           <title>Case Notes Report</title>
           <style>
-            body { font-family: Arial, sans-serif; margin: 20px; line-height: 1.6; }
-            .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 20px; }
+            body { font-family: Arial, sans-serif; margin: 20px; line-height: 1.6; color: #333; }
+            .header {
+              text-align: center;
+              margin-bottom: 30px;
+              border-bottom: 3px solid #b91c1c;
+              padding-bottom: 20px;
+              background: linear-gradient(135deg, #b91c1c 0%, #dc2626 50%, #d97706 100%);
+              color: white;
+              padding: 20px;
+              border-radius: 8px 8px 0 0;
+              margin: -20px -20px 30px -20px;
+            }
+            .header img { height: 60px; margin-bottom: 15px; }
             .youth-info { background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
-            .note-item { margin-bottom: 20px; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+            .note-item { margin-bottom: 20px; padding: 20px; border: 1px solid #ddd; border-radius: 8px; page-break-inside: avoid; background: white; }
             .note-date { font-weight: bold; color: #333; }
             .note-staff { color: #666; font-style: italic; }
-            .note-content { margin-top: 10px; }
-            .summary { background-color: #e8f4fd; padding: 15px; border-radius: 5px; margin-top: 20px; }
+            .note-content { margin-top: 16px; display: grid; gap: 14px; }
+            .note-section h4 { margin: 0 0 6px 0; font-size: 14px; text-transform: uppercase; letter-spacing: 0.05em; color: #b91c1c; }
+            .note-section p { margin: 0; padding: 12px; background: #fafafa; border-left: 4px solid #b91c1c; border-radius: 6px; line-height: 1.7; }
+            .summary { background-color: #e8f4fd; padding: 15px; border-radius: 5px; margin-top: 20px; border-left: 4px solid #0ea5e9; }
             @media print { body { margin: 0; } }
           </style>
         </head>
         <body>
           <div class="header">
-            <h1>Heartland Care Compass</h1>
+            <img src="${logoSrc}" alt="Heartland Boys Home Logo" />
+            <h1>Heartland Boys Home</h1>
             <h2>Case Notes Report</h2>
             <p>Generated on ${data.exportDate}</p>
           </div>
@@ -319,13 +448,23 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
 
           <div class="notes-section">
             <h3>Case Notes</h3>
-            ${data.notes.map((note: any) => `
+            ${data.notes.map((note: any) => {
+              const sections = parseStructuredNote(note.note);
+              const sectionHtml = sections ? `
+                ${renderSectionHTML('Summary of Discussion', sections.summary)}
+                ${renderSectionHTML('Strengths & Challenges', sections.strengthsChallenges)}
+                ${renderSectionHTML('Interventions / Response', sections.interventionsResponse)}
+                ${renderSectionHTML('Plan / Next Steps', sections.planNextSteps)}
+              ` : `<div class="note-section"><p>${(note.note || 'No content')}</p></div>`;
+
+              return `
               <div class="note-item">
-                <div class="note-date">Date: ${note.date}</div>
+                <div class="note-date">Date: ${note.date ? format(new Date(note.date), 'MMMM d, yyyy') : 'Not specified'}</div>
                 <div class="note-staff">Staff: ${note.staff}</div>
-                <div class="note-content">${note.note}</div>
+                <div class="note-content">${sectionHtml}</div>
               </div>
-            `).join('')}
+            `;
+            }).join('')}
           </div>
         </body>
       </html>
@@ -387,27 +526,65 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
                 />
               </div>
               
-              <div>
-                <Label htmlFor="staff">Staff Name</Label>
-                <Input
-                  id="staff"
-                  name="staff"
-                  value={formData.staff}
-                  onChange={handleInputChange}
-                  placeholder="Your name"
-                />
-              </div>
-              
-              <div>
-                <Label htmlFor="note">Case Note</Label>
-                <Textarea
-                  id="note"
-                  name="note"
-                  value={formData.note}
-                  onChange={handleInputChange}
-                  placeholder="Enter your case note here..."
-                  rows={4}
-                />
+              <div className="grid gap-4">
+                <div>
+                  <Label htmlFor="staff">Staff Name</Label>
+                  <Input
+                    id="staff"
+                    name="staff"
+                    value={formData.staff}
+                    onChange={handleInputChange}
+                    placeholder="Staff completing the note"
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="summary">Summary of Discussion</Label>
+                  <Textarea
+                    id="summary"
+                    name="summary"
+                    value={formData.summary}
+                    onChange={handleInputChange}
+                    placeholder="Key discussion points, youth presentation, and tone"
+                    rows={4}
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="strengthsChallenges">Strengths & Challenges</Label>
+                  <Textarea
+                    id="strengthsChallenges"
+                    name="strengthsChallenges"
+                    value={formData.strengthsChallenges}
+                    onChange={handleInputChange}
+                    placeholder="Strengths demonstrated and challenges needing attention"
+                    rows={4}
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="interventionsResponse">Interventions / Response</Label>
+                  <Textarea
+                    id="interventionsResponse"
+                    name="interventionsResponse"
+                    value={formData.interventionsResponse}
+                    onChange={handleInputChange}
+                    placeholder="Supports provided and youth response"
+                    rows={4}
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="planNextSteps">Plan / Next Steps</Label>
+                  <Textarea
+                    id="planNextSteps"
+                    name="planNextSteps"
+                    value={formData.planNextSteps}
+                    onChange={handleInputChange}
+                    placeholder="Follow-up actions, responsibilities, and timelines"
+                    rows={4}
+                  />
+                </div>
               </div>
               
               <Button type="submit" disabled={isSubmitting} className="w-full">
@@ -461,63 +638,69 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
               </div>
             ) : filteredNotes.length > 0 ? (
               <div className="space-y-4">
-                {filteredNotes.map((note) => (
-                  <Collapsible 
-                    key={note.id}
-                    open={expandedNote === note.id}
-                    onOpenChange={() => toggleNoteExpansion(note.id || "")}
-                    className="border rounded-md hover:bg-gray-50 transition-colors"
-                  >
-                    <div className="flex items-start p-3">
-                      <div className="flex items-center space-x-2 mr-2">
-                        <Checkbox
-                          checked={selectedNotes.has(note.id || "")}
-                          onCheckedChange={(checked) => handleNoteSelection(note.id || "", checked as boolean)}
-                        />
-                        <CollapsibleTrigger asChild>
-                          <Button variant="ghost" size="sm" className="p-1 h-auto cursor-pointer">
-                            {expandedNote === note.id ? 
-                              <ChevronDown size={16} /> : 
-                              <ChevronRight size={16} />
-                            }
-                          </Button>
-                        </CollapsibleTrigger>
-                      </div>
-                      
-                      <div className="flex-1">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between">
-                          <div className="flex items-center space-x-2">
-                            <Badge className="bg-blue-100 text-blue-800">
-                              Case Note
-                            </Badge>
-                            <span className="text-sm text-gray-600">
-                              by {note.staff}
-                            </span>
-                          </div>
-                          <span className="text-sm text-gray-500 mt-1 sm:mt-0">
-                            {format(note.date as Date, 'MMM d, yyyy')}
-                          </span>
+                {filteredNotes.map((note) => {
+                  const sections = parseStructuredNote(note.note);
+                  const summaryText = sections?.summary?.trim() || note.note || "Progress note recorded";
+                  const preview = summaryText.length > 160 ? `${summaryText.slice(0, 160)}…` : summaryText;
+
+                  return (
+                    <Collapsible 
+                      key={note.id}
+                      open={expandedNote === note.id}
+                      onOpenChange={() => toggleNoteExpansion(note.id || "")}
+                      className="border rounded-md hover:bg-gray-50 transition-colors"
+                    >
+                      <div className="flex items-start p-3">
+                        <div className="flex items-center space-x-2 mr-2">
+                          <Checkbox
+                            checked={selectedNotes.has(note.id || "")}
+                            onCheckedChange={(checked) => handleNoteSelection(note.id || "", checked as boolean)}
+                          />
+                          <CollapsibleTrigger asChild>
+                            <Button variant="ghost" size="sm" className="p-1 h-auto cursor-pointer">
+                              {expandedNote === note.id ? 
+                                <ChevronDown size={16} /> : 
+                                <ChevronRight size={16} />
+                              }
+                            </Button>
+                          </CollapsibleTrigger>
                         </div>
                         
-                        <p className="mt-2 text-gray-700">
-                          {note.note || "Progress note recorded"}
-                        </p>
-                      </div>
-                    </div>
-                    
-                    <CollapsibleContent>
-                      <div className="px-4 pb-3 pt-1">
-                        <div className="pl-6 border-l-2 border-gray-200">
-                          <p className="text-gray-800">{note.note || "Progress note recorded for this date"}</p>
-                          <div className="mt-3 text-sm text-gray-500">
-                            <p>Recorded by: {note.staff}</p>
-                            <p>Added: {format(note.createdAt as Date, 'MMM d, yyyy h:mm a')}</p>
+                        <div className="flex-1">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between">
+                            <div className="flex items-center space-x-2">
+                              <Badge className="bg-blue-100 text-blue-800">
+                                Case Note
+                              </Badge>
+                              <span className="text-sm text-gray-600">
+                                by {note.staff || 'Staff Member'}
+                              </span>
+                            </div>
+                            <span className="text-sm text-gray-500 mt-1 sm:mt-0">
+                              {note.date ? format(new Date(note.date), 'MMM d, yyyy') : 'No date'}
+                            </span>
                           </div>
+                          
+                          <p className="mt-2 text-gray-700">
+                            {preview}
+                          </p>
                         </div>
                       </div>
-                    </CollapsibleContent>
-                  </Collapsible>
-                ))}
+                      
+                      <CollapsibleContent>
+                        <div className="px-4 pb-3 pt-1">
+                          <div className="pl-6 border-l-2 border-gray-200 space-y-3">
+                            {renderNoteSections(note)}
+                            <div className="text-sm text-gray-500">
+                              <p>Recorded by: {note.staff || 'Staff Member'}</p>
+                              <p>Added: {note.createdAt ? format(new Date(note.createdAt), 'MMM d, yyyy h:mm a') : 'Unknown'}</p>
+                            </div>
+                          </div>
+                        </div>
+                      </CollapsibleContent>
+                    </Collapsible>
+                  );
+                })}
               </div>
             ) : (
               <div className="text-center py-8 text-gray-500">

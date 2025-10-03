@@ -87,19 +87,26 @@ export const SupabaseAuthProvider = ({ children }: { children: ReactNode }) => {
 
   const signInWithGoogle = async () => {
     try {
-      const { error } = await supabase.auth.signInWithOAuth({
+      const redirect = import.meta.env.VITE_SUPABASE_REDIRECT_URL || `${window.location.origin}/`;
+      const { error, data } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/`,
+          redirectTo: redirect,
+          queryParams: {
+            // Request basic profile + email
+            scope: 'openid profile email',
+            prompt: 'select_account',
+          },
         },
       });
-      
       if (error) {
+        console.error('Google OAuth error:', error);
         return { error };
       }
-      
+      // Supabase will redirect; returning here for completeness
       return {};
     } catch (error) {
+      console.error('Google OAuth exception:', error);
       return { error: error as Error };
     }
   };

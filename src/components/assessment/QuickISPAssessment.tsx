@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { format } from 'date-fns';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -6,8 +7,12 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
+import { FormattedText } from '@/components/ui/formatted-text';
+import { ReportHeader } from '@/components/reports/ReportHeader';
 import { Printer, Save } from 'lucide-react';
 import { toast } from 'sonner';
+import { draftsService } from '@/integrations/supabase/draftsService'
+import { useAuth } from '@/contexts/SupabaseAuthContext'
 
 interface ISPData {
   youthName: string;
@@ -91,6 +96,7 @@ const QuickISPAssessment: React.FC<QuickISPAssessmentProps> = ({ selectedYouth, 
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isAutoSaving, setIsAutoSaving] = useState(false);
   const isInitialMount = useRef(true);
+  const { user } = useAuth();
 
   const teamMemberOptions = ['Case Manager', 'PO', 'Therapist', 'Teacher', 'Family'];
   const riskLevels = ['Low', 'Moderate', 'High', 'Very High'];
@@ -155,6 +161,7 @@ const QuickISPAssessment: React.FC<QuickISPAssessmentProps> = ({ selectedYouth, 
       };
 
       const draftKey = getDraftKey();
+      try { await draftsService.save(ispData.youthId || null, 'quick_isp', (user as any)?.id || null, draftData) } catch {}
       localStorage.setItem(draftKey, JSON.stringify(draftData));
 
       setHasUnsavedChanges(false);
@@ -172,8 +179,18 @@ const QuickISPAssessment: React.FC<QuickISPAssessmentProps> = ({ selectedYouth, 
     return `isp-assessment-draft-${ispData.youthId || 'new'}`;
   };
 
-  const loadDraft = () => {
+  const loadDraft = async () => {
     try {
+      try {
+        const remote = await draftsService.get(ispData.youthId || null, 'quick_isp', (user as any)?.id || null)
+        if (remote?.data) {
+          const { timestamp, ...rest } = (remote.data as any)
+          setISPData(rest as ISPData)
+          setHasUnsavedChanges(true)
+          toast.info("Previous ISP draft loaded", { duration: 2000 });
+          return
+        }
+      } catch {}
       const draftKey = getDraftKey();
       const draftData = localStorage.getItem(draftKey);
 
@@ -195,8 +212,9 @@ const QuickISPAssessment: React.FC<QuickISPAssessmentProps> = ({ selectedYouth, 
     }
   };
 
-  const clearDraft = () => {
+  const clearDraft = async () => {
     const draftKey = getDraftKey();
+    try { await draftsService.delete(ispData.youthId || null, 'quick_isp', (user as any)?.id || null) } catch {}
     localStorage.removeItem(draftKey);
     setHasUnsavedChanges(false);
   };
@@ -229,44 +247,104 @@ const QuickISPAssessment: React.FC<QuickISPAssessmentProps> = ({ selectedYouth, 
   };
 
   const renderPrintView = () => {
+    const reviewDetail = ispData.reviewDate
+      ? `Review Date: ${format(new Date(ispData.reviewDate), 'MMMM d, yyyy')}`
+      : `Generated on ${format(new Date(), 'MMMM d, yyyy')}`;
+
     return (
       <div className="max-w-4xl mx-auto p-6 space-y-4">
-        <div className="text-center mb-6">
-          <h1 className="text-xl font-bold">HEARTLAND BOYS HOME</h1>
-          <h2 className="text-lg font-semibold">Quick Individualized Service Plan (ISP)</h2>
-        </div>
+        <ReportHeader
+          subtitle="Quick Individualized Service Plan (ISP)"
+          detail={reviewDetail}
+          className="mb-6"
+        />
 
         <div className="space-y-4 text-sm leading-relaxed">
-          <p><strong>Youth Information:</strong> {ispData.youthName} (ID: {ispData.youthId}) is a {ispData.age}-year-old resident born on {ispData.dob}. Admission date was {ispData.admissionDate}, currently at Level {ispData.level} with an estimated stay of {ispData.estStay}.</p>
+          <p className="whitespace-pre-wrap">
+            <strong>Youth Information:</strong>{' '}
+            <FormattedText
+              text={`${ispData.youthName} (ID: ${ispData.youthId}) is a ${ispData.age}-year-old resident born on ${ispData.dob}. Admission date was ${ispData.admissionDate}, currently at Level ${ispData.level} with an estimated stay of ${ispData.estStay}.`}
+            />
+          </p>
 
           {ispData.teamMembers.length > 0 && (
-            <p><strong>Treatment Team:</strong> The treatment team consists of {ispData.teamMembers.join(', ')}.</p>
+            <p className="whitespace-pre-wrap">
+              <strong>Treatment Team:</strong>{' '}
+              <FormattedText text={`The treatment team consists of ${ispData.teamMembers.join(', ')}.`} />
+            </p>
           )}
 
-          <p><strong>Risk Assessment:</strong> The youth presents with a {ispData.riskLevel.toLowerCase()} risk level.</p>
+          <p className="whitespace-pre-wrap">
+            <strong>Risk Assessment:</strong>{' '}
+            <FormattedText text={`The youth presents with a ${ispData.riskLevel.toLowerCase()} risk level.`} />
+          </p>
 
           {ispData.topConcerns.length > 0 && (
-            <p><strong>Primary Concerns:</strong> Areas of concern include {ispData.topConcerns.join(', ')}{ispData.otherConcern && `, and ${ispData.otherConcern}`}.</p>
+            <p className="whitespace-pre-wrap">
+              <strong>Primary Concerns:</strong>{' '}
+              <FormattedText
+                text={`Areas of concern include ${ispData.topConcerns.join(', ')}${
+                  ispData.otherConcern ? `, and ${ispData.otherConcern}` : ''
+                }.`}
+              />
+            </p>
           )}
 
           {ispData.strengths.length > 0 && (
-            <p><strong>Identified Strengths:</strong> The youth demonstrates strengths in {ispData.strengths.join(', ')}{ispData.otherStrength && `, and ${ispData.otherStrength}`}.</p>
+            <p className="whitespace-pre-wrap">
+              <strong>Identified Strengths:</strong>{' '}
+              <FormattedText
+                text={`The youth demonstrates strengths in ${ispData.strengths.join(', ')}${
+                  ispData.otherStrength ? `, and ${ispData.otherStrength}` : ''
+                }.`}
+              />
+            </p>
           )}
 
           <div className="space-y-3">
             <h3 className="font-semibold">Treatment Goals:</h3>
             {ispData.goal1 && (
-              <div>
-                <p><strong>Goal 1:</strong> {ispData.goal1} (Type: {ispData.goal1Type})</p>
-                {ispData.goal1Strategies && <p><strong>Key Strategies:</strong> {ispData.goal1Strategies}</p>}
-                {ispData.goal1Skill && <p><strong>Main Skill to Develop:</strong> {ispData.goal1Skill}</p>}
+              <div className="space-y-1">
+                <p className="whitespace-pre-wrap">
+                  <strong>Goal 1:</strong>{' '}
+                  <FormattedText
+                    text={`${ispData.goal1}${ispData.goal1Type ? ` (Type: ${ispData.goal1Type})` : ''}`}
+                  />
+                </p>
+                {ispData.goal1Strategies && (
+                  <p className="whitespace-pre-wrap">
+                    <strong>Key Strategies:</strong>{' '}
+                    <FormattedText text={ispData.goal1Strategies} />
+                  </p>
+                )}
+                {ispData.goal1Skill && (
+                  <p className="whitespace-pre-wrap">
+                    <strong>Main Skill to Develop:</strong>{' '}
+                    <FormattedText text={ispData.goal1Skill} />
+                  </p>
+                )}
               </div>
             )}
             {ispData.goal2 && (
-              <div>
-                <p><strong>Goal 2:</strong> {ispData.goal2} (Type: {ispData.goal2Type})</p>
-                {ispData.goal2Strategies && <p><strong>Key Strategies:</strong> {ispData.goal2Strategies}</p>}
-                {ispData.goal2Skill && <p><strong>Main Skill to Develop:</strong> {ispData.goal2Skill}</p>}
+              <div className="space-y-1">
+                <p className="whitespace-pre-wrap">
+                  <strong>Goal 2:</strong>{' '}
+                  <FormattedText
+                    text={`${ispData.goal2}${ispData.goal2Type ? ` (Type: ${ispData.goal2Type})` : ''}`}
+                  />
+                </p>
+                {ispData.goal2Strategies && (
+                  <p className="whitespace-pre-wrap">
+                    <strong>Key Strategies:</strong>{' '}
+                    <FormattedText text={ispData.goal2Strategies} />
+                  </p>
+                )}
+                {ispData.goal2Skill && (
+                  <p className="whitespace-pre-wrap">
+                    <strong>Main Skill to Develop:</strong>{' '}
+                    <FormattedText text={ispData.goal2Skill} />
+                  </p>
+                )}
               </div>
             )}
           </div>
@@ -274,29 +352,77 @@ const QuickISPAssessment: React.FC<QuickISPAssessmentProps> = ({ selectedYouth, 
           <div className="space-y-2">
             <h3 className="font-semibold">Support Plan:</h3>
             {ispData.earlyWarningSigns.length > 0 && (
-              <p><strong>Early Warning Signs:</strong> Staff should watch for {ispData.earlyWarningSigns.join(', ')}{ispData.otherWarningSign && `, and ${ispData.otherWarningSign}`}.</p>
+              <p className="whitespace-pre-wrap">
+                <strong>Early Warning Signs:</strong>{' '}
+                <FormattedText
+                  text={`Staff should watch for ${ispData.earlyWarningSigns.join(', ')}${
+                    ispData.otherWarningSign ? `, and ${ispData.otherWarningSign}` : ''
+                  }.`}
+                />
+              </p>
             )}
             {ispData.whatHelps.length > 0 && (
-              <p><strong>Interventions that Help:</strong> Effective interventions include {ispData.whatHelps.join(', ')}{ispData.otherWhatHelps && `, and ${ispData.otherWhatHelps}`}.</p>
+              <p className="whitespace-pre-wrap">
+                <strong>Interventions that Help:</strong>{' '}
+                <FormattedText
+                  text={`Effective interventions include ${ispData.whatHelps.join(', ')}${
+                    ispData.otherWhatHelps ? `, and ${ispData.otherWhatHelps}` : ''
+                  }.`}
+                />
+              </p>
             )}
             {ispData.staffApproach.length > 0 && (
-              <p><strong>Recommended Staff Approach:</strong> Staff should utilize {ispData.staffApproach.join(', ')}{ispData.otherStaffApproach && `, and ${ispData.otherStaffApproach}`} approaches.</p>
+              <p className="whitespace-pre-wrap">
+                <strong>Recommended Staff Approach:</strong>{' '}
+                <FormattedText
+                  text={`Staff should utilize ${ispData.staffApproach.join(', ')}${
+                    ispData.otherStaffApproach ? `, and ${ispData.otherStaffApproach}` : ''
+                  } approaches.`}
+                />
+              </p>
             )}
           </div>
 
           {ispData.dailyMeasure.length > 0 && (
-            <p><strong>Progress Tracking:</strong> Daily progress will be monitored using {ispData.dailyMeasure.join(', ')}{ispData.otherDailyMeasure && `, and ${ispData.otherDailyMeasure}`}.</p>
+            <p className="whitespace-pre-wrap">
+              <strong>Progress Tracking:</strong>{' '}
+              <FormattedText
+                text={`Daily progress will be monitored using ${ispData.dailyMeasure.join(', ')}${
+                  ispData.otherDailyMeasure ? `, and ${ispData.otherDailyMeasure}` : ''
+                }.`}
+              />
+            </p>
           )}
 
           {ispData.reviewDate && (
-            <p><strong>Review Schedule:</strong> This plan will be reviewed on {ispData.reviewDate}.</p>
+            <p className="whitespace-pre-wrap">
+              <strong>Review Schedule:</strong>{' '}
+              <FormattedText text={`This plan will be reviewed on ${ispData.reviewDate}.`} />
+            </p>
           )}
 
           <div className="mt-8 space-y-2">
-            <p><strong>Signatures:</strong></p>
-            {ispData.youthSignature && <p>Youth: {ispData.youthSignature}</p>}
-            {ispData.staffSignature && <p>Staff: {ispData.staffSignature}</p>}
-            {ispData.signatureDate && <p>Date: {ispData.signatureDate}</p>}
+            <p className="whitespace-pre-wrap">
+              <strong>Signatures:</strong>
+            </p>
+            {ispData.youthSignature && (
+              <p className="whitespace-pre-wrap">
+                Youth:{' '}
+                <FormattedText text={ispData.youthSignature} />
+              </p>
+            )}
+            {ispData.staffSignature && (
+              <p className="whitespace-pre-wrap">
+                Staff:{' '}
+                <FormattedText text={ispData.staffSignature} />
+              </p>
+            )}
+            {ispData.signatureDate && (
+              <p className="whitespace-pre-wrap">
+                Date:{' '}
+                <FormattedText text={ispData.signatureDate} />
+              </p>
+            )}
           </div>
         </div>
       </div>

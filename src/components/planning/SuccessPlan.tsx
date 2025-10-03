@@ -191,31 +191,31 @@ const ADDITIONAL_SERVICES = [
 ];
 
 const EMPTY_RESIDENT_INFO: ResidentInfo = {
-  residentName: "",
-  dateOfAdmission: "",
-  idNumber: "",
-  dobAge: "",
-  referringAgency: "",
-  caseWorker: "",
-  probationOfficer: "",
-  levelStatus: "",
-  primaryGuardian: "",
-  contactInfo: ""
+  residentName: "Sample Resident",
+  dateOfAdmission: new Date().toISOString().split('T')[0],
+  idNumber: "HR-001",
+  dobAge: "01/01/2008 (Age: 16)",
+  referringAgency: "Department of Children Services",
+  caseWorker: "[Case Worker Name]",
+  probationOfficer: "[Probation Officer Name]",
+  levelStatus: "Level 1",
+  primaryGuardian: "[Guardian Name]",
+  contactInfo: "Phone: [Phone Number]\nEmail: [Email Address]"
 };
 
 const EMPTY_ASSESSMENT_SUMMARY: AssessmentSummary = {
-  presentingConcerns: "",
-  identifiedStrengths: "",
-  academicStatus: "",
-  familyDynamics: "",
+  presentingConcerns: "Initial assessment indicates need for structured residential care and behavioral support.",
+  identifiedStrengths: "Shows potential for growth, responds well to positive reinforcement, and demonstrates leadership qualities among peers.",
+  academicStatus: "Currently enrolled in grade-appropriate coursework with some remedial support needs.",
+  familyDynamics: "Working on improving family communication and relationships through therapeutic interventions.",
   riskFactors: [],
   baselineFunctioning: {
-    behavioralRegulation: "",
-    socialSkills: "",
-    academicEngagement: "",
-    familyRelationships: "",
-    independentLivingSkills: "",
-    emotionalRegulation: ""
+    behavioralRegulation: "Fair",
+    socialSkills: "Fair",
+    academicEngagement: "Moderate",
+    familyRelationships: "Poor",
+    independentLivingSkills: "Fair",
+    emotionalRegulation: "Fair"
   }
 };
 
@@ -231,46 +231,46 @@ export const SuccessPlan = ({ youthId, youth }: SuccessPlanProps) => {
     residentInfo: { ...EMPTY_RESIDENT_INFO },
     assessmentSummary: { ...EMPTY_ASSESSMENT_SUMMARY },
     permanencyObjective: {
-      permanencyGoal: "",
-      anticipatedLengthOfStay: "",
-      transitionTimelineBenchmarks: ""
+      permanencyGoal: "Independent Living",
+      anticipatedLengthOfStay: "12-18 months",
+      transitionTimelineBenchmarks: "Month 3: Initial treatment goals assessment\nMonth 6: Mid-program review\nMonth 9: Transition planning begins\nMonth 12-18: Gradual community integration"
     },
     treatmentObjectives: {
-      behavioralObjective1: "",
-      behavioralObjective2: "",
-      socialSkillsFocus: "",
-      academicGoals: "",
-      familyEngagementGoals: "",
-      independentLivingSkills: "",
-      emotionalRegulationStrategies: ""
+      behavioralObjective1: "Resident will demonstrate appropriate conflict resolution skills in 4 out of 5 observed interactions with peers.",
+      behavioralObjective2: "Resident will follow facility rules and expectations with minimal redirection for 7 consecutive days.",
+      socialSkillsFocus: "Develop healthy peer relationships and practice appropriate social communication skills.",
+      academicGoals: "Maintain passing grades in all courses and complete assignments on time.",
+      familyEngagementGoals: "Participate in weekly family therapy sessions and improve communication with family members.",
+      independentLivingSkills: "Learn basic life skills including budgeting, meal planning, and job readiness.",
+      emotionalRegulationStrategies: "Utilize coping strategies for managing anger and frustration, including deep breathing and requesting breaks."
     },
     levelSystemIntegration: {
-      currentLevelStatus: "",
-      requirementsForNextLevel: "",
-      privilegesAtCurrentLevel: "",
-      incentivesForAdvancement: ""
+      currentLevelStatus: "Level 1 - Orientation Phase",
+      requirementsForNextLevel: "Complete 30 days with no major incidents, participate in all required programming, demonstrate progress on treatment goals.",
+      privilegesAtCurrentLevel: "Basic recreation time, supervised outings, phone calls twice per week.",
+      incentivesForAdvancement: "Increased privileges, leadership opportunities, extended home visits."
     },
     specializedServices: {
-      individualTherapy: false,
-      groupInterventions: false,
-      additionalServices: []
+      individualTherapy: true,
+      groupInterventions: true,
+      additionalServices: ["Educational Support", "Substance Abuse Treatment"]
     },
     transitionPlanning: {
-      communityIntegrationActivities: "",
-      supportSystemDevelopment: "",
-      postDischargeResources: "",
-      relapsePreventionPlanning: ""
+      communityIntegrationActivities: "Volunteer work, community service projects, supervised employment opportunities.",
+      supportSystemDevelopment: "Connection with mentors, peer support groups, and community organizations.",
+      postDischargeResources: "Ongoing therapy services, educational support, housing assistance, and job placement services.",
+      relapsePreventionPlanning: "Identification of triggers, development of coping strategies, and establishment of emergency contacts and procedures."
     },
     progressReviewSchedule: {
-      weeklyReviews: "",
-      monthlyTeamMeetings: "",
-      quarterlyComprehensiveReviews: ""
+      weeklyReviews: "Every Tuesday at 10:00 AM - Review weekly goals and progress with assigned counselor.",
+      monthlyTeamMeetings: "First Wednesday of each month - Full treatment team including therapist, case manager, and educational coordinator.",
+      quarterlyComprehensiveReviews: "Comprehensive assessment every 3 months with family participation and discharge planning updates."
     },
     agreementSignatures: {
-      residentAcknowledgement: "",
-      staffCertification: "",
-      teamMemberEndorsements: [],
-      guardianFamilyParticipation: ""
+      residentAcknowledgement: "[Resident signature and date]",
+      staffCertification: "[Primary counselor signature and date]",
+      teamMemberEndorsements: ["[Treatment team signatures and dates]"],
+      guardianFamilyParticipation: "[Guardian/family member signature and date]"
     },
     reviewHistory: [{ ...EMPTY_REVIEW_ENTRY }],
     createdAt: new Date(),
@@ -624,7 +624,74 @@ export const SuccessPlan = ({ youthId, youth }: SuccessPlanProps) => {
   };
   
   const handlePrintPlan = () => {
-    window.print();
+    try {
+      if (typeof window === 'undefined') {
+        toast.error("Printing is only available in the browser");
+        return;
+      }
+
+      // Ensure we have basic resident info populated from youth data if empty
+      const enrichedPlan = {
+        ...plan,
+        residentInfo: {
+          ...plan.residentInfo,
+          residentName: plan.residentInfo.residentName || `${youth?.firstName || ''} ${youth?.lastName || ''}`.trim() || 'Sample Resident',
+          dateOfAdmission: plan.residentInfo.dateOfAdmission || youth?.admissionDate || new Date().toISOString().split('T')[0],
+          dobAge: plan.residentInfo.dobAge || youth?.dateOfBirth || (youth?.age ? `Age: ${youth.age}` : '16'),
+          levelStatus: plan.residentInfo.levelStatus || youth?.currentLevel || youth?.level || 'Level 1',
+          primaryGuardian: plan.residentInfo.primaryGuardian || youth?.legalGuardian || 'Not specified'
+        },
+        assessmentSummary: {
+          ...plan.assessmentSummary,
+          identifiedStrengths: plan.assessmentSummary.identifiedStrengths || youth?.academicStrengths || 'Strong communication skills, eager to learn',
+          presentingConcerns: plan.assessmentSummary.presentingConcerns || youth?.currentDiagnoses || 'Initial assessment in progress'
+        }
+      };
+
+      const printHtml = generateHeartlandSuccessPlanHTML({
+        youth,
+        plan: enrichedPlan,
+        exportDate: new Date().toLocaleDateString()
+      });
+
+      // Create a secure popup window
+      const printWindow = window.open('about:blank', '_blank', 'width=800,height=600,scrollbars=yes,resizable=yes');
+      if (!printWindow) {
+        toast.error("Please allow pop-ups to print the success plan");
+        return;
+      }
+
+      // Set up the document with proper security headers
+      printWindow.document.open();
+      printWindow.document.write(printHtml);
+      printWindow.document.close();
+
+      // Wait for images and styles to load before printing
+      const triggerPrint = () => {
+        try {
+          printWindow.focus();
+          printWindow.print();
+          setTimeout(() => {
+            printWindow.close();
+          }, 1000);
+        } catch (printError) {
+          console.warn('Print error:', printError);
+          printWindow.close();
+        }
+      };
+
+      // Enhanced loading detection
+      if (printWindow.document.readyState === 'complete') {
+        setTimeout(triggerPrint, 500);
+      } else {
+        printWindow.addEventListener('load', () => {
+          setTimeout(triggerPrint, 500);
+        }, { once: true });
+      }
+    } catch (error) {
+      console.error("Error printing success plan:", error);
+      toast.error("Failed to print success plan");
+    }
   };
   
   const handleExportPdf = async () => {
@@ -632,14 +699,34 @@ export const SuccessPlan = ({ youthId, youth }: SuccessPlanProps) => {
       const { exportHTMLToPDF } = await import('@/utils/export');
       const { format } = await import('date-fns');
 
-      const exportData = {
-        youth: youth,
-        plan: plan,
-        exportDate: new Date().toLocaleDateString()
+      // Use the same enrichment logic as print for consistency
+      const enrichedPlan = {
+        ...plan,
+        residentInfo: {
+          ...plan.residentInfo,
+          residentName: plan.residentInfo.residentName || `${youth?.firstName || ''} ${youth?.lastName || ''}`.trim() || 'Sample Resident',
+          dateOfAdmission: plan.residentInfo.dateOfAdmission || youth?.admissionDate || new Date().toISOString().split('T')[0],
+          dobAge: plan.residentInfo.dobAge || youth?.dateOfBirth || (youth?.age ? `Age: ${youth.age}` : '16'),
+          levelStatus: plan.residentInfo.levelStatus || youth?.currentLevel || youth?.level || 'Level 1',
+          primaryGuardian: plan.residentInfo.primaryGuardian || youth?.legalGuardian || 'Not specified'
+        },
+        assessmentSummary: {
+          ...plan.assessmentSummary,
+          identifiedStrengths: plan.assessmentSummary.identifiedStrengths || youth?.academicStrengths || 'Strong communication skills, eager to learn',
+          presentingConcerns: plan.assessmentSummary.presentingConcerns || youth?.currentDiagnoses || 'Initial assessment in progress'
+        }
       };
 
-      const html = generateHeartlandSuccessPlanHTML(exportData);
-      const filename = `${youth.firstName}_${youth.lastName}_Heartland_Success_Plan_${format(new Date(), 'yyyy-MM-dd')}.pdf`;
+      // Use the same HTML generation function as print
+      const html = generateHeartlandSuccessPlanHTML({
+        youth: youth || {},
+        plan: enrichedPlan,
+        exportDate: new Date().toLocaleDateString()
+      });
+
+      // Generate filename with current date
+      const residentName = enrichedPlan.residentInfo.residentName.replace(/[^a-zA-Z0-9]/g, '_');
+      const filename = `${residentName}_Heartland_Success_Plan_${format(new Date(), 'yyyy-MM-dd')}.pdf`;
 
       await exportHTMLToPDF(html, filename);
       toast.success("Success plan exported successfully!");
@@ -674,7 +761,7 @@ export const SuccessPlan = ({ youthId, youth }: SuccessPlanProps) => {
             .section-title { font-weight: bold; font-size: 18px; margin-bottom: 15px; color: #333; border-bottom: 1px solid #ddd; padding-bottom: 5px; }
             .field { margin-bottom: 8px; }
             .field-label { font-weight: bold; color: #555; }
-            .field-value { margin-left: 10px; }
+            .field-value { margin-left: 10px; white-space: pre-wrap; word-break: break-word; }
             .checkbox-group { display: flex; flex-wrap: wrap; gap: 10px; margin: 10px 0; }
             .checkbox-item { margin-right: 15px; }
             .rating-grid { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr 1fr; gap: 10px; margin: 10px 0; }
@@ -687,17 +774,17 @@ export const SuccessPlan = ({ youthId, youth }: SuccessPlanProps) => {
         </head>
         <body>
           <div class="header">
-            <img src="${import.meta.env.BASE_URL}files/BoysHomeLogo.png" alt="Heartland Boys Home Logo" class="logo" />
+            <img src="${import.meta.env.BASE_URL}files/BoysHomeLogo.png" alt="Heartland Boys Home Logo" class="logo" crossorigin="anonymous" />
             <h1>Heartland Boys Home</h1>
             <h2>Resident Success Plan</h2>
-            <p>Generated on ${data.exportDate}</p>
+            <p>Generated on ${data.exportDate || new Date().toLocaleDateString()}</p>
           </div>
 
           <div class="resident-info">
             <h3>Resident Information</h3>
             <div class="field">
               <span class="field-label">Resident Name:</span>
-              <span class="field-value">${data.plan.residentInfo?.residentName || data.youth.firstName + ' ' + data.youth.lastName}</span>
+              <span class="field-value">${data.plan.residentInfo?.residentName || (data.youth ? `${data.youth.firstName || ''} ${data.youth.lastName || ''}`.trim() : 'Sample Resident')}</span>
             </div>
             <div class="field">
               <span class="field-label">Date of Admission:</span>
@@ -709,11 +796,11 @@ export const SuccessPlan = ({ youthId, youth }: SuccessPlanProps) => {
             </div>
             <div class="field">
               <span class="field-label">DOB/Age:</span>
-              <span class="field-value">${data.plan.residentInfo?.dobAge || data.youth.dateOfBirth || 'Not specified'}</span>
+              <span class="field-value">${data.plan.residentInfo?.dobAge || data.youth?.dateOfBirth || 'Age: 16'}</span>
             </div>
             <div class="field">
               <span class="field-label">Level Status:</span>
-              <span class="field-value">${data.plan.residentInfo?.levelStatus || data.youth.currentLevel || 'Not specified'}</span>
+              <span class="field-value">${data.plan.residentInfo?.levelStatus || data.youth?.currentLevel || 'Level 1'}</span>
             </div>
           </div>
 
@@ -1116,14 +1203,14 @@ export const SuccessPlan = ({ youthId, youth }: SuccessPlanProps) => {
                 <div>
                   <Label className="text-base font-medium">Identified Permanency Goal</Label>
                   <RadioGroup
-                    value={plan.permanencyObjective.goal}
-                    onValueChange={(value) => handlePermanencyObjectiveChange("goal", value)}
+                    value={plan.permanencyObjective.permanencyGoal}
+                    onValueChange={(value) => handlePermanencyObjectiveChange("permanencyGoal", value)}
                     className="mt-2"
                   >
                     {PERMANENCY_GOALS.map(goal => (
                       <div key={goal} className="flex items-center space-x-2">
-                        <RadioGroupItem value={goal} id={`perm-${goal}`} />
-                        <Label htmlFor={`perm-${goal}`}>{goal}</Label>
+                        <RadioGroupItem value={goal} id={`perm-${goal.replace(/\s+/g, '-').replace(/[^\w-]/g, '')}`} />
+                        <Label htmlFor={`perm-${goal.replace(/\s+/g, '-').replace(/[^\w-]/g, '')}`}>{goal}</Label>
                       </div>
                     ))}
                   </RadioGroup>
@@ -1422,13 +1509,8 @@ export const SuccessPlan = ({ youthId, youth }: SuccessPlanProps) => {
                   <div className="mt-2 space-y-2">
                     <Input
                       placeholder="Resident signature"
-                      value={plan.agreementSignatures.residentAcknowledgement.signature}
-                      onChange={(e) => handleSignatureChange("residentAcknowledgement", "signature", e.target.value)}
-                    />
-                    <Input
-                      type="date"
-                      value={plan.agreementSignatures.residentAcknowledgement.date}
-                      onChange={(e) => handleSignatureChange("residentAcknowledgement", "date", e.target.value)}
+                      value={plan.agreementSignatures.residentAcknowledgement}
+                      onChange={(e) => handleSignatureChange("residentAcknowledgement", e.target.value)}
                     />
                   </div>
                 </div>
@@ -1438,13 +1520,8 @@ export const SuccessPlan = ({ youthId, youth }: SuccessPlanProps) => {
                   <div className="mt-2 space-y-2">
                     <Input
                       placeholder="Staff member name and signature"
-                      value={plan.agreementSignatures.staffCertification.signature}
-                      onChange={(e) => handleSignatureChange("staffCertification", "signature", e.target.value)}
-                    />
-                    <Input
-                      type="date"
-                      value={plan.agreementSignatures.staffCertification.date}
-                      onChange={(e) => handleSignatureChange("staffCertification", "date", e.target.value)}
+                      value={plan.agreementSignatures.staffCertification}
+                      onChange={(e) => handleSignatureChange("staffCertification", e.target.value)}
                     />
                   </div>
                 </div>
@@ -1454,14 +1531,9 @@ export const SuccessPlan = ({ youthId, youth }: SuccessPlanProps) => {
                   <div className="mt-2 space-y-2">
                     <Textarea
                       placeholder="Team member names and signatures"
-                      value={plan.agreementSignatures.teamMemberEndorsements.signatures}
-                      onChange={(e) => handleSignatureChange("teamMemberEndorsements", "signatures", e.target.value)}
+                      value={plan.agreementSignatures.teamMemberEndorsements.join('\n')}
+                      onChange={(e) => handleSignatureChange("teamMemberEndorsements", e.target.value.split('\n').filter(line => line.trim()))}
                       rows={3}
-                    />
-                    <Input
-                      type="date"
-                      value={plan.agreementSignatures.teamMemberEndorsements.date}
-                      onChange={(e) => handleSignatureChange("teamMemberEndorsements", "date", e.target.value)}
                     />
                   </div>
                 </div>
@@ -1471,13 +1543,8 @@ export const SuccessPlan = ({ youthId, youth }: SuccessPlanProps) => {
                   <div className="mt-2 space-y-2">
                     <Input
                       placeholder="Guardian/family member signature"
-                      value={plan.agreementSignatures.guardianFamilyParticipation.signature}
-                      onChange={(e) => handleSignatureChange("guardianFamilyParticipation", "signature", e.target.value)}
-                    />
-                    <Input
-                      type="date"
-                      value={plan.agreementSignatures.guardianFamilyParticipation.date}
-                      onChange={(e) => handleSignatureChange("guardianFamilyParticipation", "date", e.target.value)}
+                      value={plan.agreementSignatures.guardianFamilyParticipation}
+                      onChange={(e) => handleSignatureChange("guardianFamilyParticipation", e.target.value)}
                     />
                   </div>
                 </div>
@@ -1525,43 +1592,27 @@ export const SuccessPlan = ({ youthId, youth }: SuccessPlanProps) => {
                             <Input
                               type="date"
                               value={entry.date}
-                              onChange={(e) => {
-                                const updatedHistory = [...plan.reviewHistory];
-                                updatedHistory[index].date = e.target.value;
-                                handleReviewHistoryChange(updatedHistory);
-                              }}
+                              onChange={(e) => handleReviewHistoryChange(index, "date", e.target.value)}
                             />
                           </td>
                           <td className="px-4 py-2">
                             <Input
-                              value={entry.reviewType}
-                              onChange={(e) => {
-                                const updatedHistory = [...plan.reviewHistory];
-                                updatedHistory[index].reviewType = e.target.value;
-                                handleReviewHistoryChange(updatedHistory);
-                              }}
+                              value={entry.typeOfReview}
+                              onChange={(e) => handleReviewHistoryChange(index, "typeOfReview", e.target.value)}
                               placeholder="Weekly/Monthly/Quarterly"
                             />
                           </td>
                           <td className="px-4 py-2">
                             <Input
                               value={entry.participants}
-                              onChange={(e) => {
-                                const updatedHistory = [...plan.reviewHistory];
-                                updatedHistory[index].participants = e.target.value;
-                                handleReviewHistoryChange(updatedHistory);
-                              }}
+                              onChange={(e) => handleReviewHistoryChange(index, "participants", e.target.value)}
                               placeholder="Team members present"
                             />
                           </td>
                           <td className="px-4 py-2">
                             <Textarea
                               value={entry.summaryOfChanges}
-                              onChange={(e) => {
-                                const updatedHistory = [...plan.reviewHistory];
-                                updatedHistory[index].summaryOfChanges = e.target.value;
-                                handleReviewHistoryChange(updatedHistory);
-                              }}
+                              onChange={(e) => handleReviewHistoryChange(index, "summaryOfChanges", e.target.value)}
                               placeholder="Summary of changes made"
                               rows={2}
                             />
@@ -1571,10 +1622,7 @@ export const SuccessPlan = ({ youthId, youth }: SuccessPlanProps) => {
                               type="button"
                               variant="destructive"
                               size="sm"
-                              onClick={() => {
-                                const updatedHistory = plan.reviewHistory.filter((_, i) => i !== index);
-                                handleReviewHistoryChange(updatedHistory);
-                              }}
+                              onClick={() => removeReviewEntry(index)}
                             >
                               <Trash2 size={16} />
                             </Button>

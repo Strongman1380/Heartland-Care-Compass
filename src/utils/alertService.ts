@@ -1,5 +1,6 @@
 // Alert Service - Automatic alert triggers for application events
 import { toast } from "sonner";
+import { alertsService } from '@/integrations/supabase/alertsService'
 
 export type AutoAlert = {
   id: string;
@@ -30,6 +31,27 @@ class AlertService {
 
   private loadAlerts() {
     try {
+      // Try Supabase first to hydrate
+      try {
+        void (async () => {
+          const remote = await alertsService.list()
+          if (remote && remote.length) {
+            // map to AutoAlert-like
+            this.alerts = remote.map(r => ({
+              id: r.id,
+              type: (r.level === 'urgent' ? 'urgent' : r.level === 'warning' ? 'warning' : 'info') as any,
+              title: r.title,
+              description: r.body || '',
+              priority: (r.level === 'urgent' ? 'high' : 'medium') as any,
+              category: 'System',
+              createdAt: new Date(r.created_at),
+              resolved: r.status === 'closed'
+            }))
+            this.saveAlerts()
+          }
+        })()
+      } catch {}
+
       const savedAlerts = localStorage.getItem('heartland_alerts');
       if (savedAlerts) {
         this.alerts = JSON.parse(savedAlerts).map((alert: any) => ({
@@ -60,6 +82,17 @@ class AlertService {
 
     this.alerts.unshift(newAlert);
     this.saveAlerts();
+
+    // Persist to Supabase best-effort
+    try {
+      void alertsService.save({
+        id: undefined as any,
+        title: newAlert.title,
+        body: newAlert.description,
+        level: newAlert.type,
+        status: newAlert.resolved ? 'closed' : 'open'
+      })
+    } catch {}
 
     // Show toast notification
     toast.info(`Alert: ${newAlert.title}`, {

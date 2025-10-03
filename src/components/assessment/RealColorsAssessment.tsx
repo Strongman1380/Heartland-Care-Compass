@@ -171,6 +171,7 @@ export const RealColorsAssessment = ({ selectedYouth }: RealColorsAssessmentProp
       };
 
       const draftKey = getDraftKey();
+      try { await draftsService.save(selectedYouth?.id || selectedYouthId || null, 'real_colors_assessment', (user as any)?.id || null, draftData) } catch {}
       localStorage.setItem(draftKey, JSON.stringify(draftData));
 
       setHasUnsavedChanges(false);
@@ -193,8 +194,28 @@ export const RealColorsAssessment = ({ selectedYouth }: RealColorsAssessmentProp
     return `real-colors-draft-${youthId}`;
   };
 
-  const loadDraft = () => {
+  const loadDraft = async () => {
     try {
+      try {
+        const remote = await draftsService.get(selectedYouth?.id || selectedYouthId || null, 'real_colors_assessment', (user as any)?.id || null)
+        if (remote?.data) {
+          const parsed: any = remote.data
+          setPrimaryColor(parsed.primaryColor || "");
+          setSecondaryColor(parsed.secondaryColor || "");
+          setInsights(parsed.insights || "");
+          setComments(parsed.comments || "");
+          setObservations(parsed.observations || "");
+          setIsScreening(parsed.isScreening || false);
+          setCompletedBy(parsed.completedBy || "");
+          if (!selectedYouth) {
+            setYouthSelection(parsed.youthSelection || 'existing');
+            setSelectedYouthId(parsed.selectedYouthId || "");
+            setNewYouthName(parsed.newYouthName || "");
+          }
+          setHasUnsavedChanges(true);
+          return;
+        }
+      } catch {}
       const draftKey = getDraftKey();
       const draftData = localStorage.getItem(draftKey);
 
@@ -234,6 +255,7 @@ export const RealColorsAssessment = ({ selectedYouth }: RealColorsAssessmentProp
 
   const clearDraft = () => {
     const draftKey = getDraftKey();
+    try { void draftsService.delete(selectedYouth?.id || selectedYouthId || null, 'real_colors_assessment', (user as any)?.id || null) } catch {}
     localStorage.removeItem(draftKey);
   };
 
@@ -346,7 +368,7 @@ export const RealColorsAssessment = ({ selectedYouth }: RealColorsAssessmentProp
         </head>
         <body>
           <div class="header">
-            <img src="${import.meta.env.BASE_URL}files/BoysHomeLogo.png" alt="Heartland Boys Home Logo" class="logo" />
+            <img src="${import.meta.env.BASE_URL}files/BoysHomeLogo.png" alt="Heartland Boys Home Logo" class="logo" crossorigin="anonymous" />
             <h1>Heartland Boys Home</h1>
             <h2>Real Colors Assessment Report</h2>
             <p>Generated on ${data.exportDate}</p>

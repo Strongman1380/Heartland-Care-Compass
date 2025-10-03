@@ -1,15 +1,19 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import type { CSSProperties } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ReportHeader } from "@/components/reports/ReportHeader";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Youth } from "@/types/app-types";
-import { Save, FileDown, Printer, RotateCcw, Gavel } from "lucide-react";
-import { format } from "date-fns";
-import { exportElementToPDF, exportElementToDocx } from "@/utils/export";
+import { Save, Printer, RotateCcw, Gavel, Eye, Sparkles } from "lucide-react";
+import { format, subMonths } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
+import { draftsService } from '@/integrations/supabase/draftsService'
+import { useAuth } from '@/contexts/SupabaseAuthContext'
+import { getBehaviorPointsByYouth, getProgressNotesByYouth } from "@/lib/api";
 
 interface CourtReportProps {
   youth?: Youth;
@@ -19,17 +23,11 @@ interface CourtReportData {
   // Header Information
   youthName: string;
   dateOfBirth: string;
-  caseNumber: string;
-  courtDate: string;
   reportDate: string;
   reportingOfficer: string;
-  
+
   // Current Status
   currentPlacement: string;
-  admissionDate: string;
-  lengthOfStay: string;
-  currentLevel: string;
-  legalStatus: string;
   
   // Treatment Goals & Progress
   treatmentGoals: string;
@@ -86,6 +84,15 @@ const getDisplayValue = (value?: string | null) => {
   return trimmed.length > 0 ? trimmed : 'Not provided';
 };
 
+const getCourtHeaderDetail = (reportDate?: string) => {
+  const formattedReport = formatDateForDisplay(reportDate);
+  if (formattedReport) {
+    return `Report Date: ${formattedReport}`;
+  }
+
+  return undefined;
+};
+
 interface CourtReportPreviewProps {
   data: CourtReportData;
 }
@@ -99,29 +106,38 @@ const CourtReportPreview = ({ data }: CourtReportPreviewProps) => {
     return getDisplayValue(value);
   };
 
-  const sectionClass = 'rounded-2xl border border-red-100 shadow-sm overflow-hidden bg-white';
-  const fieldValueClass = 'min-h-[48px] whitespace-pre-wrap rounded-md border border-amber-200 bg-amber-50/60 px-4 py-3 text-sm leading-relaxed text-slate-800';
-  const fieldLabelClass = 'text-xs font-semibold uppercase tracking-wide text-red-600';
+  const sectionClass = 'bg-white/95 rounded-2xl border border-red-100 shadow-sm px-8 py-6 space-y-4 print:bg-white print:shadow-none print:border print:border-gray-300 print:rounded-lg print:px-6 print:py-4 print:mb-4';
+  const sectionBreakStyle: CSSProperties = {
+    breakInside: 'avoid',
+    pageBreakInside: 'avoid',
+    WebkitColumnBreakInside: 'avoid',
+    WebkitPageBreakInside: 'avoid',
+    MozPageBreakInside: 'avoid'
+  };
+  const sectionHeaderClass = 'border-b border-red-100 pb-3 print:border-b-2 print:border-gray-700 print:pb-2 print:mb-3';
+  const fieldLabelClass = 'text-xs font-semibold uppercase tracking-wide text-red-700 print:text-gray-700 print:text-sm';
+  const fieldValueClass = 'text-base text-slate-800 whitespace-pre-wrap leading-relaxed print:text-gray-900 print:text-sm print:leading-normal';
+
+  const renderField = (field: { label: string; value?: string | null; isDate?: boolean }) => (
+    <div key={field.label} className="space-y-1">
+      <span className={fieldLabelClass}>{field.label}</span>
+      <p className={fieldValueClass}>{resolveValue(field.value, field.isDate)}</p>
+    </div>
+  );
 
   const basicInfoFields = [
     { label: 'Youth Name', value: data.youthName },
     { label: 'Date of Birth', value: data.dateOfBirth },
-    { label: 'Case Number', value: data.caseNumber },
-    { label: 'Court Date', value: data.courtDate, isDate: true },
     { label: 'Report Date', value: data.reportDate, isDate: true },
     { label: 'Reporting Officer', value: data.reportingOfficer },
   ];
 
   const sections = [
     {
-      title: 'Current Status',
-      columns: 2,
+      title: 'Current Placement',
+      columns: 1,
       fields: [
         { label: 'Current Placement', value: data.currentPlacement },
-        { label: 'Admission Date', value: data.admissionDate, isDate: true },
-        { label: 'Length of Stay', value: data.lengthOfStay },
-        { label: 'Current Level', value: data.currentLevel },
-        { label: 'Legal Status', value: data.legalStatus },
       ],
     },
     {
@@ -193,76 +209,68 @@ const CourtReportPreview = ({ data }: CourtReportPreviewProps) => {
   ];
 
   return (
-    <div className="print-container space-y-6">
-      <div className="overflow-hidden rounded-3xl border border-red-200 bg-white shadow-xl print:shadow-none">
-        <div className="bg-gradient-to-r from-red-900 via-red-700 to-amber-600 px-8 py-10 text-center text-white">
-          <img
-            src={`${import.meta.env.BASE_URL}files/BoysHomeLogo.png`}
-            alt="Heartland Boys Home Logo"
-            className="mx-auto mb-6 h-20 w-auto object-contain"
+    <div className="print-container space-y-6 text-slate-900 print:space-y-0">
+      <div className="overflow-hidden rounded-3xl border border-red-200 bg-white shadow-xl print:shadow-none print:border-0 print:rounded-none">
+        <div className="px-8 pt-8 print:px-0 print:pt-0">
+          <ReportHeader
+            subtitle="Court Report"
+            detail={getCourtHeaderDetail(data.reportDate)}
+            className="mb-0 print:mb-6"
           />
-          <p className="text-sm uppercase tracking-[0.35em] text-amber-200/80">Heartland Boys Home</p>
-          <h1 className="mt-3 text-4xl font-black tracking-wide">Court Report</h1>
-          <p className="mt-2 text-sm font-medium text-amber-100/90">
-            Comprehensive status update for court review
-          </p>
         </div>
 
-        <div className="space-y-8 px-8 py-8">
-          <section className={sectionClass}>
-            <div className="bg-red-50 px-6 py-4">
-              <h2 className="text-lg font-semibold text-red-800">Basic Information</h2>
-            </div>
-            <div className="grid gap-4 px-6 py-6 md:grid-cols-2">
-              {basicInfoFields.map((field) => (
-                <div key={field.label} className="space-y-2">
-                  <span className={fieldLabelClass}>{field.label}</span>
-                  <p className={fieldValueClass}>{resolveValue(field.value, field.isDate)}</p>
-                </div>
-              ))}
+        <div className="px-8 pb-10 space-y-8 text-base leading-relaxed print:px-0 print:pb-0 print:space-y-4">
+          <section className={sectionClass} style={sectionBreakStyle}>
+            <header className={sectionHeaderClass}>
+              <h2 className="text-lg font-semibold text-red-800 print:text-gray-900 print:text-base">Basic Information</h2>
+            </header>
+            <div className="grid grid-cols-2 gap-x-8 gap-y-3 print:gap-y-2">
+              {basicInfoFields.map(renderField)}
             </div>
           </section>
 
           {sections.map((section) => (
-            <section key={section.title} className={sectionClass}>
-              <div className="bg-red-50 px-6 py-4">
-                <h3 className="text-lg font-semibold text-red-800">{section.title}</h3>
-              </div>
-              <div
-                className={`px-6 py-6 grid gap-4 ${
-                  section.columns === 2 ? 'md:grid-cols-2' : 'grid-cols-1'
-                }`}
-              >
-                {section.fields.map((field) => (
-                  <div key={field.label} className="space-y-2">
-                    <span className={fieldLabelClass}>{field.label}</span>
-                    <p className={fieldValueClass}>{resolveValue(field.value, field.isDate)}</p>
-                  </div>
-                ))}
+            <section key={section.title} className={sectionClass} style={sectionBreakStyle}>
+              <header className={sectionHeaderClass}>
+                <h3 className="text-lg font-semibold text-red-800 print:text-gray-900 print:text-base">{section.title}</h3>
+                {section.description && (
+                  <p className="text-sm text-slate-600 print:text-gray-600">{section.description}</p>
+                )}
+              </header>
+              <div className={section.columns === 2 ? "grid grid-cols-2 gap-x-8 gap-y-3 print:gap-y-2" : "space-y-3 print:space-y-2"}>
+                {section.fields.map(renderField)}
               </div>
             </section>
           ))}
 
-          <section className={sectionClass}>
-            <div className="bg-red-50 px-6 py-4">
-              <h3 className="text-lg font-semibold text-red-800">Summary & Recommendations</h3>
-            </div>
-            <div className="space-y-4 px-6 py-6">
-              {summaryFields.map((field) => (
-                <div key={field.label} className="space-y-2">
-                  <span className={fieldLabelClass}>{field.label}</span>
-                  <p className={fieldValueClass}>{resolveValue(field.value)}</p>
-                </div>
-              ))}
+          <section className={sectionClass} style={sectionBreakStyle}>
+            <header className={sectionHeaderClass}>
+              <h3 className="text-lg font-semibold text-red-800 print:text-gray-900 print:text-base">Summary & Recommendations</h3>
+            </header>
+            <div className="space-y-3 print:space-y-2">
+              {summaryFields.map(renderField)}
             </div>
           </section>
 
-          <div className="flex flex-col items-start gap-1 border-t border-red-100 pt-6 text-xs text-slate-500">
-            <span>Court report generated on {format(new Date(), 'MMMM d, yyyy')}.</span>
-            <span>
-              For questions regarding this report, please contact Heartland Boys Home Treatment Team.
-            </span>
-          </div>
+          <section className={sectionClass} style={sectionBreakStyle}>
+            <header className={sectionHeaderClass}>
+              <h3 className="text-lg font-semibold text-red-800 print:text-gray-900 print:text-base">Signatures</h3>
+            </header>
+            <div className="grid gap-6 md:grid-cols-2 print:gap-4 print:mt-4">
+              <div className="space-y-2">
+                <span className={fieldLabelClass}>Reporting Officer</span>
+                <div className="h-10 border-b-2 border-slate-400 print:border-gray-700" />
+              </div>
+              <div className="space-y-2">
+                <span className={fieldLabelClass}>Date</span>
+                <div className="h-10 border-b-2 border-slate-400 print:border-gray-700" />
+              </div>
+            </div>
+          </section>
+
+          <p className="text-sm text-slate-500 print:text-gray-600 print:text-xs print:mt-6 print:text-center">
+            Prepared on {format(new Date(), 'MMMM d, yyyy')} • Heartland Boys Home Treatment Team
+          </p>
         </div>
       </div>
     </div>
@@ -273,16 +281,10 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
   const [reportData, setReportData] = useState<CourtReportData>({
     youthName: youth ? `${youth.firstName} ${youth.lastName}` : '',
     dateOfBirth: youth?.dob ? format(new Date(youth.dob), 'MM/dd/yyyy') : '',
-    caseNumber: '',
-    courtDate: '',
     reportDate: format(new Date(), 'yyyy-MM-dd'),
     reportingOfficer: '',
-    
+
     currentPlacement: 'Heartland Boys Home - Residential Treatment',
-    admissionDate: youth?.admissionDate ? format(new Date(youth.admissionDate), 'MM/dd/yyyy') : '',
-    lengthOfStay: '',
-    currentLevel: youth?.level ? `Level ${youth.level}` : '',
-    legalStatus: '',
     
     treatmentGoals: '',
     goalProgress: '',
@@ -320,9 +322,30 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
   });
 
   const [isSaving, setIsSaving] = useState(false);
-  const [isExporting, setIsExporting] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
+  const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const autoSaveTimerRef = useRef<number | null>(null);
+  const pendingYouthIdRef = useRef<string | null>(null);
+  const pendingReportTypeRef = useRef<string>('court_report');
   const printRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
+  const { user } = useAuth();
+
+  // Calculate length of stay
+  const calculateLengthOfStay = (admissionDate?: Date | null): string => {
+    if (!admissionDate) return '';
+    const admission = new Date(admissionDate);
+    const now = new Date();
+    const diffTime = Math.abs(now.getTime() - admission.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    const months = Math.floor(diffDays / 30);
+    const days = diffDays % 30;
+    
+    if (months > 0) {
+      return `${months} month${months > 1 ? 's' : ''}, ${days} day${days !== 1 ? 's' : ''}`;
+    }
+    return `${days} day${days !== 1 ? 's' : ''}`;
+  };
 
   // Sync report data when youth changes or saved data exists
   useEffect(() => {
@@ -330,32 +353,146 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
       return;
     }
 
-    const baseData: Partial<CourtReportData> = {
-      youthName: `${youth.firstName} ${youth.lastName}`,
-      dateOfBirth: youth.dob ? format(new Date(youth.dob), 'MM/dd/yyyy') : '',
-      admissionDate: youth.admissionDate ? format(new Date(youth.admissionDate), 'MM/dd/yyyy') : '',
-      currentLevel: youth.level ? `Level ${youth.level}` : '',
-      schoolPlacement: youth.currentSchool || '',
+    // Auto-populate from youth profile - but only for empty fields
+    const getBaseDataIfEmpty = (existingData: CourtReportData): Partial<CourtReportData> => {
+      const result: Partial<CourtReportData> = {};
+
+      // Always update basic info that should stay in sync with youth profile
+      result.youthName = `${youth.firstName} ${youth.lastName}`;
+      result.dateOfBirth = youth.dob ? format(new Date(youth.dob), 'MM/dd/yyyy') : '';
+      result.currentPlacement = existingData.currentPlacement || 'Heartland Boys Home - Residential Treatment';
+
+      // Only populate these if they're currently empty
+      if (!existingData.schoolPlacement && youth.currentSchool) {
+        result.schoolPlacement = youth.currentSchool;
+      }
+      if (!existingData.academicProgress && youth.academicStrengths) {
+        result.academicProgress = `Strengths: ${youth.academicStrengths}`;
+      }
+      if (!existingData.educationalChallenges && youth.academicChallenges) {
+        result.educationalChallenges = youth.academicChallenges;
+      }
+      if (!existingData.vocationalGoals && youth.educationGoals) {
+        result.vocationalGoals = youth.educationGoals;
+      }
+      if (!existingData.medicationCompliance && youth.currentMedications) {
+        result.medicationCompliance = `Current medications: ${youth.currentMedications}`;
+      }
+      if (!existingData.treatmentGoals && youth.currentDiagnoses) {
+        result.treatmentGoals = `Diagnoses: ${youth.currentDiagnoses}`;
+      }
+      if (!existingData.familyVisitation && (youth.mother?.name || youth.father?.name)) {
+        result.familyVisitation = `Mother: ${youth.mother?.name || 'N/A'}, Father: ${youth.father?.name || 'N/A'}`;
+      }
+      if (!existingData.behavioralProgress && youth.strengthsTalents) {
+        result.behavioralProgress = `Strengths: ${youth.strengthsTalents}`;
+      }
+      if (!existingData.riskAssessment && youth.hyrnaRiskLevel) {
+        result.riskAssessment = `HYRNA Risk Level: ${youth.hyrnaRiskLevel}`;
+      }
+      if (!existingData.dischargePlanning && (youth.dischargePlan?.parents || youth.dischargePlan?.relative?.name)) {
+        result.dischargePlanning = `Planned discharge to: ${youth.dischargePlan.parents || youth.dischargePlan.relative?.name}`;
+      }
+      if (!existingData.dischargeTimeline && youth.dischargePlan?.estimatedLengthOfStayMonths) {
+        result.dischargeTimeline = `Estimated ${youth.dischargePlan.estimatedLengthOfStayMonths} months`;
+      }
+
+      return result;
     };
 
-    const savedData = localStorage.getItem(`court-report-${youth.id}`);
-
-    if (savedData) {
+    (async () => {
+      // Try Supabase draft first
       try {
-        const parsed = JSON.parse(savedData);
-        setReportData(prev => ({ ...prev, ...baseData, ...parsed }));
-        return;
-      } catch (error) {
-        console.error('Error loading saved court report data:', error);
-      }
-    }
+        const draft = await draftsService.get(youth.id, 'court_report', user?.id || null)
+        if (draft?.data) {
+          const savedData = draft.data as CourtReportData;
+          const baseData = getBaseDataIfEmpty(savedData);
+          // Saved data takes priority, baseData only fills empty fields
+          setReportData(prev => ({ ...prev, ...baseData, ...savedData }));
+          setAutoSaveStatus('saved');
+          return;
+        }
+      } catch {}
 
-    setReportData(prev => ({ ...prev, ...baseData }));
-  }, [youth]);
+      const savedDataStr = localStorage.getItem(`court-report-${youth.id}`);
+      if (savedDataStr) {
+        try {
+          const savedData = JSON.parse(savedDataStr) as CourtReportData;
+          const baseData = getBaseDataIfEmpty(savedData);
+          // Saved data takes priority, baseData only fills empty fields
+          setReportData(prev => ({ ...prev, ...baseData, ...savedData }));
+          return;
+        } catch (error) {
+          console.error('Error loading saved court report data:', error);
+        }
+      }
+
+      // No saved data, use base data for initial population
+      const baseData = getBaseDataIfEmpty(reportData);
+      setReportData(prev => ({ ...prev, ...baseData }));
+    })();
+  }, [youth, user?.id]);
 
   const handleInputChange = (field: keyof CourtReportData, value: string) => {
     setReportData(prev => ({ ...prev, [field]: value }));
   };
+
+  const persistDraft = useCallback(
+    async (data: CourtReportData, youthId: string, authorId: string | null) => {
+      if (!youthId) {
+        // Supabase table requires youth context, so skip remote draft when missing
+        localStorage.setItem('court-report-user-only', JSON.stringify(data));
+        return;
+      }
+
+      // Save to localStorage first (always works)
+      localStorage.setItem(`court-report-${youthId}`, JSON.stringify(data));
+
+      // Try to save to Supabase (best effort)
+      try {
+        await draftsService.save(youthId, pendingReportTypeRef.current, authorId, data);
+      } catch (error) {
+        // Supabase save failed, but localStorage succeeded
+        console.warn('Supabase save failed, data saved locally only:', error);
+      }
+    },
+    []
+  );
+
+  useEffect(() => {
+    if (!youth) {
+      return;
+    }
+
+    // Identify context for any pending autosave operations
+    pendingYouthIdRef.current = youth.id;
+    pendingReportTypeRef.current = 'court_report';
+
+    if (autoSaveTimerRef.current) {
+      window.clearTimeout(autoSaveTimerRef.current);
+    }
+
+    autoSaveTimerRef.current = window.setTimeout(async () => {
+      if (!pendingYouthIdRef.current) {
+        return;
+      }
+
+      setAutoSaveStatus('saving');
+      try {
+        await persistDraft(reportData, pendingYouthIdRef.current, user?.id || null);
+        setAutoSaveStatus('saved');
+      } catch (error) {
+        console.error('Autosave failed:', error);
+        setAutoSaveStatus('error');
+      }
+    }, 2000);
+
+    return () => {
+      if (autoSaveTimerRef.current) {
+        window.clearTimeout(autoSaveTimerRef.current);
+      }
+    };
+  }, [reportData, youth, user?.id, persistDraft]);
 
   const handleSave = async () => {
     if (!youth) {
@@ -368,89 +505,144 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
     }
 
     setIsSaving(true);
-    try {
-      localStorage.setItem(`court-report-${youth.id}`, JSON.stringify(reportData));
-      
-      toast({
-        title: "Report Saved",
-        description: "Court report has been saved successfully",
-      });
-    } catch (error) {
-      toast({
-        title: "Save Error",
-        description: "Failed to save the report",
-        variant: "destructive"
-      });
-    } finally {
-      setIsSaving(false);
-    }
-  };
+    setAutoSaveStatus('saving');
 
-  const handleExportPDF = async () => {
-    if (!printRef.current) return;
-    
-    setIsExporting(true);
-    try {
-      const filename = `${reportData.youthName.replace(/\s+/g, '_')}_Court_Report_${format(new Date(), 'yyyy-MM-dd')}.pdf`;
-      await exportElementToPDF(printRef.current, filename);
-      
-      toast({
-        title: "Export Successful",
-        description: "Court Report PDF has been downloaded",
-      });
-    } catch (error) {
-      toast({
-        title: "Export Error",
-        description: "Failed to export PDF",
-        variant: "destructive"
-      });
-    } finally {
-      setIsExporting(false);
-    }
-  };
+    // persistDraft now handles errors internally and always saves to localStorage
+    await persistDraft(reportData, youth.id, user?.id || null);
 
-  const handleExportDOCX = async () => {
-    if (!printRef.current) return;
-    
-    setIsExporting(true);
-    try {
-      const filename = `${reportData.youthName.replace(/\s+/g, '_')}_Court_Report_${format(new Date(), 'yyyy-MM-dd')}.docx`;
-      await exportElementToDocx(printRef.current, filename);
-      
-      toast({
-        title: "Export Successful",
-        description: "Court Report DOCX has been downloaded",
-      });
-    } catch (error) {
-      toast({
-        title: "Export Error",
-        description: "Failed to export DOCX",
-        variant: "destructive"
-      });
-    } finally {
-      setIsExporting(false);
-    }
+    setAutoSaveStatus('saved');
+    setIsSaving(false);
+
+    toast({
+      title: "Report Saved",
+      description: "Court report has been saved successfully",
+    });
   };
 
   const handlePrint = () => {
     window.print();
   };
 
-  const handleReset = () => {
+  const handleAutoPopulate = async () => {
+    if (!youth) {
+      toast({
+        title: "Error",
+        description: "No youth selected",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Check if any behavioral fields already have data
+    const hasExistingData = !!(
+      reportData.behavioralProgress ||
+      reportData.significantIncidents ||
+      reportData.goalProgress ||
+      reportData.programCompliance
+    );
+
+    if (hasExistingData) {
+      const confirmed = confirm(
+        'Some fields already contain data. Auto-populate will only update empty fields. Continue?'
+      );
+      if (!confirmed) return;
+    }
+
+    try {
+      // Fetch recent behavior points and progress notes
+      const [behaviorPoints, progressNotes] = await Promise.all([
+        getBehaviorPointsByYouth(youth.id),
+        getProgressNotesByYouth(youth.id)
+      ]);
+
+      // Filter to last 30 days
+      const thirtyDaysAgo = subMonths(new Date(), 1);
+      const recentBehavior = behaviorPoints.filter(bp =>
+        bp.date && new Date(bp.date) >= thirtyDaysAgo
+      );
+      const recentNotes = progressNotes.filter(note =>
+        note.date && new Date(note.date) >= thirtyDaysAgo
+      );
+
+      // Calculate average behavior points
+      const avgPoints = recentBehavior.length > 0
+        ? recentBehavior.reduce((sum, bp) => sum + (bp.totalPoints ?? 0), 0) / recentBehavior.length
+        : 0;
+
+      // Build behavioral progress summary
+      let behavioralSummary = `Average daily points over last 30 days: ${avgPoints.toFixed(1)}/15. `;
+      if (avgPoints >= 12) {
+        behavioralSummary += "Demonstrates consistent positive behavior and engagement.";
+      } else if (avgPoints >= 9) {
+        behavioralSummary += "Shows moderate progress with some behavioral challenges.";
+      } else {
+        behavioralSummary += "Continues to work on behavioral goals with staff support.";
+      }
+
+      // Extract significant incidents from notes
+      const incidentNotes = recentNotes.filter(note =>
+        note.note?.toLowerCase().includes('incident') ||
+        note.note?.toLowerCase().includes('altercation') ||
+        note.note?.toLowerCase().includes('conflict')
+      );
+      const significantIncidents = incidentNotes.length > 0
+        ? `${incidentNotes.length} incident(s) documented in the past 30 days. ` +
+          incidentNotes.slice(0, 3).map(n => n.note).join(' ')
+        : 'No significant behavioral incidents reported in the past 30 days.';
+
+      // Extract positive progress from notes
+      const positiveNotes = recentNotes.filter(note =>
+        note.note?.toLowerCase().includes('progress') ||
+        note.note?.toLowerCase().includes('improvement') ||
+        note.note?.toLowerCase().includes('positive')
+      );
+      const goalProgress = positiveNotes.length > 0
+        ? positiveNotes.slice(0, 3).map(n => n.note).join(' ')
+        : 'Youth continues to work toward treatment goals.';
+
+      const programCompliance = `Current level: ${youth.level}. ${avgPoints >= 10 ? 'Consistently meets program expectations.' : 'Working to improve program compliance.'}`;
+
+      // Only update empty fields
+      setReportData(prev => ({
+        ...prev,
+        behavioralProgress: prev.behavioralProgress || behavioralSummary,
+        significantIncidents: prev.significantIncidents || significantIncidents,
+        goalProgress: prev.goalProgress || goalProgress,
+        programCompliance: prev.programCompliance || programCompliance,
+      }));
+
+      toast({
+        title: "Data Auto-Populated",
+        description: "Empty fields have been filled with recent behavioral and progress data",
+      });
+    } catch (error) {
+      console.error('Error auto-populating data:', error);
+      toast({
+        title: "Error",
+        description: "Failed to auto-populate data",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleReset = async () => {
+    if (!youth) {
+      toast({
+        title: "Error",
+        description: "No youth selected for report",
+        variant: "destructive"
+      });
+      return;
+    }
+
     if (confirm('Are you sure you want to reset all form data? This action cannot be undone.')) {
-      setReportData({
+      const emptyData: CourtReportData = {
         youthName: youth ? `${youth.firstName} ${youth.lastName}` : '',
         dateOfBirth: youth?.dob ? format(new Date(youth.dob), 'MM/dd/yyyy') : '',
-        caseNumber: '',
-        courtDate: '',
         reportDate: format(new Date(), 'yyyy-MM-dd'),
         reportingOfficer: '',
-        
+
         currentPlacement: 'Heartland Boys Home - Residential Treatment',
-        admissionDate: youth?.admissionDate ? format(new Date(youth.admissionDate), 'MM/dd/yyyy') : '',
-        lengthOfStay: '',
-        currentLevel: youth?.level ? `Level ${youth.level}` : '',
-        legalStatus: '',
         
         treatmentGoals: '',
         goalProgress: '',
@@ -485,12 +677,19 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
         overallAssessment: '',
         courtRecommendations: '',
         additionalComments: ''
-      });
-      
-      if (youth) {
-        localStorage.removeItem(`court-report-${youth.id}`);
+      };
+
+      setReportData(emptyData);
+
+      try {
+        await draftsService.delete(youth.id, 'court_report', user?.id || null);
+      } catch (error) {
+        console.error('Failed to remove saved draft:', error);
       }
-      
+
+      localStorage.removeItem(`court-report-${youth.id}`);
+      setAutoSaveStatus('idle');
+
       toast({
         title: "Form Reset",
         description: "All form data has been cleared",
@@ -503,12 +702,80 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
       {/* Control Panel */}
       <Card className="no-print">
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2">
-              <Gavel className="h-5 w-5" />
-              Court Report
-            </CardTitle>
-            <div className="flex gap-2">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Gavel className="h-5 w-5" />
+                Court Report
+              </CardTitle>
+              <p className="text-sm text-slate-500 mt-1">
+                Use Auto-Populate to fill behavioral and progress data from the last 30 days
+              </p>
+              <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+                <span className="inline-flex items-center gap-1">
+                  <span className={`h-2 w-2 rounded-full ${
+                    autoSaveStatus === 'saving'
+                      ? 'bg-amber-500 animate-pulse'
+                      : autoSaveStatus === 'saved'
+                        ? 'bg-emerald-500'
+                        : autoSaveStatus === 'error'
+                          ? 'bg-red-500'
+                          : 'bg-slate-300'
+                  }`} />
+                  {autoSaveStatus === 'saving' && 'Autosaving…'}
+                  {autoSaveStatus === 'saved' && 'All changes saved'}
+                  {autoSaveStatus === 'error' && 'Autosave failed — last changes not saved'}
+                  {autoSaveStatus === 'idle' && 'Waiting for changes'}
+                </span>
+                {autoSaveStatus === 'error' && (
+                  <Button
+                    variant="link"
+                    size="sm"
+                    className="h-auto px-0 text-xs"
+                    onClick={async () => {
+                      if (!youth) return;
+                      setAutoSaveStatus('saving');
+                      try {
+                        await persistDraft(reportData, youth.id, user?.id || null);
+                        setAutoSaveStatus('saved');
+                        toast({
+                          title: "Retry Successful",
+                          description: "Draft was saved after retry",
+                        });
+                      } catch (retryError) {
+                        console.error('Retry save failed:', retryError);
+                        setAutoSaveStatus('error');
+                        toast({
+                          title: "Retry Failed",
+                          description: "Could not save the draft. Please try again.",
+                          variant: "destructive"
+                        });
+                      }
+                    }}
+                  >
+                    Retry now
+                  </Button>
+                )}
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="default"
+                size="sm"
+                onClick={handleAutoPopulate}
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                <Sparkles className="mr-2 h-4 w-4" />
+                Auto-Populate
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowPreview(!showPreview)}
+              >
+                <Eye className="mr-2 h-4 w-4" />
+                {showPreview ? 'Hide Preview' : 'Preview'}
+              </Button>
               <Button
                 variant="outline"
                 size="sm"
@@ -521,28 +788,10 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={handleExportPDF}
-                disabled={isExporting}
-              >
-                <FileDown className="mr-2 h-4 w-4" />
-                Export PDF
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleExportDOCX}
-                disabled={isExporting}
-              >
-                <FileDown className="mr-2 h-4 w-4" />
-                Export DOCX
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
                 onClick={handlePrint}
               >
                 <Printer className="mr-2 h-4 w-4" />
-                Print
+                Print Report
               </Button>
               <Button
                 variant="outline"
@@ -563,32 +812,58 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
         dangerouslySetInnerHTML={{
           __html: `
             @media print {
-              body { background: #fff !important; }
-              .no-print { display: none !important; }
-              .print-root { display: block !important; }
-              .print-container { padding: 0 !important; }
+              @page {
+                margin: 0.75in;
+                size: letter;
+              }
+
+              body {
+                background: #fff !important;
+                margin: 0;
+                padding: 0;
+              }
+
+              .no-print {
+                display: none !important;
+              }
+
+              .print-root {
+                display: block !important;
+              }
+
+              .print-container {
+                padding: 0 !important;
+                max-width: 100% !important;
+              }
+
               .print-container * {
                 -webkit-print-color-adjust: exact !important;
                 print-color-adjust: exact !important;
+              }
+
+              h1, h2, h3, h4, h5, h6 {
+                page-break-after: avoid;
+                break-after: avoid;
+              }
+
+              img {
+                page-break-inside: avoid;
+                break-inside: avoid;
               }
             }
           `,
         }}
       />
 
-      {/* Report editing form and printable preview */}
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] items-start">
+      {/* Report editing form */}
+      <div className="max-w-5xl mx-auto">
         <div className="no-print rounded-3xl border border-red-200 bg-white p-8 shadow-sm">
         {/* Header */}
-        <div className="text-center mb-6 bg-gradient-to-r from-red-800 via-red-700 to-amber-600 text-white p-6 rounded-lg">
-          <img 
-            src={`${import.meta.env.BASE_URL}files/BoysHomeLogo.png`} 
-            alt="Heartland Boys Home Logo" 
-            className="h-16 mx-auto mb-4 object-contain" 
-          />
-          <h1 className="text-3xl font-bold mb-2">Heartland Boys Home</h1>
-          <h2 className="text-xl font-semibold">Court Report</h2>
-        </div>
+        <ReportHeader
+          subtitle="Court Report"
+          detail={getCourtHeaderDetail(reportData.reportDate)}
+          className="mb-6"
+        />
 
         {/* Basic Information */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
@@ -607,25 +882,6 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
               id="dateOfBirth"
               value={reportData.dateOfBirth}
               onChange={(e) => handleInputChange('dateOfBirth', e.target.value)}
-              className="mt-1"
-            />
-          </div>
-          <div>
-            <Label htmlFor="caseNumber">Case Number</Label>
-            <Input
-              id="caseNumber"
-              value={reportData.caseNumber}
-              onChange={(e) => handleInputChange('caseNumber', e.target.value)}
-              className="mt-1"
-            />
-          </div>
-          <div>
-            <Label htmlFor="courtDate">Court Date</Label>
-            <Input
-              id="courtDate"
-              type="date"
-              value={reportData.courtDate}
-              onChange={(e) => handleInputChange('courtDate', e.target.value)}
               className="mt-1"
             />
           </div>
@@ -650,62 +906,17 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
           </div>
         </div>
 
-        {/* Current Status */}
+        {/* Current Placement */}
         <div className="mb-8">
-          <h3 className="text-lg font-semibold mb-4 text-red-700 border-b border-red-200 pb-2">Current Status</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="currentPlacement">Current Placement</Label>
-              <Input
-                id="currentPlacement"
-                value={reportData.currentPlacement}
-                onChange={(e) => handleInputChange('currentPlacement', e.target.value)}
-                className="mt-1"
-              />
-            </div>
-            <div>
-              <Label htmlFor="admissionDate">Admission Date</Label>
-              <Input
-                id="admissionDate"
-                value={reportData.admissionDate}
-                onChange={(e) => handleInputChange('admissionDate', e.target.value)}
-                className="mt-1"
-              />
-            </div>
-            <div>
-              <Label htmlFor="lengthOfStay">Length of Stay</Label>
-              <Input
-                id="lengthOfStay"
-                value={reportData.lengthOfStay}
-                onChange={(e) => handleInputChange('lengthOfStay', e.target.value)}
-                className="mt-1"
-                placeholder="e.g., 6 months"
-              />
-            </div>
-            <div>
-              <Label htmlFor="currentLevel">Current Level</Label>
-              <Select value={reportData.currentLevel} onValueChange={(value) => handleInputChange('currentLevel', value)}>
-                <SelectTrigger className="mt-1">
-                  <SelectValue placeholder="Select level" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Level 1">Level 1</SelectItem>
-                  <SelectItem value="Level 2">Level 2</SelectItem>
-                  <SelectItem value="Level 3">Level 3</SelectItem>
-                  <SelectItem value="Level 4">Level 4</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="md:col-span-2">
-              <Label htmlFor="legalStatus">Legal Status</Label>
-              <Input
-                id="legalStatus"
-                value={reportData.legalStatus}
-                onChange={(e) => handleInputChange('legalStatus', e.target.value)}
-                className="mt-1"
-                placeholder="e.g., Court-ordered placement, Voluntary admission"
-              />
-            </div>
+          <h3 className="text-lg font-semibold mb-4 text-red-700 border-b border-red-200 pb-2">Current Placement</h3>
+          <div>
+            <Label htmlFor="currentPlacement">Current Placement</Label>
+            <Input
+              id="currentPlacement"
+              value={reportData.currentPlacement}
+              onChange={(e) => handleInputChange('currentPlacement', e.target.value)}
+              className="mt-1"
+            />
           </div>
         </div>
 
@@ -1067,7 +1278,16 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
           </div>
         </div>
       </div>
-      <div ref={printRef} className="print-root print-container">
+      
+      {/* Preview section - shown when user clicks Preview button */}
+      {showPreview && (
+        <div className="max-w-5xl mx-auto mt-6">
+          <CourtReportPreview data={reportData} />
+        </div>
+      )}
+      
+      {/* Hidden preview for printing/exporting only */}
+      <div ref={printRef} className="hidden print:block">
         <CourtReportPreview data={reportData} />
       </div>
       </div>

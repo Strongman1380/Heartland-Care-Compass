@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Header } from "@/components/layout/Header";
-import { CaseNotes } from "@/components/notes/CaseNotes";
+import { EnhancedCaseNotes } from "@/components/notes/EnhancedCaseNotes";
 import { YouthSelector } from "@/components/common/YouthSelector";
 
 const CaseNotesPage = () => {
@@ -26,14 +26,14 @@ const CaseNotesPage = () => {
         </div>
         
         {!selectedYouthId ? (
-          <YouthSelector 
+          <YouthSelector
             onSelectYouth={handleYouthSelect}
             selectedYouthId={selectedYouthId}
           />
         ) : (
-          <CaseNotes 
-            youthId={selectedYouthId} 
-            youth={null} 
+          <EnhancedCaseNotes
+            youthId={selectedYouthId}
+            youth={null}
             onYouthChange={handleYouthSelect}
             onBackToSelection={handleBackToSelection}
           />

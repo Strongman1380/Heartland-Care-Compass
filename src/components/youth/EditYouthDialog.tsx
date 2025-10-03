@@ -3,6 +3,8 @@ import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { useYouth } from "@/hooks/useSupabase";
 import { type Youth } from "@/integrations/supabase/services";
@@ -13,6 +15,8 @@ import { EducationTab } from "./EducationTab";
 import { MedicalTab } from "./MedicalTab";
 import { MentalHealthTab } from "./MentalHealthTab";
 import { format } from "date-fns";
+import { parseYouthProfileText } from "@/services/aiService";
+import { Upload, Loader2, CheckCircle, AlertCircle } from "lucide-react";
 
 interface EditYouthDialogProps {
   youth: Youth;
@@ -24,6 +28,11 @@ interface EditYouthDialogProps {
 export const EditYouthDialog = ({ youth, open, onClose, onSuccess }: EditYouthDialogProps) => {
   const [activeTab, setActiveTab] = useState("personal");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Import feature state
+  const [importText, setImportText] = useState("");
+  const [isImporting, setIsImporting] = useState(false);
+  const [importStatus, setImportStatus] = useState<'idle' | 'success' | 'error'>('idle');
   
   // Use Supabase hook for youth operations
   const { updateYouth } = useYouth();
@@ -144,6 +153,123 @@ export const EditYouthDialog = ({ youth, open, onClose, onSuccess }: EditYouthDi
       age--;
     }
     return age;
+  };
+
+  const handleImportProfile = async () => {
+    if (!importText.trim()) {
+      toast.error("Please paste some profile text to import");
+      return;
+    }
+
+    setIsImporting(true);
+    setImportStatus('idle');
+
+    try {
+      const response = await parseYouthProfileText(importText);
+
+      if (!response.success || !response.data) {
+        throw new Error(response.error || "Failed to parse profile text");
+      }
+
+      const parsedData = response.data.parsedData || response.data;
+
+      // Merge parsed data with existing form data
+      const updatedFormData: YouthFormData = {
+        ...formData,
+        ...(parsedData.firstName && { firstName: parsedData.firstName }),
+        ...(parsedData.lastName && { lastName: parsedData.lastName }),
+        ...(parsedData.dob && { dob: parsedData.dob }),
+        ...(parsedData.age && { age: parsedData.age.toString() }),
+        ...(parsedData.sex && { sex: parsedData.sex }),
+        ...(parsedData.race && { race: parsedData.race }),
+        ...(parsedData.religion && { religion: parsedData.religion }),
+        ...(parsedData.placeOfBirth && { placeOfBirth: parsedData.placeOfBirth }),
+        ...(parsedData.socialSecurityNumber && { socialSecurityNumber: parsedData.socialSecurityNumber }),
+        ...(parsedData.address && { address: parsedData.address }),
+        ...(parsedData.height && { height: parsedData.height }),
+        ...(parsedData.weight && { weight: parsedData.weight }),
+        ...(parsedData.hairColor && { hairColor: parsedData.hairColor }),
+        ...(parsedData.eyeColor && { eyeColor: parsedData.eyeColor }),
+        ...(parsedData.tattoosScars && { tattoosScars: parsedData.tattoosScars }),
+        ...(parsedData.admissionDate && { admissionDate: parsedData.admissionDate }),
+        ...(parsedData.level && { level: parsedData.level.toString(), currentLevel: parsedData.level }),
+        ...(parsedData.legalGuardian && { legalGuardian: parsedData.legalGuardian }),
+        ...(parsedData.guardianRelationship && { guardianRelationship: parsedData.guardianRelationship }),
+        ...(parsedData.guardianContact && { guardianContact: parsedData.guardianContact }),
+        ...(parsedData.guardianPhone && { guardianPhone: parsedData.guardianPhone }),
+        ...(parsedData.guardianEmail && { guardianEmail: parsedData.guardianEmail }),
+        ...(parsedData.probationOfficer && { probationOfficer: parsedData.probationOfficer }),
+        ...(parsedData.probationContact && { probationContact: parsedData.probationContact }),
+        ...(parsedData.probationPhone && { probationPhone: parsedData.probationPhone }),
+        ...(parsedData.placementAuthority && { placementAuthority: parsedData.placementAuthority }),
+        ...(parsedData.estimatedStay && { estimatedStay: parsedData.estimatedStay }),
+        ...(parsedData.referralSource && { referralSource: parsedData.referralSource }),
+        ...(parsedData.referralReason && { referralReason: parsedData.referralReason }),
+        ...(parsedData.priorPlacements && { priorPlacements: parsedData.priorPlacements }),
+        ...(parsedData.numPriorPlacements && { numPriorPlacements: parsedData.numPriorPlacements }),
+        ...(parsedData.lengthRecentPlacement && { lengthRecentPlacement: parsedData.lengthRecentPlacement }),
+        ...(parsedData.courtInvolvement && { courtInvolvement: parsedData.courtInvolvement }),
+        ...(parsedData.currentSchool && { currentSchool: parsedData.currentSchool }),
+        ...(parsedData.grade && { grade: parsedData.grade }),
+        ...(parsedData.hasIEP !== undefined && { hasIEP: parsedData.hasIEP }),
+        ...(parsedData.academicStrengths && { academicStrengths: parsedData.academicStrengths }),
+        ...(parsedData.academicChallenges && { academicChallenges: parsedData.academicChallenges }),
+        ...(parsedData.educationGoals && { educationGoals: parsedData.educationGoals }),
+        ...(parsedData.schoolContact && { schoolContact: parsedData.schoolContact }),
+        ...(parsedData.schoolPhone && { schoolPhone: parsedData.schoolPhone }),
+        ...(parsedData.physician && { physician: parsedData.physician }),
+        ...(parsedData.physicianPhone && { physicianPhone: parsedData.physicianPhone }),
+        ...(parsedData.insuranceProvider && { insuranceProvider: parsedData.insuranceProvider }),
+        ...(parsedData.policyNumber && { policyNumber: parsedData.policyNumber }),
+        ...(parsedData.allergies && { allergies: parsedData.allergies }),
+        ...(parsedData.medicalConditions && { medicalConditions: parsedData.medicalConditions }),
+        ...(parsedData.medicalRestrictions && { medicalRestrictions: parsedData.medicalRestrictions }),
+        ...(parsedData.currentDiagnoses && { currentDiagnoses: parsedData.currentDiagnoses }),
+        ...(parsedData.diagnoses && { diagnoses: parsedData.diagnoses }),
+        ...(parsedData.traumaHistory && { traumaHistory: parsedData.traumaHistory }),
+        ...(parsedData.previousTreatment && { previousTreatment: parsedData.previousTreatment }),
+        ...(parsedData.currentCounseling && { currentCounseling: parsedData.currentCounseling }),
+        ...(parsedData.therapistName && { therapistName: parsedData.therapistName }),
+        ...(parsedData.therapistContact && { therapistContact: parsedData.therapistContact }),
+        ...(parsedData.sessionFrequency && { sessionFrequency: parsedData.sessionFrequency }),
+        ...(parsedData.sessionTime && { sessionTime: parsedData.sessionTime }),
+        ...(parsedData.selfHarmHistory && { selfHarmHistory: parsedData.selfHarmHistory }),
+        ...(parsedData.lastIncidentDate && { lastIncidentDate: parsedData.lastIncidentDate }),
+        ...(parsedData.hasSafetyPlan !== undefined && { hasSafetyPlan: parsedData.hasSafetyPlan }),
+        ...(parsedData.onSubsystem !== undefined && { onSubsystem: parsedData.onSubsystem }),
+        ...(parsedData.pointsInCurrentLevel !== undefined && { pointsInCurrentLevel: parsedData.pointsInCurrentLevel }),
+        ...(parsedData.dailyPointsForPrivileges !== undefined && { dailyPointsForPrivileges: parsedData.dailyPointsForPrivileges }),
+        ...(parsedData.hyrnaRiskLevel && { hyrnaRiskLevel: parsedData.hyrnaRiskLevel }),
+        ...(parsedData.hyrnaScore && { hyrnaScore: parsedData.hyrnaScore }),
+        ...(parsedData.hyrnaAssessmentDate && { hyrnaAssessmentDate: parsedData.hyrnaAssessmentDate }),
+      };
+
+      setFormData(updatedFormData);
+      setImportStatus('success');
+      
+      // Show warnings if any
+      if (parsedData.warnings && parsedData.warnings.length > 0) {
+        toast.warning("Import completed with warnings", {
+          description: parsedData.warnings.join(", ")
+        });
+      } else {
+        toast.success("Profile data imported successfully!", {
+          description: `Confidence: ${parsedData.confidence ? Math.round(parsedData.confidence * 100) : 'N/A'}%`
+        });
+      }
+
+      // Clear import text and switch to personal tab
+      setImportText("");
+      setActiveTab("personal");
+    } catch (error) {
+      console.error("Import error:", error);
+      setImportStatus('error');
+      toast.error("Failed to import profile", {
+        description: error instanceof Error ? error.message : "Unknown error occurred"
+      });
+    } finally {
+      setIsImporting(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -327,6 +453,7 @@ export const EditYouthDialog = ({ youth, open, onClose, onSuccess }: EditYouthDi
 
   // Tab navigation
   const tabs = [
+    { id: "import", label: "Import" },
     { id: "personal", label: "Personal" },
     { id: "background", label: "Background" },
     { id: "education", label: "Education" },
@@ -346,11 +473,88 @@ export const EditYouthDialog = ({ youth, open, onClose, onSuccess }: EditYouthDi
 
         <form onSubmit={handleSubmit} className="space-y-4 py-2">
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="grid grid-cols-5 mb-4">
+            <TabsList className="grid grid-cols-6 mb-4">
               {tabs.map(tab => (
                 <TabsTrigger key={tab.id} value={tab.id}>{tab.label}</TabsTrigger>
               ))}
             </TabsList>
+            
+            <TabsContent value="import">
+              <div className="space-y-4">
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <div className="flex items-start gap-3">
+                    <Upload className="w-5 h-5 text-blue-600 mt-0.5" />
+                    <div>
+                      <h3 className="font-semibold text-blue-900 mb-1">AI-Powered Profile Import</h3>
+                      <p className="text-sm text-blue-700">
+                        Paste any youth profile text below (from documents, emails, forms, etc.) and our AI will automatically extract and populate the profile fields.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="import-text">Profile Text</Label>
+                  <Textarea
+                    id="import-text"
+                    value={importText}
+                    onChange={(e) => setImportText(e.target.value)}
+                    placeholder="Paste youth profile information here...&#10;&#10;Example:&#10;Name: John Doe&#10;DOB: 01/15/2008&#10;Address: 123 Main St, Springfield, IL 62701&#10;Guardian: Jane Doe (Mother)&#10;School: Springfield High School, Grade 10&#10;Medical: Allergic to penicillin&#10;..."
+                    rows={12}
+                    className="font-mono text-sm"
+                  />
+                  <p className="text-xs text-gray-500">
+                    The AI will intelligently parse the text and map it to the appropriate fields. You can review and edit the imported data before saving.
+                  </p>
+                </div>
+
+                {importStatus === 'success' && (
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex items-center gap-2">
+                    <CheckCircle className="w-5 h-5 text-green-600" />
+                    <p className="text-sm text-green-800">Profile data imported successfully! Review the other tabs to verify.</p>
+                  </div>
+                )}
+
+                {importStatus === 'error' && (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-center gap-2">
+                    <AlertCircle className="w-5 h-5 text-red-600" />
+                    <p className="text-sm text-red-800">Failed to import profile. Please check the text format and try again.</p>
+                  </div>
+                )}
+
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    onClick={handleImportProfile}
+                    disabled={isImporting || !importText.trim()}
+                    className="bg-blue-600 hover:bg-blue-700"
+                  >
+                    {isImporting ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Importing...
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="w-4 h-4 mr-2" />
+                        Import Profile Data
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setImportText("");
+                      setImportStatus('idle');
+                    }}
+                    disabled={isImporting}
+                  >
+                    Clear
+                  </Button>
+                </div>
+              </div>
+            </TabsContent>
             
             <TabsContent value="personal">
               <PersonalInfoTab 

@@ -1,4 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
+import { draftsService } from '@/integrations/supabase/draftsService'
+import { useAuth } from '@/contexts/SupabaseAuthContext'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -403,19 +405,17 @@ export const RiskAssessment = ({ youthId, youth, onAssessmentUpdated }: RiskAsse
     setAutoSaveTimer(timer);
   }, [autoSaveTimer]);
 
+  const { user } = useAuth()
   const autoSave = async () => {
     if (!hasUnsavedChanges || isAutoSaving) return;
     
     try {
       setIsAutoSaving(true);
       
-      // Save to localStorage as draft
+      // Save to Supabase draft and local
       const draftKey = `risk-assessment-draft-${youthId}`;
-      localStorage.setItem(draftKey, JSON.stringify({
-        ...assessment,
-        questionResponses,
-        savedAt: new Date().toISOString()
-      }));
+      try { await draftsService.save(youthId, 'risk_assessment', (user as any)?.id || null, { ...assessment, questionResponses, savedAt: new Date().toISOString() }) } catch {}
+      localStorage.setItem(draftKey, JSON.stringify({ ...assessment, questionResponses, savedAt: new Date().toISOString() }));
       
       setHasUnsavedChanges(false);
 
@@ -427,29 +427,46 @@ export const RiskAssessment = ({ youthId, youth, onAssessmentUpdated }: RiskAsse
     }
   };
 
-  // Load draft on component mount
+  // Load draft on component mount (prefer Supabase)
   useEffect(() => {
-    const draftKey = `risk-assessment-draft-${youthId}`;
-    const draft = localStorage.getItem(draftKey);
-    
-    if (draft && !isLoading) {
+    (async () => {
       try {
-        const draftData = JSON.parse(draft);
-        setAssessment(prev => ({
-          ...prev,
-          ...draftData,
-          assessmentDate: new Date(draftData.assessmentDate),
-          createdAt: new Date(draftData.createdAt),
-          updatedAt: new Date(draftData.updatedAt)
-        }));
-        setQuestionResponses(draftData.questionResponses || {});
-        setHasUnsavedChanges(true);
-        toast.info("Draft loaded from auto-save", { duration: 2000 });
-      } catch (error) {
-        console.error("Failed to load draft:", error);
+        const remote = await draftsService.get(youthId, 'risk_assessment', (user as any)?.id || null)
+        if (remote?.data && !isLoading) {
+          const draftData: any = remote.data
+          setAssessment(prev => ({
+            ...prev,
+            ...draftData,
+            assessmentDate: draftData.assessmentDate ? new Date(draftData.assessmentDate) : prev.assessmentDate,
+            createdAt: draftData.createdAt ? new Date(draftData.createdAt) : prev.createdAt,
+            updatedAt: draftData.updatedAt ? new Date(draftData.updatedAt) : prev.updatedAt
+          }));
+          setQuestionResponses(draftData.questionResponses || {});
+          setHasUnsavedChanges(true);
+          return;
+        }
+      } catch {}
+      const draftKey = `risk-assessment-draft-${youthId}`;
+      const draft = localStorage.getItem(draftKey);
+      if (draft && !isLoading) {
+        try {
+          const draftData = JSON.parse(draft);
+          setAssessment(prev => ({
+            ...prev,
+            ...draftData,
+            assessmentDate: new Date(draftData.assessmentDate),
+            createdAt: new Date(draftData.createdAt),
+            updatedAt: new Date(draftData.updatedAt)
+          }));
+          setQuestionResponses(draftData.questionResponses || {});
+          setHasUnsavedChanges(true);
+          toast.info("Draft loaded from auto-save", { duration: 2000 });
+        } catch (error) {
+          console.error("Failed to load draft:", error);
+        }
       }
-    }
-  }, [youthId, isLoading]);
+    })();
+  }, [youthId, isLoading, user]);
 
   // Auto-save on unmount or when leaving the component
   useEffect(() => {
@@ -601,12 +618,16 @@ export const RiskAssessment = ({ youthId, youth, onAssessmentUpdated }: RiskAsse
       const { exportHTMLToPDF } = await import('@/utils/export');
       const { format } = await import('date-fns');
 
+      // Calculate scores for export
+      const calculatedTotalScore = Object.values(assessment.domains).reduce((sum, domain) => sum + domain.score, 0);
+      const calculatedMaxScore = Object.values(assessment.domains).reduce((sum, domain) => sum + domain.maxScore, 0);
+
       const exportData = {
         youth: youth,
         assessment: assessment,
         exportDate: new Date().toLocaleDateString(),
-        totalScore,
-        maxPossibleScore
+        totalScore: calculatedTotalScore,
+        maxPossibleScore: calculatedMaxScore
       };
 
       const html = generateRiskAssessmentHTML(exportData);
@@ -676,7 +697,7 @@ export const RiskAssessment = ({ youthId, youth, onAssessmentUpdated }: RiskAsse
         </head>
         <body>
           <div class="header">
-            <img src="${import.meta.env.BASE_URL}files/BoysHomeLogo.png" alt="Heartland Boys Home Logo" class="logo" />
+            <img src="${import.meta.env.BASE_URL}files/BoysHomeLogo.png" alt="Heartland Boys Home Logo" class="logo" crossorigin="anonymous" />
             <h1>Heartland Boys Home</h1>
             <h2>HYRNA Risk Assessment Report</h2>
             <p>Generated on ${data.exportDate}</p>

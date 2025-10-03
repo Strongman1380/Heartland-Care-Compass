@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useEffect, useState } from "react";
+import { alertsService } from '@/integrations/supabase/alertsService'
 import { toast } from "sonner";
 import { useYouth } from "@/hooks/useSupabase";
 import { type Youth } from "@/integrations/supabase/services";
@@ -152,21 +153,25 @@ const Alerts = () => {
   useEffect(() => {
     // Load youths from Supabase
     loadYouths();
-    
-    // Load alerts from localStorage (for now, until we create Supabase alerts table)
-    const savedAlerts = localStorage.getItem('heartland_alerts');
-    if (savedAlerts) {
+    // Load alerts from Supabase (fallback to empty)
+    (async () => {
       try {
-        const parsedAlerts = JSON.parse(savedAlerts).map((alert: any) => ({
-          ...alert,
-          createdAt: new Date(alert.createdAt)
-        }));
-        setAlerts(parsedAlerts);
-      } catch (error) {
-        console.error('Error parsing saved alerts:', error);
-      }
-    }
-    
+        const remote = await alertsService.list();
+        const mapped = remote.map(r => ({
+          id: r.id,
+          type: (r.level === 'urgent' ? 'urgent' : r.level === 'warning' ? 'warning' : 'info') as any,
+          title: r.title,
+          description: r.body || '',
+          timestamp: 'Now',
+          priority: (r.level === 'urgent' ? 'high' : 'medium') as any,
+          createdAt: new Date(r.created_at),
+          resolved: r.status === 'closed',
+          category: 'System'
+        })) as Alert[]
+        setAlerts(mapped)
+      } catch {}
+    })();
+
     // Check notification permission status
     if ('Notification' in window) {
       setNotificationsEnabled(Notification.permission === 'granted');
@@ -211,7 +216,7 @@ const Alerts = () => {
     setIsCreateDialogOpen(true);
   };
 
-  const createAlert = () => {
+  const createAlert = async () => {
     if (!newAlert.title.trim() || !newAlert.description.trim()) {
       toast.error('Please fill in all required fields');
       return;
@@ -225,9 +230,21 @@ const Alerts = () => {
       resolved: false
     };
 
-    const updatedAlerts = [alert, ...alerts];
-    setAlerts(updatedAlerts);
-    localStorage.setItem('heartland_alerts', JSON.stringify(updatedAlerts));
+    // Save to Supabase and update UI
+    try { await alertsService.save({ title: alert.title, body: alert.description, level: alert.type, status: 'open' }) } catch {}
+    const remote = await alertsService.list();
+    const mapped = remote.map(r => ({
+      id: r.id,
+      type: (r.level === 'urgent' ? 'urgent' : r.level === 'warning' ? 'warning' : 'info') as any,
+      title: r.title,
+      description: r.body || '',
+      timestamp: 'Now',
+      priority: (r.level === 'urgent' ? 'high' : 'medium') as any,
+      createdAt: new Date(r.created_at),
+      resolved: r.status === 'closed',
+      category: 'System'
+    })) as Alert[]
+    setAlerts(mapped)
 
     // Send push notification if enabled
     if (notificationsEnabled) {
@@ -243,12 +260,12 @@ const Alerts = () => {
     resetNewAlert();
   };
 
-  const resolveAlert = (alertId: string) => {
+  const resolveAlert = async (alertId: string) => {
     const updatedAlerts = alerts.map(alert => 
       alert.id === alertId ? { ...alert, resolved: true } : alert
     );
     setAlerts(updatedAlerts);
-    localStorage.setItem('heartland_alerts', JSON.stringify(updatedAlerts));
+    try { await alertsService.save({ id: alertId as any, title: (alerts.find(a=>a.id===alertId)?.title)||'', body: (alerts.find(a=>a.id===alertId)?.description)||'', level: (alerts.find(a=>a.id===alertId)?.type)||'info', status: 'closed' }) } catch {}
     toast.success('Alert resolved');
   };
 
@@ -264,10 +281,10 @@ const Alerts = () => {
     });
   };
 
-  const deleteAlert = (alertId: string) => {
+  const deleteAlert = async (alertId: string) => {
+    try { await alertsService.delete(alertId) } catch {}
     const updatedAlerts = alerts.filter(alert => alert.id !== alertId);
     setAlerts(updatedAlerts);
-    localStorage.setItem('heartland_alerts', JSON.stringify(updatedAlerts));
     toast.success('Alert deleted');
   };
 

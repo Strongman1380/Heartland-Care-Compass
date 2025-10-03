@@ -1,0 +1,207 @@
+[
+  {
+    "incidentNumber": "INC-2025-00001",
+    "status": "submitted",
+    "incidentDate": "2025-01-15",
+    "incidentTime": "14:30",
+    "reportedDate": "2025-01-15",
+    "location": "Common Room",
+    "incidentType": "behavioral",
+    "severity": "moderate",
+    "youthName": "Sample Youth A",
+    "youthAge": 15,
+    "summary": "Youth became agitated during group activity and raised voice at staff",
+    "description": "During the afternoon group activity session, Youth A became increasingly agitated when asked to participate in the team-building exercise. After approximately 10 minutes, the youth raised their voice at staff member John Smith, using inappropriate language. The youth was redirected multiple times but continued to escalate. No physical aggression occurred.",
+    "antecedents": "Youth had received disappointing news from family earlier in the day. Youth appeared withdrawn during lunch and declined to participate in earlier activities.",
+    "behavior": "Raised voice, used inappropriate language, refused redirection, paced around room, crossed arms and turned away from staff.",
+    "consequences": "Youth was given space to calm down. After 15 minutes, youth apologized to staff and agreed to take a break. Youth participated appropriately in evening activities.",
+    "staffInvolved": ["John Smith", "Mary Johnson"],
+    "witnesses": [
+      {
+        "name": "Mary Johnson",
+        "role": "Staff",
+        "statement": "I observed the youth becoming increasingly agitated. Staff member John Smith handled the situation appropriately with de-escalation techniques."
+      }
+    ],
+    "othersInvolved": ["Youth B (present in room)"],
+    "immediateActions": [
+      {
+        "timestamp": "2025-01-15T14:35:00Z",
+        "action": "Verbal de-escalation attempted",
+        "takenBy": "John Smith",
+        "notes": "Used calm voice, offered choices, maintained safe distance"
+      },
+      {
+        "timestamp": "2025-01-15T14:40:00Z",
+        "action": "Provided space for youth to calm down",
+        "takenBy": "John Smith",
+        "notes": "Youth moved to quiet corner of room voluntarily"
+      },
+      {
+        "timestamp": "2025-01-15T14:55:00Z",
+        "action": "Check-in with youth",
+        "takenBy": "Mary Johnson",
+        "notes": "Youth was calm and ready to discuss what happened"
+      }
+    ],
+    "interventionsUsed": ["Verbal de-escalation", "Space and time", "Redirection"],
+    "medicalAttentionRequired": false,
+    "parentsNotified": true,
+    "parentsNotifiedAt": "2025-01-15T16:00:00Z",
+    "parentsNotifiedBy": "John Smith",
+    "authoritiesNotified": false,
+    "attachments": [],
+    "photosTaken": false,
+    "videoRecorded": false,
+    "signatures": [
+      {
+        "staffName": "John Smith",
+        "staffId": "JS001",
+        "signatureData": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+        "timestamp": "2025-01-15T17:00:00Z"
+      }
+    ],
+    "followUp": {
+      "required": true,
+      "dueDate": "2025-01-17",
+      "assignedTo": "Mary Johnson",
+      "description": "Follow up with youth about coping strategies and family communication"
+    },
+    "additionalNotes": "Youth has been doing well overall. This appears to be an isolated incident related to family stress."
+  },
+  {
+    "incidentNumber": "INC-2025-00002",
+    "status": "submitted",
+    "incidentDate": "2025-01-14",
+    "incidentTime": "09:15",
+    "reportedDate": "2025-01-14",
+    "location": "Bedroom 3",
+    "incidentType": "medical",
+    "severity": "serious",
+    "youthName": "Sample Youth B",
+    "youthAge": 16,
+    "summary": "Youth complained of severe headache and dizziness, required medical evaluation",
+    "description": "Youth B approached staff at 9:15 AM complaining of severe headache and dizziness. Youth appeared pale and was holding their head. Staff immediately assessed the situation and determined medical evaluation was necessary. Youth's vital signs were taken: BP 130/85, pulse 88, temp 98.6°F. Youth was able to walk with assistance to the medical office.",
+    "antecedents": "Youth mentioned not sleeping well the previous night. No recent illness or injury reported.",
+    "behavior": "Youth appropriately communicated symptoms and cooperated with staff assessment.",
+    "consequences": "Youth was evaluated by on-site nurse, then transported to urgent care for further evaluation. Diagnosed with migraine headache. Prescribed medication and rest. Youth returned to facility same day.",
+    "staffInvolved": ["Sarah Williams", "Nurse Thompson"],
+    "witnesses": [
+      {
+        "name": "Nurse Thompson",
+        "role": "Licensed Nurse",
+        "statement": "Youth presented with symptoms consistent with migraine. Vital signs were within normal limits. Recommended urgent care evaluation as precaution."
+      }
+    ],
+    "othersInvolved": [],
+    "immediateActions": [
+      {
+        "timestamp": "2025-01-14T09:15:00Z",
+        "action": "Initial assessment by staff",
+        "takenBy": "Sarah Williams",
+        "notes": "Youth complained of severe headache and dizziness"
+      },
+      {
+        "timestamp": "2025-01-14T09:20:00Z",
+        "action": "Vital signs taken",
+        "takenBy": "Nurse Thompson",
+        "notes": "BP 130/85, pulse 88, temp 98.6°F"
+      },
+      {
+        "timestamp": "2025-01-14T09:30:00Z",
+        "action": "Youth moved to quiet room",
+        "takenBy": "Sarah Williams",
+        "notes": "Lights dimmed, youth resting"
+      },
+      {
+        "timestamp": "2025-01-14T10:00:00Z",
+        "action": "Transported to urgent care",
+        "takenBy": "Sarah Williams",
+        "notes": "Youth accompanied by staff"
+      }
+    ],
+    "interventionsUsed": ["Medical assessment", "Vital signs monitoring", "Transport to medical facility"],
+    "medicalAttentionRequired": true,
+    "medicalDetails": "Youth evaluated at Heartland Urgent Care. Diagnosed with migraine headache. Prescribed Ibuprofen 400mg and rest. No concerning findings. Youth returned to facility at 12:30 PM. Follow-up with primary care physician scheduled for next week.",
+    "parentsNotified": true,
+    "parentsNotifiedAt": "2025-01-14T09:45:00Z",
+    "parentsNotifiedBy": "Sarah Williams",
+    "authoritiesNotified": false,
+    "attachments": [],
+    "photosTaken": false,
+    "videoRecorded": false,
+    "signatures": [
+      {
+        "staffName": "Sarah Williams",
+        "staffId": "SW002",
+        "signatureData": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+        "timestamp": "2025-01-14T14:00:00Z"
+      },
+      {
+        "staffName": "Nurse Thompson",
+        "staffId": "NT003",
+        "signatureData": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+        "timestamp": "2025-01-14T14:05:00Z"
+      }
+    ],
+    "followUp": {
+      "required": true,
+      "dueDate": "2025-01-21",
+      "assignedTo": "Nurse Thompson",
+      "description": "Monitor for recurring headaches. Ensure follow-up appointment with PCP is completed. Review sleep patterns and hydration."
+    },
+    "additionalNotes": "Youth has no history of migraines. Parents were appreciative of prompt medical attention. Youth feeling better by evening."
+  },
+  {
+    "incidentNumber": "INC-2025-00003",
+    "status": "draft",
+    "incidentDate": "2025-01-16",
+    "incidentTime": "20:45",
+    "reportedDate": "2025-01-16",
+    "location": "Dining Area",
+    "incidentType": "property_damage",
+    "severity": "minor",
+    "youthName": "Sample Youth C",
+    "youthAge": 14,
+    "summary": "Youth accidentally broke plate during dinner cleanup",
+    "description": "During evening cleanup after dinner, Youth C was carrying dishes to the kitchen when they accidentally dropped a ceramic plate. The plate broke into several pieces on the floor. Youth immediately apologized and appeared genuinely upset about the accident. No one was injured.",
+    "antecedents": "Normal dinner service. Youth was participating appropriately in cleanup duties.",
+    "behavior": "Youth was carrying dishes carefully but lost grip on plate. Immediately stopped and apologized. Offered to help clean up.",
+    "consequences": "Staff reassured youth that accidents happen. Youth helped sweep up broken pieces under staff supervision. Youth completed remaining cleanup duties without incident.",
+    "staffInvolved": ["Mike Davis"],
+    "witnesses": [
+      {
+        "name": "Youth D",
+        "role": "Resident",
+        "statement": "I saw it happen. It was an accident. Youth C was being careful."
+      }
+    ],
+    "othersInvolved": ["Youth D (witnessed)"],
+    "immediateActions": [
+      {
+        "timestamp": "2025-01-16T20:45:00Z",
+        "action": "Secured area to prevent injuries",
+        "takenBy": "Mike Davis",
+        "notes": "Ensured no one stepped on broken pieces"
+      },
+      {
+        "timestamp": "2025-01-16T20:47:00Z",
+        "action": "Cleaned up broken plate",
+        "takenBy": "Mike Davis",
+        "notes": "Youth C helped sweep under supervision"
+      }
+    ],
+    "interventionsUsed": ["Reassurance", "Teaching moment about accidents"],
+    "medicalAttentionRequired": false,
+    "parentsNotified": false,
+    "authoritiesNotified": false,
+    "attachments": [],
+    "photosTaken": false,
+    "videoRecorded": false,
+    "signatures": [],
+    "followUp": {
+      "required": false
+    },
+    "additionalNotes": "Minor incident. Youth handled situation appropriately. No concerns."
+  }
+]

@@ -1,4 +1,5 @@
 import { Youth, BehaviorPoints, ProgressNote, CaseNote, DailyRating } from "@/types/app-types";
+import { notesService } from '@/integrations/supabase/notesService'
 import { v4 as uuidv4 } from '@/utils/uuid';
 
 // Storage keys
@@ -142,6 +143,28 @@ export const saveBehaviorPoints = (
 
 // Progress Notes functions
 export const fetchProgressNotes = (youthId: string): ProgressNote[] => {
+  // Hydrate from Supabase in background and merge
+  try {
+    void (async () => {
+      const remote = await notesService.listForYouth(youthId)
+      if (remote && remote.length) {
+        const merged = remote.map(r => ({
+          id: r.id,
+          youth_id: r.youth_id,
+          date: r.created_at,
+          note: r.text,
+          staff: r.author_id || '',
+          category: r.category || 'Progress Note',
+          createdAt: new Date(r.created_at)
+        })) as any as ProgressNote[]
+        const local = getItem<ProgressNote[]>(STORAGE_KEYS.NOTES) || [];
+        const map = new Map<string, ProgressNote>()
+        for (const n of local) map.set(n.id || `${n.youth_id}|${String(n.date)}`, n)
+        for (const n of merged) map.set(n.id || `${n.youth_id}|${String(n.date)}`, n)
+        setItem(STORAGE_KEYS.NOTES, Array.from(map.values()))
+      }
+    })()
+  } catch {}
   const allNotes = getItem<ProgressNote[]>(STORAGE_KEYS.NOTES) || [];
   return allNotes
     .filter(note => note.youth_id === youthId)
@@ -164,6 +187,14 @@ export const saveProgressNote = (
     ...noteData,
     createdAt: new Date()
   };
+  // Persist to Supabase best-effort
+  try {
+    void notesService.save({
+      youth_id: youthId,
+      text: typeof newNote.note === 'string' ? newNote.note : JSON.stringify(newNote.note),
+      category: newNote.category || 'Progress Note'
+    } as any)
+  } catch {}
   
   allNotes.push(newNote);
   setItem(STORAGE_KEYS.NOTES, allNotes);
@@ -264,14 +295,16 @@ export const saveAssessment = (
   data: any
 ) => {
   const allAssessments = getItem<any[]>(STORAGE_KEYS.ASSESSMENTS) || [];
-  
+  const { createdat, updatedat, ...rest } = data || {};
+  const nowIso = new Date().toISOString();
+
   const newAssessment = {
     id: documentId || uuidv4(),
     youth_id: youthId,
     collection, // save collection type for filtering
-    ...data,
-    createdat: new Date().toISOString(),
-    updatedat: new Date().toISOString()
+    createdat: createdat ?? nowIso,
+    updatedat: nowIso,
+    ...rest
   };
   
   // Remove existing if update

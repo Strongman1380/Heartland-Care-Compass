@@ -117,6 +117,16 @@
 
 /* Print styles for behavior cards and reports */
 @media print {
+  /* Hide navigation, headers, and controls when printing */
+  .print\:hidden {
+    display: none !important;
+  }
+  
+  /* Ensure print content is visible */
+  body {
+    background: white;
+  }
+  
   /* Hide everything except print-only content */
   body * {
     visibility: hidden;
@@ -182,5 +192,44 @@
   
   .print-report .no-break {
     page-break-inside: avoid;
+  }
+  
+  /* School Print Reports specific styles */
+  @page {
+    margin: 0.5in;
+    size: letter;
+  }
+  
+  /* Make sure the print area is visible */
+  .print\:block {
+    display: block !important;
+    visibility: visible !important;
+  }
+  
+  .print\:block * {
+    visibility: visible !important;
+  }
+  
+  /* Remove shadows and backgrounds for print */
+  .print\:shadow-none {
+    box-shadow: none !important;
+  }
+  
+  /* Ensure tables print correctly */
+  table {
+    page-break-inside: auto;
+  }
+  
+  tr {
+    page-break-inside: avoid;
+    page-break-after: auto;
+  }
+  
+  thead {
+    display: table-header-group;
+  }
+  
+  tfoot {
+    display: table-footer-group;
   }
 }

@@ -170,6 +170,9 @@ export const KpiDashboard = ({ youthId, youth }: KpiDashboardProps) => {
     );
   }
 
+  // Check if we have insufficient data for meaningful KPI analysis
+  const hasInsufficientData = pointsData.length === 0 && notesData.length === 0;
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-start flex-col sm:flex-row">
@@ -192,6 +195,33 @@ export const KpiDashboard = ({ youthId, youth }: KpiDashboardProps) => {
         </div>
       </div>
 
+      {hasInsufficientData && (
+        <Card className="border-dashed border-2 border-gray-300 bg-gray-50">
+          <CardContent className="p-8 text-center">
+            <div className="text-gray-500 mb-4">
+              <AlertCircle size={48} className="mx-auto mb-3 opacity-50" />
+              <h3 className="text-lg font-medium text-gray-700 mb-2">No KPI Data Available</h3>
+              <p className="text-sm text-gray-600 max-w-md mx-auto">
+                To see progress analytics for {youth.firstName}, you'll need to add some data first:
+              </p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-md mx-auto mt-4">
+              <div className="text-left p-3 bg-white rounded border">
+                <h4 className="font-medium text-gray-700 text-sm mb-1">Behavior Points</h4>
+                <p className="text-xs text-gray-600">Add daily behavior point totals to track progress trends</p>
+              </div>
+              <div className="text-left p-3 bg-white rounded border">
+                <h4 className="font-medium text-gray-700 text-sm mb-1">Case Notes</h4>
+                <p className="text-xs text-gray-600">Record case notes to analyze activity patterns</p>
+              </div>
+            </div>
+            <p className="text-xs text-gray-500 mt-4">
+              Data will automatically appear in charts and metrics as you add it.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <Card>
           <CardHeader className="pb-2">
@@ -200,12 +230,22 @@ export const KpiDashboard = ({ youthId, youth }: KpiDashboardProps) => {
           <CardContent>
             <div className="flex items-baseline justify-between">
               <div className="text-2xl font-bold">
-                {(kpiMetrics.avgPointsPerDay / 1000).toFixed(1)}k
-                <span className="text-sm font-normal text-gray-500 ml-1">/ 105k</span>
+                {pointsData.length === 0 ? (
+                  <span className="text-gray-400">--</span>
+                ) : (
+                  <>
+                    {(kpiMetrics.avgPointsPerDay / 1000).toFixed(1)}k
+                    <span className="text-sm font-normal text-gray-500 ml-1">/ 105k</span>
+                  </>
+                )}
               </div>
-              
+
               <div className="flex items-center">
-                {kpiMetrics.pointTrend > 0 ? (
+                {pointsData.length === 0 ? (
+                  <Badge variant="outline" className="bg-gray-50 text-gray-500">
+                    No data
+                  </Badge>
+                ) : kpiMetrics.pointTrend > 0 ? (
                   <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
                     <TrendingUp size={14} className="mr-1" />
                     +{(kpiMetrics.pointTrend / 1000).toFixed(1)}k
@@ -232,14 +272,23 @@ export const KpiDashboard = ({ youthId, youth }: KpiDashboardProps) => {
           <CardContent>
             <div className="flex items-baseline justify-between">
               <div className="text-2xl font-bold">
-                {kpiMetrics.daysOnTarget}
-                <span className="text-sm font-normal text-gray-500 ml-1">/ {kpiMetrics.totalDays}</span>
+                {pointsData.length === 0 ? (
+                  <span className="text-gray-400">--</span>
+                ) : (
+                  <>
+                    {kpiMetrics.daysOnTarget}
+                    <span className="text-sm font-normal text-gray-500 ml-1">/ {kpiMetrics.totalDays}</span>
+                  </>
+                )}
               </div>
-              
               <div>
-                {kpiMetrics.totalDays > 0 && (
+                {pointsData.length === 0 ? (
+                  <Badge variant="outline" className="bg-gray-50 text-gray-500">
+                    No data
+                  </Badge>
+                ) : kpiMetrics.totalDays > 0 ? (
                   <Badge variant="outline" className={
-                    kpiMetrics.daysOnTarget / kpiMetrics.totalDays >= 0.8 
+                    kpiMetrics.daysOnTarget / kpiMetrics.totalDays >= 0.8
                       ? "bg-green-50 text-green-700 border-green-200"
                       : kpiMetrics.daysOnTarget / kpiMetrics.totalDays >= 0.6
                       ? "bg-yellow-50 text-yellow-700 border-yellow-200"
@@ -247,7 +296,7 @@ export const KpiDashboard = ({ youthId, youth }: KpiDashboardProps) => {
                   }>
                     {Math.round((kpiMetrics.daysOnTarget / kpiMetrics.totalDays) * 100)}%
                   </Badge>
-                )}
+                ) : null}
               </div>
             </div>
           </CardContent>
@@ -288,16 +337,28 @@ export const KpiDashboard = ({ youthId, youth }: KpiDashboardProps) => {
           <CardContent>
             <div className="flex items-baseline justify-between">
               <div className="text-2xl font-bold">
-                {kpiMetrics.lowRatingCount}
-                <span className="text-sm font-normal text-gray-500 ml-1">notes</span>
+                {notesData.length === 0 ? (
+                  <span className="text-gray-400">--</span>
+                ) : (
+                  <>
+                    {kpiMetrics.lowRatingCount}
+                    <span className="text-sm font-normal text-gray-500 ml-1">notes</span>
+                  </>
+                )}
               </div>
-              
-              {kpiMetrics.lowRatingCount > 5 && (
-                <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-                  <AlertCircle size={14} className="mr-1" />
-                  Active
-                </Badge>
-              )}
+
+              <div>
+                {notesData.length === 0 ? (
+                  <Badge variant="outline" className="bg-gray-50 text-gray-500">
+                    No notes
+                  </Badge>
+                ) : kpiMetrics.lowRatingCount > 5 ? (
+                  <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                    <AlertCircle size={14} className="mr-1" />
+                    Active
+                  </Badge>
+                ) : null}
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -338,7 +399,10 @@ export const KpiDashboard = ({ youthId, youth }: KpiDashboardProps) => {
                 </ResponsiveContainer>
               ) : (
                 <div className="h-full flex items-center justify-center">
-                  <p className="text-gray-500">No point data available</p>
+                  <div className="text-center">
+                    <p className="text-gray-500 text-sm mb-2">No behavior point data</p>
+                    <p className="text-xs text-gray-400">Add daily points to see trends</p>
+                  </div>
                 </div>
               )}
             </div>
@@ -377,7 +441,10 @@ export const KpiDashboard = ({ youthId, youth }: KpiDashboardProps) => {
                     </ResponsiveContainer>
                   ) : (
                     <div className="h-full flex items-center justify-center">
-                      <p className="text-gray-500">No notes data available</p>
+                      <div className="text-center">
+                        <p className="text-gray-500 text-xs mb-1">No case notes</p>
+                        <p className="text-gray-400 text-xs">Add notes to see categories</p>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -402,7 +469,10 @@ export const KpiDashboard = ({ youthId, youth }: KpiDashboardProps) => {
                     </ResponsiveContainer>
                   ) : (
                     <div className="h-full flex items-center justify-center">
-                      <p className="text-gray-500">No ratings data available</p>
+                      <div className="text-center">
+                        <p className="text-gray-500 text-xs mb-1">No staff activity</p>
+                        <p className="text-gray-400 text-xs">Notes will show staff distribution</p>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -448,7 +518,16 @@ export const KpiDashboard = ({ youthId, youth }: KpiDashboardProps) => {
           <CardContent>
             <div className="space-y-3">
               {pointsData.length === 0 ? (
-                <p className="text-gray-500">Add more data to generate insights</p>
+                <div className="p-4 border-l-4 border-blue-500 bg-blue-50 rounded-r-md">
+                  <h4 className="font-medium text-blue-800 text-sm mb-1">Getting Started</h4>
+                  <p className="text-sm text-blue-700">
+                    Once you start adding behavior points and case notes for {youth.firstName},
+                    this section will automatically generate insights about trends, patterns, and areas that may need attention.
+                  </p>
+                  <p className="text-xs text-blue-600 mt-2">
+                    Insights include point trend analysis, threshold alerts, and activity level monitoring.
+                  </p>
+                </div>
               ) : (
                 <>
                   {kpiMetrics.totalDays > 0 && kpiMetrics.daysOnTarget / kpiMetrics.totalDays < 0.6 && (

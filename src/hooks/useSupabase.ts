@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { 
   youthService, 
   behaviorPointsService, 
@@ -374,7 +374,7 @@ export const useDailyRatings = (youthId?: string) => {
   const [error, setError] = useState<string | null>(null)
   const { toast } = useToast()
 
-  const loadDailyRatings = async (id: string, limit?: number) => {
+  const loadDailyRatings = useCallback(async (id: string, limit?: number) => {
     try {
       setLoading(true)
       setError(null)
@@ -388,9 +388,9 @@ export const useDailyRatings = (youthId?: string) => {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
-  const saveDailyRating = async (ratingData: DailyRatingsInsert) => {
+  const saveDailyRating = useCallback(async (ratingData: DailyRatingsInsert) => {
     try {
       setLoading(true)
       const saved = await dailyRatingsService.upsert(ratingData)
@@ -418,18 +418,18 @@ export const useDailyRatings = (youthId?: string) => {
     } finally {
       setLoading(false)
     }
-  }
+  }, [toast])
 
-  const getDailyRatingForDate = async (id: string, date: string) => {
+  const getDailyRatingForDate = useCallback(async (id: string, date: string) => {
     try {
       return await dailyRatingsService.getByDate(id, date)
     } catch (err) {
       console.error('Failed to get daily rating for date:', err)
       return null
     }
-  }
+  }, [])
 
-  const clearDailyRatings = async (id: string, startDate: Date, endDate: Date) => {
+  const clearDailyRatings = useCallback(async (id: string, startDate: Date, endDate: Date) => {
     try {
       setLoading(true)
       await dailyRatingsService.deleteByDateRange(id, startDate, endDate)
@@ -460,13 +460,13 @@ export const useDailyRatings = (youthId?: string) => {
     } finally {
       setLoading(false)
     }
-  }
+  }, [toast])
 
   useEffect(() => {
     if (youthId) {
       loadDailyRatings(youthId)
     }
-  }, [youthId])
+  }, [youthId, loadDailyRatings])
 
   return {
     dailyRatings,

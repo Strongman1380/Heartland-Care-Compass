@@ -252,7 +252,12 @@ export function DpnReport({ youth, variant, onAutoExportComplete }: { youth: You
       {/* Printable Section */}
       <div ref={printRef} className="print-section bg-white text-black p-8 rounded-lg border">
         <div className="text-center mb-6 bg-gradient-to-r from-red-800 via-red-700 to-amber-600 text-white p-6 rounded-lg">
-          <img src={`${import.meta.env.BASE_URL}files/BoysHomeLogo.png`} alt="Heartland Boys Home Logo" className="h-16 mx-auto mb-4 object-contain" />
+          <img
+            src={`${import.meta.env.BASE_URL}files/BoysHomeLogo.png`}
+            alt="Heartland Boys Home Logo"
+            className="h-16 mx-auto mb-4 object-contain"
+            crossOrigin="anonymous"
+          />
           <h1 className="text-3xl font-bold mb-2">Heartland Boys Home</h1>
           <h2 className="text-xl font-semibold">Resident {variant === 'monthly' ? 'Monthly' : variant === 'biweekly' ? 'Bi-Weekly' : 'Weekly'} Progress Evaluation</h2>
         </div>

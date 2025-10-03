@@ -10,7 +10,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { FileText, Save, RotateCcw, Download } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { exportElementToPDF } from "@/utils/export";
+import { ReportHeader } from "@/components/reports/ReportHeader";
 import { format } from "date-fns";
+import { useAuth } from '@/contexts/SupabaseAuthContext'
+import { draftsService } from '@/integrations/supabase/draftsService'
 
 interface HeartlandMonthlyProgressReportProps {
   youth: Youth;
@@ -131,46 +134,60 @@ export const HeartlandMonthlyProgressReport = ({ youth }: HeartlandMonthlyProgre
   const [isAutoSaving, setIsAutoSaving] = useState(false);
   const { toast } = useToast();
   const printRef = useRef<HTMLDivElement>(null);
+  const { user } = useAuth();
 
-  // Calculate days in program and current level
+  // Load saved report data FIRST, then auto-calculate
   useEffect(() => {
-    if (youth.admissionDate) {
-      const admissionDate = new Date(youth.admissionDate);
-      const now = new Date();
-      const totalDays = Math.floor((now.getTime() - admissionDate.getTime()) / (1000 * 60 * 60 * 24));
+    let hasLoadedData = false;
 
-      setReportData(prev => ({
-        ...prev,
-        totalDaysInProgram: totalDays.toString(),
-        daysAtCurrentLevel: "30" // This would need to be tracked separately in a real implementation
-      }));
-    }
-  }, [youth]);
+    (async () => {
+      try {
+        const draft = await draftsService.get(youth.id, 'monthly_progress_heartland', user?.id || null)
+        if (draft?.data) {
+          setReportData(prev => ({ ...prev, ...(draft.data as any) }));
+          hasLoadedData = true;
+          return;
+        }
+      } catch {}
+      const savedData = localStorage.getItem(`monthlyProgressReport_${youth.id}`);
+      if (savedData) {
+        try {
+          const parsed = JSON.parse(savedData);
+          setReportData(prev => ({ ...prev, ...parsed }));
+          hasLoadedData = true;
+        } catch (error) {
+          console.error("Error loading saved report data:", error);
+        }
+      }
+
+      // Only auto-calculate if NO saved data exists
+      if (!hasLoadedData && youth.admissionDate) {
+        const admissionDate = new Date(youth.admissionDate);
+        const now = new Date();
+        const totalDays = Math.floor((now.getTime() - admissionDate.getTime()) / (1000 * 60 * 60 * 24));
+
+        setReportData(prev => ({
+          ...prev,
+          totalDaysInProgram: prev.totalDaysInProgram || totalDays.toString(),
+          daysAtCurrentLevel: prev.daysAtCurrentLevel || "30"
+        }));
+      }
+    })();
+  }, [youth.id, youth.admissionDate, user?.id]);
 
   // Auto-save functionality
   useEffect(() => {
-    const autoSave = () => {
-      setIsAutoSaving(true);
-      localStorage.setItem(`monthlyProgressReport_${youth.id}`, JSON.stringify(reportData));
-      setTimeout(() => setIsAutoSaving(false), 1000);
+    const autoSave = async () => {
+      try {
+        setIsAutoSaving(true);
+        await draftsService.save(youth.id, 'monthly_progress_heartland', user?.id || null, reportData)
+        localStorage.setItem(`monthlyProgressReport_${youth.id}`, JSON.stringify(reportData));
+      } catch {}
+      setTimeout(() => setIsAutoSaving(false), 500);
     };
-
     const timer = setTimeout(autoSave, 2000);
     return () => clearTimeout(timer);
-  }, [reportData, youth.id]);
-
-  // Load saved report data
-  useEffect(() => {
-    const savedData = localStorage.getItem(`monthlyProgressReport_${youth.id}`);
-    if (savedData) {
-      try {
-        const parsed = JSON.parse(savedData);
-        setReportData(prev => ({ ...prev, ...parsed }));
-      } catch (error) {
-        console.error("Error loading saved report data:", error);
-      }
-    }
-  }, [youth.id]);
+  }, [reportData, youth.id, user?.id]);
 
   const handleInputChange = (field: keyof MonthlyProgressData, value: any) => {
     setReportData(prev => ({
@@ -179,7 +196,8 @@ export const HeartlandMonthlyProgressReport = ({ youth }: HeartlandMonthlyProgre
     }));
   };
 
-  const handleSaveReport = () => {
+  const handleSaveReport = async () => {
+    await draftsService.save(youth.id, 'monthly_progress_heartland', user?.id || null, reportData)
     localStorage.setItem(`monthlyProgressReport_${youth.id}`, JSON.stringify(reportData));
     toast({
       title: "Report Saved",
@@ -187,8 +205,9 @@ export const HeartlandMonthlyProgressReport = ({ youth }: HeartlandMonthlyProgre
     });
   };
 
-  const handleResetForm = () => {
+  const handleResetForm = async () => {
     if (confirm("Are you sure you want to reset the form? All data will be lost.")) {
+      try { await draftsService.delete(youth.id, 'monthly_progress_heartland', user?.id || null) } catch {}
       localStorage.removeItem(`monthlyProgressReport_${youth.id}`);
       window.location.reload();
     }
@@ -244,10 +263,11 @@ export const HeartlandMonthlyProgressReport = ({ youth }: HeartlandMonthlyProgre
       {/* Report Form */}
       <div ref={printRef} className="bg-white p-8 rounded-lg border print-section">
         {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold mb-2">HEARTLAND BOYS HOME</h1>
-          <h2 className="text-xl font-semibold mb-4">MONTHLY PROGRESS REPORT</h2>
-        </div>
+        <ReportHeader
+          subtitle="Monthly Progress Report"
+          detail={reportData.monthYear || undefined}
+          className="mb-8"
+        />
 
         {/* Basic Information */}
         <div className="grid grid-cols-2 gap-4 mb-6">

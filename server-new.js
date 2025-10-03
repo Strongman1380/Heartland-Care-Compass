@@ -314,6 +314,487 @@ Enhanced Report:`;
   }
 });
 
+// ============================================================================
+// NEW AI ENDPOINTS - Enhanced Features
+// ============================================================================
+
+// Case Note Summarization
+app.post('/api/ai/summarize-note', async (req, res) => {
+  try {
+    if (!openai) {
+      return res.status(503).json({ error: 'OpenAI not configured', fallback: true });
+    }
+
+    const { noteContent, maxLength } = req.body;
+
+    const completion = await openai.chat.completions.create({
+      model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a clinical documentation specialist. Summarize case notes concisely while preserving critical information, clinical observations, and action items.'
+        },
+        {
+          role: 'user',
+          content: `Summarize this case note in ${maxLength || 150} words or less. Include key points and action items.\n\nNote:\n${noteContent}`
+        }
+      ],
+      max_tokens: 500,
+      temperature: 0.2,
+    });
+
+    const summary = completion.choices[0]?.message?.content || '';
+
+    // Extract key points and action items
+    const keyPoints = summary.split('\n').filter(line => line.trim().startsWith('-') || line.trim().startsWith('•'));
+    const actionItems = keyPoints.filter(point =>
+      point.toLowerCase().includes('follow up') ||
+      point.toLowerCase().includes('action') ||
+      point.toLowerCase().includes('next')
+    );
+
+    logAIUsage(true, completion.usage?.total_tokens || 0);
+
+    res.json({
+      summary,
+      keyPoints,
+      actionItems,
+      usage: completion.usage
+    });
+
+  } catch (error) {
+    console.error('Note summarization error:', error);
+    logAIUsage(false, 0, error);
+    res.status(500).json({ error: 'Failed to summarize note', fallback: true });
+  }
+});
+
+// Case Note Content Analysis (Sentiment & Risk Detection)
+app.post('/api/ai/analyze-note', async (req, res) => {
+  try {
+    if (!openai) {
+      return res.status(503).json({ error: 'OpenAI not configured', fallback: true });
+    }
+
+    const { noteContent, youth } = req.body;
+
+    const completion = await openai.chat.completions.create({
+      model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a clinical risk assessment specialist. Analyze case notes for sentiment, risk indicators, and recommended actions. Respond in JSON format with: sentiment (positive/neutral/concerning/critical), riskIndicators (array of {type, severity, description}), and suggestedActions (array of strings).'
+        },
+        {
+          role: 'user',
+          content: `Analyze this case note for ${youth.firstName}:\n\n${noteContent}`
+        }
+      ],
+      max_tokens: 800,
+      temperature: 0.1,
+      response_format: { type: "json_object" }
+    });
+
+    const analysis = JSON.parse(completion.choices[0]?.message?.content || '{}');
+    logAIUsage(true, completion.usage?.total_tokens || 0);
+
+    res.json({
+      ...analysis,
+      usage: completion.usage
+    });
+
+  } catch (error) {
+    console.error('Note analysis error:', error);
+    logAIUsage(false, 0, error);
+    res.status(500).json({ error: 'Failed to analyze note', fallback: true });
+  }
+});
+
+// Incident Categorization
+app.post('/api/ai/categorize-incident', async (req, res) => {
+  try {
+    if (!openai) {
+      return res.status(503).json({ error: 'OpenAI not configured', fallback: true });
+    }
+
+    const { description } = req.body;
+
+    const completion = await openai.chat.completions.create({
+      model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'system',
+          content: 'You are an incident classification specialist. Categorize incidents into: Physical Aggression, Verbal Aggression, Property Damage, Self-Harm, Elopement, Substance Use, Policy Violation, or Other. Assign severity (low/medium/high/critical) and provide relevant tags. Respond in JSON format with: category, subcategory, severity, tags (array), confidence (0-1).'
+        },
+        {
+          role: 'user',
+          content: `Categorize this incident:\n\n${description}`
+        }
+      ],
+      max_tokens: 300,
+      temperature: 0.1,
+      response_format: { type: "json_object" }
+    });
+
+    const categorization = JSON.parse(completion.choices[0]?.message?.content || '{}');
+    logAIUsage(true, completion.usage?.total_tokens || 0);
+
+    res.json({
+      ...categorization,
+      usage: completion.usage
+    });
+
+  } catch (error) {
+    console.error('Incident categorization error:', error);
+    logAIUsage(false, 0, error);
+    res.status(500).json({ error: 'Failed to categorize incident', fallback: true });
+  }
+});
+
+// Incident Pattern Analysis
+app.post('/api/ai/analyze-incident', async (req, res) => {
+  try {
+    if (!openai) {
+      return res.status(503).json({ error: 'OpenAI not configured', fallback: true });
+    }
+
+    const { incidentData, youthId, historicalIncidents } = req.body;
+
+    const prompt = `Analyze this incident and identify patterns, triggers, and recommendations.
+
+Current Incident:
+${JSON.stringify(incidentData, null, 2)}
+
+Historical Incidents (last 10):
+${JSON.stringify(historicalIncidents?.slice(0, 10) || [], null, 2)}
+
+Provide analysis in JSON format with:
+- severity: low/medium/high/critical
+- category: primary incident type
+- patterns: array of identified patterns
+- triggers: array of potential triggers
+- recommendations: array of intervention recommendations`;
+
+    const completion = await openai.chat.completions.create({
+      model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a behavioral pattern analyst for youth treatment. Identify patterns, triggers, and provide evidence-based recommendations.'
+        },
+        {
+          role: 'user',
+          content: prompt
+        }
+      ],
+      max_tokens: 1000,
+      temperature: 0.2,
+      response_format: { type: "json_object" }
+    });
+
+    const analysis = JSON.parse(completion.choices[0]?.message?.content || '{}');
+    logAIUsage(true, completion.usage?.total_tokens || 0);
+
+    res.json({
+      ...analysis,
+      usage: completion.usage
+    });
+
+  } catch (error) {
+    console.error('Incident analysis error:', error);
+    logAIUsage(false, 0, error);
+    res.status(500).json({ error: 'Failed to analyze incident', fallback: true });
+  }
+});
+
+// Behavioral Analysis and Predictions
+app.post('/api/ai/analyze-behavior', async (req, res) => {
+  try {
+    if (!openai) {
+      return res.status(503).json({ error: 'OpenAI not configured', fallback: true });
+    }
+
+    const { youthId, behaviorData, timeframe } = req.body;
+
+    const recentData = behaviorData.slice(-30); // Last 30 entries
+    const points = recentData.map(d => d.totalPoints || 0);
+    const avg = points.reduce((sum, p) => sum + p, 0) / points.length;
+
+    const prompt = `Analyze behavioral trends and provide predictions.
+
+Recent Behavior Data (${recentData.length} days):
+Points: ${points.join(', ')}
+Average: ${avg.toFixed(1)}
+
+Provide analysis in JSON format with:
+- trends: {overall: improving/stable/declining, shortTerm: string, longTerm: string}
+- predictions: {nextWeekAverage: number, levelAdvancementLikelihood: number (0-100), concernAreas: array}
+- recommendations: array of actionable recommendations`;
+
+    const completion = await openai.chat.completions.create({
+      model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a behavioral analyst specializing in youth treatment outcomes. Analyze trends and make data-driven predictions.'
+        },
+        {
+          role: 'user',
+          content: prompt
+        }
+      ],
+      max_tokens: 800,
+      temperature: 0.2,
+      response_format: { type: "json_object" }
+    });
+
+    const analysis = JSON.parse(completion.choices[0]?.message?.content || '{}');
+    logAIUsage(true, completion.usage?.total_tokens || 0);
+
+    res.json({
+      ...analysis,
+      usage: completion.usage
+    });
+
+  } catch (error) {
+    console.error('Behavior analysis error:', error);
+    logAIUsage(false, 0, error);
+    res.status(500).json({ error: 'Failed to analyze behavior', fallback: true });
+  }
+});
+
+// Natural Language Query Interface
+app.post('/api/ai/query', async (req, res) => {
+  try {
+    if (!openai) {
+      return res.status(503).json({ error: 'OpenAI not configured', fallback: true });
+    }
+
+    const { question, context } = req.body;
+
+    const prompt = `Answer this question about youth treatment data: "${question}"
+
+Available context:
+${JSON.stringify(context, null, 2)}
+
+Provide a clear, professional answer based on the data.`;
+
+    const completion = await openai.chat.completions.create({
+      model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a clinical data analyst. Answer questions about youth treatment data with accuracy and professionalism. Cite specific data points when possible.'
+        },
+        {
+          role: 'user',
+          content: prompt
+        }
+      ],
+      max_tokens: 1000,
+      temperature: 0.3,
+    });
+
+    const answer = completion.choices[0]?.message?.content || '';
+    logAIUsage(true, completion.usage?.total_tokens || 0);
+
+    res.json({
+      answer,
+      usage: completion.usage
+    });
+
+  } catch (error) {
+    console.error('Query error:', error);
+    logAIUsage(false, 0, error);
+    res.status(500).json({ error: 'Failed to process query', fallback: true });
+  }
+});
+
+// Treatment Recommendations
+app.post('/api/ai/treatment-recommendations', async (req, res) => {
+  try {
+    if (!openai) {
+      return res.status(503).json({ error: 'OpenAI not configured', fallback: true });
+    }
+
+    const { youth, progressData, assessmentData } = req.body;
+
+    const prompt = `Generate evidence-based treatment recommendations.
+
+Youth Profile:
+${JSON.stringify(youth, null, 2)}
+
+Progress Data:
+${JSON.stringify(progressData, null, 2)}
+
+Assessment Data:
+${JSON.stringify(assessmentData, null, 2)}
+
+Provide in JSON format:
+- recommendations: array of recommendation strings
+- priorities: array of {area: string, priority: high/medium/low, rationale: string}
+- narrative: comprehensive narrative summary`;
+
+    const completion = await openai.chat.completions.create({
+      model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a clinical treatment planning specialist. Provide evidence-based, trauma-informed treatment recommendations.'
+        },
+        {
+          role: 'user',
+          content: prompt
+        }
+      ],
+      max_tokens: 1500,
+      temperature: 0.3,
+      response_format: { type: "json_object" }
+    });
+
+    const recommendations = JSON.parse(completion.choices[0]?.message?.content || '{}');
+    logAIUsage(true, completion.usage?.total_tokens || 0);
+
+    res.json({
+      ...recommendations,
+      usage: completion.usage
+    });
+
+  } catch (error) {
+    console.error('Treatment recommendations error:', error);
+    logAIUsage(false, 0, error);
+    res.status(500).json({ error: 'Failed to generate recommendations', fallback: true });
+  }
+});
+
+// Parse Youth Profile from Text
+app.post('/api/ai/parse-youth-profile', async (req, res) => {
+  try {
+    if (!openai) {
+      return res.status(503).json({ error: 'OpenAI not configured', fallback: true });
+    }
+
+    const { profileText } = req.body;
+
+    if (!profileText || typeof profileText !== 'string') {
+      return res.status(400).json({ error: 'Profile text is required' });
+    }
+
+    const prompt = `Parse the following youth profile text and extract structured information. The text may contain labeled fields or be in paragraph form. Extract as much information as possible and return it in JSON format.
+
+Profile Text:
+${profileText}
+
+Return a JSON object with the following structure (use null for missing fields):
+{
+  "firstName": string,
+  "lastName": string,
+  "dob": string (YYYY-MM-DD format),
+  "age": number,
+  "sex": string,
+  "race": string,
+  "religion": string,
+  "placeOfBirth": string,
+  "socialSecurityNumber": string,
+  "address": string (full address as single string),
+  "height": string,
+  "weight": string,
+  "hairColor": string,
+  "eyeColor": string,
+  "tattoosScars": string,
+  "admissionDate": string (YYYY-MM-DD format),
+  "level": number (1-5),
+  "legalGuardian": string,
+  "guardianRelationship": string,
+  "guardianContact": string,
+  "guardianPhone": string,
+  "guardianEmail": string,
+  "probationOfficer": string,
+  "probationContact": string,
+  "probationPhone": string,
+  "placementAuthority": string,
+  "estimatedStay": string,
+  "referralSource": string,
+  "referralReason": string,
+  "priorPlacements": array of strings,
+  "numPriorPlacements": string,
+  "lengthRecentPlacement": string,
+  "courtInvolvement": array of strings,
+  "currentSchool": string,
+  "grade": string,
+  "hasIEP": boolean,
+  "academicStrengths": string,
+  "academicChallenges": string,
+  "educationGoals": string,
+  "schoolContact": string,
+  "schoolPhone": string,
+  "physician": string,
+  "physicianPhone": string,
+  "insuranceProvider": string,
+  "policyNumber": string,
+  "allergies": string,
+  "medicalConditions": string,
+  "medicalRestrictions": string,
+  "currentDiagnoses": string,
+  "traumaHistory": array of strings,
+  "previousTreatment": string,
+  "currentCounseling": array of strings,
+  "therapistName": string,
+  "therapistContact": string,
+  "sessionFrequency": string,
+  "sessionTime": string,
+  "selfHarmHistory": array of strings,
+  "lastIncidentDate": string,
+  "hasSafetyPlan": boolean,
+  "hyrnaRiskLevel": string,
+  "hyrnaScore": number,
+  "hyrnaAssessmentDate": string
+}
+
+Important:
+- Extract dates in YYYY-MM-DD format
+- Convert age to number if found
+- Convert level to number (1-5) if found
+- Arrays should contain strings
+- Use null for any field not found in the text
+- Be intelligent about parsing - look for common variations of field names`;
+
+    const completion = await openai.chat.completions.create({
+      model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a data extraction specialist for youth residential care profiles. Extract structured information from unstructured or semi-structured text accurately and comprehensively.'
+        },
+        {
+          role: 'user',
+          content: prompt
+        }
+      ],
+      max_tokens: 2000,
+      temperature: 0.1, // Very low temperature for consistent extraction
+      response_format: { type: "json_object" }
+    });
+
+    const parsedData = JSON.parse(completion.choices[0]?.message?.content || '{}');
+    logAIUsage(true, completion.usage?.total_tokens || 0);
+
+    res.json({
+      parsedData,
+      usage: completion.usage
+    });
+
+  } catch (error) {
+    console.error('Parse youth profile error:', error);
+    logAIUsage(false, 0, error);
+    res.status(500).json({ 
+      error: 'Failed to parse youth profile', 
+      fallback: true,
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
 // API Routes - All other data operations are handled by Supabase client in the frontend
 app.all('/api/*', (req, res) => {
   res.json({

@@ -6,387 +6,47 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[]
 
-export interface Database {
+export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "13.0.4"
+  }
   public: {
     Tables: {
-      youth: {
-        Row: {
-          id: string
-          firstName: string
-          lastName: string
-          dob: string | null
-          age: number | null
-          sex: string | null
-          socialSecurityNumber: string | null
-          placeOfBirth: string | null
-          race: string | null
-          address: Json | null
-          physicalDescription: Json | null
-          admissionDate: string | null
-          admissionTime: string | null
-          rcsIn: string | null
-          dischargeDate: string | null
-          dischargeTime: string | null
-          rcsOut: string | null
-          mother: Json | null
-          father: Json | null
-          legalGuardian: Json | null
-          nextOfKin: Json | null
-          placingAgencyCounty: string | null
-          probationOfficer: Json | null
-          caseworker: Json | null
-          guardianAdLitem: Json | null
-          attorney: string | null
-          judge: string | null
-          allergies: string | null
-          currentMedications: string | null
-          significantHealthConditions: string | null
-          religion: string | null
-          lastSchoolAttended: string | null
-          hasIEP: boolean | null
-          currentGrade: string | null
-          getAlongWithOthers: string | null
-          strengthsTalents: string | null
-          interests: string | null
-          behaviorProblems: string | null
-          dislikesAboutSelf: string | null
-          angerTriggers: string | null
-          historyPhysicallyHurting: boolean | null
-          historyVandalism: boolean | null
-          gangInvolvement: boolean | null
-          familyViolentCrimes: boolean | null
-          tobaccoPast6To12Months: boolean | null
-          alcoholPast6To12Months: boolean | null
-          drugsVapingMarijuanaPast6To12Months: boolean | null
-          drugTestingDates: string | null
-          communityResources: Json | null
-          treatmentFocus: Json | null
-          dischargePlan: Json | null
-          emergencyShelterCare: Json | null
-          profilePhoto: string | null
-          level: number
-          pointTotal: number
-          referralSource: string | null
-          referralReason: string | null
-          educationInfo: string | null
-          medicalInfo: string | null
-          mentalHealthInfo: string | null
-          legalStatus: string | null
-          peerInteraction: number | null
-          adultInteraction: number | null
-          investmentLevel: number | null
-          dealAuthority: number | null
-          hyrnaRiskLevel: string | null
-          hyrnaScore: number | null
-          hyrnaAssessmentDate: string | null
-          createdAt: string | null
-          updatedAt: string | null
-          idNumber: string | null
-          guardianRelationship: string | null
-          guardianContact: string | null
-          guardianPhone: string | null
-          guardianEmail: string | null
-          probationContact: string | null
-          probationPhone: string | null
-          placementAuthority: string | null
-          estimatedStay: string | null
-          priorPlacements: string[] | null
-          numPriorPlacements: string | null
-          lengthRecentPlacement: string | null
-          courtInvolvement: string[] | null
-          currentSchool: string | null
-          grade: string | null
-          academicStrengths: string | null
-          academicChallenges: string | null
-          educationGoals: string | null
-          schoolContact: string | null
-          schoolPhone: string | null
-          physician: string | null
-          physicianPhone: string | null
-          insuranceProvider: string | null
-          policyNumber: string | null
-          medicalConditions: string | null
-          medicalRestrictions: string | null
-          currentDiagnoses: string | null
-          diagnoses: string | null
-          traumaHistory: string[] | null
-          previousTreatment: string | null
-          currentCounseling: string[] | null
-          therapistName: string | null
-          therapistContact: string | null
-          sessionFrequency: string | null
-          sessionTime: string | null
-          selfHarmHistory: string[] | null
-          lastIncidentDate: string | null
-          hasSafetyPlan: boolean | null
-          onSubsystem: boolean | null
-          pointsInCurrentLevel: number | null
-          dailyPointsForPrivileges: number | null
-          realColorsResult: string | null
-        }
-        Insert: {
-          id?: string
-          firstName: string
-          lastName: string
-          dob?: string | null
-          age?: number | null
-          sex?: string | null
-          socialSecurityNumber?: string | null
-          placeOfBirth?: string | null
-          race?: string | null
-          address?: Json | null
-          physicalDescription?: Json | null
-          admissionDate?: string | null
-          admissionTime?: string | null
-          rcsIn?: string | null
-          dischargeDate?: string | null
-          dischargeTime?: string | null
-          rcsOut?: string | null
-          mother?: Json | null
-          father?: Json | null
-          legalGuardian?: Json | null
-          nextOfKin?: Json | null
-          placingAgencyCounty?: string | null
-          probationOfficer?: Json | null
-          caseworker?: Json | null
-          guardianAdLitem?: Json | null
-          attorney?: string | null
-          judge?: string | null
-          allergies?: string | null
-          currentMedications?: string | null
-          significantHealthConditions?: string | null
-          religion?: string | null
-          lastSchoolAttended?: string | null
-          hasIEP?: boolean | null
-          currentGrade?: string | null
-          getAlongWithOthers?: string | null
-          strengthsTalents?: string | null
-          interests?: string | null
-          behaviorProblems?: string | null
-          dislikesAboutSelf?: string | null
-          angerTriggers?: string | null
-          historyPhysicallyHurting?: boolean | null
-          historyVandalism?: boolean | null
-          gangInvolvement?: boolean | null
-          familyViolentCrimes?: boolean | null
-          tobaccoPast6To12Months?: boolean | null
-          alcoholPast6To12Months?: boolean | null
-          drugsVapingMarijuanaPast6To12Months?: boolean | null
-          drugTestingDates?: string | null
-          communityResources?: Json | null
-          treatmentFocus?: Json | null
-          dischargePlan?: Json | null
-          emergencyShelterCare?: Json | null
-          profilePhoto?: string | null
-          level?: number
-          pointTotal?: number
-          referralSource?: string | null
-          referralReason?: string | null
-          educationInfo?: string | null
-          medicalInfo?: string | null
-          mentalHealthInfo?: string | null
-          legalStatus?: string | null
-          peerInteraction?: number | null
-          adultInteraction?: number | null
-          investmentLevel?: number | null
-          dealAuthority?: number | null
-          hyrnaRiskLevel?: string | null
-          hyrnaScore?: number | null
-          hyrnaAssessmentDate?: string | null
-          createdAt?: string | null
-          updatedAt?: string | null
-          idNumber?: string | null
-          guardianRelationship?: string | null
-          guardianContact?: string | null
-          guardianPhone?: string | null
-          guardianEmail?: string | null
-          probationContact?: string | null
-          probationPhone?: string | null
-          placementAuthority?: string | null
-          estimatedStay?: string | null
-          priorPlacements?: string[] | null
-          numPriorPlacements?: string | null
-          lengthRecentPlacement?: string | null
-          courtInvolvement?: string[] | null
-          currentSchool?: string | null
-          grade?: string | null
-          academicStrengths?: string | null
-          academicChallenges?: string | null
-          educationGoals?: string | null
-          schoolContact?: string | null
-          schoolPhone?: string | null
-          physician?: string | null
-          physicianPhone?: string | null
-          insuranceProvider?: string | null
-          policyNumber?: string | null
-          medicalConditions?: string | null
-          medicalRestrictions?: string | null
-          currentDiagnoses?: string | null
-          diagnoses?: string | null
-          traumaHistory?: string[] | null
-          previousTreatment?: string | null
-          currentCounseling?: string[] | null
-          therapistName?: string | null
-          therapistContact?: string | null
-          sessionFrequency?: string | null
-          sessionTime?: string | null
-          selfHarmHistory?: string[] | null
-          lastIncidentDate?: string | null
-          hasSafetyPlan?: boolean | null
-          onSubsystem?: boolean | null
-          pointsInCurrentLevel?: number | null
-          dailyPointsForPrivileges?: number | null
-          realColorsResult?: string | null
-        }
-        Update: {
-          id?: string
-          firstName?: string
-          lastName?: string
-          dob?: string | null
-          age?: number | null
-          sex?: string | null
-          socialSecurityNumber?: string | null
-          placeOfBirth?: string | null
-          race?: string | null
-          address?: Json | null
-          physicalDescription?: Json | null
-          admissionDate?: string | null
-          admissionTime?: string | null
-          rcsIn?: string | null
-          dischargeDate?: string | null
-          dischargeTime?: string | null
-          rcsOut?: string | null
-          mother?: Json | null
-          father?: Json | null
-          legalGuardian?: Json | null
-          nextOfKin?: Json | null
-          placingAgencyCounty?: string | null
-          probationOfficer?: Json | null
-          caseworker?: Json | null
-          guardianAdLitem?: Json | null
-          attorney?: string | null
-          judge?: string | null
-          allergies?: string | null
-          currentMedications?: string | null
-          significantHealthConditions?: string | null
-          religion?: string | null
-          lastSchoolAttended?: string | null
-          hasIEP?: boolean | null
-          currentGrade?: string | null
-          getAlongWithOthers?: string | null
-          strengthsTalents?: string | null
-          interests?: string | null
-          behaviorProblems?: string | null
-          dislikesAboutSelf?: string | null
-          angerTriggers?: string | null
-          historyPhysicallyHurting?: boolean | null
-          historyVandalism?: boolean | null
-          gangInvolvement?: boolean | null
-          familyViolentCrimes?: boolean | null
-          tobaccoPast6To12Months?: boolean | null
-          alcoholPast6To12Months?: boolean | null
-          drugsVapingMarijuanaPast6To12Months?: boolean | null
-          drugTestingDates?: string | null
-          communityResources?: Json | null
-          treatmentFocus?: Json | null
-          dischargePlan?: Json | null
-          emergencyShelterCare?: Json | null
-          profilePhoto?: string | null
-          level?: number
-          pointTotal?: number
-          referralSource?: string | null
-          referralReason?: string | null
-          educationInfo?: string | null
-          medicalInfo?: string | null
-          mentalHealthInfo?: string | null
-          legalStatus?: string | null
-          peerInteraction?: number | null
-          adultInteraction?: number | null
-          investmentLevel?: number | null
-          dealAuthority?: number | null
-          hyrnaRiskLevel?: string | null
-          hyrnaScore?: number | null
-          hyrnaAssessmentDate?: string | null
-          createdAt?: string | null
-          updatedAt?: string | null
-          idNumber?: string | null
-          guardianRelationship?: string | null
-          guardianContact?: string | null
-          guardianPhone?: string | null
-          guardianEmail?: string | null
-          probationContact?: string | null
-          probationPhone?: string | null
-          placementAuthority?: string | null
-          estimatedStay?: string | null
-          priorPlacements?: string[] | null
-          numPriorPlacements?: string | null
-          lengthRecentPlacement?: string | null
-          courtInvolvement?: string[] | null
-          currentSchool?: string | null
-          grade?: string | null
-          academicStrengths?: string | null
-          academicChallenges?: string | null
-          educationGoals?: string | null
-          schoolContact?: string | null
-          schoolPhone?: string | null
-          physician?: string | null
-          physicianPhone?: string | null
-          insuranceProvider?: string | null
-          policyNumber?: string | null
-          medicalConditions?: string | null
-          medicalRestrictions?: string | null
-          currentDiagnoses?: string | null
-          diagnoses?: string | null
-          traumaHistory?: string[] | null
-          previousTreatment?: string | null
-          currentCounseling?: string[] | null
-          therapistName?: string | null
-          therapistContact?: string | null
-          sessionFrequency?: string | null
-          sessionTime?: string | null
-          selfHarmHistory?: string[] | null
-          lastIncidentDate?: string | null
-          hasSafetyPlan?: boolean | null
-          onSubsystem?: boolean | null
-          pointsInCurrentLevel?: number | null
-          dailyPointsForPrivileges?: number | null
-          realColorsResult?: string | null
-        }
-        Relationships: []
-      }
       behavior_points: {
         Row: {
-          id: string
-          youth_id: string
-          date: string | null
-          morningPoints: number
-          afternoonPoints: number
-          eveningPoints: number
-          totalPoints: number
+          afternoonPoints: number | null
           comments: string | null
           createdAt: string | null
+          date: string | null
+          eveningPoints: number | null
+          id: string
+          morningPoints: number | null
+          totalPoints: number | null
+          youth_id: string
         }
         Insert: {
-          id?: string
-          youth_id: string
-          date?: string | null
-          morningPoints: number
-          afternoonPoints: number
-          eveningPoints: number
-          totalPoints: number
+          afternoonPoints?: number | null
           comments?: string | null
           createdAt?: string | null
+          date?: string | null
+          eveningPoints?: number | null
+          id?: string
+          morningPoints?: number | null
+          totalPoints?: number | null
+          youth_id: string
         }
         Update: {
-          id?: string
-          youth_id?: string
-          date?: string | null
-          morningPoints?: number
-          afternoonPoints?: number
-          eveningPoints?: number
-          totalPoints?: number
+          afternoonPoints?: number | null
           comments?: string | null
           createdAt?: string | null
+          date?: string | null
+          eveningPoints?: number | null
+          id?: string
+          morningPoints?: number | null
+          totalPoints?: number | null
+          youth_id?: string
         }
         Relationships: [
           {
@@ -395,36 +55,36 @@ export interface Database {
             isOneToOne: false
             referencedRelation: "youth"
             referencedColumns: ["id"]
-          }
+          },
         ]
       }
       case_notes: {
         Row: {
-          id: string
-          youth_id: string
+          createdAt: string | null
           date: string | null
-          summary: string | null
+          id: string
           note: string | null
           staff: string | null
-          createdAt: string | null
+          summary: string | null
+          youth_id: string
         }
         Insert: {
-          id?: string
-          youth_id: string
+          createdAt?: string | null
           date?: string | null
-          summary?: string | null
+          id?: string
           note?: string | null
           staff?: string | null
-          createdAt?: string | null
+          summary?: string | null
+          youth_id: string
         }
         Update: {
-          id?: string
-          youth_id?: string
+          createdAt?: string | null
           date?: string | null
-          summary?: string | null
+          id?: string
           note?: string | null
           staff?: string | null
-          createdAt?: string | null
+          summary?: string | null
+          youth_id?: string
         }
         Relationships: [
           {
@@ -433,48 +93,185 @@ export interface Database {
             isOneToOne: false
             referencedRelation: "youth"
             referencedColumns: ["id"]
-          }
+          },
+        ]
+      }
+      court_reports: {
+        Row: {
+          academic_progress: string | null
+          additional_comments: string | null
+          aftercare_recommendations: string | null
+          author_user_id: string | null
+          behavioral_interventions: string | null
+          behavioral_progress: string | null
+          community_contacts: string | null
+          court_recommendations: string | null
+          created_at: string
+          created_by: string | null
+          current_placement: string | null
+          daily_structure: string | null
+          date_of_birth: string | null
+          discharge_planning: string | null
+          discharge_timeline: string | null
+          draft_payload: Json | null
+          educational_challenges: string | null
+          family_therapy: string | null
+          family_visitation: string | null
+          goal_progress: string | null
+          id: string
+          incentives_earned: string | null
+          medication_compliance: string | null
+          overall_assessment: string | null
+          peer_relationships: string | null
+          program_compliance: string | null
+          report_date: string
+          reporting_officer: string | null
+          risk_assessment: string | null
+          school_placement: string | null
+          significant_incidents: string | null
+          skills_development: string | null
+          therapeutic_participation: string | null
+          transition_plan: string | null
+          treatment_goals: string | null
+          updated_at: string
+          updated_by: string | null
+          vocational_goals: string | null
+          youth_id: string
+          youth_name: string
+        }
+        Insert: {
+          academic_progress?: string | null
+          additional_comments?: string | null
+          aftercare_recommendations?: string | null
+          author_user_id?: string | null
+          behavioral_interventions?: string | null
+          behavioral_progress?: string | null
+          community_contacts?: string | null
+          court_recommendations?: string | null
+          created_at?: string
+          created_by?: string | null
+          current_placement?: string | null
+          daily_structure?: string | null
+          date_of_birth?: string | null
+          discharge_planning?: string | null
+          discharge_timeline?: string | null
+          draft_payload?: Json | null
+          educational_challenges?: string | null
+          family_therapy?: string | null
+          family_visitation?: string | null
+          goal_progress?: string | null
+          id?: string
+          incentives_earned?: string | null
+          medication_compliance?: string | null
+          overall_assessment?: string | null
+          peer_relationships?: string | null
+          program_compliance?: string | null
+          report_date: string
+          reporting_officer?: string | null
+          risk_assessment?: string | null
+          school_placement?: string | null
+          significant_incidents?: string | null
+          skills_development?: string | null
+          therapeutic_participation?: string | null
+          transition_plan?: string | null
+          treatment_goals?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          vocational_goals?: string | null
+          youth_id: string
+          youth_name: string
+        }
+        Update: {
+          academic_progress?: string | null
+          additional_comments?: string | null
+          aftercare_recommendations?: string | null
+          author_user_id?: string | null
+          behavioral_interventions?: string | null
+          behavioral_progress?: string | null
+          community_contacts?: string | null
+          court_recommendations?: string | null
+          created_at?: string
+          created_by?: string | null
+          current_placement?: string | null
+          daily_structure?: string | null
+          date_of_birth?: string | null
+          discharge_planning?: string | null
+          discharge_timeline?: string | null
+          draft_payload?: Json | null
+          educational_challenges?: string | null
+          family_therapy?: string | null
+          family_visitation?: string | null
+          goal_progress?: string | null
+          id?: string
+          incentives_earned?: string | null
+          medication_compliance?: string | null
+          overall_assessment?: string | null
+          peer_relationships?: string | null
+          program_compliance?: string | null
+          report_date?: string
+          reporting_officer?: string | null
+          risk_assessment?: string | null
+          school_placement?: string | null
+          significant_incidents?: string | null
+          skills_development?: string | null
+          therapeutic_participation?: string | null
+          transition_plan?: string | null
+          treatment_goals?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          vocational_goals?: string | null
+          youth_id?: string
+          youth_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "court_reports_youth_id_fkey"
+            columns: ["youth_id"]
+            isOneToOne: false
+            referencedRelation: "youth"
+            referencedColumns: ["id"]
+          },
         ]
       }
       daily_ratings: {
         Row: {
-          id: string
-          youth_id: string
-          date: string | null
-          peerInteraction: number | null
           adultInteraction: number | null
-          investmentLevel: number | null
-          dealAuthority: number | null
-          staff: string | null
           comments: string | null
           createdAt: string | null
+          date: string | null
+          dealAuthority: number | null
+          id: string
+          investmentLevel: number | null
+          peerInteraction: number | null
+          staff: string | null
           updatedAt: string | null
+          youth_id: string
         }
         Insert: {
-          id?: string
-          youth_id: string
-          date?: string | null
-          peerInteraction?: number | null
           adultInteraction?: number | null
-          investmentLevel?: number | null
-          dealAuthority?: number | null
-          staff?: string | null
           comments?: string | null
           createdAt?: string | null
+          date?: string | null
+          dealAuthority?: number | null
+          id?: string
+          investmentLevel?: number | null
+          peerInteraction?: number | null
+          staff?: string | null
           updatedAt?: string | null
+          youth_id: string
         }
         Update: {
-          id?: string
-          youth_id?: string
-          date?: string | null
-          peerInteraction?: number | null
           adultInteraction?: number | null
-          investmentLevel?: number | null
-          dealAuthority?: number | null
-          staff?: string | null
           comments?: string | null
           createdAt?: string | null
+          date?: string | null
+          dealAuthority?: number | null
+          id?: string
+          investmentLevel?: number | null
+          peerInteraction?: number | null
+          staff?: string | null
           updatedAt?: string | null
+          youth_id?: string
         }
         Relationships: [
           {
@@ -483,8 +280,432 @@ export interface Database {
             isOneToOne: false
             referencedRelation: "youth"
             referencedColumns: ["id"]
-          }
+          },
         ]
+      }
+      progress_notes: {
+        Row: {
+          category: string | null
+          createdat: string | null
+          date: string | null
+          id: string
+          note: string | null
+          rating: number | null
+          staff: string | null
+          youth_id: string
+        }
+        Insert: {
+          category?: string | null
+          createdat?: string | null
+          date?: string | null
+          id?: string
+          note?: string | null
+          rating?: number | null
+          staff?: string | null
+          youth_id: string
+        }
+        Update: {
+          category?: string | null
+          createdat?: string | null
+          date?: string | null
+          id?: string
+          note?: string | null
+          rating?: number | null
+          staff?: string | null
+          youth_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "progress_notes_youth_id_fkey"
+            columns: ["youth_id"]
+            isOneToOne: false
+            referencedRelation: "youth"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      report_drafts: {
+        Row: {
+          author_user_id: string | null
+          created_at: string
+          data: Json
+          id: string
+          report_type: string
+          updated_at: string
+          youth_id: string
+        }
+        Insert: {
+          author_user_id?: string | null
+          created_at?: string
+          data: Json
+          id?: string
+          report_type: string
+          updated_at?: string
+          youth_id: string
+        }
+        Update: {
+          author_user_id?: string | null
+          created_at?: string
+          data?: Json
+          id?: string
+          report_type?: string
+          updated_at?: string
+          youth_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "report_drafts_youth_id_fkey"
+            columns: ["youth_id"]
+            isOneToOne: false
+            referencedRelation: "youth"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      youth: {
+        Row: {
+          academicChallenges: string | null
+          academicStrengths: string | null
+          address: Json | null
+          admissionDate: string | null
+          admissionTime: string | null
+          adultInteraction: number | null
+          age: number | null
+          alcoholPast6To12Months: boolean | null
+          allergies: string | null
+          angerTriggers: string | null
+          attorney: string | null
+          behaviorProblems: string | null
+          caseworker: Json | null
+          communityResources: Json | null
+          courtInvolvement: string[] | null
+          createdAt: string | null
+          currentCounseling: string[] | null
+          currentDiagnoses: string | null
+          currentGrade: string | null
+          currentMedications: string | null
+          currentSchool: string | null
+          dailyPointsForPrivileges: number | null
+          dealAuthority: number | null
+          diagnoses: string | null
+          dischargeDate: string | null
+          dischargePlan: Json | null
+          dischargeTime: string | null
+          dislikesAboutSelf: string | null
+          dob: string | null
+          drugsVapingMarijuanaPast6To12Months: boolean | null
+          drugTestingDates: string | null
+          educationGoals: string | null
+          educationInfo: string | null
+          emergencyShelterCare: Json | null
+          estimatedStay: string | null
+          familyViolentCrimes: boolean | null
+          father: Json | null
+          firstName: string
+          gangInvolvement: boolean | null
+          getAlongWithOthers: string | null
+          grade: string | null
+          guardianAdLitem: Json | null
+          guardianContact: string | null
+          guardianEmail: string | null
+          guardianPhone: string | null
+          guardianRelationship: string | null
+          hasIEP: boolean | null
+          hasSafetyPlan: boolean | null
+          historyPhysicallyHurting: boolean | null
+          historyVandalism: boolean | null
+          hyrnaAssessmentDate: string | null
+          hyrnaRiskLevel: string | null
+          hyrnaScore: number | null
+          id: string
+          idNumber: string | null
+          insuranceProvider: string | null
+          interests: string | null
+          investmentLevel: number | null
+          judge: string | null
+          lastIncidentDate: string | null
+          lastName: string
+          lastSchoolAttended: string | null
+          legalGuardian: Json | null
+          legalStatus: string | null
+          lengthRecentPlacement: string | null
+          level: number | null
+          medicalConditions: string | null
+          medicalInfo: string | null
+          medicalRestrictions: string | null
+          mentalHealthInfo: string | null
+          mother: Json | null
+          nextOfKin: Json | null
+          numPriorPlacements: string | null
+          onSubsystem: boolean | null
+          peerInteraction: number | null
+          physicalDescription: Json | null
+          physician: string | null
+          physicianPhone: string | null
+          placementAuthority: string | null
+          placeOfBirth: string | null
+          placingAgencyCounty: string | null
+          pointsInCurrentLevel: number | null
+          pointTotal: number | null
+          policyNumber: string | null
+          previousTreatment: string | null
+          priorPlacements: string[] | null
+          probationContact: string | null
+          probationOfficer: Json | null
+          probationPhone: string | null
+          profilePhoto: string | null
+          race: string | null
+          rcsIn: string | null
+          rcsOut: string | null
+          realColorsResult: string | null
+          referralReason: string | null
+          referralSource: string | null
+          religion: string | null
+          schoolContact: string | null
+          schoolPhone: string | null
+          selfHarmHistory: string[] | null
+          sessionFrequency: string | null
+          sessionTime: string | null
+          sex: string | null
+          significantHealthConditions: string | null
+          socialSecurityNumber: string | null
+          strengthsTalents: string | null
+          therapistContact: string | null
+          therapistName: string | null
+          tobaccoPast6To12Months: boolean | null
+          traumaHistory: string[] | null
+          treatmentFocus: Json | null
+          updatedAt: string | null
+        }
+        Insert: {
+          academicChallenges?: string | null
+          academicStrengths?: string | null
+          address?: Json | null
+          admissionDate?: string | null
+          admissionTime?: string | null
+          adultInteraction?: number | null
+          age?: number | null
+          alcoholPast6To12Months?: boolean | null
+          allergies?: string | null
+          angerTriggers?: string | null
+          attorney?: string | null
+          behaviorProblems?: string | null
+          caseworker?: Json | null
+          communityResources?: Json | null
+          courtInvolvement?: string[] | null
+          createdAt?: string | null
+          currentCounseling?: string[] | null
+          currentDiagnoses?: string | null
+          currentGrade?: string | null
+          currentMedications?: string | null
+          currentSchool?: string | null
+          dailyPointsForPrivileges?: number | null
+          dealAuthority?: number | null
+          diagnoses?: string | null
+          dischargeDate?: string | null
+          dischargePlan?: Json | null
+          dischargeTime?: string | null
+          dislikesAboutSelf?: string | null
+          dob?: string | null
+          drugsVapingMarijuanaPast6To12Months?: boolean | null
+          drugTestingDates?: string | null
+          educationGoals?: string | null
+          educationInfo?: string | null
+          emergencyShelterCare?: Json | null
+          estimatedStay?: string | null
+          familyViolentCrimes?: boolean | null
+          father?: Json | null
+          firstName: string
+          gangInvolvement?: boolean | null
+          getAlongWithOthers?: string | null
+          grade?: string | null
+          guardianAdLitem?: Json | null
+          guardianContact?: string | null
+          guardianEmail?: string | null
+          guardianPhone?: string | null
+          guardianRelationship?: string | null
+          hasIEP?: boolean | null
+          hasSafetyPlan?: boolean | null
+          historyPhysicallyHurting?: boolean | null
+          historyVandalism?: boolean | null
+          hyrnaAssessmentDate?: string | null
+          hyrnaRiskLevel?: string | null
+          hyrnaScore?: number | null
+          id?: string
+          idNumber?: string | null
+          insuranceProvider?: string | null
+          interests?: string | null
+          investmentLevel?: number | null
+          judge?: string | null
+          lastIncidentDate?: string | null
+          lastName: string
+          lastSchoolAttended?: string | null
+          legalGuardian?: Json | null
+          legalStatus?: string | null
+          lengthRecentPlacement?: string | null
+          level?: number | null
+          medicalConditions?: string | null
+          medicalInfo?: string | null
+          medicalRestrictions?: string | null
+          mentalHealthInfo?: string | null
+          mother?: Json | null
+          nextOfKin?: Json | null
+          numPriorPlacements?: string | null
+          onSubsystem?: boolean | null
+          peerInteraction?: number | null
+          physicalDescription?: Json | null
+          physician?: string | null
+          physicianPhone?: string | null
+          placementAuthority?: string | null
+          placeOfBirth?: string | null
+          placingAgencyCounty?: string | null
+          pointsInCurrentLevel?: number | null
+          pointTotal?: number | null
+          policyNumber?: string | null
+          previousTreatment?: string | null
+          priorPlacements?: string[] | null
+          probationContact?: string | null
+          probationOfficer?: Json | null
+          probationPhone?: string | null
+          profilePhoto?: string | null
+          race?: string | null
+          rcsIn?: string | null
+          rcsOut?: string | null
+          realColorsResult?: string | null
+          referralReason?: string | null
+          referralSource?: string | null
+          religion?: string | null
+          schoolContact?: string | null
+          schoolPhone?: string | null
+          selfHarmHistory?: string[] | null
+          sessionFrequency?: string | null
+          sessionTime?: string | null
+          sex?: string | null
+          significantHealthConditions?: string | null
+          socialSecurityNumber?: string | null
+          strengthsTalents?: string | null
+          therapistContact?: string | null
+          therapistName?: string | null
+          tobaccoPast6To12Months?: boolean | null
+          traumaHistory?: string[] | null
+          treatmentFocus?: Json | null
+          updatedAt?: string | null
+        }
+        Update: {
+          academicChallenges?: string | null
+          academicStrengths?: string | null
+          address?: Json | null
+          admissionDate?: string | null
+          admissionTime?: string | null
+          adultInteraction?: number | null
+          age?: number | null
+          alcoholPast6To12Months?: boolean | null
+          allergies?: string | null
+          angerTriggers?: string | null
+          attorney?: string | null
+          behaviorProblems?: string | null
+          caseworker?: Json | null
+          communityResources?: Json | null
+          courtInvolvement?: string[] | null
+          createdAt?: string | null
+          currentCounseling?: string[] | null
+          currentDiagnoses?: string | null
+          currentGrade?: string | null
+          currentMedications?: string | null
+          currentSchool?: string | null
+          dailyPointsForPrivileges?: number | null
+          dealAuthority?: number | null
+          diagnoses?: string | null
+          dischargeDate?: string | null
+          dischargePlan?: Json | null
+          dischargeTime?: string | null
+          dislikesAboutSelf?: string | null
+          dob?: string | null
+          drugsVapingMarijuanaPast6To12Months?: boolean | null
+          drugTestingDates?: string | null
+          educationGoals?: string | null
+          educationInfo?: string | null
+          emergencyShelterCare?: Json | null
+          estimatedStay?: string | null
+          familyViolentCrimes?: boolean | null
+          father?: Json | null
+          firstName?: string
+          gangInvolvement?: boolean | null
+          getAlongWithOthers?: string | null
+          grade?: string | null
+          guardianAdLitem?: Json | null
+          guardianContact?: string | null
+          guardianEmail?: string | null
+          guardianPhone?: string | null
+          guardianRelationship?: string | null
+          hasIEP?: boolean | null
+          hasSafetyPlan?: boolean | null
+          historyPhysicallyHurting?: boolean | null
+          historyVandalism?: boolean | null
+          hyrnaAssessmentDate?: string | null
+          hyrnaRiskLevel?: string | null
+          hyrnaScore?: number | null
+          id?: string
+          idNumber?: string | null
+          insuranceProvider?: string | null
+          interests?: string | null
+          investmentLevel?: number | null
+          judge?: string | null
+          lastIncidentDate?: string | null
+          lastName?: string
+          lastSchoolAttended?: string | null
+          legalGuardian?: Json | null
+          legalStatus?: string | null
+          lengthRecentPlacement?: string | null
+          level?: number | null
+          medicalConditions?: string | null
+          medicalInfo?: string | null
+          medicalRestrictions?: string | null
+          mentalHealthInfo?: string | null
+          mother?: Json | null
+          nextOfKin?: Json | null
+          numPriorPlacements?: string | null
+          onSubsystem?: boolean | null
+          peerInteraction?: number | null
+          physicalDescription?: Json | null
+          physician?: string | null
+          physicianPhone?: string | null
+          placementAuthority?: string | null
+          placeOfBirth?: string | null
+          placingAgencyCounty?: string | null
+          pointsInCurrentLevel?: number | null
+          pointTotal?: number | null
+          policyNumber?: string | null
+          previousTreatment?: string | null
+          priorPlacements?: string[] | null
+          probationContact?: string | null
+          probationOfficer?: Json | null
+          probationPhone?: string | null
+          profilePhoto?: string | null
+          race?: string | null
+          rcsIn?: string | null
+          rcsOut?: string | null
+          realColorsResult?: string | null
+          referralReason?: string | null
+          referralSource?: string | null
+          religion?: string | null
+          schoolContact?: string | null
+          schoolPhone?: string | null
+          selfHarmHistory?: string[] | null
+          sessionFrequency?: string | null
+          sessionTime?: string | null
+          sex?: string | null
+          significantHealthConditions?: string | null
+          socialSecurityNumber?: string | null
+          strengthsTalents?: string | null
+          therapistContact?: string | null
+          therapistName?: string | null
+          tobaccoPast6To12Months?: boolean | null
+          traumaHistory?: string[] | null
+          treatmentFocus?: Json | null
+          updatedAt?: string | null
+        }
+        Relationships: []
       }
     }
     Views: {
@@ -501,3 +722,126 @@ export interface Database {
     }
   }
 }
+
+type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
+
+type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
+
+export type Tables<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+      Row: infer R
+    }
+    ? R
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])
+    ? (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
+        Row: infer R
+      }
+      ? R
+      : never
+    : never
+
+export type TablesInsert<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Insert: infer I
+    }
+    ? I
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Insert: infer I
+      }
+      ? I
+      : never
+    : never
+
+export type TablesUpdate<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Update: infer U
+    }
+    ? U
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Update: infer U
+      }
+      ? U
+      : never
+    : never
+
+export type Enums<
+  DefaultSchemaEnumNameOrOptions extends
+    | keyof DefaultSchema["Enums"]
+    | { schema: keyof DatabaseWithoutInternals },
+  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+    : never = never,
+> = DefaultSchemaEnumNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
+  : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
+    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
+    : never
+
+export type CompositeTypes<
+  PublicCompositeTypeNameOrOptions extends
+    | keyof DefaultSchema["CompositeTypes"]
+    | { schema: keyof DatabaseWithoutInternals },
+  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    : never = never,
+> = PublicCompositeTypeNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
+  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
+    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
+    : never
+
+export const Constants = {
+  public: {
+    Enums: {},
+  },
+} as const

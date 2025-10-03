@@ -273,23 +273,23 @@ export const YouthProfile = ({ youth, onBack, onYouthUpdated, onRatingsUpdated }
             </TabsContent>
 
             <TabsContent value="personal">
-              <PersonalInfoProfileTab youth={youth} />
+              <PersonalInfoProfileTab youth={youth} onYouthUpdated={onYouthUpdated} />
             </TabsContent>
 
             <TabsContent value="background">
-              <BackgroundProfileTab youth={youth} />
+              <BackgroundProfileTab youth={youth} onYouthUpdated={onYouthUpdated} />
             </TabsContent>
 
             <TabsContent value="education">
-              <EducationProfileTab youth={youth} />
+              <EducationProfileTab youth={youth} onYouthUpdated={onYouthUpdated} />
             </TabsContent>
 
             <TabsContent value="medical">
-              <MedicalProfileTab youth={youth} />
+              <MedicalProfileTab youth={youth} onYouthUpdated={onYouthUpdated} />
             </TabsContent>
 
             <TabsContent value="mental-health">
-              <MentalHealthProfileTab youth={youth} />
+              <MentalHealthProfileTab youth={youth} onYouthUpdated={onYouthUpdated} />
             </TabsContent>
           </Tabs>
         </CardContent>

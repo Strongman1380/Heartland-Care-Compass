@@ -21,6 +21,13 @@ interface CaseNotesProps {
   onBackToSelection?: () => void;
 }
 
+type CaseNoteSections = {
+  summary?: string;
+  strengthsChallenges?: string;
+  interventionsResponse?: string;
+  planNextSteps?: string;
+};
+
 export const CaseNotes = ({ youthId, youth, onYouthChange, onBackToSelection }: CaseNotesProps) => {
   const [filteredNotes, setFilteredNotes] = useState<CaseNote[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -33,9 +40,11 @@ export const CaseNotes = ({ youthId, youth, onYouthChange, onBackToSelection }: 
   const { youths } = useYouth();
   const [formData, setFormData] = useState({
     date: format(new Date(), 'yyyy-MM-dd'),
-    summary: "",
-    note: "",
     staff: "",
+    summary: "",
+    strengthsChallenges: "",
+    interventionsResponse: "",
+    planNextSteps: "",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -70,32 +79,50 @@ export const CaseNotes = ({ youthId, youth, onYouthChange, onBackToSelection }: 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.note.trim()) {
-      toast.error("Case note content is required");
+    const hasContent = [
+      formData.summary,
+      formData.strengthsChallenges,
+      formData.interventionsResponse,
+      formData.planNextSteps,
+    ].some(section => section.trim().length > 0);
+
+    if (!hasContent) {
+      toast.error("Please complete at least one section of the case note");
       return;
     }
-    
+
     try {
       setIsSubmitting(true);
-      
+
       const noteDate = new Date(formData.date);
-      
+      const structuredNote = {
+        formatVersion: "v2",
+        sections: {
+          summary: formData.summary.trim(),
+          strengthsChallenges: formData.strengthsChallenges.trim(),
+          interventionsResponse: formData.interventionsResponse.trim(),
+          planNextSteps: formData.planNextSteps.trim(),
+        },
+      };
+
       const newNote = {
         youth_id: youthId,
         date: format(noteDate, 'yyyy-MM-dd'),
         summary: formData.summary.trim() || "Case Note",
-        note: formData.note.trim(),
+        note: JSON.stringify(structuredNote),
         staff: formData.staff.trim() || "Staff Member",
       };
-      
+
       await createCaseNote(newNote);
-      
+
       // Reset form
       setFormData({
         date: format(new Date(), 'yyyy-MM-dd'),
-        summary: "",
-        note: "",
         staff: "",
+        summary: "",
+        strengthsChallenges: "",
+        interventionsResponse: "",
+        planNextSteps: "",
       });
     } catch (error) {
       toast.error("Failed to add case note");
@@ -159,8 +186,87 @@ export const CaseNotes = ({ youthId, youth, onYouthChange, onBackToSelection }: 
     }
   };
 
+  const parseStructuredNote = (content?: string | null): CaseNoteSections | null => {
+    if (!content) return null;
+    try {
+      const parsed = JSON.parse(content);
+      if (parsed?.formatVersion === 'v2' && parsed.sections) {
+        return parsed.sections as CaseNoteSections;
+      }
+      return null;
+    } catch (error) {
+      return null;
+    }
+  };
+
+  const renderNoteSections = (note: CaseNote) => {
+    const sections = parseStructuredNote(note.note);
+    if (!sections) {
+      return (
+        <div
+          className="text-sm text-gray-800 leading-relaxed"
+          style={{
+            fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+            lineHeight: '1.8',
+            whiteSpace: 'pre-wrap',
+            wordWrap: 'break-word',
+            overflowWrap: 'break-word'
+          }}
+          dangerouslySetInnerHTML={{
+            __html: (note.note || 'No content')
+              .replace(/\n/g, '<br>')
+              .replace(/  /g, '&nbsp;&nbsp;')
+              .replace(/\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;')
+          }}
+        />
+      );
+    }
+
+    const ordered: Array<{ label: string; key: keyof CaseNoteSections }> = [
+      { label: 'Summary of Discussion', key: 'summary' },
+      { label: 'Strengths & Challenges', key: 'strengthsChallenges' },
+      { label: 'Interventions / Response', key: 'interventionsResponse' },
+      { label: 'Plan / Next Steps', key: 'planNextSteps' },
+    ];
+
+    return (
+      <div className="space-y-4">
+        {ordered.map(({ label, key }) => {
+          const value = sections[key];
+          if (!value || value.trim().length === 0) return null;
+          return (
+            <div key={key}>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-red-700">
+                {label}
+              </p>
+              <div className="mt-1 rounded-md border border-red-100 bg-red-50/40 px-3 py-2 text-sm text-gray-800 whitespace-pre-wrap">
+                {value}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  const renderStructuredSection = (label: string, value?: string) => {
+    if (!value || value.trim().length === 0) return '';
+    return `
+      <div class="note-section">
+        <h4>${label}</h4>
+        <p>${value
+          .trim()
+          .replace(/\n/g, '<br>')
+          .replace(/  /g, '&nbsp;&nbsp;')
+          .replace(/\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;')}</p>
+      </div>
+    `;
+  };
+
   const generateCaseNotesHTML = () => {
     const youthName = selectedYouth ? `${selectedYouth.firstName} ${selectedYouth.lastName}` : 'Unknown Youth';
+    const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+    const logoSrc = `${baseUrl}${import.meta.env.BASE_URL}files/BoysHomeLogo.png`;
 
     return `
       <!DOCTYPE html>
@@ -186,6 +292,10 @@ export const CaseNotes = ({ youthId, youth, onYouthChange, onBackToSelection }: 
               padding: 20px;
               border-radius: 8px 8px 0 0;
               margin: -20px -20px 30px -20px;
+            }
+            .header img {
+              height: 60px;
+              margin-bottom: 15px;
             }
             .youth-info {
               background-color: #f5f5f5;
@@ -219,17 +329,26 @@ export const CaseNotes = ({ youthId, youth, onYouthChange, onBackToSelection }: 
               font-weight: normal;
             }
             .note-content {
-              white-space: pre-wrap;
-              line-height: 1.8;
-              font-size: 14px;
+              display: grid;
+              gap: 16px;
               margin-top: 15px;
-              padding: 15px;
+            }
+            .note-section h4 {
+              margin: 0 0 6px 0;
+              font-size: 14px;
+              text-transform: uppercase;
+              letter-spacing: 0.05em;
+              color: #b91c1c;
+            }
+            .note-section p {
+              margin: 0;
+              padding: 12px;
               background: #fafafa;
+              border-radius: 6px;
               border-left: 4px solid #b91c1c;
-              border-radius: 0 4px 4px 0;
-              word-wrap: break-word;
-              overflow-wrap: break-word;
-              font-family: 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', sans-serif;
+              font-size: 14px;
+              line-height: 1.7;
+              white-space: normal;
             }
             .summary-stats {
               background: #f0f9ff;
@@ -252,6 +371,7 @@ export const CaseNotes = ({ youthId, youth, onYouthChange, onBackToSelection }: 
         </head>
         <body>
           <div class="header">
+            <img src="${logoSrc}" alt="Heartland Boys Home Logo" />
             <h1>Heartland Boys Home</h1>
             <h2>Case Notes Report</h2>
             <p>Generated on ${format(new Date(), 'MMMM d, yyyy')}</p>
@@ -273,7 +393,19 @@ export const CaseNotes = ({ youthId, youth, onYouthChange, onBackToSelection }: 
             }</p>
           </div>
 
-          ${filteredNotes.map((note) => `
+          ${filteredNotes.map((note) => {
+              const structured = parseStructuredNote(note.note);
+              const renderedSections = structured ? `
+                ${renderStructuredSection('Summary of Discussion', structured.summary)}
+                ${renderStructuredSection('Strengths & Challenges', structured.strengthsChallenges)}
+                ${renderStructuredSection('Interventions / Response', structured.interventionsResponse)}
+                ${renderStructuredSection('Plan / Next Steps', structured.planNextSteps)}
+              ` : `<div class="note-section"><p>${(note.note || 'No content')
+                .replace(/\n/g, '<br>')
+                .replace(/  /g, '&nbsp;&nbsp;')
+                .replace(/\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;')}</p></div>`;
+
+              return `
             <div class="case-note">
               <div class="note-header">
                 <span>${note.summary || 'Case Note'}</span>
@@ -282,12 +414,10 @@ export const CaseNotes = ({ youthId, youth, onYouthChange, onBackToSelection }: 
                   <div>by ${note.staff || 'Staff Member'}</div>
                 </div>
               </div>
-              <div class="note-content">${(note.note || 'No content')
-                .replace(/\n/g, '<br>')
-                .replace(/  /g, '&nbsp;&nbsp;')
-                .replace(/\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;')}</div>
+              <div class="note-content">${renderedSections}</div>
             </div>
-          `).join('')}
+          `;
+            }).join('')}
 
           <div style="margin-top: 40px; text-align: center; font-size: 12px; color: #666; border-top: 1px solid #ddd; padding-top: 20px;">
             <p>Heartland Boys Home - Confidential Case Notes</p>
@@ -370,49 +500,60 @@ export const CaseNotes = ({ youthId, youth, onYouthChange, onBackToSelection }: 
                 />
               </div>
               
-              <div>
-                <Label htmlFor="summary">Case Note Summary</Label>
-                <Input
-                  id="summary"
-                  name="summary"
-                  value={formData.summary}
-                  onChange={handleInputChange}
-                  placeholder="Brief summary of the case note..."
-                />
-              </div>
-              
-              <div>
-                <Label htmlFor="note">Case Note Content</Label>
-                <Textarea
-                  id="note"
-                  name="note"
-                  value={formData.note}
-                  onChange={handleInputChange}
-                  placeholder="Enter detailed case note information...
+              <div className="grid gap-4">
+                <div>
+                  <Label htmlFor="summary">Summary of Discussion</Label>
+                  <Textarea
+                    id="summary"
+                    name="summary"
+                    value={formData.summary}
+                    onChange={handleInputChange}
+                    placeholder="Key topics discussed, youth presentation, and overall tone of the conversation"
+                    rows={4}
+                    className="resize-none text-sm leading-relaxed"
+                  />
+                </div>
 
-Examples:
-• Behavioral observations
-• Treatment progress
-• Incident details
-• Family interactions
-• Academic updates
+                <div>
+                  <Label htmlFor="strengthsChallenges">Strengths & Challenges</Label>
+                  <Textarea
+                    id="strengthsChallenges"
+                    name="strengthsChallenges"
+                    value={formData.strengthsChallenges}
+                    onChange={handleInputChange}
+                    placeholder="Identify strengths that surfaced and challenges or barriers that need attention"
+                    rows={4}
+                    className="resize-none text-sm leading-relaxed"
+                  />
+                </div>
 
-Use proper spacing and formatting - all formatting will be preserved in reports and exports."
-                  rows={10}
-                  className="resize-none text-sm leading-relaxed"
-                  style={{
-                    fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-                    lineHeight: '1.7',
-                    padding: '12px',
-                    whiteSpace: 'pre-wrap'
-                  }}
-                />
-                <div className="text-xs text-gray-500 mt-2 flex items-start space-x-2">
-                  <span>💡</span>
-                  <span>All formatting including line breaks, spacing, and bullet points will be preserved in reports and exports</span>
+                <div>
+                  <Label htmlFor="interventionsResponse">Interventions / Response</Label>
+                  <Textarea
+                    id="interventionsResponse"
+                    name="interventionsResponse"
+                    value={formData.interventionsResponse}
+                    onChange={handleInputChange}
+                    placeholder="Document interventions applied, staff support provided, and youth response"
+                    rows={4}
+                    className="resize-none text-sm leading-relaxed"
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="planNextSteps">Plan / Next Steps</Label>
+                  <Textarea
+                    id="planNextSteps"
+                    name="planNextSteps"
+                    value={formData.planNextSteps}
+                    onChange={handleInputChange}
+                    placeholder="Outline follow-up actions, assigned responsibilities, and dates for review"
+                    rows={4}
+                    className="resize-none text-sm leading-relaxed"
+                  />
                 </div>
               </div>
-              
+
               <div>
                 <Label htmlFor="staff">Staff Name</Label>
                 <Input
@@ -420,7 +561,7 @@ Use proper spacing and formatting - all formatting will be preserved in reports 
                   name="staff"
                   value={formData.staff}
                   onChange={handleInputChange}
-                  placeholder="Your name"
+                  placeholder="Staff completing the note"
                 />
               </div>
               
@@ -493,25 +634,8 @@ Use proper spacing and formatting - all formatting will be preserved in reports 
                         </div>
                         
                         <CollapsibleContent className="mt-2">
-                          <div className="bg-gray-50 p-4 rounded-md border-l-4 border-blue-500">
-                            <div className="prose prose-sm max-w-none">
-                              <div
-                                className="text-sm text-gray-800 leading-relaxed"
-                                style={{
-                                  fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-                                  lineHeight: '1.8',
-                                  whiteSpace: 'pre-wrap',
-                                  wordWrap: 'break-word',
-                                  overflowWrap: 'break-word'
-                                }}
-                                dangerouslySetInnerHTML={{
-                                  __html: (note.note || 'No content')
-                                    .replace(/\n/g, '<br>')
-                                    .replace(/  /g, '&nbsp;&nbsp;')
-                                    .replace(/\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;')
-                                }}
-                              />
-                            </div>
+                          <div className="bg-gray-50 p-4 rounded-md border border-blue-100">
+                            {renderNoteSections(note)}
                           </div>
                           <div className="text-xs text-gray-500 mt-3 flex justify-between">
                             <span>Created: {note.createdAt ? format(new Date(note.createdAt), 'MMM dd, yyyy \'at\' h:mm a') : 'Unknown'}</span>

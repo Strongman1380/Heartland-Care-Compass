@@ -168,14 +168,44 @@ const GroupHomeKPIDashboard = () => {
       'Very High': 0 
     };
     
+    // Map risk levels to numeric values for averaging
+    const riskLevelToNumber = {
+      'Very Low': 1,
+      'Low': 2,
+      'Low Medium': 3,
+      'Medium': 4,
+      'Medium High': 5,
+      'High': 6,
+      'Very High': 7
+    };
+    
+    const numberToRiskLevel = {
+      1: 'Very Low',
+      2: 'Low',
+      3: 'Low Medium',
+      4: 'Medium',
+      5: 'Medium High',
+      6: 'High',
+      7: 'Very High'
+    };
+    
+    let totalRiskScore = 0;
+    let youthWithRiskLevel = 0;
+    
     youths.forEach(youth => {
       const riskLevel = youth.hyrnaRiskLevel || 'Medium'; // Default to Medium if not set
       // Handle legacy "Moderate" level
       const normalizedLevel = riskLevel === 'Moderate' ? 'Medium' : riskLevel;
       if (normalizedLevel in riskCounts) {
         riskCounts[normalizedLevel as keyof typeof riskCounts]++;
+        totalRiskScore += riskLevelToNumber[normalizedLevel as keyof typeof riskLevelToNumber] || 4;
+        youthWithRiskLevel++;
       }
     });
+    
+    // Calculate average risk level
+    const averageRiskScore = youthWithRiskLevel > 0 ? Math.round(totalRiskScore / youthWithRiskLevel) : 4;
+    const calculatedAverageRiskLevel = numberToRiskLevel[averageRiskScore as keyof typeof numberToRiskLevel] || 'Medium';
     
     const riskLevelDistribution = [
       { name: 'Very Low', value: riskCounts['Very Low'], percentage: totalYouth > 0 ? ((riskCounts['Very Low'] / totalYouth) * 100).toFixed(1) : '0' },
@@ -263,7 +293,7 @@ const GroupHomeKPIDashboard = () => {
     setKpiMetrics({
       totalAssessments: allCaseNotes.length, // Using case notes as proxy
       totalYouth,
-      averageRiskLevel: Object.keys(riskCounts).reduce((a, b) => riskCounts[a] > riskCounts[b] ? a : b, 'Low'),
+      averageRiskLevel: calculatedAverageRiskLevel,
       improvementTrend,
       lastMonthAssessments,
       realColorsAssessments: 0, // No real colors assessments yet
@@ -441,7 +471,7 @@ const GroupHomeKPIDashboard = () => {
                 </Badge>
               </div>
               <p className="text-xs text-muted-foreground">
-                Most common level
+                Group average
               </p>
             </CardContent>
           </Card>
@@ -504,23 +534,38 @@ const GroupHomeKPIDashboard = () => {
                 <CardTitle>Risk Level Distribution</CardTitle>
               </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
+                <ResponsiveContainer width="100%" height={400}>
                   <PieChart>
                     <Pie
-                      data={chartData.riskLevelDistribution}
+                      data={chartData.riskLevelDistribution.filter((entry: any) => entry.value > 0)}
                       cx="50%"
                       cy="50%"
-                      labelLine={false}
+                      labelLine={true}
                       label={({ name, percentage }) => `${name}: ${percentage}%`}
-                      outerRadius={80}
+                      outerRadius={100}
                       fill="#8884d8"
                       dataKey="value"
                     >
-                      {chartData.riskLevelDistribution.map((entry: any, index) => (
-                        <Cell key={`cell-${index}`} fill={getRiskLevelColor(entry.name)} />
-                      ))}
+                      {chartData.riskLevelDistribution
+                        .filter((entry: any) => entry.value > 0)
+                        .map((entry: any, index) => (
+                          <Cell key={`cell-${index}`} fill={getRiskLevelColor(entry.name)} />
+                        ))}
                     </Pie>
-                    <Tooltip />
+                    <Tooltip 
+                      formatter={(value: any, name: any, props: any) => [
+                        `${value} youth (${props.payload.percentage}%)`,
+                        props.payload.name
+                      ]}
+                    />
+                    <Legend 
+                      verticalAlign="bottom" 
+                      height={36}
+                      formatter={(value, entry: any) => {
+                        const item = chartData.riskLevelDistribution.find((d: any) => d.name === entry.payload.name);
+                        return `${value}: ${item?.value || 0} (${item?.percentage || 0}%)`;
+                      }}
+                    />
                   </PieChart>
                 </ResponsiveContainer>
               </CardContent>

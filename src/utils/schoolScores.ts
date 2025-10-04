@@ -64,23 +64,30 @@ export const getScore = (youthId: string, dateISO: string): SchoolDailyScore | n
 
 // Cache to prevent infinite API calls
 const syncCache = new Map<string, number>();
-const SYNC_COOLDOWN = 5000; // 5 seconds between syncs for same range
+const SYNC_COOLDOWN = 10000; // 10 seconds between syncs for same range to prevent resource exhaustion
 
-export const getScoresForRange = (startISO: string, endISO: string): SchoolDailyScore[] => {
+export const getScoresForRange = (startISO: string, endISO: string, forceSync: boolean = false): SchoolDailyScore[] => {
   // Attempt to refresh from Supabase in the background (with cooldown)
   const cacheKey = `${startISO}|${endISO}`;
   const lastSync = syncCache.get(cacheKey) || 0;
   const now = Date.now();
 
-  if (now - lastSync > SYNC_COOLDOWN) {
+  if (forceSync || now - lastSync > SYNC_COOLDOWN) {
     syncCache.set(cacheKey, now);
 
-    try {
-      void (async () => {
+    // Fire and forget with proper error handling
+    (async () => {
+      try {
         const remote = await schoolScoresService.range(startISO, endISO)
         if (remote && remote.length) {
-          // Merge into local cache
+          // Merge into local cache, preferring remote data (it's the source of truth)
           const map = new Map<string, SchoolDailyScore>()
+
+          // First add all local scores
+          const all = readAll()
+          for (const l of all) map.set(`${l.youth_id}|${l.date}`, l)
+
+          // Then overwrite with remote scores (remote is source of truth)
           for (const r of remote) {
             map.set(`${r.youth_id}|${r.date}`, {
               id: r.id,
@@ -92,14 +99,14 @@ export const getScoresForRange = (startISO: string, endISO: string): SchoolDaily
               updatedAt: r.updated_at,
             })
           }
-          const all = readAll()
-          for (const l of all) map.set(`${l.youth_id}|${l.date}`, l)
+
           writeAll(Array.from(map.values()))
         }
-      })()
-    } catch (error) {
-      console.error('School scores sync error:', error);
-    }
+      } catch (error) {
+        // Silently fail - we'll use local cache
+        console.warn('School scores sync failed, using local cache:', error);
+      }
+    })()
   }
 
   const all = readAll()
@@ -210,10 +217,11 @@ export const getYouthStats = (youthId: string): YouthScoreStats | null => {
     ? previousScores.reduce((a, b) => a + b.score, 0) / previousScores.length
     : average
   
+  // Trend thresholds adjusted for 0–4 rating scale
   let trend: 'improving' | 'declining' | 'stable' = 'stable'
   const diff = recentAverage - previousAverage
-  if (diff > 5) trend = 'improving'
-  else if (diff < -5) trend = 'declining'
+  if (diff > 0.2) trend = 'improving'
+  else if (diff < -0.2) trend = 'declining'
   
   return {
     youthId,

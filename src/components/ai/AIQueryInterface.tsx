@@ -29,19 +29,19 @@ interface AIQueryInterfaceProps {
 
 export function AIQueryInterface({
   context,
-  placeholder = "Ask me anything about your data...",
+  placeholder = "Ask me to analyze data, calculate statistics, or expand your notes...",
   suggestions = [
-    "Show me youth with declining behavioral trends this month",
-    "What interventions have been most effective for trauma cases?",
-    "Summarize recent incidents by severity",
-    "Which youth are ready for level advancement?",
+    "Calculate the average behavior points for this month",
+    "What percentage of youth improved their ratings this week?",
+    "Show me the distribution of incidents by type",
+    "Calculate the trend in daily ratings over the last 30 days",
   ]
 }: AIQueryInterfaceProps) {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
       type: 'system',
-      content: "Hi! I'm your AI assistant. I can help you navigate data, analyze patterns, and answer questions about youth in the system. Ask me anything!",
+      content: "Hi! I'm your AI assistant. I can help you with data calculations, statistical analysis, and expanding brief notes into professional paragraphs. Ask me anything!",
       timestamp: new Date(),
     }
   ]);

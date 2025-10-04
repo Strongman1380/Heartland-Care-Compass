@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { PlusCircle, BarChart3, LogOut, Menu, X, LogIn, Users, StickyNote, Calendar, Gavel } from "lucide-react";
+import { PlusCircle, BarChart3, LogOut, Menu, X, LogIn, Users, Calendar, Gavel, FileBarChart, AlertTriangle, GraduationCap } from "lucide-react";
 import { AddYouthDialog } from "@/components/youth/AddYouthDialog";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
@@ -22,10 +22,9 @@ export const Header = () => {
 
   // Navigation items configuration
   const navigationItems = [
-    { path: '/progress-notes', label: 'Case Notes', icon: StickyNote },
+    { path: '/school', label: 'School', icon: GraduationCap },
     { path: '/monthly-progress', label: 'Monthly Progress Report', icon: Calendar },
     { path: '/court-report', label: 'Court Report', icon: Gavel },
-    { path: '/school', label: 'School', icon: Calendar },
   ];
 
   const isActiveRoute = (path: string) => {

@@ -32,8 +32,8 @@ class AlertService {
   private loadAlerts() {
     try {
       // Try Supabase first to hydrate
-      try {
-        void (async () => {
+      (async () => {
+        try {
           const remote = await alertsService.list()
           if (remote && remote.length) {
             // map to AutoAlert-like
@@ -49,8 +49,10 @@ class AlertService {
             }))
             this.saveAlerts()
           }
-        })()
-      } catch {}
+        } catch (error) {
+          console.warn('Alerts sync failed, using local cache:', error)
+        }
+      })()
 
       const savedAlerts = localStorage.getItem('heartland_alerts');
       if (savedAlerts) {

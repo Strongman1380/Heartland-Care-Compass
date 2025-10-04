@@ -161,7 +161,7 @@ app.post('/api/ai/behavioral-insights', async (req, res) => {
       messages: [
         {
           role: 'system',
-          content: 'You are a behavioral analysis specialist for youth residential treatment. Provide professional, evidence-based insights about behavioral patterns and treatment recommendations.'
+          content: 'You are a data analyst specializing in behavioral statistics for youth residential treatment. Focus on interpreting numerical data, calculating trends, identifying patterns in the statistics, and providing quantitative insights. Use the calculated statistics to support your analysis.'
         },
         {
           role: 'user',
@@ -572,27 +572,40 @@ app.post('/api/ai/query', async (req, res) => {
 
     const { question, context } = req.body;
 
-    const prompt = `Answer this question about youth treatment data: "${question}"
+    // Determine if this is a text expansion request or data analysis request
+    const isTextExpansion = context?.fieldType || context?.currentText;
+    
+    let systemPrompt, userPrompt;
+    
+    if (isTextExpansion) {
+      // Text expansion mode - expand brief notes into paragraphs
+      systemPrompt = 'You are a professional clinical writer. Your job is to take brief notes or keywords and expand them into clear, well-written paragraphs (2-3 sentences). Keep the original meaning and facts, just add appropriate structure and professional clinical language. Do not add information that was not implied in the original notes.';
+      userPrompt = question;
+    } else {
+      // Data analysis mode - help with calculations, distributions, insights
+      systemPrompt = 'You are a clinical data analyst and assistant. Help with data calculations, distributions, statistical analysis, and insights about youth treatment data. Provide clear, accurate answers with specific numbers and data points when available. If asked to perform calculations, show your work.';
+      userPrompt = `Question: "${question}"
 
-Available context:
+Available data:
 ${JSON.stringify(context, null, 2)}
 
-Provide a clear, professional answer based on the data.`;
+Provide a clear, professional answer. If this involves calculations or data analysis, show the specific numbers and your reasoning.`;
+    }
 
     const completion = await openai.chat.completions.create({
       model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
       messages: [
         {
           role: 'system',
-          content: 'You are a clinical data analyst. Answer questions about youth treatment data with accuracy and professionalism. Cite specific data points when possible.'
+          content: systemPrompt
         },
         {
           role: 'user',
-          content: prompt
+          content: userPrompt
         }
       ],
-      max_tokens: 1000,
-      temperature: 0.3,
+      max_tokens: isTextExpansion ? 300 : 1000,
+      temperature: isTextExpansion ? 0.5 : 0.3,
     });
 
     const answer = completion.choices[0]?.message?.content || '';
@@ -931,30 +944,38 @@ function generateBehavioralInsightsPrompt(behaviorData, youth, period) {
   const points = behaviorData.map(d => d.totalPoints || 0);
   const avg = points.reduce((sum, p) => sum + p, 0) / points.length;
   const trend = points.length > 1 ? points[points.length - 1] - points[0] : 0;
+  
+  // Calculate additional statistics
+  const median = [...points].sort((a, b) => a - b)[Math.floor(points.length / 2)];
+  const variance = points.reduce((sum, p) => sum + Math.pow(p - avg, 2), 0) / points.length;
+  const stdDev = Math.sqrt(variance);
 
   return `
-Analyze the behavioral data for ${youth.firstName} ${youth.lastName} and provide professional clinical insights:
+Analyze the behavioral data for ${youth.firstName} ${youth.lastName} with focus on statistical patterns and data-driven insights:
 
-BEHAVIORAL DATA ANALYSIS:
+CALCULATED STATISTICS:
 - Data points: ${points.length} entries
 - Average daily points: ${avg.toFixed(1)}
-- Overall trend: ${trend > 0 ? 'Improving' : trend < 0 ? 'Declining' : 'Stable'}
+- Median points: ${median.toFixed(1)}
+- Standard deviation: ${stdDev.toFixed(1)}
+- Overall trend: ${trend > 0 ? `+${trend.toFixed(1)} (Improving)` : trend < 0 ? `${trend.toFixed(1)} (Declining)` : 'Stable'}
 - Point range: ${Math.min(...points)} to ${Math.max(...points)}
 - Recent performance: ${points.slice(-5).join(', ')} (last 5 entries)
+- Consistency: ${stdDev < 5 ? 'High' : stdDev < 10 ? 'Moderate' : 'Variable'}
 
 YOUTH CONTEXT:
 - Current Level: ${youth.level || 'Not specified'}
 - Investment Level: ${youth.investmentLevel || 'Not rated'}/5
 - Trauma History: ${youth.traumaHistory?.length ? 'Present' : 'None documented'}
 
-Please provide:
-1. Behavioral pattern analysis
-2. Potential triggers and motivators
-3. Treatment recommendations
-4. Risk factors and protective factors
-5. Prognosis for continued improvement
+Based on these calculations and data patterns, provide:
+1. Statistical interpretation of behavioral trends
+2. Data-driven pattern analysis (consistency, volatility, trajectory)
+3. Quantitative comparison to expected performance
+4. Evidence-based treatment recommendations
+5. Measurable goals based on current data
 
-Keep response clinical and actionable for treatment planning.`;
+Focus on data-driven insights and quantifiable observations.`;
 }
 
 // Error handling middleware

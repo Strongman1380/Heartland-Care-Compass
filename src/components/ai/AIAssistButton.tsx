@@ -193,14 +193,14 @@ export function AIAssistButton({
       </DropdownMenuTrigger>
 
       <DropdownMenuContent align="end" className="w-56">
-        <DropdownMenuLabel>AI Features</DropdownMenuLabel>
+        <DropdownMenuLabel>AI Assistance</DropdownMenuLabel>
         <DropdownMenuSeparator />
 
         {noteContent && (
           <>
             <DropdownMenuItem onClick={handleSummarize} disabled={isLoading}>
               <FileText className="w-4 h-4 mr-2" />
-              Summarize Content
+              Condense to Key Points
             </DropdownMenuItem>
 
             {youth && (
@@ -215,14 +215,14 @@ export function AIAssistButton({
         {youthId && (
           <DropdownMenuItem onClick={handleSuggest} disabled={isLoading}>
             <Lightbulb className="w-4 h-4 mr-2" />
-            Get Writing Suggestions
+            Suggest Content Ideas
           </DropdownMenuItem>
         )}
 
         {context?.behaviorData && youth && (
           <DropdownMenuItem onClick={handleBehavioralInsights} disabled={isLoading}>
             <TrendingUp className="w-4 h-4 mr-2" />
-            Behavioral Insights
+            Calculate Behavior Trends
           </DropdownMenuItem>
         )}
       </DropdownMenuContent>

@@ -295,19 +295,19 @@ const SchoolPrintReports: React.FC = () => {
   }
 
   const renderHeader = () => (
-    <div className="flex items-center justify-between mb-8 pb-4 border-b-2 border-red-600">
-      <div className="flex items-center gap-4">
+    <div className="flex items-center justify-between mb-4 pb-3 border-b-2 border-red-600">
+      <div className="flex items-center gap-3">
         <img
           src="/files/BoysHomeLogo.png"
           alt="Heartland Boys Home"
-          className="h-16 w-auto object-contain"
+          className="h-12 w-auto object-contain"
         />
         <div>
-          <h1 className="text-2xl font-bold text-red-800">Heartland Boys Home</h1>
-          <p className="text-sm text-gray-600">Academic Services</p>
+          <h1 className="text-xl font-bold text-red-800">Heartland Boys Home</h1>
+          <p className="text-xs text-gray-600">Academic Services</p>
         </div>
       </div>
-      <div className="text-right text-sm text-gray-600">
+      <div className="text-right text-xs text-gray-600">
         <p>Report Date: {format(new Date(), 'MMMM dd, yyyy')}</p>
         <p>Period: {formatRangeDate(startDate)} - {formatRangeDate(endDate)}</p>
       </div>
@@ -315,16 +315,16 @@ const SchoolPrintReports: React.FC = () => {
   )
 
   const renderWeeklyAverageSection = () => (
-    <section className="mt-2">
-      <h2 className="text-xl font-bold text-red-800 mb-4 flex items-center gap-2">
-        <TrendingUp className="w-5 h-5" />
+    <section className="mt-2 no-break">
+      <h2 className="text-lg font-bold text-red-800 mb-3 flex items-center gap-2">
+        <TrendingUp className="w-4 h-4" />
         Weekly Average School Performance Report
       </h2>
 
-      <div className="mb-6">
-        <div className="bg-red-50 p-4 rounded-lg mb-4">
+      <div className="mb-4">
+        <div className="bg-red-50 p-3 rounded-lg mb-3">
           <p className="text-sm text-gray-600">Overall Program Average</p>
-          <p className="text-3xl font-bold text-red-800">{overallAverage}%</p>
+          <p className="text-2xl font-bold text-red-800">{overallAverage}</p>
         </div>
       </div>
 
@@ -332,27 +332,28 @@ const SchoolPrintReports: React.FC = () => {
         <p className="text-sm text-gray-600">No school scores were recorded during this period.</p>
       ) : (
         <>
-          <table className="w-full border-collapse mb-6">
+          <table className="w-full border-collapse mb-4">
             <thead>
               <tr className="bg-gray-100">
-                <th className="border border-gray-300 px-4 py-2 text-left">Student Name</th>
-                <th className="border border-gray-300 px-4 py-2 text-center">Days Recorded</th>
-                <th className="border border-gray-300 px-4 py-2 text-center">Weekly Average</th>
-                <th className="border border-gray-300 px-4 py-2 text-center">Performance</th>
+                <th className="border border-gray-300 px-3 py-1.5 text-left text-sm">Student Name</th>
+                <th className="border border-gray-300 px-3 py-1.5 text-center text-sm">Days</th>
+                <th className="border border-gray-300 px-3 py-1.5 text-center text-sm">Avg</th>
+                <th className="border border-gray-300 px-3 py-1.5 text-center text-sm">Performance</th>
               </tr>
             </thead>
             <tbody>
               {weeklyAverages.map((item) => {
                 const avg = parseFloat(item.average)
-                const performance = avg >= 90 ? 'Excellent' : avg >= 80 ? 'Good' : avg >= 70 ? 'Satisfactory' : avg >= 60 ? 'Needs Improvement' : 'Unsatisfactory'
-                const performanceColor = avg >= 90 ? 'text-green-700' : avg >= 80 ? 'text-blue-700' : avg >= 70 ? 'text-yellow-700' : 'text-red-700'
+                // 0-4 scale: 3.5-4 = Exceeding, 3-3.5 = Meeting, 2-3 = Needs Improvement, <2 = Unsatisfactory
+                const performance = avg >= 3.5 ? 'Exceeding Expectations' : avg >= 3 ? 'Meeting Expectations' : avg >= 2 ? 'Needs Improvement' : 'Unsatisfactory'
+                const performanceColor = avg >= 3.5 ? 'text-green-700' : avg >= 3 ? 'text-yellow-600' : avg >= 2 ? 'text-orange-600' : 'text-red-700'
 
                 return (
                   <tr key={item.youthId}>
-                    <td className="border border-gray-300 px-4 py-2">{item.name}</td>
-                    <td className="border border-gray-300 px-4 py-2 text-center">{item.daysRecorded}</td>
-                    <td className="border border-gray-300 px-4 py-2 text-center font-semibold">{item.average}%</td>
-                    <td className={`border border-gray-300 px-4 py-2 text-center font-medium ${performanceColor}`}>
+                    <td className="border border-gray-300 px-3 py-1.5 text-sm">{item.name}</td>
+                    <td className="border border-gray-300 px-3 py-1.5 text-center text-sm">{item.daysRecorded}</td>
+                    <td className="border border-gray-300 px-3 py-1.5 text-center font-semibold text-sm">{item.average}</td>
+                    <td className={`border border-gray-300 px-3 py-1.5 text-center font-medium text-sm ${performanceColor}`}>
                       {performance}
                     </td>
                   </tr>
@@ -361,14 +362,13 @@ const SchoolPrintReports: React.FC = () => {
             </tbody>
           </table>
 
-          <div className="text-sm text-gray-600 mt-8">
-            <p className="font-semibold mb-2">Performance Scale:</p>
-            <ul className="list-disc list-inside space-y-1">
-              <li>Excellent: 90-100%</li>
-              <li>Good: 80-89%</li>
-              <li>Satisfactory: 70-79%</li>
-              <li>Needs Improvement: 60-69%</li>
-              <li>Unsatisfactory: Below 60%</li>
+          <div className="text-xs text-gray-600 mt-3">
+            <p className="font-semibold mb-1.5">Performance Scale (0-4 rating):</p>
+            <ul className="list-disc list-inside space-y-0.5">
+              <li className="text-green-700 font-medium">Exceeding Expectations: 3.5-4.0</li>
+              <li className="text-yellow-600 font-medium">Meeting Expectations: 3.0-3.4</li>
+              <li className="text-orange-600 font-medium">Needs Improvement: 2.0-2.9</li>
+              <li className="text-red-700 font-medium">Unsatisfactory: Below 2.0</li>
             </ul>
           </div>
         </>
@@ -420,7 +420,7 @@ const SchoolPrintReports: React.FC = () => {
 
         <div className="bg-red-50 p-4 rounded-lg mb-6">
           <p className="text-sm text-gray-600">Weekly Average Score</p>
-          <p className="text-3xl font-bold text-red-800">{studentProgress.average}%</p>
+          <p className="text-3xl font-bold text-red-800">{studentProgress.average}</p>
           <p className="text-sm text-gray-600 mt-1">Based on {studentProgress.daysRecorded} recorded day{studentProgress.daysRecorded === 1 ? '' : 's'}</p>
         </div>
 
@@ -441,7 +441,7 @@ const SchoolPrintReports: React.FC = () => {
                       {format(new Date(score.date), 'EEEE, MMM dd, yyyy')}
                     </td>
                     <td className="border border-gray-300 px-4 py-2 text-center font-semibold">
-                      {score.score}%
+                      {score.score}
                     </td>
                   </tr>
                 ))}
@@ -552,7 +552,7 @@ const SchoolPrintReports: React.FC = () => {
 
             <div className="bg-red-50 p-4 rounded-lg mb-4">
               <p className="text-sm text-gray-600">Weekly Average Score</p>
-              <p className="text-2xl font-bold text-red-800">{student.average}%</p>
+              <p className="text-2xl font-bold text-red-800">{student.average}</p>
               <p className="text-sm text-gray-600 mt-1">
                 Based on {student.daysRecorded} recorded day{student.daysRecorded === 1 ? '' : 's'}
               </p>
@@ -575,7 +575,7 @@ const SchoolPrintReports: React.FC = () => {
                           {format(new Date(score.date), 'EEE, MMM dd, yyyy')}
                         </td>
                         <td className="border border-gray-300 px-3 py-1 text-center font-semibold">
-                          {score.score}%
+                          {score.score}
                         </td>
                       </tr>
                     ))}
@@ -869,7 +869,7 @@ const SchoolPrintReports: React.FC = () => {
 
       {/* Printable Report Area */}
       <div ref={printRef} className="print:block">
-        <div className="bg-white p-8 rounded-lg shadow-sm print:shadow-none print-report">
+        <div className="bg-white p-6 rounded-lg shadow-sm print:shadow-none print-report">
           {renderHeader()}
           {reportType === 'weekly-average' && renderWeeklyAverageSection()}
           {reportType === 'student-progress' && renderStudentProgressSection()}

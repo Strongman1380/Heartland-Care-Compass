@@ -144,8 +144,8 @@ export const saveBehaviorPoints = (
 // Progress Notes functions
 export const fetchProgressNotes = (youthId: string): ProgressNote[] => {
   // Hydrate from Supabase in background and merge
-  try {
-    void (async () => {
+  (async () => {
+    try {
       const remote = await notesService.listForYouth(youthId)
       if (remote && remote.length) {
         const merged = remote.map(r => ({
@@ -163,8 +163,11 @@ export const fetchProgressNotes = (youthId: string): ProgressNote[] => {
         for (const n of merged) map.set(n.id || `${n.youth_id}|${String(n.date)}`, n)
         setItem(STORAGE_KEYS.NOTES, Array.from(map.values()))
       }
-    })()
-  } catch {}
+    } catch (error) {
+      // Silently fail - we'll use local cache
+      console.warn('Progress notes sync failed, using local cache:', error)
+    }
+  })()
   const allNotes = getItem<ProgressNote[]>(STORAGE_KEYS.NOTES) || [];
   return allNotes
     .filter(note => note.youth_id === youthId)

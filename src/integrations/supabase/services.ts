@@ -274,13 +274,21 @@ export const dailyRatingsService = {
   },
 
   // Get daily rating for a specific date
-  async getByDate(youthId: string, date: string): Promise<DailyRatings | null> {
-    const { data, error } = await supabase
+  async getByDate(youthId: string, date: string, timeOfDay?: 'morning' | 'day' | 'evening'): Promise<DailyRatings | null> {
+    let query = supabase
       .from('daily_ratings')
       .select('*')
       .eq('youth_id', youthId)
       .eq('date', date)
-      .single()
+      .order('time_of_day', { ascending: true });
+
+    if (timeOfDay) {
+      query = query.eq('time_of_day', timeOfDay);
+    }
+
+    const { data, error } = timeOfDay
+      ? await query.single()
+      : await query.limit(3); // up to 3 slots per day
     
     if (error) {
       if (error.code === 'PGRST116') return null // Not found
@@ -290,10 +298,14 @@ export const dailyRatingsService = {
   },
 
   // Create or update daily rating
-  async upsert(dailyRating: DailyRatingsInsert): Promise<DailyRatings> {
+  async upsert(dailyRating: DailyRatingsInsert & { time_of_day?: 'morning' | 'day' | 'evening' }): Promise<DailyRatings> {
+    const payload: any = { time_of_day: 'day', ...dailyRating };
+    if (!payload.time_of_day) payload.time_of_day = 'day';
+
     const { data, error } = await supabase
       .from('daily_ratings')
-      .upsert(dailyRating, { onConflict: 'youth_id,date' })
+      // conflict target includes time_of_day to allow multiple per day
+      .upsert(payload, { onConflict: 'youth_id,date,time_of_day' })
       .select()
       .single()
     

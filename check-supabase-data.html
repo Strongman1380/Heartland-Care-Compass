@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Check Supabase Data</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            max-width: 1200px;
+            margin: 40px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            border-bottom: 3px solid #4CAF50;
+            padding-bottom: 10px;
+        }
+        .status {
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .status.warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        pre {
+            background: #f4f4f4;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .input-group {
+            margin: 20px 0;
+        }
+        .input-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        .input-group input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .stat-card {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            border-left: 4px solid #4CAF50;
+        }
+        .stat-card h3 {
+            margin: 0 0 10px 0;
+            color: #666;
+            font-size: 14px;
+        }
+        .stat-card .value {
+            font-size: 32px;
+            font-weight: bold;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Check Supabase Data</h1>
+        
+        <div class="status info">
+            ℹ️ This tool checks if your school scores data exists in Supabase.
+        </div>
+        
+        <div class="input-group">
+            <label for="supabaseUrl">Supabase URL:</label>
+            <input type="text" id="supabaseUrl" placeholder="https://your-project.supabase.co" value="https://bxloqozxgptrfmjfsjsy.supabase.co">
+        </div>
+        
+        <div class="input-group">
+            <label for="supabaseKey">Supabase Anon Key:</label>
+            <input type="password" id="supabaseKey" placeholder="Your anon/public key">
+            <small style="color: #666;">This is safe - it's the public key. Find it in your Supabase project settings.</small>
+        </div>
+        
+        <div id="status"></div>
+        
+        <div class="stats" id="stats"></div>
+        
+        <div style="margin: 20px 0;">
+            <button onclick="checkTable()">🔍 Check if Table Exists</button>
+            <button onclick="checkData()" id="checkDataBtn" disabled>📊 Check for Data</button>
+            <button onclick="viewData()" id="viewDataBtn" disabled>👁️ View All Data</button>
+        </div>
+        
+        <div id="output"></div>
+    </div>
+
+    <script>
+        let supabaseClient = null;
+        let tableExists = false;
+
+        function getSupabaseClient() {
+            const url = document.getElementById('supabaseUrl').value.trim();
+            const key = document.getElementById('supabaseKey').value.trim();
+            
+            if (!url || !key) {
+                alert('Please enter both Supabase URL and Anon Key');
+                return null;
+            }
+            
+            // Simple fetch-based client (no SDK needed)
+            return {
+                url: url,
+                key: key,
+                headers: {
+                    'apikey': key,
+                    'Authorization': `Bearer ${key}`,
+                    'Content-Type': 'application/json'
+                }
+            };
+        }
+
+        async function checkTable() {
+            const statusDiv = document.getElementById('status');
+            const outputDiv = document.getElementById('output');
+            
+            supabaseClient = getSupabaseClient();
+            if (!supabaseClient) return;
+            
+            statusDiv.innerHTML = '<div class="status info">⏳ Checking if table exists...</div>';
+            outputDiv.innerHTML = '';
+            
+            try {
+                // Try to query the table
+                const response = await fetch(
+                    `${supabaseClient.url}/rest/v1/school_daily_scores?select=count&limit=0`,
+                    {
+                        method: 'GET',
+                        headers: supabaseClient.headers
+                    }
+                );
+                
+                if (response.status === 404) {
+                    statusDiv.innerHTML = '<div class="status error">❌ Table "school_daily_scores" does NOT exist in Supabase</div>';
+                    outputDiv.innerHTML = `
+                        <h3>What this means:</h3>
+                        <p>The <code>school_daily_scores</code> table has not been created in your Supabase database yet.</p>
+                        <p><strong>Action Required:</strong> Follow the instructions in <code>CREATE_SCHOOL_SCORES_TABLE.md</code> to create the table.</p>
+                    `;
+                    tableExists = false;
+                    document.getElementById('checkDataBtn').disabled = true;
+                    document.getElementById('viewDataBtn').disabled = true;
+                } else if (response.ok) {
+                    statusDiv.innerHTML = '<div class="status success">✅ Table "school_daily_scores" EXISTS in Supabase!</div>';
+                    tableExists = true;
+                    document.getElementById('checkDataBtn').disabled = false;
+                    document.getElementById('viewDataBtn').disabled = false;
+                    outputDiv.innerHTML = `
+                        <p>The table exists! Now click "Check for Data" to see if there are any scores saved.</p>
+                    `;
+                } else {
+                    const errorText = await response.text();
+                    statusDiv.innerHTML = '<div class="status error">❌ Error checking table: ' + response.status + '</div>';
+                    outputDiv.innerHTML = `<pre>${errorText}</pre>`;
+                }
+            } catch (error) {
+                statusDiv.innerHTML = '<div class="status error">❌ Error: ' + error.message + '</div>';
+                outputDiv.innerHTML = `
+                    <p>Could not connect to Supabase. Please check:</p>
+                    <ul>
+                        <li>Your Supabase URL is correct</li>
+                        <li>Your Anon Key is correct</li>
+                        <li>You have internet connection</li>
+                    </ul>
+                `;
+            }
+        }
+
+        async function checkData() {
+            const statusDiv = document.getElementById('status');
+            const statsDiv = document.getElementById('stats');
+            const outputDiv = document.getElementById('output');
+            
+            if (!supabaseClient || !tableExists) {
+                alert('Please check if table exists first');
+                return;
+            }
+            
+            statusDiv.innerHTML = '<div class="status info">⏳ Checking for data...</div>';
+            
+            try {
+                // Get count
+                const countResponse = await fetch(
+                    `${supabaseClient.url}/rest/v1/school_daily_scores?select=count`,
+                    {
+                        method: 'HEAD',
+                        headers: supabaseClient.headers
+                    }
+                );
+                
+                const contentRange = countResponse.headers.get('content-range');
+                const totalCount = contentRange ? parseInt(contentRange.split('/')[1]) : 0;
+                
+                if (totalCount === 0) {
+                    statusDiv.innerHTML = '<div class="status warning">⚠️ Table exists but contains NO data</div>';
+                    statsDiv.innerHTML = '';
+                    outputDiv.innerHTML = `
+                        <h3>What this means:</h3>
+                        <p>The table is created but empty. Your school scores were never saved to Supabase.</p>
+                        <p><strong>Possible reasons:</strong></p>
+                        <ul>
+                            <li>The table was created after you entered the scores</li>
+                            <li>The bug prevented data from being saved</li>
+                            <li>Data was only saved to localStorage (which is now empty)</li>
+                        </ul>
+                        <p><strong>Next steps:</strong> Unfortunately, the data may be lost. You'll need to re-enter the scores.</p>
+                    `;
+                    return;
+                }
+                
+                // Get actual data for statistics
+                const dataResponse = await fetch(
+                    `${supabaseClient.url}/rest/v1/school_daily_scores?select=*`,
+                    {
+                        method: 'GET',
+                        headers: supabaseClient.headers
+                    }
+                );
+                
+                const scores = await dataResponse.json();
+                
+                // Calculate statistics
+                const uniqueYouth = new Set(scores.map(s => s.youth_id)).size;
+                const uniqueDates = new Set(scores.map(s => s.date)).size;
+                const avgScore = (scores.reduce((sum, s) => sum + s.score, 0) / scores.length).toFixed(2);
+                
+                // Get date range
+                const dates = scores.map(s => new Date(s.date)).sort((a, b) => a - b);
+                const oldestDate = dates[0].toLocaleDateString();
+                const newestDate = dates[dates.length - 1].toLocaleDateString();
+                
+                statusDiv.innerHTML = '<div class="status success">✅ Data found in Supabase!</div>';
+                
+                statsDiv.innerHTML = `
+                    <div class="stat-card">
+                        <h3>Total Scores</h3>
+                        <div class="value">${totalCount}</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Unique Students</h3>
+                        <div class="value">${uniqueYouth}</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Unique Dates</h3>
+                        <div class="value">${uniqueDates}</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Average Score</h3>
+                        <div class="value">${avgScore}</div>
+                    </div>
+                `;
+                
+                outputDiv.innerHTML = `
+                    <h3>📊 Data Summary</h3>
+                    <p><strong>Date Range:</strong> ${oldestDate} to ${newestDate}</p>
+                    <p><strong>Status:</strong> Your data is safe in Supabase! ✅</p>
+                    <p><strong>Next steps:</strong></p>
+                    <ol>
+                        <li>Refresh your app</li>
+                        <li>The data should automatically sync from Supabase to localStorage</li>
+                        <li>Your scores should appear in the School tab</li>
+                    </ol>
+                `;
+                
+            } catch (error) {
+                statusDiv.innerHTML = '<div class="status error">❌ Error: ' + error.message + '</div>';
+            }
+        }
+
+        async function viewData() {
+            const outputDiv = document.getElementById('output');
+            
+            if (!supabaseClient || !tableExists) {
+                alert('Please check if table exists first');
+                return;
+            }
+            
+            try {
+                const response = await fetch(
+                    `${supabaseClient.url}/rest/v1/school_daily_scores?select=*&order=date.desc&limit=100`,
+                    {
+                        method: 'GET',
+                        headers: supabaseClient.headers
+                    }
+                );
+                
+                const data = await response.json();
+                
+                outputDiv.innerHTML = `
+                    <h3>📄 Recent Data (up to 100 records)</h3>
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                `;
+            } catch (error) {
+                outputDiv.innerHTML = '<div class="status error">❌ Error: ' + error.message + '</div>';
+            }
+        }
+
+        // Try to load Supabase URL from the app's config
+        window.addEventListener('load', () => {
+            // The URL is already pre-filled from your console logs
+            document.getElementById('supabaseUrl').value = 'https://bxloqozxgptrfmjfsjsy.supabase.co';
+        });
+    </script>
+</body>
+</html>

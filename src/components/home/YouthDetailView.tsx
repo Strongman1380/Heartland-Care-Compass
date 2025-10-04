@@ -65,30 +65,32 @@ export const YouthDetailView = ({
   const { dailyRatings, loadDailyRatings, loading: ratingsLoading } = useDailyRatings(selectedYouth.id);
 
   // Memoized calculation of behavioral averages - only recalculates when dailyRatings actually change
-  const behavioralAverages = useMemo(() => {
+  const { behavioralAverages, behavioralCounts } = useMemo(() => {
     if (dailyRatings.length === 0) {
       return {
-        peerInteraction: 0,
-        adultInteraction: 0,
-        investmentLevel: 0,
-        dealAuthority: 0,
+        behavioralAverages: { peerInteraction: 0, adultInteraction: 0, investmentLevel: 0, dealAuthority: 0 },
+        behavioralCounts: { peer: 0, adult: 0, invest: 0, auth: 0 },
       };
     }
 
-    const totals = dailyRatings.reduce((acc, rating) => {
-      acc.peerInteraction += rating.peerInteraction || 0;
-      acc.adultInteraction += rating.adultInteraction || 0;
-      acc.investmentLevel += rating.investmentLevel || 0;
-      acc.dealAuthority += rating.dealAuthority || 0;
-      return acc;
-    }, { peerInteraction: 0, adultInteraction: 0, investmentLevel: 0, dealAuthority: 0 });
+    const totals = { peer: 0, adult: 0, invest: 0, auth: 0 };
+    const counts = { peer: 0, adult: 0, invest: 0, auth: 0 };
 
-    const count = dailyRatings.length;
+    for (const r of dailyRatings) {
+      if (r.peerInteraction != null) { totals.peer += Number(r.peerInteraction); counts.peer++; }
+      if (r.adultInteraction != null) { totals.adult += Number(r.adultInteraction); counts.adult++; }
+      if (r.investmentLevel != null) { totals.invest += Number(r.investmentLevel); counts.invest++; }
+      if (r.dealAuthority != null) { totals.auth += Number(r.dealAuthority); counts.auth++; }
+    }
+
     return {
-      peerInteraction: totals.peerInteraction / count,
-      adultInteraction: totals.adultInteraction / count,
-      investmentLevel: totals.investmentLevel / count,
-      dealAuthority: totals.dealAuthority / count,
+      behavioralAverages: {
+        peerInteraction: counts.peer ? totals.peer / counts.peer : 0,
+        adultInteraction: counts.adult ? totals.adult / counts.adult : 0,
+        investmentLevel: counts.invest ? totals.invest / counts.invest : 0,
+        dealAuthority: counts.auth ? totals.auth / counts.auth : 0,
+      },
+      behavioralCounts: counts,
     };
   }, [dailyRatings]);
 
@@ -102,6 +104,7 @@ export const YouthDetailView = ({
     investmentLevel: behavioralAverages.investmentLevel.toFixed(1),
     dealAuthority: behavioralAverages.dealAuthority.toFixed(1),
   }), [behavioralAverages]);
+
 
   // Memoized formatted points
   const formattedPoints = useMemo(() => formatPoints(selectedYouth.pointTotal || 0), [selectedYouth.pointTotal]);
@@ -156,11 +159,20 @@ export const YouthDetailView = ({
               {selectedYouth.firstName} {selectedYouth.lastName}
             </h1>
             <div className="flex flex-col items-center justify-center gap-2 mt-2">
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 flex-wrap">
                 <p className="text-red-600">Level {selectedYouth.level} • {formattedPoints} Points</p>
                 {riskLevel && (
                   <span className={`px-2 py-1 rounded-full text-xs font-medium ${getRiskLevelColor(riskLevel)}`}>
                     {riskLevel} Risk
+                  </span>
+                )}
+                {hasRatingsData && (
+                  <span className="flex items-center gap-2 text-xs">
+                    <span className="font-semibold text-red-700">Avg Scores:</span>
+                    <span className="bg-blue-100 text-blue-800 px-1 py-0.5 rounded">P:{formattedAverages.peerInteraction}</span>
+                    <span className="bg-green-100 text-green-800 px-1 py-0.5 rounded">A:{formattedAverages.adultInteraction}</span>
+                    <span className="bg-purple-100 text-purple-800 px-1 py-0.5 rounded">I:{formattedAverages.investmentLevel}</span>
+                    <span className="bg-orange-100 text-orange-800 px-1 py-0.5 rounded">D:{formattedAverages.dealAuthority}</span>
                   </span>
                 )}
               </div>
@@ -191,12 +203,13 @@ export const YouthDetailView = ({
                     </span>
                     <span className="text-xs text-gray-500">
                       {hasRatingsData
-                        ? `Averages based on ${dailyRatings.length} recent daily rating${dailyRatings.length === 1 ? '' : 's'} (0-4 scale)`
+                        ? `Averages based on ${dailyRatings.length} total daily rating${dailyRatings.length === 1 ? '' : 's'} (0-4 scale)`
                         : 'No daily ratings yet — showing baseline averages (0-4 scale)'}
                     </span>
                   </>
                 )}
               </div>
+              
             </div>
           </div>
           <div className="w-32"></div> {/* Spacer for layout balance */}

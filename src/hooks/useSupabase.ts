@@ -390,12 +390,12 @@ export const useDailyRatings = (youthId?: string) => {
     }
   }, [])
 
-  const saveDailyRating = useCallback(async (ratingData: DailyRatingsInsert) => {
+  const saveDailyRating = useCallback(async (ratingData: DailyRatingsInsert & { time_of_day?: 'morning' | 'day' | 'evening' }) => {
     try {
       setLoading(true)
-      const saved = await dailyRatingsService.upsert(ratingData)
+      const saved = await dailyRatingsService.upsert(ratingData as any)
       setDailyRatings(prev => {
-        const existing = prev.find(r => r.youth_id === saved.youth_id && r.date === saved.date)
+        const existing = prev.find(r => (r as any).youth_id === saved.youth_id && (r as any).date === saved.date && ((r as any).time_of_day || 'day') === ((saved as any).time_of_day || 'day'))
         if (existing) {
           return prev.map(r => r.id === saved.id ? saved : r)
         } else {
@@ -420,9 +420,9 @@ export const useDailyRatings = (youthId?: string) => {
     }
   }, [toast])
 
-  const getDailyRatingForDate = useCallback(async (id: string, date: string) => {
+  const getDailyRatingForDate = useCallback(async (id: string, date: string, timeOfDay?: 'morning' | 'day' | 'evening') => {
     try {
-      return await dailyRatingsService.getByDate(id, date)
+      return await dailyRatingsService.getByDate(id, date, timeOfDay)
     } catch (err) {
       console.error('Failed to get daily rating for date:', err)
       return null

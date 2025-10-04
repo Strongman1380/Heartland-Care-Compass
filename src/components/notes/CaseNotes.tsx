@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ChevronDown, ChevronRight, FileText, Search, Users, ArrowLeft, Download, Printer } from "lucide-react";
 import { toast } from "sonner";
-import { format } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useCaseNotes, useYouth } from "@/hooks/useSupabase";
 import { type CaseNotes as CaseNote, type Youth } from "@/integrations/supabase/services";
@@ -388,7 +388,7 @@ export const CaseNotes = ({ youthId, youth, onYouthChange, onBackToSelection }: 
             <h3>Summary</h3>
             <p>This report contains ${filteredNotes.length} case note${filteredNotes.length !== 1 ? 's' : ''} for ${youthName}.</p>
             <p>Date range: ${filteredNotes.length > 0 ?
-              `${format(new Date(filteredNotes[filteredNotes.length - 1].date), 'MMM d, yyyy')} to ${format(new Date(filteredNotes[0].date), 'MMM d, yyyy')}` :
+              `${format(parseISO(filteredNotes[filteredNotes.length - 1].date + 'T00:00:00'), 'MMM d, yyyy')} to ${format(parseISO(filteredNotes[0].date + 'T00:00:00'), 'MMM d, yyyy')}` :
               'No notes available'
             }</p>
           </div>
@@ -410,7 +410,7 @@ export const CaseNotes = ({ youthId, youth, onYouthChange, onBackToSelection }: 
               <div class="note-header">
                 <span>${note.summary || 'Case Note'}</span>
                 <div class="note-meta">
-                  <div>${format(new Date(note.date), 'MMMM d, yyyy')}</div>
+                  <div>${format(parseISO(note.date + 'T00:00:00'), 'MMMM d, yyyy')}</div>
                   <div>by ${note.staff || 'Staff Member'}</div>
                 </div>
               </div>
@@ -625,7 +625,7 @@ export const CaseNotes = ({ youthId, youth, onYouthChange, onBackToSelection }: 
                               {note.summary || "Case Note"}
                             </span>
                             <Badge variant="outline" className="text-xs">
-                              {note.date ? format(new Date(note.date), 'MMM dd, yyyy') : 'No date'}
+                              {note.date ? format(parseISO(note.date + 'T00:00:00'), 'MMM dd, yyyy') : 'No date'}
                             </Badge>
                           </div>
                           <div className="text-xs text-gray-500 mt-1 sm:mt-0">

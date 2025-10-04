@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ArrowLeft, Edit } from "lucide-react";
 import { format } from "date-fns";
 import { Youth } from "@/integrations/supabase/services";
@@ -32,6 +33,7 @@ export const YouthProfile = ({ youth, onBack, onYouthUpdated, onRatingsUpdated }
   });
 
   const { dailyRatings, loadDailyRatings } = useDailyRatings();
+  const ratingsCount = dailyRatings.length;
 
   const formatDate = (dateString: string | null) => {
     if (!dateString) return "Not specified";
@@ -54,7 +56,7 @@ export const YouthProfile = ({ youth, onBack, onYouthUpdated, onRatingsUpdated }
     return colorMap[color] || { bg: 'bg-gray-100', text: 'text-gray-800', border: 'border-gray-300' };
   };
 
-  // Calculate average scores from recent ratings
+  // Calculate average scores from all ratings (cumulative)
   const calculateAverageScores = () => {
     if (!dailyRatings || dailyRatings.length === 0) {
       return {
@@ -65,25 +67,20 @@ export const YouthProfile = ({ youth, onBack, onYouthUpdated, onRatingsUpdated }
       };
     }
 
-    // Get the last 30 days of ratings for more accurate averages
-    const recentRatings = dailyRatings.slice(0, 30);
-    
-    const totals = recentRatings.reduce((acc, rating) => {
-      return {
-        peerInteraction: acc.peerInteraction + (rating.peerInteraction || 0),
-        adultInteraction: acc.adultInteraction + (rating.adultInteraction || 0),
-        investmentLevel: acc.investmentLevel + (rating.investmentLevel || 0),
-        dealAuthority: acc.dealAuthority + (rating.dealAuthority || 0)
-      };
-    }, { peerInteraction: 0, adultInteraction: 0, investmentLevel: 0, dealAuthority: 0 });
+    let totals = { peer: 0, adult: 0, invest: 0, auth: 0 };
+    let counts = { peer: 0, adult: 0, invest: 0, auth: 0 };
+    for (const r of dailyRatings) {
+      if (r.peerInteraction != null) { totals.peer += Number(r.peerInteraction); counts.peer++; }
+      if (r.adultInteraction != null) { totals.adult += Number(r.adultInteraction); counts.adult++; }
+      if (r.investmentLevel != null) { totals.invest += Number(r.investmentLevel); counts.invest++; }
+      if (r.dealAuthority != null) { totals.auth += Number(r.dealAuthority); counts.auth++; }
+    }
 
-    const count = recentRatings.length;
-    
     return {
-      peerInteraction: count > 0 ? Math.round((totals.peerInteraction / count) * 10) / 10 : 0,
-      adultInteraction: count > 0 ? Math.round((totals.adultInteraction / count) * 10) / 10 : 0,
-      investmentLevel: count > 0 ? Math.round((totals.investmentLevel / count) * 10) / 10 : 0,
-      dealAuthority: count > 0 ? Math.round((totals.dealAuthority / count) * 10) / 10 : 0
+      peerInteraction: counts.peer ? Math.round(((totals.peer / counts.peer) * 10)) / 10 : 0,
+      adultInteraction: counts.adult ? Math.round(((totals.adult / counts.adult) * 10)) / 10 : 0,
+      investmentLevel: counts.invest ? Math.round(((totals.invest / counts.invest) * 10)) / 10 : 0,
+      dealAuthority: counts.auth ? Math.round(((totals.auth / counts.auth) * 10)) / 10 : 0,
     };
   };
 
@@ -91,7 +88,7 @@ export const YouthProfile = ({ youth, onBack, onYouthUpdated, onRatingsUpdated }
   useEffect(() => {
     const loadData = async () => {
       if (youth.id) {
-        await loadDailyRatings(youth.id, 30); // Load last 30 ratings
+        await loadDailyRatings(youth.id); // Load all ratings for cumulative averages
       }
     };
     loadData();
@@ -110,7 +107,7 @@ export const YouthProfile = ({ youth, onBack, onYouthUpdated, onRatingsUpdated }
     }
     // Reload daily ratings to get fresh averages
     if (youth.id) {
-      await loadDailyRatings(youth.id, 30);
+      await loadDailyRatings(youth.id);
     }
   };
 
@@ -228,15 +225,53 @@ export const YouthProfile = ({ youth, onBack, onYouthUpdated, onRatingsUpdated }
                 {renderRiskLevel()}
                 
                 {(averageScores.peerInteraction > 0 || averageScores.adultInteraction > 0 || averageScores.investmentLevel > 0 || averageScores.dealAuthority > 0) && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold text-red-700">Avg Scores:</span>
-                    <div className="flex gap-1 text-xs">
-                      {averageScores.peerInteraction > 0 && <span className="bg-blue-100 text-blue-800 px-1 py-0.5 rounded">P:{averageScores.peerInteraction}</span>}
-                      {averageScores.adultInteraction > 0 && <span className="bg-green-100 text-green-800 px-1 py-0.5 rounded">A:{averageScores.adultInteraction}</span>}
-                      {averageScores.investmentLevel > 0 && <span className="bg-purple-100 text-purple-800 px-1 py-0.5 rounded">I:{averageScores.investmentLevel}</span>}
-                      {averageScores.dealAuthority > 0 && <span className="bg-orange-100 text-orange-800 px-1 py-0.5 rounded">D:{averageScores.dealAuthority}</span>}
+                  <TooltipProvider>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-semibold text-red-700">Avg Scores{ratingsCount > 0 ? ` (${ratingsCount} total)` : ''}:</span>
+                      <div className="flex gap-1 text-xs">
+                      {averageScores.peerInteraction > 0 && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="bg-blue-100 text-blue-800 px-1 py-0.5 rounded cursor-default">P:{averageScores.peerInteraction}</span>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              Cumulative average (0–4 scale)
+                            </TooltipContent>
+                          </Tooltip>
+                        )}
+                        {averageScores.adultInteraction > 0 && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="bg-green-100 text-green-800 px-1 py-0.5 rounded cursor-default">A:{averageScores.adultInteraction}</span>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              Cumulative average (0–4 scale)
+                            </TooltipContent>
+                          </Tooltip>
+                        )}
+                        {averageScores.investmentLevel > 0 && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="bg-purple-100 text-purple-800 px-1 py-0.5 rounded cursor-default">I:{averageScores.investmentLevel}</span>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              Cumulative average (0–4 scale)
+                            </TooltipContent>
+                          </Tooltip>
+                        )}
+                        {averageScores.dealAuthority > 0 && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="bg-orange-100 text-orange-800 px-1 py-0.5 rounded cursor-default">D:{averageScores.dealAuthority}</span>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              Cumulative average (0–4 scale)
+                            </TooltipContent>
+                          </Tooltip>
+                        )}
+                      </div>
                     </div>
-                  </div>
+                  </TooltipProvider>
                 )}
               </div>
             </div>

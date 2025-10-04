@@ -236,39 +236,51 @@ export type Database = {
       daily_ratings: {
         Row: {
           adultInteraction: number | null
+          adultInteractionComment: string | null
           comments: string | null
           createdAt: string | null
           date: string | null
           dealAuthority: number | null
+          dealAuthorityComment: string | null
           id: string
           investmentLevel: number | null
+          investmentLevelComment: string | null
           peerInteraction: number | null
+          peerInteractionComment: string | null
           staff: string | null
           updatedAt: string | null
           youth_id: string
         }
         Insert: {
           adultInteraction?: number | null
+          adultInteractionComment?: string | null
           comments?: string | null
           createdAt?: string | null
           date?: string | null
           dealAuthority?: number | null
+          dealAuthorityComment?: string | null
           id?: string
           investmentLevel?: number | null
+          investmentLevelComment?: string | null
           peerInteraction?: number | null
+          peerInteractionComment?: string | null
           staff?: string | null
           updatedAt?: string | null
           youth_id: string
         }
         Update: {
           adultInteraction?: number | null
+          adultInteractionComment?: string | null
           comments?: string | null
           createdAt?: string | null
           date?: string | null
           dealAuthority?: number | null
+          dealAuthorityComment?: string | null
           id?: string
           investmentLevel?: number | null
+          investmentLevelComment?: string | null
           peerInteraction?: number | null
+          peerInteractionComment?: string | null
           staff?: string | null
           updatedAt?: string | null
           youth_id?: string

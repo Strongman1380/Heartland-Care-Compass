@@ -13,7 +13,7 @@ export type SchoolScoreRow = {
 export const schoolScoresService = {
   async upsert(youth_id: string, date: string, weekday: number, score: number): Promise<SchoolScoreRow> {
     const { data, error } = await supabase
-      .from('school_scores')
+      .from('school_daily_scores')
       .upsert({ youth_id, date, weekday, score }, { onConflict: 'youth_id,date' })
       .select()
       .single()
@@ -23,7 +23,7 @@ export const schoolScoresService = {
 
   async get(youth_id: string, date: string): Promise<SchoolScoreRow | null> {
     const { data, error } = await supabase
-      .from('school_scores')
+      .from('school_daily_scores')
       .select('*')
       .eq('youth_id', youth_id)
       .eq('date', date)
@@ -34,7 +34,7 @@ export const schoolScoresService = {
 
   async range(startISO: string, endISO: string): Promise<SchoolScoreRow[]> {
     const { data, error } = await supabase
-      .from('school_scores')
+      .from('school_daily_scores')
       .select('*')
       .gte('date', startISO)
       .lte('date', endISO)
@@ -45,7 +45,7 @@ export const schoolScoresService = {
 
   async forYouth(youth_id: string): Promise<SchoolScoreRow[]> {
     const { data, error } = await supabase
-      .from('school_scores')
+      .from('school_daily_scores')
       .select('*')
       .eq('youth_id', youth_id)
       .order('date', { ascending: false })

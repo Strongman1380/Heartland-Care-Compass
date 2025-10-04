@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Check School Data - LocalStorage</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 40px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            border-bottom: 3px solid #dc2626;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #555;
+            margin-top: 30px;
+            border-left: 4px solid #dc2626;
+            padding-left: 10px;
+        }
+        .info-box {
+            background: #f0f9ff;
+            border-left: 4px solid #3b82f6;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .warning-box {
+            background: #fef3c7;
+            border-left: 4px solid #f59e0b;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .success-box {
+            background: #dcfce7;
+            border-left: 4px solid #22c55e;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        .data-table th {
+            background: #dc2626;
+            color: white;
+            padding: 12px;
+            text-align: left;
+        }
+        .data-table td {
+            padding: 10px;
+            border-bottom: 1px solid #ddd;
+        }
+        .data-table tr:hover {
+            background: #f9fafb;
+        }
+        pre {
+            background: #1f2937;
+            color: #f3f4f6;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 12px;
+        }
+        .stat {
+            display: inline-block;
+            background: #dc2626;
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            margin: 5px;
+            font-weight: bold;
+        }
+        button {
+            background: #dc2626;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin: 5px;
+        }
+        button:hover {
+            background: #b91c1c;
+        }
+        .empty {
+            color: #9ca3af;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 School Data Check - LocalStorage</h1>
+        
+        <div class="info-box">
+            <strong>ℹ️ Instructions:</strong> Open this file in the same browser where you use the Heartland Youth Compass application. 
+            This will check for any school data stored locally in your browser.
+        </div>
+
+        <div id="results"></div>
+
+        <h2>🛠️ Actions</h2>
+        <button onclick="refreshData()">🔄 Refresh Data</button>
+        <button onclick="exportData()">📥 Export to JSON</button>
+        <button onclick="clearData()">🗑️ Clear LocalStorage Data</button>
+    </div>
+
+    <script>
+        function checkSchoolData() {
+            const resultsDiv = document.getElementById('results');
+            let html = '';
+
+            // Check for school scores
+            const schoolScoresKey = 'heartland_school_scores';
+            const schoolScoresRaw = localStorage.getItem(schoolScoresKey);
+            
+            html += '<h2>📊 School Daily Scores</h2>';
+            
+            if (schoolScoresRaw) {
+                try {
+                    const schoolScores = JSON.parse(schoolScoresRaw);
+                    
+                    if (Array.isArray(schoolScores) && schoolScores.length > 0) {
+                        html += `<div class="success-box">
+                            <strong>✅ Found ${schoolScores.length} school score records in localStorage</strong>
+                        </div>`;
+
+                        // Calculate statistics
+                        const youthIds = [...new Set(schoolScores.map(s => s.youth_id))];
+                        const dates = [...new Set(schoolScores.map(s => s.date))].sort();
+                        const avgScore = schoolScores.reduce((sum, s) => sum + s.score, 0) / schoolScores.length;
+
+                        html += '<div>';
+                        html += `<span class="stat">Youth: ${youthIds.length}</span>`;
+                        html += `<span class="stat">Dates: ${dates.length}</span>`;
+                        html += `<span class="stat">Avg Score: ${avgScore.toFixed(2)}</span>`;
+                        html += '</div>';
+
+                        // Show recent scores
+                        html += '<h3>Recent Scores (Latest 10)</h3>';
+                        html += '<table class="data-table">';
+                        html += '<tr><th>Date</th><th>Youth ID</th><th>Weekday</th><th>Score</th><th>Updated</th></tr>';
+                        
+                        const sortedScores = [...schoolScores].sort((a, b) => 
+                            new Date(b.date) - new Date(a.date)
+                        ).slice(0, 10);
+
+                        sortedScores.forEach(score => {
+                            const weekdayNames = ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+                            html += `<tr>
+                                <td>${score.date}</td>
+                                <td>${score.youth_id.substring(0, 8)}...</td>
+                                <td>${weekdayNames[score.weekday] || score.weekday}</td>
+                                <td><strong>${score.score}</strong></td>
+                                <td>${new Date(score.updatedAt).toLocaleString()}</td>
+                            </tr>`;
+                        });
+                        html += '</table>';
+
+                        // Group by youth
+                        html += '<h3>Scores by Youth</h3>';
+                        const byYouth = {};
+                        schoolScores.forEach(score => {
+                            if (!byYouth[score.youth_id]) {
+                                byYouth[score.youth_id] = [];
+                            }
+                            byYouth[score.youth_id].push(score);
+                        });
+
+                        html += '<table class="data-table">';
+                        html += '<tr><th>Youth ID</th><th>Total Scores</th><th>Average</th><th>Latest Date</th></tr>';
+                        
+                        Object.entries(byYouth).forEach(([youthId, scores]) => {
+                            const avg = scores.reduce((sum, s) => sum + s.score, 0) / scores.length;
+                            const latestDate = scores.sort((a, b) => new Date(b.date) - new Date(a.date))[0].date;
+                            html += `<tr>
+                                <td>${youthId.substring(0, 8)}...</td>
+                                <td>${scores.length}</td>
+                                <td>${avg.toFixed(2)}</td>
+                                <td>${latestDate}</td>
+                            </tr>`;
+                        });
+                        html += '</table>';
+
+                        // Show raw JSON (collapsed)
+                        html += '<details style="margin-top: 20px;">';
+                        html += '<summary style="cursor: pointer; font-weight: bold;">📄 View Raw JSON Data</summary>';
+                        html += '<pre>' + JSON.stringify(schoolScores, null, 2) + '</pre>';
+                        html += '</details>';
+
+                    } else {
+                        html += '<div class="warning-box"><strong>⚠️ LocalStorage key exists but contains no data</strong></div>';
+                    }
+                } catch (e) {
+                    html += `<div class="warning-box"><strong>❌ Error parsing localStorage data:</strong> ${e.message}</div>`;
+                }
+            } else {
+                html += '<div class="warning-box"><strong>⚠️ No school scores found in localStorage</strong><br>Key: <code>' + schoolScoresKey + '</code></div>';
+            }
+
+            // Check for other related keys
+            html += '<h2>🔑 Other LocalStorage Keys</h2>';
+            const allKeys = Object.keys(localStorage);
+            const relevantKeys = allKeys.filter(key => 
+                key.includes('heartland') || 
+                key.includes('school') || 
+                key.includes('academic')
+            );
+
+            if (relevantKeys.length > 0) {
+                html += '<table class="data-table">';
+                html += '<tr><th>Key</th><th>Size (bytes)</th><th>Preview</th></tr>';
+                relevantKeys.forEach(key => {
+                    const value = localStorage.getItem(key);
+                    const size = new Blob([value]).size;
+                    const preview = value.length > 100 ? value.substring(0, 100) + '...' : value;
+                    html += `<tr>
+                        <td><code>${key}</code></td>
+                        <td>${size.toLocaleString()}</td>
+                        <td style="font-size: 11px; color: #666;">${preview}</td>
+                    </tr>`;
+                });
+                html += '</table>';
+            } else {
+                html += '<p class="empty">No relevant keys found</p>';
+            }
+
+            // Storage usage
+            html += '<h2>💾 Storage Usage</h2>';
+            let totalSize = 0;
+            for (let key in localStorage) {
+                if (localStorage.hasOwnProperty(key)) {
+                    totalSize += localStorage.getItem(key).length + key.length;
+                }
+            }
+            html += `<div class="info-box">
+                <strong>Total localStorage usage:</strong> ${(totalSize / 1024).toFixed(2)} KB<br>
+                <strong>Total keys:</strong> ${allKeys.length}
+            </div>`;
+
+            resultsDiv.innerHTML = html;
+        }
+
+        function refreshData() {
+            checkSchoolData();
+        }
+
+        function exportData() {
+            const schoolScoresRaw = localStorage.getItem('heartland_school_scores');
+            if (schoolScoresRaw) {
+                const blob = new Blob([schoolScoresRaw], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `school-scores-export-${new Date().toISOString().split('T')[0]}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+                alert('✅ Data exported successfully!');
+            } else {
+                alert('⚠️ No data to export');
+            }
+        }
+
+        function clearData() {
+            if (confirm('⚠️ Are you sure you want to clear all school scores from localStorage? This cannot be undone!')) {
+                localStorage.removeItem('heartland_school_scores');
+                alert('✅ School scores cleared from localStorage');
+                checkSchoolData();
+            }
+        }
+
+        // Run check on load
+        checkSchoolData();
+    </script>
+</body>
+</html>

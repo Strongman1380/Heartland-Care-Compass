@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Youth } from "@/integrations/supabase/services";
 import { DailyRating } from "@/types/app-types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,10 +7,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Calendar, Save, Plus, Download, FileText } from "lucide-react";
+import { Calendar, Save, Plus, Download, FileText, Sparkles } from "lucide-react";
 import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { useDailyRatings } from "@/hooks/useSupabase";
+import { queryData } from "@/services/aiService";
 import { DpnReport } from "@/components/reports/DpnReport";
 
 interface ConsolidatedScoringTabProps {
@@ -22,8 +23,10 @@ export const ConsolidatedScoringTab = ({ youth, onRatingsUpdated }: Consolidated
   const [selectedDate, setSelectedDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [loading, setLoading] = useState(false);
   const [staffName, setStaffName] = useState("");
+  const [timeOfDay, setTimeOfDay] = useState<'morning' | 'day' | 'evening'>('day');
   const { toast } = useToast();
-  const { saveDailyRating } = useDailyRatings();
+  const { dailyRatings, loadDailyRatings, saveDailyRating } = useDailyRatings();
+  const [aiEnhancing, setAiEnhancing] = useState(false);
 
   // DPN Export State
   const [showDpnExport, setShowDpnExport] = useState(false);
@@ -72,6 +75,13 @@ export const ConsolidatedScoringTab = ({ youth, onRatingsUpdated }: Consolidated
     fetchExistingData();
   }, [selectedDate, youth.id]);
 
+  // Load all historical ratings for cumulative averages
+  useEffect(() => {
+    if (youth.id) {
+      loadDailyRatings(youth.id);
+    }
+  }, [youth.id, loadDailyRatings]);
+
   const renderRatingInput = (
     label: string,
     value: number,
@@ -107,6 +117,125 @@ export const ConsolidatedScoringTab = ({ youth, onRatingsUpdated }: Consolidated
     </div>
   );
 
+  // Derived averages for display (one decimal place)
+  const dailyAverage = (() => {
+    const vals = [
+      dailyRating.peerInteraction,
+      dailyRating.adultInteraction,
+      dailyRating.investmentLevel,
+      dailyRating.dealAuthority,
+    ];
+    const sum = vals.reduce((a, b) => a + Number(b || 0), 0);
+    const avg = sum / vals.length;
+    return Number.isFinite(avg) ? Number(avg.toFixed(1)) : 0;
+  })();
+
+  // Cumulative averages across all entries
+  const cumulativeAverages = useMemo(() => {
+    if (!dailyRatings || dailyRatings.length === 0) {
+      return { peer: '0.0', adult: '0.0', invest: '0.0', auth: '0.0' };
+    }
+    const totals = dailyRatings.reduce((acc, r) => {
+      acc.peer += Number(r.peerInteraction || 0);
+      acc.adult += Number(r.adultInteraction || 0);
+      acc.invest += Number(r.investmentLevel || 0);
+      acc.auth += Number(r.dealAuthority || 0);
+      return acc;
+    }, { peer: 0, adult: 0, invest: 0, auth: 0 });
+    const count = dailyRatings.length || 1;
+    return {
+      peer: (totals.peer / count).toFixed(1),
+      adult: (totals.adult / count).toFixed(1),
+      invest: (totals.invest / count).toFixed(1),
+      auth: (totals.auth / count).toFixed(1),
+    };
+  }, [dailyRatings]);
+
+  const enhanceCommentsWithAI = async () => {
+    try {
+      setAiEnhancing(true);
+      const context = {
+        youth: { id: youth.id, name: `${youth.firstName} ${youth.lastName}` },
+        date: selectedDate,
+        ratings: {
+          peerInteraction: dailyRating.peerInteraction,
+          adultInteraction: dailyRating.adultInteraction,
+          investmentLevel: dailyRating.investmentLevel,
+          dealAuthority: dailyRating.dealAuthority,
+          average: dailyAverage,
+        },
+        comments: {
+          peerInteraction: dailyRating.peerInteractionComment,
+          adultInteraction: dailyRating.adultInteractionComment,
+          investmentLevel: dailyRating.investmentLevelComment,
+          dealAuthority: dailyRating.dealAuthorityComment,
+        },
+        scale: "0-4 (whole numbers)",
+        guidance: "Generate concise, strengths-based, actionable notes per domain. 1-2 sentences each. Keep trauma-informed tone.",
+      };
+
+      const prompt = `Provide improved, concise comments for each behavioral domain based on the 0–4 ratings and current notes.
+Domains: peerInteraction, adultInteraction, investmentLevel, dealAuthority.
+Return JSON with keys for each domain.
+Youth: ${context.youth.name}
+Date: ${selectedDate}
+Ratings: ${JSON.stringify(context.ratings)}
+CurrentComments: ${JSON.stringify(context.comments)}`;
+
+      const res = await queryData(prompt, context);
+
+      let suggestions: any = null;
+      if (res.success && res.data) {
+        // Try to parse a JSON object from the AI response
+        try {
+          const parsed = typeof res.data === 'string' ? JSON.parse(res.data) : res.data;
+          suggestions = parsed;
+        } catch {
+          // If not JSON, try a simple heuristic split
+          suggestions = {};
+        }
+      }
+
+      // Fallback template if AI unavailable
+      const fallbackFor = (domain: string, score: number) => {
+        const labels = [
+          'Unsatisfactory',
+          'Needs Improvement',
+          'Needs Improvement',
+          'Meeting Expectations',
+          'Exceeding Expectations',
+        ];
+        const lvl = labels[Math.max(0, Math.min(4, Math.round(score)))];
+        switch (domain) {
+          case 'peerInteraction':
+            return `${lvl}: Engaged peers ${score >= 3 ? 'positively' : 'with prompts'}. Continue ${score >= 3 ? 'leadership and pro-social modeling' : 'teaching replacement skills and coaching turn-taking'}.`;
+          case 'adultInteraction':
+            return `${lvl}: ${score >= 3 ? 'Respectful and responsive' : 'Needed reminders to follow directions'}. Reinforce ${score >= 3 ? 'assertive communication' : 'clear expectations and check-for-understanding'}.`;
+          case 'investmentLevel':
+            return `${lvl}: ${score >= 3 ? 'On-task and motivated' : 'Variable engagement'}. Use ${score >= 3 ? 'goal-setting and stretch tasks' : 'chunking, choice, and brief breaks'} to support progress.`;
+          case 'dealAuthority':
+            return `${lvl}: ${score >= 3 ? 'Accepted feedback and limits' : 'Struggled with redirection at times'}. Practice ${score >= 3 ? 'self-advocacy and reflection' : 'calm-down strategies and pre-teaching of expectations'}.`;
+          default:
+            return '';
+        }
+      };
+
+      setDailyRating(dr => ({
+        ...dr,
+        peerInteractionComment: suggestions?.peerInteraction || fallbackFor('peerInteraction', dr.peerInteraction),
+        adultInteractionComment: suggestions?.adultInteraction || fallbackFor('adultInteraction', dr.adultInteraction),
+        investmentLevelComment: suggestions?.investmentLevel || fallbackFor('investmentLevel', dr.investmentLevel),
+        dealAuthorityComment: suggestions?.dealAuthority || fallbackFor('dealAuthority', dr.dealAuthority),
+      }));
+
+      toast({ title: 'Comments enhanced', description: 'AI suggestions applied per domain.' });
+    } catch (e) {
+      toast({ title: 'AI not available', description: 'Using fallback suggestions.', variant: 'default' });
+    } finally {
+      setAiEnhancing(false);
+    }
+  };
+
   const handleSaveDPN = async () => {
     setLoading(true);
     try {
@@ -114,10 +243,15 @@ export const ConsolidatedScoringTab = ({ youth, onRatingsUpdated }: Consolidated
       const ratingData = {
         youth_id: youth.id,
         date: selectedDate,
+        time_of_day: timeOfDay,
         peerInteraction: dailyRating.peerInteraction,
+        peerInteractionComment: dailyRating.peerInteractionComment,
         adultInteraction: dailyRating.adultInteraction,
+        adultInteractionComment: dailyRating.adultInteractionComment,
         investmentLevel: dailyRating.investmentLevel,
+        investmentLevelComment: dailyRating.investmentLevelComment,
         dealAuthority: dailyRating.dealAuthority,
+        dealAuthorityComment: dailyRating.dealAuthorityComment,
         staff: staffName,
         comments: [
           dailyRating.peerInteractionComment,
@@ -128,6 +262,10 @@ export const ConsolidatedScoringTab = ({ youth, onRatingsUpdated }: Consolidated
       };
 
       await saveDailyRating(ratingData);
+      // Refresh cumulative averages after save
+      if (youth.id) {
+        await loadDailyRatings(youth.id);
+      }
 
       // Call the callback to refresh behavioral averages in parent component
       if (onRatingsUpdated) {
@@ -171,7 +309,7 @@ export const ConsolidatedScoringTab = ({ youth, onRatingsUpdated }: Consolidated
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-2">
               <Label htmlFor="date">Date</Label>
               <Input
@@ -180,6 +318,19 @@ export const ConsolidatedScoringTab = ({ youth, onRatingsUpdated }: Consolidated
                 value={selectedDate}
                 onChange={(e) => setSelectedDate(e.target.value)}
               />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="slot">Time of Day</Label>
+              <Select value={timeOfDay} onValueChange={(v: any) => setTimeOfDay(v)}>
+                <SelectTrigger id="slot">
+                  <SelectValue placeholder="Select slot" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="morning">Morning</SelectItem>
+                  <SelectItem value="day">Day</SelectItem>
+                  <SelectItem value="evening">Evening</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label htmlFor="staff">Staff Member</Label>
@@ -229,6 +380,21 @@ export const ConsolidatedScoringTab = ({ youth, onRatingsUpdated }: Consolidated
               dailyRating.dealAuthorityComment,
               (value) => setDailyRating({...dailyRating, dealAuthorityComment: value})
             )}
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div className="text-xs text-gray-500">Average shown is the mean of the four domains, rounded to one decimal.</div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={enhanceCommentsWithAI}
+              disabled={aiEnhancing}
+              className="gap-2"
+            >
+              <Sparkles className={`h-4 w-4 ${aiEnhancing ? 'animate-spin' : ''}`} />
+              {aiEnhancing ? 'Enhancing…' : 'Enhance Comments'}
+            </Button>
           </div>
           
           {/* DPN Submit Button */}

@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>School Scores - localStorage Checker</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            max-width: 1200px;
+            margin: 40px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            border-bottom: 3px solid #4CAF50;
+            padding-bottom: 10px;
+        }
+        .status {
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .status.warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        button.danger {
+            background: #f44336;
+        }
+        button.danger:hover {
+            background: #da190b;
+        }
+        pre {
+            background: #f4f4f4;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .stat-card {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            border-left: 4px solid #4CAF50;
+        }
+        .stat-card h3 {
+            margin: 0 0 10px 0;
+            color: #666;
+            font-size: 14px;
+        }
+        .stat-card .value {
+            font-size: 32px;
+            font-weight: bold;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏫 School Scores - localStorage Checker</h1>
+        
+        <div id="status"></div>
+        
+        <div class="stats" id="stats"></div>
+        
+        <div style="margin: 20px 0;">
+            <button onclick="checkData()">🔍 Check School Scores</button>
+            <button onclick="checkAllKeys()">🔑 Show All Keys</button>
+            <button onclick="showRawData()">📄 Show Raw Data</button>
+            <button onclick="exportData()">💾 Export Data</button>
+            <button onclick="clearData()" class="danger">🗑️ Clear Data (Dangerous!)</button>
+        </div>
+        
+        <div id="output"></div>
+    </div>
+
+    <script>
+        const STORAGE_KEY = 'heartland_school_scores';
+
+        function checkAllKeys() {
+            const outputDiv = document.getElementById('output');
+            const allKeys = Object.keys(localStorage);
+            
+            outputDiv.innerHTML = `
+                <h3>🔍 All localStorage Keys (${allKeys.length} total)</h3>
+                <pre>${JSON.stringify(allKeys, null, 2)}</pre>
+                <h3>📦 Keys that might contain school data:</h3>
+            `;
+            
+            const schoolRelated = allKeys.filter(key => 
+                key.toLowerCase().includes('school') || 
+                key.toLowerCase().includes('score') ||
+                key.toLowerCase().includes('academic')
+            );
+            
+            if (schoolRelated.length > 0) {
+                schoolRelated.forEach(key => {
+                    const data = localStorage.getItem(key);
+                    const size = (data.length / 1024).toFixed(2);
+                    outputDiv.innerHTML += `
+                        <div style="margin: 10px 0; padding: 10px; background: #f8f9fa; border-radius: 4px;">
+                            <strong>${key}</strong> (${size} KB)
+                            <button onclick="viewKey('${key}')" style="margin-left: 10px; padding: 5px 10px; font-size: 12px;">View</button>
+                        </div>
+                    `;
+                });
+            } else {
+                outputDiv.innerHTML += '<p>No school-related keys found.</p>';
+            }
+        }
+        
+        function viewKey(key) {
+            const outputDiv = document.getElementById('output');
+            const data = localStorage.getItem(key);
+            
+            try {
+                const parsed = JSON.parse(data);
+                outputDiv.innerHTML = `
+                    <h3>📄 Data from key: ${key}</h3>
+                    <button onclick="checkAllKeys()">← Back to All Keys</button>
+                    <pre>${JSON.stringify(parsed, null, 2)}</pre>
+                `;
+            } catch (error) {
+                outputDiv.innerHTML = `
+                    <h3>📄 Data from key: ${key}</h3>
+                    <button onclick="checkAllKeys()">← Back to All Keys</button>
+                    <p>Could not parse as JSON. Showing raw data:</p>
+                    <pre>${data}</pre>
+                `;
+            }
+        }
+
+        function checkData() {
+            const statusDiv = document.getElementById('status');
+            const statsDiv = document.getElementById('stats');
+            const outputDiv = document.getElementById('output');
+            
+            try {
+                const rawData = localStorage.getItem(STORAGE_KEY);
+                
+                if (!rawData) {
+                    statusDiv.innerHTML = '<div class="status error">❌ No school scores found in localStorage</div>';
+                    statsDiv.innerHTML = '';
+                    outputDiv.innerHTML = '<p>The localStorage key "heartland_school_scores" does not exist or is empty.</p>';
+                    return;
+                }
+                
+                const scores = JSON.parse(rawData);
+                
+                if (!Array.isArray(scores) || scores.length === 0) {
+                    statusDiv.innerHTML = '<div class="status warning">⚠️ School scores data exists but is empty</div>';
+                    statsDiv.innerHTML = '';
+                    outputDiv.innerHTML = '<p>The data exists but contains no scores.</p>';
+                    return;
+                }
+                
+                // Calculate statistics
+                const totalScores = scores.length;
+                const uniqueYouth = new Set(scores.map(s => s.youth_id)).size;
+                const uniqueDates = new Set(scores.map(s => s.date)).size;
+                const avgScore = (scores.reduce((sum, s) => sum + s.score, 0) / totalScores).toFixed(2);
+                
+                // Get date range
+                const dates = scores.map(s => new Date(s.date)).sort((a, b) => a - b);
+                const oldestDate = dates[0].toLocaleDateString();
+                const newestDate = dates[dates.length - 1].toLocaleDateString();
+                
+                statusDiv.innerHTML = '<div class="status success">✅ School scores data found and valid!</div>';
+                
+                statsDiv.innerHTML = `
+                    <div class="stat-card">
+                        <h3>Total Scores</h3>
+                        <div class="value">${totalScores}</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Unique Students</h3>
+                        <div class="value">${uniqueYouth}</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Unique Dates</h3>
+                        <div class="value">${uniqueDates}</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Average Score</h3>
+                        <div class="value">${avgScore}</div>
+                    </div>
+                `;
+                
+                outputDiv.innerHTML = `
+                    <h3>📊 Data Summary</h3>
+                    <p><strong>Date Range:</strong> ${oldestDate} to ${newestDate}</p>
+                    <p><strong>Data Size:</strong> ${(rawData.length / 1024).toFixed(2)} KB</p>
+                    <p><strong>Status:</strong> Your data is intact and should load correctly with the fix applied.</p>
+                `;
+                
+            } catch (error) {
+                statusDiv.innerHTML = '<div class="status error">❌ Error reading data: ' + error.message + '</div>';
+                statsDiv.innerHTML = '';
+                outputDiv.innerHTML = '<p>There was an error parsing the localStorage data. It may be corrupted.</p>';
+            }
+        }
+
+        function showRawData() {
+            const outputDiv = document.getElementById('output');
+            const rawData = localStorage.getItem(STORAGE_KEY);
+            
+            if (!rawData) {
+                outputDiv.innerHTML = '<p>No data to display.</p>';
+                return;
+            }
+            
+            try {
+                const scores = JSON.parse(rawData);
+                outputDiv.innerHTML = `
+                    <h3>📄 Raw Data (${scores.length} records)</h3>
+                    <pre>${JSON.stringify(scores, null, 2)}</pre>
+                `;
+            } catch (error) {
+                outputDiv.innerHTML = `
+                    <h3>📄 Raw Data (Unparsed)</h3>
+                    <pre>${rawData}</pre>
+                `;
+            }
+        }
+
+        function exportData() {
+            const rawData = localStorage.getItem(STORAGE_KEY);
+            
+            if (!rawData) {
+                alert('No data to export');
+                return;
+            }
+            
+            const blob = new Blob([rawData], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `school_scores_backup_${new Date().toISOString().split('T')[0]}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            alert('Data exported successfully!');
+        }
+
+        function clearData() {
+            if (!confirm('⚠️ WARNING: This will permanently delete all school scores from localStorage!\n\nAre you absolutely sure?')) {
+                return;
+            }
+            
+            if (!confirm('This action cannot be undone. Continue?')) {
+                return;
+            }
+            
+            localStorage.removeItem(STORAGE_KEY);
+            alert('Data cleared from localStorage');
+            checkData();
+        }
+
+        // Auto-check on load
+        window.addEventListener('load', checkData);
+    </script>
+</body>
+</html>

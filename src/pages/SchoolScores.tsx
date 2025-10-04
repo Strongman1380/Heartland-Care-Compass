@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { useYouth } from '@/hooks/useSupabase'
-import { upsertScore, getScore, getYouthStats, calculateOverallAverage, type YouthScoreStats } from '@/utils/schoolScores'
+import { upsertScore, getScore, getYouthStats, calculateOverallAverage, getScoresForRange, type YouthScoreStats } from '@/utils/schoolScores'
 import { format } from 'date-fns'
 import { TrendingUp, TrendingDown, Minus, Sparkles, Save, CheckCircle2 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
@@ -81,42 +81,53 @@ const SchoolScores: React.FC = () => {
   // Load existing scores and calculate stats
   useEffect(() => {
     if (!sortedYouths || sortedYouths.length === 0) return
-    const statsMap = new Map<string, YouthScoreStats>()
 
-    setGrid(prev => {
-      const updated: GridValue = {}
+    // Trigger background sync from Supabase for the current week range
+    const startDate = weekDates[0]
+    const endDate = weekDates[weekDates.length - 1]
 
-      for (const y of sortedYouths) {
-        updated[y.id] = {}
-        for (let i = 0; i < weekdays.length; i++) {
-          const iso = weekDates[i]
+    // Always trigger sync to get latest data from Supabase
+    const loadScores = async () => {
+      try {
+        // Force sync from Supabase for current week range
+        getScoresForRange(startDate, endDate, true)
 
-          // Preserve unsaved edits from current grid if they exist
-          if (prev[y.id]?.[iso] !== undefined) {
-            updated[y.id][iso] = prev[y.id][iso]
-          } else {
-            // Load from saved scores only if no current value
+        // Wait for the sync to complete
+        await new Promise(resolve => setTimeout(resolve, 500))
+
+        const statsMap = new Map<string, YouthScoreStats>()
+        const updated: GridValue = {}
+
+        for (const y of sortedYouths) {
+          updated[y.id] = {}
+          for (let i = 0; i < weekdays.length; i++) {
+            const iso = weekDates[i]
+
+            // Always load fresh from storage (which now has synced data)
             const existing = getScore(y.id, iso)
             updated[y.id][iso] = existing ? existing.score : ''
           }
+
+          // Calculate stats for each youth
+          const stats = getYouthStats(y.id)
+          if (stats) {
+            statsMap.set(y.id, stats)
+          }
         }
 
-        // Calculate stats for each youth
-        const stats = getYouthStats(y.id)
-        if (stats) {
-          statsMap.set(y.id, stats)
-        }
+        setGrid(updated)
+        setYouthStats(statsMap)
+      } catch (error) {
+        console.error('Error loading scores:', error)
       }
+    }
 
-      return updated
-    })
-
-    setYouthStats(statsMap)
+    loadScores()
   }, [sortedYouths, weekDates.join('|')])
 
-  // Auto-save functionality with debounce
+  // Auto-save functionality with debounce (0–4 rating scale)
   const autoSave = useCallback((youthId: string, iso: string, weekdayIdx: number, value: number) => {
-    if (autoSaveEnabled && value >= 0 && value <= 100) {
+    if (autoSaveEnabled && value >= 0 && value <= 4) {
       upsertScore(youthId, iso, weekdayIdx, value)
       setLastSaved(new Date())
       
@@ -199,6 +210,21 @@ const SchoolScores: React.FC = () => {
   const weeklyAverages = calculateWeeklyAverages()
   const overallAverage = calculateOverallAverage(30)
 
+  // Rating helpers for 0–4 scale
+  const ratingLabel = (val: number) => {
+    if (val >= 3.5) return 'Exceeding Expectations'
+    if (val >= 3.0) return 'Meeting Expectations'
+    if (val >= 2.0) return 'Needs Improvement'
+    return 'Unsatisfactory'
+  }
+
+  const ratingColor = (val: number) => {
+    if (val >= 3.5) return 'text-green-600'
+    if (val >= 3.0) return 'text-blue-600'
+    if (val >= 2.0) return 'text-yellow-600'
+    return 'text-red-600'
+  }
+
   // Generate AI insights
   const generateAIInsights = async () => {
     setGeneratingInsights(true)
@@ -216,16 +242,16 @@ const SchoolScores: React.FC = () => {
       
       // Overall program performance
       if (overallAverage !== null) {
-        insights.push(`📊 **Program Overview**: The overall 30-day average is ${overallAverage.toFixed(1)}%.`)
-        
-        if (overallAverage >= 85) {
-          insights.push("The program is performing excellently! Students are consistently meeting high academic standards.")
-        } else if (overallAverage >= 75) {
-          insights.push("The program shows solid performance with room for targeted improvements.")
-        } else if (overallAverage >= 65) {
-          insights.push("The program performance indicates a need for additional academic support and intervention strategies.")
+        insights.push(`📊 **Program Overview**: 30-day average score is ${overallAverage.toFixed(1)} on a 0–4 scale.`)
+        const label = ratingLabel(overallAverage)
+        if (label === 'Exceeding Expectations') {
+          insights.push('The program is performing at a high level; students consistently exceed expectations.')
+        } else if (label === 'Meeting Expectations') {
+          insights.push('Solid performance overall with opportunities for targeted enrichment.')
+        } else if (label === 'Needs Improvement') {
+          insights.push('Performance indicates a need for additional support and intervention strategies.')
         } else {
-          insights.push("⚠️ Program performance requires immediate attention and comprehensive intervention planning.")
+          insights.push('⚠️ Performance requires immediate attention and comprehensive intervention planning.')
         }
       }
       
@@ -253,30 +279,30 @@ const SchoolScores: React.FC = () => {
       }
       
       // High performers
-      const highPerformers = statsArray.filter(s => s.average >= 85)
+      const highPerformers = statsArray.filter(s => s.average >= 3.5)
       if (highPerformers.length > 0) {
         const names = highPerformers.map(s => {
           const youth = sortedYouths.find(y => y.id === s.youthId)
           return youth ? `${youth.firstName} ${youth.lastName}` : 'Unknown'
         })
-        insights.push(`\n🌟 **High Performers** (85%+): ${names.join(', ')} - Consider advanced coursework or leadership opportunities.`)
+        insights.push(`\n🌟 **Exceeding Expectations** (3.5–4.0): ${names.join(', ')} - Consider advanced coursework or leadership opportunities.`)
       }
       
       // Students needing intervention
-      const needsIntervention = statsArray.filter(s => s.average < 65)
+      const needsIntervention = statsArray.filter(s => s.average < 2.0)
       if (needsIntervention.length > 0) {
         const names = needsIntervention.map(s => {
           const youth = sortedYouths.find(y => y.id === s.youthId)
           return youth ? `${youth.firstName} ${youth.lastName}` : 'Unknown'
         })
-        insights.push(`\n🔔 **Immediate Intervention Needed** (<65%): ${names.join(', ')} - Schedule IEP review, increase one-on-one support, and coordinate with behavioral team.`)
+        insights.push(`\n🔔 **Immediate Intervention Needed** (<2.0): ${names.join(', ')} - Schedule IEP review, increase one-on-one support, and coordinate with behavioral team.`)
       }
       
       // Weekly performance for current view
       const currentWeekAvg = Array.from(weeklyAverages.values())
       if (currentWeekAvg.length > 0) {
         const weekAvg = currentWeekAvg.reduce((a, b) => a + b, 0) / currentWeekAvg.length
-        insights.push(`\n📅 **Current Week Average**: ${weekAvg.toFixed(1)}% (${format(weekStart, 'MMM dd')} - ${format(addDays(weekStart, 4), 'MMM dd')})`)
+        insights.push(`\n📅 **Current Week Average**: ${weekAvg.toFixed(1)} (${format(weekStart, 'MMM dd')} - ${format(addDays(weekStart, 4), 'MMM dd')})`)
       }
       
       // Recommendations
@@ -357,20 +383,12 @@ const SchoolScores: React.FC = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-gray-600">30-Day Program Average</p>
-                    <p className="text-3xl font-bold text-blue-800">{overallAverage.toFixed(1)}%</p>
+                    <p className="text-3xl font-bold text-blue-800">{overallAverage.toFixed(1)}</p>
                   </div>
                   <div className="text-right">
                     <p className="text-sm text-gray-600">Performance Level</p>
-                    <p className={`text-lg font-semibold ${
-                      overallAverage >= 85 ? 'text-green-600' :
-                      overallAverage >= 75 ? 'text-blue-600' :
-                      overallAverage >= 65 ? 'text-yellow-600' :
-                      'text-red-600'
-                    }`}>
-                      {overallAverage >= 85 ? 'Excellent' :
-                       overallAverage >= 75 ? 'Good' :
-                       overallAverage >= 65 ? 'Fair' :
-                       'Needs Improvement'}
+                    <p className={`text-lg font-semibold ${ratingColor(overallAverage)}`}>
+                      {ratingLabel(overallAverage)}
                     </p>
                   </div>
                 </div>
@@ -431,6 +449,9 @@ const SchoolScores: React.FC = () => {
           </CardTitle>
         </CardHeader>
         <CardContent>
+          <div className="mb-2 text-xs text-gray-600">
+            Scale: 0–4.0 — Exceeding Expectations (3.5–4.0), Meeting Expectations (3.0–3.4), Needs Improvement (2.0–2.9), Unsatisfactory (&lt;2.0)
+          </div>
           <div className="mb-4 flex items-center justify-between">
             <div className="text-sm text-gray-700">
               <div className="font-medium">Week: {toISO(weekStart)} to {toISO(addDays(weekStart, 4))}</div>
@@ -482,8 +503,8 @@ const SchoolScores: React.FC = () => {
                             <Input
                               type="number"
                               min={0}
-                              max={100}
-                              step={1}
+                              max={4}
+                              step={0.1}
                               value={grid?.[y.id]?.[iso] ?? ''}
                               onChange={e => handleChange(y.id, iso, weekdays[idx].idx, e.target.value)}
                               className="text-center"

@@ -276,14 +276,17 @@ export const truncateDecimal = (num: number, places: number) => {
 // School Incident Reports (New Structured Format)
 export const listSchoolIncidents = (): SchoolIncidentReport[] => {
   // Attempt to hydrate from Supabase in background
-  try {
-    void (async () => {
+  (async () => {
+    try {
       const remote = await schoolIncidentsService.list()
       if (remote && remote.length) {
         writeArray(LS_KEYS.schoolIncidents, remote as any)
       }
-    })()
-  } catch {}
+    } catch (error) {
+      // Silently fail - we'll use local cache
+      console.warn('School incidents sync failed, using local cache:', error)
+    }
+  })()
   return readArray<SchoolIncidentReport>(LS_KEYS.schoolIncidents)
 }
 

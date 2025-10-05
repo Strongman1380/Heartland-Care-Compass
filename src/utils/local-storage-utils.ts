@@ -178,27 +178,35 @@ export const fetchProgressNotes = (youthId: string): ProgressNote[] => {
     });
 };
 
-export const saveProgressNote = (
-  youthId: string, 
+export const saveProgressNote = async (
+  youthId: string,
   noteData: Omit<ProgressNote, 'id' | 'createdAt' | 'youth_id'>
-): ProgressNote => {
+): Promise<ProgressNote> => {
   const allNotes = getItem<ProgressNote[]>(STORAGE_KEYS.NOTES) || [];
-  
+
   const newNote: ProgressNote = {
     id: uuidv4(),
     youth_id: youthId,
     ...noteData,
     createdAt: new Date()
   };
-  // Persist to Supabase best-effort
+
+  // Persist to Supabase - throw error if it fails so UI can handle it
   try {
-    void notesService.save({
+    await notesService.save({
+      id: newNote.id,
       youth_id: youthId,
       text: typeof newNote.note === 'string' ? newNote.note : JSON.stringify(newNote.note),
       category: newNote.category || 'Progress Note'
-    } as any)
-  } catch {}
-  
+    } as any);
+  } catch (error) {
+    console.error('Failed to save progress note to Supabase:', error);
+    // Still save to localStorage as fallback
+    allNotes.push(newNote);
+    setItem(STORAGE_KEYS.NOTES, allNotes);
+    throw new Error('Failed to save progress note to database. Note saved locally only.');
+  }
+
   allNotes.push(newNote);
   setItem(STORAGE_KEYS.NOTES, allNotes);
   return newNote;

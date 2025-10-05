@@ -12,7 +12,19 @@ import { getDailyRatingsByYouth, getBehaviorPointsByYouth, getProgressNotesByYou
 import { saveDpnComments, fetchDpnCommentsInRange } from '@/utils/local-storage-utils';
 import { summarizeReport } from '@/lib/aiClient';
 
-export function DpnReport({ youth, variant, onAutoExportComplete }: { youth: Youth; variant: 'weekly' | 'biweekly' | 'monthly'; onAutoExportComplete?: () => void }) {
+export function DpnReport({
+  youth,
+  variant,
+  onAutoExportComplete,
+  customStartDate,
+  customEndDate
+}: {
+  youth: Youth;
+  variant: 'weekly' | 'biweekly' | 'monthly';
+  onAutoExportComplete?: () => void;
+  customStartDate?: string;
+  customEndDate?: string;
+}) {
   const [periodFrom, setPeriodFrom] = useState('');
   const [periodTo, setPeriodTo] = useState('');
   const [comments, setComments] = useState({ peer: '', adult: '', investment: '', authority: '', strengths: '', deficiencies: '' });
@@ -24,20 +36,27 @@ export function DpnReport({ youth, variant, onAutoExportComplete }: { youth: You
   const [notesInRange, setNotesInRange] = useState<ProgressNote[]>([]);
   const printRef = useRef<HTMLDivElement>(null);
 
-  // Default date range
+  // Default date range (or use custom dates if provided)
   useEffect(() => {
-    const now = new Date();
-    let start: Date; let end: Date;
-    if (variant === 'weekly') {
-      start = startOfWeek(now); end = endOfWeek(now);
-    } else if (variant === 'biweekly') {
-      end = now; start = subDays(now, 14);
+    if (customStartDate && customEndDate) {
+      // Use custom dates if provided
+      setPeriodFrom(customStartDate);
+      setPeriodTo(customEndDate);
     } else {
-      start = startOfMonth(now); end = endOfMonth(now);
+      // Otherwise calculate from variant
+      const now = new Date();
+      let start: Date; let end: Date;
+      if (variant === 'weekly') {
+        start = startOfWeek(now); end = endOfWeek(now);
+      } else if (variant === 'biweekly') {
+        end = now; start = subDays(now, 14);
+      } else {
+        start = startOfMonth(now); end = endOfMonth(now);
+      }
+      setPeriodFrom(format(start, 'yyyy-MM-dd'));
+      setPeriodTo(format(end, 'yyyy-MM-dd'));
     }
-    setPeriodFrom(format(start, 'yyyy-MM-dd'));
-    setPeriodTo(format(end, 'yyyy-MM-dd'));
-  }, [variant]);
+  }, [variant, customStartDate, customEndDate]);
 
   const loadRatings = async (start: Date, end: Date) => {
     try {

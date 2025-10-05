@@ -46,10 +46,13 @@ const Index = () => {
 
 
   const handleYouthSelect = (youth: Youth) => {
+    console.log('Youth selected:', youth);
     setSelectedYouth(youth);
+    setActiveTab("profile"); // Reset to profile tab when selecting a youth
   };
 
   const handleBackToHome = () => {
+    console.log('Back to home');
     setSelectedYouth(null);
     setActiveTab("profile");
   };
@@ -104,6 +107,11 @@ const Index = () => {
     }
   };
 
+  // Debug logging
+  useEffect(() => {
+    console.log('Index state:', { selectedYouth: selectedYouth?.firstName, activeTab, youthsCount: youths.length });
+  }, [selectedYouth, activeTab, youths.length]);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-red-50 via-yellow-50 to-red-100">
       <Header />
@@ -120,7 +128,7 @@ const Index = () => {
               formatDate={formatDate}
             />
           </>
-        ) : (
+        ) : selectedYouth && selectedYouth.id ? (
           <YouthDetailView
             selectedYouth={selectedYouth}
             activeTab={activeTab}
@@ -128,6 +136,17 @@ const Index = () => {
             onBackToHome={handleBackToHome}
             onYouthUpdated={loadYouths}
           />
+        ) : (
+          <div className="text-center py-12 bg-white rounded-lg shadow-lg">
+            <p className="text-red-600 text-lg font-semibold mb-2">Error: Invalid youth profile</p>
+            <p className="text-gray-600 mb-4">The selected youth profile could not be loaded.</p>
+            <button
+              onClick={handleBackToHome}
+              className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+            >
+              Back to Youth List
+            </button>
+          </div>
         )}
       </main>
       

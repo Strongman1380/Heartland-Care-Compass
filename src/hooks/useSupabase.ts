@@ -395,9 +395,10 @@ export const useDailyRatings = (youthId?: string) => {
       setLoading(true)
       const saved = await dailyRatingsService.upsert(ratingData as any)
       setDailyRatings(prev => {
-        const existing = prev.find(r => (r as any).youth_id === saved.youth_id && (r as any).date === saved.date && ((r as any).time_of_day || 'day') === ((saved as any).time_of_day || 'day'))
+        // Find existing rating for same youth and date (one per day)
+        const existing = prev.find(r => r.youth_id === saved.youth_id && r.date === saved.date)
         if (existing) {
-          return prev.map(r => r.id === saved.id ? saved : r)
+          return prev.map(r => r.id === existing.id ? saved : r)
         } else {
           return [saved, ...prev]
         }

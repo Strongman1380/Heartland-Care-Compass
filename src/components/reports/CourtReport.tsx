@@ -39,7 +39,6 @@ interface CourtReportData {
   behavioralProgress: string;
   significantIncidents: string;
   behavioralInterventions: string;
-  riskAssessment: string;
   
   // Educational Progress
   schoolPlacement: string;
@@ -157,7 +156,6 @@ const CourtReportPreview = ({ data }: CourtReportPreviewProps) => {
         { label: 'Behavioral Progress', value: data.behavioralProgress },
         { label: 'Significant Incidents', value: data.significantIncidents },
         { label: 'Behavioral Interventions', value: data.behavioralInterventions },
-        { label: 'Risk Assessment', value: data.riskAssessment },
       ],
     },
     {
@@ -294,7 +292,6 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
     behavioralProgress: '',
     significantIncidents: '',
     behavioralInterventions: '',
-    riskAssessment: '',
     
     schoolPlacement: youth?.currentSchool || '',
     academicProgress: '',
@@ -386,9 +383,6 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
       }
       if (!existingData.behavioralProgress && youth.strengthsTalents) {
         result.behavioralProgress = `Strengths: ${youth.strengthsTalents}`;
-      }
-      if (!existingData.riskAssessment && youth.hyrnaRiskLevel) {
-        result.riskAssessment = `HYRNA Risk Level: ${youth.hyrnaRiskLevel}`;
       }
       if (!existingData.dischargePlanning && (youth.dischargePlan?.parents || youth.dischargePlan?.relative?.name)) {
         result.dischargePlanning = `Planned discharge to: ${youth.dischargePlan.parents || youth.dischargePlan.relative?.name}`;
@@ -652,7 +646,6 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
         behavioralProgress: '',
         significantIncidents: '',
         behavioralInterventions: '',
-        riskAssessment: '',
         
         schoolPlacement: youth?.currentSchool || '',
         academicProgress: '',
@@ -1006,17 +999,6 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
                 rows={3}
                 className="mt-1"
                 placeholder="Describe interventions and strategies used..."
-              />
-            </div>
-            <div>
-              <Label htmlFor="riskAssessment">Risk Assessment</Label>
-              <Textarea
-                id="riskAssessment"
-                value={reportData.riskAssessment}
-                onChange={(e) => handleInputChange('riskAssessment', e.target.value)}
-                rows={3}
-                className="mt-1"
-                placeholder="Assess current risk level and safety concerns..."
               />
             </div>
           </div>

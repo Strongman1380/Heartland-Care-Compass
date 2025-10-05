@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Youth } from "@/integrations/supabase/services";
 import { DailyRating } from "@/types/app-types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,7 +25,7 @@ export const ConsolidatedScoringTab = ({ youth, onRatingsUpdated }: Consolidated
   const [staffName, setStaffName] = useState("");
   const [timeOfDay, setTimeOfDay] = useState<'morning' | 'day' | 'evening'>('day');
   const { toast } = useToast();
-  const { dailyRatings, loadDailyRatings, saveDailyRating } = useDailyRatings();
+  const { dailyRatings, loadDailyRatings, saveDailyRating, getDailyRatingForDate } = useDailyRatings();
   const [aiEnhancing, setAiEnhancing] = useState(false);
 
   // DPN Export State
@@ -33,6 +33,7 @@ export const ConsolidatedScoringTab = ({ youth, onRatingsUpdated }: Consolidated
   const [dpnStartDate, setDpnStartDate] = useState(format(startOfWeek(new Date()), "yyyy-MM-dd"));
   const [dpnEndDate, setDpnEndDate] = useState(format(endOfWeek(new Date()), "yyyy-MM-dd"));
   const [dpnVariant, setDpnVariant] = useState<'weekly' | 'biweekly' | 'monthly'>('weekly');
+  const [triggerDpnExport, setTriggerDpnExport] = useState(false);
 
 
 
@@ -49,10 +50,43 @@ export const ConsolidatedScoringTab = ({ youth, onRatingsUpdated }: Consolidated
   });
 
 
-  const fetchExistingData = () => {
+  const fetchExistingData = useCallback(async () => {
     try {
-      // TODO: Implement daily ratings and points fetching from local storage
-      // For now, just reset to defaults
+      // Fetch existing rating for the selected date from Supabase
+      const existingRating = await getDailyRatingForDate(youth.id, selectedDate);
+
+      if (existingRating) {
+        // Load existing data
+        console.log('Loading existing rating for date:', selectedDate, existingRating);
+        setDailyRating({
+          peerInteraction: existingRating.peerInteraction || 0,
+          peerInteractionComment: existingRating.peerInteractionComment || "",
+          adultInteraction: existingRating.adultInteraction || 0,
+          adultInteractionComment: existingRating.adultInteractionComment || "",
+          investmentLevel: existingRating.investmentLevel || 0,
+          investmentLevelComment: existingRating.investmentLevelComment || "",
+          dealAuthority: existingRating.dealAuthority || 0,
+          dealAuthorityComment: existingRating.dealAuthorityComment || ""
+        });
+        setStaffName(existingRating.staff || "");
+      } else {
+        // No existing data for this date, reset to defaults
+        console.log('No existing rating for date:', selectedDate);
+        setDailyRating({
+          peerInteraction: 0,
+          peerInteractionComment: "",
+          adultInteraction: 0,
+          adultInteractionComment: "",
+          investmentLevel: 0,
+          investmentLevelComment: "",
+          dealAuthority: 0,
+          dealAuthorityComment: ""
+        });
+        setStaffName("");
+      }
+    } catch (error) {
+      console.error("Error fetching existing data:", error);
+      // Reset to defaults on error
       setDailyRating({
         peerInteraction: 0,
         peerInteractionComment: "",
@@ -64,16 +98,13 @@ export const ConsolidatedScoringTab = ({ youth, onRatingsUpdated }: Consolidated
         dealAuthorityComment: ""
       });
       setStaffName("");
-    } catch (error) {
-      // No existing data found, which is fine
-      console.log("No existing data for selected date");
     }
-  };
+  }, [selectedDate, youth.id, getDailyRatingForDate]);
 
   useEffect(() => {
-    // Only fetch existing data when date or youth changes, not on every render
+    // Fetch existing data when date or youth changes
     fetchExistingData();
-  }, [selectedDate, youth.id]);
+  }, [fetchExistingData]);
 
   // Load all historical ratings for cumulative averages
   useEffect(() => {
@@ -237,6 +268,16 @@ CurrentComments: ${JSON.stringify(context.comments)}`;
   };
 
   const handleSaveDPN = async () => {
+    // Validate required fields
+    if (!staffName.trim()) {
+      toast({
+        title: "Validation Error",
+        description: "Staff name is required",
+        variant: "destructive"
+      });
+      return;
+    }
+
     setLoading(true);
     try {
       // Save daily ratings to Supabase
@@ -261,7 +302,10 @@ CurrentComments: ${JSON.stringify(context.comments)}`;
         ].filter(Boolean).join(' | ')
       };
 
-      await saveDailyRating(ratingData);
+      console.log('Saving daily rating:', ratingData);
+      const saved = await saveDailyRating(ratingData);
+      console.log('Daily rating saved successfully:', saved);
+
       // Refresh cumulative averages after save
       if (youth.id) {
         await loadDailyRatings(youth.id);
@@ -285,11 +329,17 @@ CurrentComments: ${JSON.stringify(context.comments)}`;
       });
       setStaffName("");
 
+      toast({
+        title: "Success",
+        description: "Behavioral ratings saved successfully",
+      });
+
     } catch (error) {
       console.error("Error saving DPN:", error);
+      const errorMessage = error instanceof Error ? error.message : "Failed to save DPN data";
       toast({
         title: "Error",
-        description: "Failed to save DPN data",
+        description: errorMessage,
         variant: "destructive"
       });
     } finally {
@@ -468,11 +518,12 @@ CurrentComments: ${JSON.stringify(context.comments)}`;
                   <Button
                     size="sm"
                     onClick={() => {
-                      // This will trigger the DPN export
+                      // Trigger the DPN export
                       toast({
                         title: "Generating DPN Report",
                         description: `Creating ${dpnVariant} report for ${format(new Date(dpnStartDate), 'MMM d')} - ${format(new Date(dpnEndDate), 'MMM d, yyyy')}`,
                       });
+                      setTriggerDpnExport(true);
                     }}
                     className="text-xs"
                   >
@@ -486,6 +537,24 @@ CurrentComments: ${JSON.stringify(context.comments)}`;
         </CardContent>
       </Card>
 
+      {/* Hidden DPN Report Component for Export */}
+      {triggerDpnExport && (
+        <div style={{ position: 'fixed', left: '-9999px', top: '-9999px' }}>
+          <DpnReport
+            youth={youth}
+            variant={dpnVariant}
+            customStartDate={dpnStartDate}
+            customEndDate={dpnEndDate}
+            onAutoExportComplete={() => {
+              setTriggerDpnExport(false);
+              toast({
+                title: "DPN Report Generated",
+                description: "Your report has been downloaded successfully",
+              });
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 };

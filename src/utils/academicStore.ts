@@ -23,6 +23,7 @@ export type Grade = {
   student_id: AcademicStudentId;
   date_entered: string; // ISO yyyy-MM-dd
   grade_value: number; // percentage 0-100
+  course_name?: string; // name of the class/course
   createdAt: string;
   updatedAt: string;
 };
@@ -164,8 +165,9 @@ export const saveGrade = (data: Omit<Grade, "id" | "createdAt" | "updatedAt"> & 
       id: result.id as any,
       student_id: result.student_id,
       date_entered: result.date_entered,
-      grade_value: result.grade_value
-    });
+      grade_value: result.grade_value,
+      course_name: result.course_name
+    } as any);
   } catch (error) {
     console.error('Failed to sync grade to Supabase:', error);
   }

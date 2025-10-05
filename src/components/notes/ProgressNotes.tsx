@@ -190,7 +190,7 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!formData.staff.trim()) {
       toast.error("Staff name is required");
       return;
@@ -200,12 +200,12 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
       toast.error("Please complete at least one section of the case note");
       return;
     }
-    
+
     try {
       setIsSubmitting(true);
-      
+
       const noteDate = new Date(formData.date);
-      
+
       const structuredNote = {
         formatVersion: "v2",
         sections: {
@@ -223,15 +223,16 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
         note: JSON.stringify(structuredNote),
         staff: formData.staff.trim(),
       };
-      
-      saveProgressNote(youthId, newNote);
-      
+
+      // Now properly await the save operation
+      await saveProgressNote(youthId, newNote);
+
       toast.success("Case note added successfully");
-      
+
       // Clear draft and reset form
       const draftKey = `notes-draft-${youthId}`;
       localStorage.removeItem(draftKey);
-      
+
       setFormData({
         date: format(new Date(), 'yyyy-MM-dd'),
         staff: "",
@@ -241,10 +242,12 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
         planNextSteps: "",
       });
       setHasUnsavedChanges(false);
-      
+
       fetchNotes();
     } catch (error) {
-      toast.error("Failed to add case note");
+      const errorMessage = error instanceof Error ? error.message : "Failed to add case note";
+      toast.error(errorMessage);
+      console.error("Error saving case note:", error);
     } finally {
       setIsSubmitting(false);
     }

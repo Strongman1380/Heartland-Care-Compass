@@ -25,6 +25,7 @@ export default function AcademicProgressDashboard() {
   const [entryDate, setEntryDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'))
   const [entryCredits, setEntryCredits] = useState<string>('')
   const [entryGrade, setEntryGrade] = useState<string>('')
+  const [entryCourseName, setEntryCourseName] = useState<string>('')
   const [entrySteps, setEntrySteps] = useState<string>('')
 
   const handleRefresh = useCallback(async () => {
@@ -180,7 +181,12 @@ export default function AcademicProgressDashboard() {
         saved++
       }
       if (entryGrade !== '' && !Number.isNaN(Number(entryGrade))) {
-        saveGrade({ student_id: sid, date_entered: date, grade_value: Number(entryGrade) })
+        saveGrade({
+          student_id: sid,
+          date_entered: date,
+          grade_value: Number(entryGrade),
+          course_name: entryCourseName.trim() || undefined
+        })
         saved++
       }
       if (entrySteps !== '' && !Number.isNaN(Number(entrySteps))) {
@@ -195,6 +201,7 @@ export default function AcademicProgressDashboard() {
       // Clear inputs but keep student/date
       setEntryCredits('')
       setEntryGrade('')
+      setEntryCourseName('')
       setEntrySteps('')
     } catch (e) {
       toast({ title: 'Save failed', variant: 'destructive' })
@@ -242,7 +249,7 @@ export default function AcademicProgressDashboard() {
           <CardTitle className="text-base">Quick Entry</CardTitle>
         </CardHeader>
         <CardContent className="p-4">
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-3">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">Student</label>
               <Select value={entryStudent} onValueChange={(v: any) => setEntryStudent(v)}>
@@ -269,6 +276,10 @@ export default function AcademicProgressDashboard() {
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">Grade %</label>
               <Input type="number" placeholder="0-100" value={entryGrade} onChange={e => setEntryGrade(e.target.value)} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">Class Name</label>
+              <Input type="text" placeholder="e.g. Math 101" value={entryCourseName} onChange={e => setEntryCourseName(e.target.value)} />
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">Steps</label>

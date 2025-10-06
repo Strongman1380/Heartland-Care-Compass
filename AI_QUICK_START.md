@@ -9,7 +9,8 @@
 
 ```bash
 OPENAI_API_KEY=sk-your-actual-api-key-here
-OPENAI_MODEL=gpt-4o-mini
+OPENAI_MODEL_STANDARD=gpt-4o-mini  # Cost-efficient default (falls back to OPENAI_MODEL if set)
+OPENAI_MODEL_PREMIUM=gpt-4o        # Higher quality tier for complex workflows
 OPENAI_MAX_TOKENS=2000
 ```
 
@@ -28,6 +29,10 @@ You should see:
   "available": true,
   "configured": true,
   "model": "gpt-4o-mini",
+  "models": {
+    "standard": "gpt-4o-mini",
+    "premium": "gpt-4o"
+  },
   "status": "operational"
 }
 ```

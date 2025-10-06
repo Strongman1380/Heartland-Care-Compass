@@ -79,9 +79,7 @@ interface MonthlyReportData {
   // Treatment Progress (consolidated)
   treatmentProgressSummary: string;
 
-  // Placement Recommendation
-  placementRecommendation: string;
-  recommendationReason: string;
+  // Future Goals
   futureGoals: string;
 
   // Report metadata
@@ -111,8 +109,6 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
     academicProgressSummary: "",
     socialEmotionalSummary: "",
     treatmentProgressSummary: "",
-    placementRecommendation: "",
-    recommendationReason: "",
     futureGoals: "",
     preparedBy: "",
     reportDate: format(new Date(), "yyyy-MM-dd"),
@@ -195,13 +191,48 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
       let lengthOfStay = "";
       if (youth.admissionDate) {
         const admissionDate = new Date(youth.admissionDate);
-        const months = differenceInMonths(new Date(), admissionDate);
-        if (months >= 12) {
-          const years = Math.floor(months / 12);
-          const remainingMonths = months % 12;
-          lengthOfStay = `${years} year${years > 1 ? 's' : ''}${remainingMonths > 0 ? `, ${remainingMonths} month${remainingMonths > 1 ? 's' : ''}` : ''}`;
+        // Set to start of day for date-only comparison
+        admissionDate.setHours(0, 0, 0, 0);
+        
+        const now = new Date();
+        // Set to start of day for date-only comparison
+        now.setHours(0, 0, 0, 0);
+        
+        // Check if admission date is in the future
+        if (admissionDate > now) {
+          lengthOfStay = "Not yet admitted";
         } else {
-          lengthOfStay = `${months} month${months > 1 ? 's' : ''}`;
+          // Calculate years, months, and days
+          let years = now.getFullYear() - admissionDate.getFullYear();
+          let months = now.getMonth() - admissionDate.getMonth();
+          let days = now.getDate() - admissionDate.getDate();
+          
+          // Adjust for negative days
+          if (days < 0) {
+            months -= 1;
+            const prevMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+            days += prevMonth.getDate();
+          }
+          
+          // Adjust for negative months
+          if (months < 0) {
+            years -= 1;
+            months += 12;
+          }
+          
+          // Build the length of stay string
+          const parts = [];
+          if (years > 0) {
+            parts.push(`${years} year${years > 1 ? 's' : ''}`);
+          }
+          if (months > 0) {
+            parts.push(`${months} month${months > 1 ? 's' : ''}`);
+          }
+          if (days > 0 || parts.length === 0) {
+            parts.push(`${days} day${days > 1 ? 's' : ''}`);
+          }
+          
+          lengthOfStay = parts.join(', ');
         }
       }
 
@@ -256,20 +287,35 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
         // Treatment Progress (consolidated)
         treatmentProgressSummary: generateTreatmentProgressSummary(youth, monthProgressNotes),
 
-        // Placement Recommendation
-        placementRecommendation: generatePlacementRecommendation(youth),
-        recommendationReason: generateRecommendationReason(youth),
+        // Future Goals
         futureGoals: generateFutureGoals(youth)
       };
 
-      // Only update fields that are currently empty to preserve user edits
+      // Update fields intelligently:
+      // - Always update demographic fields (they should stay in sync with youth profile)
+      // - Only update narrative/summary fields if empty (preserve user edits)
       setReportData(prev => {
         const updates: Partial<typeof reportData> = {};
 
-        // Update each field only if it's currently empty
+        // Fields that should always sync with youth profile
+        const alwaysUpdateFields = [
+          'fullLegalName', 'preferredName', 'dateOfBirth', 'age',
+          'dateOfAdmission', 'lengthOfStay', 'currentLevel', 'currentPlacement',
+          'probationOfficer', 'guardiansInfo', 'schoolPlacement', 'currentDiagnoses'
+        ];
+
+        // Update each field based on its type
         Object.entries(autoPopulatedData).forEach(([key, value]) => {
-          if (!prev[key as keyof typeof reportData] && value) {
-            updates[key as keyof typeof reportData] = value as any;
+          if (alwaysUpdateFields.includes(key)) {
+            // Always update demographic fields with latest youth profile data
+            if (value) {
+              updates[key as keyof typeof reportData] = value as any;
+            }
+          } else {
+            // Only update narrative/summary fields if they're currently empty
+            if (!prev[key as keyof typeof reportData] && value) {
+              updates[key as keyof typeof reportData] = value as any;
+            }
           }
         });
 
@@ -415,21 +461,6 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
       return `Identified risk factors: ${factors.join(', ')}. Risk mitigation strategies include close supervision, skill-building activities, and therapeutic interventions.`;
     }
     return "Regular risk assessment with no elevated risk factors identified";
-  };
-
-  const generatePlacementRecommendation = (youth: Youth): string => {
-    const level = typeof youth.level === 'number' ? youth.level : parseInt(youth.level || '5');
-    if (level <= 2) {
-      return "Continue current placement with regular progress monitoring";
-    } else if (level === 3) {
-      return "Prepare for transition to less restrictive environment";
-    } else {
-      return "Continue intensive level of care with gradual privilege increases";
-    }
-  };
-
-  const generateRecommendationReason = (youth: Youth): string => {
-    return "Based on current behavioral performance, participation in therapeutic activities, and achievement of treatment goals";
   };
 
   const generateFutureGoals = (youth: Youth): string => {
@@ -640,8 +671,67 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
     return () => clearTimeout(timeoutId);
   }, [reportData, youth?.id, selectedMonth]);
 
+  // Helper function to calculate length of stay from admission date
+  const calculateLengthOfStayFromDate = (admissionDateStr: string): string => {
+    if (!admissionDateStr) return "";
+    
+    const admissionDate = new Date(admissionDateStr);
+    // Set to start of day for date-only comparison
+    admissionDate.setHours(0, 0, 0, 0);
+    
+    const now = new Date();
+    // Set to start of day for date-only comparison
+    now.setHours(0, 0, 0, 0);
+    
+    // Check if admission date is in the future
+    if (admissionDate > now) {
+      return "Not yet admitted";
+    }
+    
+    // Calculate years, months, and days
+    let years = now.getFullYear() - admissionDate.getFullYear();
+    let months = now.getMonth() - admissionDate.getMonth();
+    let days = now.getDate() - admissionDate.getDate();
+    
+    // Adjust for negative days
+    if (days < 0) {
+      months -= 1;
+      const prevMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+      days += prevMonth.getDate();
+    }
+    
+    // Adjust for negative months
+    if (months < 0) {
+      years -= 1;
+      months += 12;
+    }
+    
+    // Build the length of stay string
+    const parts = [];
+    if (years > 0) {
+      parts.push(`${years} year${years > 1 ? 's' : ''}`);
+    }
+    if (months > 0) {
+      parts.push(`${months} month${months > 1 ? 's' : ''}`);
+    }
+    if (days > 0 || parts.length === 0) {
+      parts.push(`${days} day${days > 1 ? 's' : ''}`);
+    }
+    
+    return parts.join(', ');
+  };
+
   const handleFieldChange = (field: keyof MonthlyReportData, value: string) => {
-    setReportData(prev => ({ ...prev, [field]: value }));
+    setReportData(prev => {
+      const updated = { ...prev, [field]: value };
+      
+      // Auto-calculate length of stay when admission date changes
+      if (field === 'dateOfAdmission') {
+        updated.lengthOfStay = calculateLengthOfStayFromDate(value);
+      }
+      
+      return updated;
+    });
   };
 
   // AI Enhancement Function
@@ -760,8 +850,6 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
       academicProgressSummary: "",
       socialEmotionalSummary: "",
       treatmentProgressSummary: "",
-      placementRecommendation: "",
-      recommendationReason: "",
       futureGoals: "",
       preparedBy: "",
       reportDate: format(new Date(), "yyyy-MM-dd"),
@@ -910,8 +998,9 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
                 <Label>Length of Stay</Label>
                 <Input
                   value={reportData.lengthOfStay}
-                  onChange={(e) => handleFieldChange('lengthOfStay', e.target.value)}
-                  placeholder="e.g., 6 months"
+                  readOnly
+                  className="bg-gray-50 cursor-not-allowed"
+                  placeholder="Auto-calculated from admission date"
                 />
               </div>
               <div className="space-y-2">
@@ -1097,27 +1186,9 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
             </div>
           </div>
 
-          {/* Placement Recommendation */}
+          {/* Future Goals */}
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold border-b pb-2">Placement Recommendation</h3>
-            <div className="space-y-2">
-              <Label>Placement Recommendation</Label>
-              <Textarea
-                value={reportData.placementRecommendation}
-                onChange={(e) => handleFieldChange('placementRecommendation', e.target.value)}
-                placeholder="Recommended placement or next steps"
-                className="min-h-[80px]"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Recommendation Rationale</Label>
-              <Textarea
-                value={reportData.recommendationReason}
-                onChange={(e) => handleFieldChange('recommendationReason', e.target.value)}
-                placeholder="Rationale for placement recommendation"
-                className="min-h-[80px]"
-              />
-            </div>
+            <h3 className="text-lg font-semibold border-b pb-2">Future Goals</h3>
             <div className="space-y-2">
               <Label>Future Goals</Label>
               <Textarea
@@ -1235,20 +1306,11 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
           <FormattedText text={reportData.treatmentProgressSummary} as="div" className="ml-4" />
         </div>
 
-        {/* Placement Recommendation */}
+        {/* Future Goals */}
         <div className="mb-6">
-          <h3 className="font-bold text-lg mb-4 border-b pb-1">7. Placement Recommendation</h3>
+          <h3 className="font-bold text-lg mb-4 border-b pb-1">7. Future Goals</h3>
           <div className="space-y-2 ml-4">
             <div>
-              <strong>Placement Recommendation:</strong>{" "}
-              <FormattedText text={reportData.placementRecommendation} />
-            </div>
-            <div>
-              <strong>Recommendation Rationale:</strong>{" "}
-              <FormattedText text={reportData.recommendationReason} />
-            </div>
-            <div>
-              <strong>Future Goals:</strong>{" "}
               <FormattedText text={reportData.futureGoals} />
             </div>
           </div>

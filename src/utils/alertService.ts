@@ -1,4 +1,5 @@
 // Alert Service - Automatic alert triggers for application events
+// All alerts are stored in Supabase with no localStorage caching
 import { toast } from "sonner";
 import { alertsService } from '@/integrations/supabase/alertsService'
 
@@ -16,7 +17,6 @@ export type AutoAlert = {
 };
 
 class AlertService {
-  private alerts: AutoAlert[] = [];
   private notificationsEnabled = false;
 
   constructor() {
@@ -24,57 +24,9 @@ class AlertService {
     if ('Notification' in window) {
       this.notificationsEnabled = Notification.permission === 'granted';
     }
-    
-    // Load existing alerts from localStorage
-    this.loadAlerts();
   }
 
-  private loadAlerts() {
-    try {
-      // Try Supabase first to hydrate
-      (async () => {
-        try {
-          const remote = await alertsService.list()
-          if (remote && remote.length) {
-            // map to AutoAlert-like
-            this.alerts = remote.map(r => ({
-              id: r.id,
-              type: (r.level === 'urgent' ? 'urgent' : r.level === 'warning' ? 'warning' : 'info') as any,
-              title: r.title,
-              description: r.body || '',
-              priority: (r.level === 'urgent' ? 'high' : 'medium') as any,
-              category: 'System',
-              createdAt: new Date(r.created_at),
-              resolved: r.status === 'closed'
-            }))
-            this.saveAlerts()
-          }
-        } catch (error) {
-          console.warn('Alerts sync failed, using local cache:', error)
-        }
-      })()
-
-      const savedAlerts = localStorage.getItem('heartland_alerts');
-      if (savedAlerts) {
-        this.alerts = JSON.parse(savedAlerts).map((alert: any) => ({
-          ...alert,
-          createdAt: new Date(alert.createdAt)
-        }));
-      }
-    } catch (error) {
-      console.error('Error loading alerts:', error);
-    }
-  }
-
-  private saveAlerts() {
-    try {
-      localStorage.setItem('heartland_alerts', JSON.stringify(this.alerts));
-    } catch (error) {
-      console.error('Error saving alerts:', error);
-    }
-  }
-
-  private createAlert(alert: Omit<AutoAlert, 'id' | 'createdAt' | 'resolved'>) {
+  private async createAlert(alert: Omit<AutoAlert, 'id' | 'createdAt' | 'resolved'>) {
     const newAlert: AutoAlert = {
       ...alert,
       id: Date.now().toString(),
@@ -82,19 +34,18 @@ class AlertService {
       resolved: false
     };
 
-    this.alerts.unshift(newAlert);
-    this.saveAlerts();
-
-    // Persist to Supabase best-effort
+    // Persist to Supabase
     try {
-      void alertsService.save({
+      await alertsService.save({
         id: undefined as any,
         title: newAlert.title,
         body: newAlert.description,
         level: newAlert.type,
         status: newAlert.resolved ? 'closed' : 'open'
-      })
-    } catch {}
+      });
+    } catch (error) {
+      console.error('Failed to save alert to Supabase:', error);
+    }
 
     // Show toast notification
     toast.info(`Alert: ${newAlert.title}`, {
@@ -230,7 +181,7 @@ class AlertService {
   triggerDataMigrationAlert(status: "success" | "error" | "warning", message: string) {
     const type = status === "error" ? "urgent" : status === "warning" ? "warning" : "info";
     const priority = status === "error" ? "high" : "medium";
-    
+
     return this.createAlert({
       type,
       title: "Data Migration",
@@ -262,35 +213,55 @@ class AlertService {
   }
 
   // Get all alerts
-  getAllAlerts(): AutoAlert[] {
-    return this.alerts;
+  async getAllAlerts(): Promise<AutoAlert[]> {
+    try {
+      const rows = await alertsService.list();
+      return rows.map(r => ({
+        id: r.id,
+        type: (r.level === 'urgent' ? 'urgent' : r.level === 'warning' ? 'warning' : 'info') as any,
+        title: r.title,
+        description: r.body || '',
+        priority: (r.level === 'urgent' ? 'high' : 'medium') as any,
+        category: 'System',
+        createdAt: new Date(r.created_at),
+        resolved: r.status === 'closed'
+      }));
+    } catch (error) {
+      console.error('Failed to fetch alerts from Supabase:', error);
+      return [];
+    }
   }
 
   // Get unresolved alerts
-  getUnresolvedAlerts(): AutoAlert[] {
-    return this.alerts.filter(alert => !alert.resolved);
+  async getUnresolvedAlerts(): Promise<AutoAlert[]> {
+    const allAlerts = await this.getAllAlerts();
+    return allAlerts.filter(alert => !alert.resolved);
   }
 
   // Resolve alert
-  resolveAlert(alertId: string): boolean {
-    const alertIndex = this.alerts.findIndex(alert => alert.id === alertId);
-    if (alertIndex !== -1) {
-      this.alerts[alertIndex].resolved = true;
-      this.saveAlerts();
+  async resolveAlert(alertId: string): Promise<boolean> {
+    try {
+      await alertsService.save({
+        id: alertId,
+        title: '', // Will be ignored on update
+        status: 'closed'
+      });
       return true;
+    } catch (error) {
+      console.error('Failed to resolve alert:', error);
+      return false;
     }
-    return false;
   }
 
   // Delete alert
-  deleteAlert(alertId: string): boolean {
-    const initialLength = this.alerts.length;
-    this.alerts = this.alerts.filter(alert => alert.id !== alertId);
-    if (this.alerts.length < initialLength) {
-      this.saveAlerts();
+  async deleteAlert(alertId: string): Promise<boolean> {
+    try {
+      await alertsService.delete(alertId);
       return true;
+    } catch (error) {
+      console.error('Failed to delete alert:', error);
+      return false;
     }
-    return false;
   }
 
   // Enable/disable notifications

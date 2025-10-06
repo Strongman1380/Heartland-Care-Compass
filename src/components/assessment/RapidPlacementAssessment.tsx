@@ -237,6 +237,19 @@ export const RapidPlacementAssessment = () => {
       });
     } catch (error) {
       console.error("Auto-save failed:", error);
+      // Log more details for debugging
+      if (error instanceof Error) {
+        console.error('Error details:', {
+          message: error.message,
+          name: error.name,
+          stack: error.stack
+        })
+      }
+      toast({
+        title: "Auto-save Failed",
+        description: error instanceof Error ? error.message : "Failed to save assessment. Please try again.",
+        variant: "destructive",
+      });
     } finally {
       setIsAutoSaving(false);
     }

@@ -44,6 +44,56 @@ export const YouthCard = ({
 
   const displayAge = calculateAge(youth.dob as any);
 
+  // Calculate length of stay
+  const calculateLengthOfStay = (admissionDate: string | null): string => {
+    if (!admissionDate) return "N/A";
+    
+    const admission = new Date(admissionDate);
+    admission.setHours(0, 0, 0, 0);
+    
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    
+    // Check if admission date is in the future
+    if (admission > now) {
+      return "Not yet admitted";
+    }
+    
+    // Calculate years, months, and days
+    let years = now.getFullYear() - admission.getFullYear();
+    let months = now.getMonth() - admission.getMonth();
+    let days = now.getDate() - admission.getDate();
+    
+    // Adjust for negative days
+    if (days < 0) {
+      months -= 1;
+      const prevMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+      days += prevMonth.getDate();
+    }
+    
+    // Adjust for negative months
+    if (months < 0) {
+      years -= 1;
+      months += 12;
+    }
+    
+    // Build the length of stay string
+    const parts = [];
+    if (years > 0) {
+      parts.push(`${years}y`);
+    }
+    if (months > 0) {
+      parts.push(`${months}m`);
+    }
+    if (days > 0 || parts.length === 0) {
+      parts.push(`${days}d`);
+    }
+    
+    return parts.join(' ');
+  };
+
+  const lengthOfStay = calculateLengthOfStay(youth.admissionDate);
+
   return (
     <Card 
       className="border-2 border-yellow-300 hover:shadow-lg transition-all duration-200 cursor-pointer hover:scale-105 relative group"
@@ -96,6 +146,10 @@ export const YouthCard = ({
           <div className="flex justify-between">
             <span className="text-gray-600">Admission:</span>
             <span className="font-medium">{formatDate(youth.admissionDate)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-gray-600">Length of Stay:</span>
+            <span className="font-medium text-blue-600">{lengthOfStay}</span>
           </div>
         </div>
         <Button 

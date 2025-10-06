@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Heartland Care Compass application now includes a comprehensive AI system powered by OpenAI's GPT-4o-mini model. This system provides intelligent data navigation, analysis, and content generation features designed specifically for youth treatment facilities.
+The Heartland Care Compass application now includes a comprehensive AI system powered by OpenAI's GPT-4o-mini (standard) and GPT-4o (premium) models. This tiered setup provides intelligent data navigation, analysis, and content generation features designed specifically for youth treatment facilities while balancing quality and cost.
 
 ## Table of Contents
 
@@ -25,7 +25,8 @@ Add the following to your `.env` file:
 ```bash
 # OpenAI Configuration
 OPENAI_API_KEY=sk-your-openai-api-key-here
-OPENAI_MODEL=gpt-4o-mini
+OPENAI_MODEL_STANDARD=gpt-4o-mini  # Cost-effective default (falls back to OPENAI_MODEL if set)
+OPENAI_MODEL_PREMIUM=gpt-4o        # Higher quality tier for complex narratives and recommendations
 OPENAI_MAX_TOKENS=2000
 ```
 
@@ -39,11 +40,16 @@ OPENAI_MAX_TOKENS=2000
 
 ### Model Information
 
-**Current Model: `gpt-4o-mini`**
+**Standard Model: `gpt-4o-mini`**
 - Cost-effective for high-volume usage
 - Fast response times
-- Excellent for summarization and analysis tasks
+- Excellent for summarization, classification, and structured analysis tasks
 - Approximate cost: $0.15 per 1M input tokens, $0.60 per 1M output tokens
+
+**Premium Model: `gpt-4o`**
+- Higher reasoning depth for complex narratives and risk-sensitive analysis
+- Recommended for court reports, clinical recommendations, and critical risk detection
+- Approximate cost: $5.00 per 1M input tokens, $15.00 per 1M output tokens
 
 ---
 

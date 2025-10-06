@@ -1,5 +1,5 @@
-// Local storage-backed store for academic data (credits, grades, steps) and incident reports
-// This is a lightweight placeholder until we migrate to Supabase.
+// Supabase-only persistence for academic data (credits, grades, steps) and incident reports
+// All data is fetched directly from Supabase with no localStorage caching
 
 import { SchoolIncidentReport } from '@/types/school-incident-types';
 import { academicsService } from '@/integrations/supabase/academicsService';
@@ -51,212 +51,153 @@ export type IncidentReport = {
   updatedAt: string;
 };
 
-const LS_KEYS = {
-  credits: "academic:credits",
-  grades: "academic:grades",
-  steps: "academic:steps",
-  incidents: "academic:incidents",
-  schoolIncidents: "academic:school-incidents",
-};
-
-const readArray = <T>(key: string): T[] => {
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return [];
-    const arr = JSON.parse(raw);
-    return Array.isArray(arr) ? arr : [];
-  } catch {
-    return [];
-  }
-};
-
-const writeArray = <T>(key: string, arr: T[]) => {
-  localStorage.setItem(key, JSON.stringify(arr));
-};
-
 const genId = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
 
 // Credits
-export const listCredits = (): CreditsEarned[] => readArray<CreditsEarned>(LS_KEYS.credits);
-export const saveCredit = (data: Omit<CreditsEarned, "id" | "createdAt" | "updatedAt"> & { id?: ID }): CreditsEarned => {
-  const now = new Date().toISOString();
-
-  const items = listCredits();
-  let result: CreditsEarned;
-
-  if (data.id) {
-    const idx = items.findIndex(i => i.id === data.id);
-    if (idx >= 0) {
-      const updated: CreditsEarned = { ...items[idx], ...data, updatedAt: now } as CreditsEarned;
-      items[idx] = updated;
-      writeArray(LS_KEYS.credits, items);
-      result = updated;
-    } else {
-      const created: CreditsEarned = { ...(data as any), id: data.id, createdAt: now, updatedAt: now };
-      items.push(created);
-      writeArray(LS_KEYS.credits, items);
-      result = created;
-    }
-  } else {
-    const created: CreditsEarned = { ...(data as any), id: genId(), createdAt: now, updatedAt: now };
-    items.push(created);
-    writeArray(LS_KEYS.credits, items);
-    result = created;
-  }
-
-  // Persist to Supabase after local save succeeds
-  try {
-    void academicsService.credits.save({
-      id: result.id as any,
-      student_id: result.student_id,
-      date_earned: result.date_earned,
-      credit_value: result.credit_value,
-    });
-  } catch (error) {
-    console.error('Failed to sync credit to Supabase:', error);
-  }
-
-  return result;
+export const listCredits = async (): Promise<CreditsEarned[]> => {
+  const rows = await academicsService.credits.list();
+  return rows.map(row => ({
+    id: row.id,
+    student_id: row.student_id,
+    date_earned: row.date_earned,
+    credit_value: row.credit_value,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  }));
 };
 
-export const deleteCredit = (id: ID) => {
-  // Delete from Supabase first (best effort)
-  try {
-    void academicsService.credits.delete(id as any);
-  } catch (error) {
-    console.error('Failed to delete credit from Supabase:', error);
+export const saveCredit = async (data: Omit<CreditsEarned, "id" | "createdAt" | "updatedAt"> & { id?: ID }): Promise<CreditsEarned> => {
+  const payload: any = {
+    student_id: data.student_id,
+    date_earned: data.date_earned,
+    credit_value: data.credit_value
+  };
+
+  if (data.id) {
+    payload.id = data.id;
+  } else {
+    payload.id = genId();
   }
 
-  // Then delete from localStorage
-  writeArray(LS_KEYS.credits, listCredits().filter(i => i.id !== id));
+  const result = await academicsService.credits.save(payload);
+  return {
+    id: result.id,
+    student_id: result.student_id,
+    date_earned: result.date_earned,
+    credit_value: result.credit_value,
+    createdAt: result.created_at,
+    updatedAt: result.updated_at
+  };
+};
+
+export const deleteCredit = async (id: ID): Promise<void> => {
+  await academicsService.credits.delete(id);
 };
 
 // Grades
-export const listGrades = (): Grade[] => readArray<Grade>(LS_KEYS.grades);
-export const saveGrade = (data: Omit<Grade, "id" | "createdAt" | "updatedAt"> & { id?: ID }): Grade => {
-  const now = new Date().toISOString();
-
-  const items = listGrades();
-  let result: Grade;
-
-  if (data.id) {
-    const idx = items.findIndex(i => i.id === data.id);
-    if (idx >= 0) {
-      const updated: Grade = { ...items[idx], ...data, updatedAt: now } as Grade;
-      items[idx] = updated;
-      writeArray(LS_KEYS.grades, items);
-      result = updated;
-    } else {
-      const created: Grade = { ...(data as any), id: data.id, createdAt: now, updatedAt: now };
-      items.push(created);
-      writeArray(LS_KEYS.grades, items);
-      result = created;
-    }
-  } else {
-    const created: Grade = { ...(data as any), id: genId(), createdAt: now, updatedAt: now };
-    items.push(created);
-    writeArray(LS_KEYS.grades, items);
-    result = created;
-  }
-
-  // Persist to Supabase after local save
-  try {
-    void academicsService.grades.save({
-      id: result.id as any,
-      student_id: result.student_id,
-      date_entered: result.date_entered,
-      grade_value: result.grade_value,
-      course_name: result.course_name
-    } as any);
-  } catch (error) {
-    console.error('Failed to sync grade to Supabase:', error);
-  }
-
-  return result;
+export const listGrades = async (): Promise<Grade[]> => {
+  const rows = await academicsService.grades.list();
+  return rows.map(row => ({
+    id: row.id,
+    student_id: row.student_id,
+    date_entered: row.date_entered,
+    grade_value: row.grade_value,
+    course_name: (row as any).course_name,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  }));
 };
 
-export const deleteGrade = (id: ID) => {
-  try {
-    void academicsService.grades.delete(id as any);
-  } catch (error) {
-    console.error('Failed to delete grade from Supabase:', error);
+export const saveGrade = async (data: Omit<Grade, "id" | "createdAt" | "updatedAt"> & { id?: ID }): Promise<Grade> => {
+  const payload: any = {
+    student_id: data.student_id,
+    date_entered: data.date_entered,
+    grade_value: data.grade_value,
+    course_name: data.course_name
+  };
+
+  if (data.id) {
+    payload.id = data.id;
+  } else {
+    payload.id = genId();
   }
-  writeArray(LS_KEYS.grades, listGrades().filter(i => i.id !== id));
+
+  const result = await academicsService.grades.save(payload);
+  return {
+    id: result.id,
+    student_id: result.student_id,
+    date_entered: result.date_entered,
+    grade_value: result.grade_value,
+    course_name: (result as any).course_name,
+    createdAt: result.created_at,
+    updatedAt: result.updated_at
+  };
+};
+
+export const deleteGrade = async (id: ID): Promise<void> => {
+  await academicsService.grades.delete(id);
 };
 
 // Steps
-export const listSteps = (): StepsCompleted[] => readArray<StepsCompleted>(LS_KEYS.steps);
-export const saveStep = (data: Omit<StepsCompleted, "id" | "createdAt" | "updatedAt"> & { id?: ID }): StepsCompleted => {
-  const now = new Date().toISOString();
+export const listSteps = async (): Promise<StepsCompleted[]> => {
+  const rows = await academicsService.steps.list();
+  return rows.map(row => ({
+    id: row.id,
+    student_id: row.student_id,
+    date_completed: row.date_completed,
+    steps_count: row.steps_count,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  }));
+};
 
-  const items = listSteps();
-  let result: StepsCompleted;
+export const saveStep = async (data: Omit<StepsCompleted, "id" | "createdAt" | "updatedAt"> & { id?: ID }): Promise<StepsCompleted> => {
+  const payload: any = {
+    student_id: data.student_id,
+    date_completed: data.date_completed,
+    steps_count: data.steps_count
+  };
 
   if (data.id) {
-    const idx = items.findIndex(i => i.id === data.id);
-    if (idx >= 0) {
-      const updated: StepsCompleted = { ...items[idx], ...data, updatedAt: now } as StepsCompleted;
-      items[idx] = updated;
-      writeArray(LS_KEYS.steps, items);
-      result = updated;
-    } else {
-      const created: StepsCompleted = { ...(data as any), id: data.id, createdAt: now, updatedAt: now };
-      items.push(created);
-      writeArray(LS_KEYS.steps, items);
-      result = created;
-    }
+    payload.id = data.id;
   } else {
-    const created: StepsCompleted = { ...(data as any), id: genId(), createdAt: now, updatedAt: now };
-    items.push(created);
-    writeArray(LS_KEYS.steps, items);
-    result = created;
+    payload.id = genId();
   }
 
-  // Persist to Supabase after local save
-  try {
-    void academicsService.steps.save({
-      id: result.id as any,
-      student_id: result.student_id,
-      date_completed: result.date_completed,
-      steps_count: result.steps_count
-    });
-  } catch (error) {
-    console.error('Failed to sync step to Supabase:', error);
-  }
-
-  return result;
+  const result = await academicsService.steps.save(payload);
+  return {
+    id: result.id,
+    student_id: result.student_id,
+    date_completed: result.date_completed,
+    steps_count: result.steps_count,
+    createdAt: result.created_at,
+    updatedAt: result.updated_at
+  };
 };
 
-export const deleteStep = (id: ID) => {
-  try {
-    void academicsService.steps.delete(id as any);
-  } catch (error) {
-    console.error('Failed to delete step from Supabase:', error);
-  }
-  writeArray(LS_KEYS.steps, listSteps().filter(i => i.id !== id));
+export const deleteStep = async (id: ID): Promise<void> => {
+  await academicsService.steps.delete(id);
 };
 
-// Incident Reports
-export const listIncidents = (): IncidentReport[] => readArray<IncidentReport>(LS_KEYS.incidents);
-export const saveIncident = (data: Omit<IncidentReport, "id" | "createdAt" | "updatedAt"> & { id?: ID }): IncidentReport => {
+// Incident Reports (Legacy - keeping empty implementations for backwards compatibility)
+export const listIncidents = async (): Promise<IncidentReport[]> => {
+  console.warn('listIncidents is deprecated. Use school incidents instead.');
+  return [];
+};
+
+export const saveIncident = async (data: Omit<IncidentReport, "id" | "createdAt" | "updatedAt"> & { id?: ID }): Promise<IncidentReport> => {
+  console.warn('saveIncident is deprecated. Use school incidents instead.');
   const now = new Date().toISOString();
-  const items = listIncidents();
-  if (data.id) {
-    const idx = items.findIndex(i => i.id === data.id);
-    if (idx >= 0) {
-      const updated: IncidentReport = { ...items[idx], ...data, updatedAt: now } as IncidentReport;
-      items[idx] = updated;
-      writeArray(LS_KEYS.incidents, items);
-      return updated;
-    }
-  }
-  const created: IncidentReport = { ...(data as any), id: genId(), createdAt: now, updatedAt: now };
-  items.push(created);
-  writeArray(LS_KEYS.incidents, items);
-  return created;
+  return {
+    ...(data as any),
+    id: data.id || genId(),
+    createdAt: now,
+    updatedAt: now
+  };
 };
-export const deleteIncident = (id: ID) => {
-  writeArray(LS_KEYS.incidents, listIncidents().filter(i => i.id !== id));
+
+export const deleteIncident = async (id: ID): Promise<void> => {
+  console.warn('deleteIncident is deprecated. Use school incidents instead.');
 };
 
 // Utilities
@@ -276,69 +217,45 @@ export const truncateDecimal = (num: number, places: number) => {
 };
 
 // School Incident Reports (New Structured Format)
-export const listSchoolIncidents = (): SchoolIncidentReport[] => {
-  // Attempt to hydrate from Supabase in background
-  (async () => {
-    try {
-      const remote = await schoolIncidentsService.list()
-      if (remote && remote.length) {
-        writeArray(LS_KEYS.schoolIncidents, remote as any)
-      }
-    } catch (error) {
-      // Silently fail - we'll use local cache
-      console.warn('School incidents sync failed, using local cache:', error)
-    }
-  })()
-  return readArray<SchoolIncidentReport>(LS_KEYS.schoolIncidents)
-}
+export const listSchoolIncidents = async (): Promise<SchoolIncidentReport[]> => {
+  const remote = await schoolIncidentsService.list();
+  return (remote || []) as SchoolIncidentReport[];
+};
 
-export const getSchoolIncident = (incidentId: string): SchoolIncidentReport | undefined => {
-  const incidents = listSchoolIncidents();
+export const getSchoolIncident = async (incidentId: string): Promise<SchoolIncidentReport | undefined> => {
+  const incidents = await listSchoolIncidents();
   return incidents.find(i => i.incident_id === incidentId);
 };
 
-export const saveSchoolIncident = (data: Partial<SchoolIncidentReport> & { incident_id?: string }): SchoolIncidentReport => {
+export const saveSchoolIncident = async (data: Partial<SchoolIncidentReport> & { incident_id?: string }): Promise<SchoolIncidentReport> => {
   const now = new Date().toISOString();
-  // Persist to Supabase (best-effort)
-  try { void schoolIncidentsService.upsert(data as any) } catch {}
-  const items = listSchoolIncidents();
-  
+
   if (data.incident_id) {
     // Update existing
-    const idx = items.findIndex(i => i.incident_id === data.incident_id);
-    if (idx >= 0) {
-      const updated: SchoolIncidentReport = { 
-        ...items[idx], 
-        ...data, 
-        updated_at: now 
-      } as SchoolIncidentReport;
-      items[idx] = updated;
-      writeArray(LS_KEYS.schoolIncidents, items);
-      return updated;
-    }
+    const result = await schoolIncidentsService.upsert({
+      ...data,
+      updated_at: now
+    } as any);
+    return result as SchoolIncidentReport;
   }
-  
-  // Create new
+
+  // Create new - generate incident_id
   const year = new Date().getFullYear();
-  const existingThisYear = items.filter(i => i.incident_id.startsWith(`HHH-${year}`));
+  const allIncidents = await listSchoolIncidents();
+  const existingThisYear = allIncidents.filter(i => i.incident_id.startsWith(`HHH-${year}`));
   const nextNumber = existingThisYear.length + 1;
   const incident_id = `HHH-${year}-${String(nextNumber).padStart(4, '0')}`;
-  
-  const created: SchoolIncidentReport = { 
-    ...(data as any), 
+
+  const result = await schoolIncidentsService.upsert({
+    ...data,
     incident_id,
-    created_at: now, 
-    updated_at: now 
-  };
-  items.push(created);
-  writeArray(LS_KEYS.schoolIncidents, items);
-  return created;
+    created_at: now,
+    updated_at: now
+  } as any);
+
+  return result as SchoolIncidentReport;
 };
 
-export const deleteSchoolIncident = (incidentId: string) => {
-  try { void schoolIncidentsService.delete(incidentId) } catch {}
-  writeArray(
-    LS_KEYS.schoolIncidents, 
-    listSchoolIncidents().filter(i => i.incident_id !== incidentId)
-  );
+export const deleteSchoolIncident = async (incidentId: string): Promise<void> => {
+  await schoolIncidentsService.delete(incidentId);
 };

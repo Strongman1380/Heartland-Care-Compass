@@ -48,6 +48,54 @@ export const YouthProfilesTable = ({ youths, loading, onYouthSelect, onYouthUpda
     }
   };
 
+  // Calculate length of stay
+  const calculateLengthOfStay = (admissionDate: string | null): string => {
+    if (!admissionDate) return "N/A";
+    
+    const admission = new Date(admissionDate);
+    admission.setHours(0, 0, 0, 0);
+    
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    
+    // Check if admission date is in the future
+    if (admission > now) {
+      return "Not yet admitted";
+    }
+    
+    // Calculate years, months, and days
+    let years = now.getFullYear() - admission.getFullYear();
+    let months = now.getMonth() - admission.getMonth();
+    let days = now.getDate() - admission.getDate();
+    
+    // Adjust for negative days
+    if (days < 0) {
+      months -= 1;
+      const prevMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+      days += prevMonth.getDate();
+    }
+    
+    // Adjust for negative months
+    if (months < 0) {
+      years -= 1;
+      months += 12;
+    }
+    
+    // Build the length of stay string
+    const parts = [];
+    if (years > 0) {
+      parts.push(`${years}y`);
+    }
+    if (months > 0) {
+      parts.push(`${months}m`);
+    }
+    if (days > 0 || parts.length === 0) {
+      parts.push(`${days}d`);
+    }
+    
+    return parts.join(' ');
+  };
+
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
       setSelectedYouthIds(youths.map(youth => youth.id));
@@ -237,6 +285,7 @@ export const YouthProfilesTable = ({ youths, loading, onYouthSelect, onYouthUpda
                 <TableHead>Level</TableHead>
                 <TableHead>Points</TableHead>
                 <TableHead>Admission Date</TableHead>
+                <TableHead>Length of Stay</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -259,6 +308,7 @@ export const YouthProfilesTable = ({ youths, loading, onYouthSelect, onYouthUpda
                   <TableCell>Level {youth.level}</TableCell>
                   <TableCell>{youth.pointTotal || 0}</TableCell>
                   <TableCell>{formatDate(youth.admissionDate)}</TableCell>
+                  <TableCell className="text-blue-600 font-medium">{calculateLengthOfStay(youth.admissionDate)}</TableCell>
                   <TableCell>
                     <div className="flex space-x-2">
                       <Button

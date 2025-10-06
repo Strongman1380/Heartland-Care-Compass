@@ -11,6 +11,8 @@ import { useToast } from "@/hooks/use-toast";
 import { Youth } from '@/integrations/supabase/services';
 import { useYouth } from "@/hooks/useSupabase";
 import { User, Palette, FileText, Save, Download, Printer } from 'lucide-react';
+import { draftsService } from '@/integrations/supabase/draftsService';
+import { useAuth } from '@/contexts/SupabaseAuthContext';
 
 const COLOR_PROFILES = {
   Gold: {
@@ -94,6 +96,7 @@ export const RealColorsAssessment = ({ selectedYouth }: RealColorsAssessmentProp
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isAutoSaving, setIsAutoSaving] = useState(false);
   const { toast } = useToast();
+  const { user } = useAuth();
   const { youths, loadYouths, createYouth, updateYouth } = useYouth();
 
   useEffect(() => {
@@ -184,6 +187,19 @@ export const RealColorsAssessment = ({ selectedYouth }: RealColorsAssessmentProp
       });
     } catch (error) {
       console.error("Auto-save failed:", error);
+      // Log more details for debugging
+      if (error instanceof Error) {
+        console.error('Error details:', {
+          message: error.message,
+          name: error.name,
+          stack: error.stack
+        })
+      }
+      toast({
+        title: "Auto-save Failed",
+        description: error instanceof Error ? error.message : "Failed to save assessment. Please try again.",
+        variant: "destructive",
+      });
     } finally {
       setIsAutoSaving(false);
     }
@@ -549,8 +565,9 @@ export const RealColorsAssessment = ({ selectedYouth }: RealColorsAssessmentProp
           details: supabaseError.details,
           hint: supabaseError.hint,
           code: supabaseError.code,
-          youthId: youthId,
-          realColorsResult: realColorsResult,
+          selectedYouthId: selectedYouth?.id || selectedYouthId,
+          primaryColor,
+          secondaryColor,
           timestamp: new Date().toISOString()
         });
       }

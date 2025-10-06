@@ -10,7 +10,7 @@ import { exportElementToPDF, exportElementToDocx } from '@/utils/export';
 import { fetchDailyRatings, fetchBehaviorPoints, fetchProgressNotes } from '@/utils/local-storage-utils';
 import { getDailyRatingsByYouth, getBehaviorPointsByYouth, getProgressNotesByYouth } from '@/lib/api';
 import { saveDpnComments, fetchDpnCommentsInRange } from '@/utils/local-storage-utils';
-import { summarizeReport } from '@/lib/aiClient';
+import { summarizeReport, generateDPNFieldComments, type DPNFieldComments } from '@/lib/aiClient';
 
 export function DpnReport({
   youth,
@@ -31,6 +31,7 @@ export function DpnReport({
   const [averages, setAverages] = useState({ peer: 0, adult: 0, investment: 0, authority: 0 });
   const [ratingsInRange, setRatingsInRange] = useState<DailyRating[]>([]);
   const [aiNarrative, setAiNarrative] = useState<string>("");
+  const [aiFieldComments, setAiFieldComments] = useState<DPNFieldComments | null>(null);
   const [autoExported, setAutoExported] = useState(false);
   const [pointsInRange, setPointsInRange] = useState<BehaviorPoints[]>([]);
   const [notesInRange, setNotesInRange] = useState<ProgressNote[]>([]);
@@ -128,13 +129,21 @@ export function DpnReport({
     const runAI = async () => {
       try {
         const variantToType = variant === 'weekly' ? 'dpnWeekly' : variant === 'biweekly' ? 'dpnBiWeekly' : 'dpnMonthly';
-        const aiText = await summarizeReport({
+        const payload = {
           youth,
           reportType: variantToType,
           period: { startDate: new Date(periodFrom).toISOString(), endDate: new Date(periodTo).toISOString() },
           data: { dailyRatings: ratingsInRange, behaviorPoints: pointsInRange, progressNotes: notesInRange }
-        });
+        };
+
+        // Generate both narrative and field comments
+        const [aiText, fieldComments] = await Promise.all([
+          summarizeReport(payload),
+          Promise.resolve(generateDPNFieldComments(payload))
+        ]);
+
         if (aiText) setAiNarrative(aiText);
+        if (fieldComments) setAiFieldComments(fieldComments);
       } catch (e) {
         // AI optional; proceed without blocking
         console.warn('AI narrative unavailable for DPN; proceeding without it');
@@ -290,35 +299,35 @@ export function DpnReport({
         <div className="space-y-3">
           <div>
             <div className="flex justify-between font-semibold"><span>Relationship and Interaction with Peer</span><span>Rating: {averages.peer || 0}</span></div>
-            <p className="mt-1 ml-1 whitespace-pre-wrap">{(monthlySummary?.peer || comments.peer) || '—'}</p>
+            <p className="mt-1 ml-1 whitespace-pre-wrap">{(monthlySummary?.peer || comments.peer || aiFieldComments?.peerInteraction) || '—'}</p>
           </div>
           <div>
             <div className="flex justify-between font-semibold"><span>Relationship and Interaction with Adults</span><span>Rating: {averages.adult || 0}</span></div>
-            <p className="mt-1 ml-1 whitespace-pre-wrap">{(monthlySummary?.adult || comments.adult) || '—'}</p>
+            <p className="mt-1 ml-1 whitespace-pre-wrap">{(monthlySummary?.adult || comments.adult || aiFieldComments?.adultInteraction) || '—'}</p>
           </div>
           <div>
             <div className="flex justify-between font-semibold"><span>Investment Level in Program and Personal Growth</span><span>Rating: {averages.investment || 0}</span></div>
-            <p className="mt-1 ml-1 whitespace-pre-wrap">{(monthlySummary?.investment || comments.investment) || '—'}</p>
+            <p className="mt-1 ml-1 whitespace-pre-wrap">{(monthlySummary?.investment || comments.investment || aiFieldComments?.investmentLevel) || '—'}</p>
           </div>
           <div>
             <div className="flex justify-between font-semibold"><span>How the Resident Deals with Authority and Structure</span><span>Rating: {averages.authority || 0}</span></div>
-            <p className="mt-1 ml-1 whitespace-pre-wrap">{(monthlySummary?.authority || comments.authority) || '—'}</p>
+            <p className="mt-1 ml-1 whitespace-pre-wrap">{(monthlySummary?.authority || comments.authority || aiFieldComments?.dealWithAuthority) || '—'}</p>
           </div>
         </div>
 
         <div className="mt-4">
           <div className="font-semibold">Social Skills Strengths:</div>
-          <p className="ml-1 whitespace-pre-wrap">{(monthlySummary?.strengths || comments.strengths) || '—'}</p>
+          <p className="ml-1 whitespace-pre-wrap">{(monthlySummary?.strengths || comments.strengths || aiFieldComments?.socialStrengths) || '—'}</p>
         </div>
         <div className="mt-2">
           <div className="font-semibold">Social Skill Deficiencies:</div>
-          <p className="ml-1 whitespace-pre-wrap">{(monthlySummary?.deficiencies || comments.deficiencies) || '—'}</p>
+          <p className="ml-1 whitespace-pre-wrap">{(monthlySummary?.deficiencies || comments.deficiencies || aiFieldComments?.socialDeficiencies) || '—'}</p>
         </div>
 
-        {aiNarrative && (
+        {(aiNarrative || aiFieldComments?.narrative) && (
           <div className="mt-6">
-            <div className="font-semibold">AI-Assisted Narrative</div>
-            <p className="ml-1 whitespace-pre-wrap">{aiNarrative}</p>
+            <div className="font-semibold">Additional Narrative Summary</div>
+            <p className="ml-1 whitespace-pre-wrap">{aiNarrative || aiFieldComments?.narrative}</p>
           </div>
         )}
       </div>

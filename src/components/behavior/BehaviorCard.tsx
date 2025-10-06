@@ -298,6 +298,15 @@ export const BehaviorCard = ({ youthId, youth, onYouthUpdated }: BehaviorCardPro
       toast.success("Draft auto-saved", { duration: 1000 });
     } catch (error) {
       console.error("Auto-save failed:", error);
+      // Log more details for debugging
+      if (error instanceof Error) {
+        console.error('Error details:', {
+          message: error.message,
+          name: error.name,
+          stack: error.stack
+        })
+      }
+      toast.error(error instanceof Error ? error.message : "Failed to save behavior data. Please try again.");
     } finally {
       setIsAutoSaving(false);
     }

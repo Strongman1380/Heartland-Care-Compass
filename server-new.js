@@ -14,6 +14,19 @@ const openai = process.env.OPENAI_API_KEY ? new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 }) : null;
 
+// Tiered model selection offers cost-effective defaults with an optional premium tier
+const modelTiers = {
+  standard: process.env.OPENAI_MODEL_STANDARD || process.env.OPENAI_MODEL || 'gpt-4o-mini',
+  premium: process.env.OPENAI_MODEL_PREMIUM || 'gpt-4o',
+};
+
+const selectModel = (tier = 'standard') => {
+  if (tier === 'premium' && modelTiers.premium) {
+    return modelTiers.premium;
+  }
+  return modelTiers[tier] || modelTiers.standard;
+};
+
 // AI Usage tracking (in-memory for this session)
 let aiUsageStats = {
   totalRequests: 0,
@@ -87,7 +100,7 @@ app.post('/api/ai/summarize-report', async (req, res) => {
 
     // Call OpenAI API
     const completion = await openai.chat.completions.create({
-      model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+      model: selectModel('premium'),
       messages: [
         {
           role: 'system',
@@ -157,7 +170,7 @@ app.post('/api/ai/behavioral-insights', async (req, res) => {
     const prompt = generateBehavioralInsightsPrompt(behaviorData, youth, period);
 
     const completion = await openai.chat.completions.create({
-      model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+      model: selectModel('standard'),
       messages: [
         {
           role: 'system',
@@ -200,13 +213,16 @@ app.get('/api/ai/status', async (req, res) => {
       return res.json({
         available: false,
         error: 'OpenAI API key not configured',
-        configured: false
+        configured: false,
+        models: modelTiers,
       });
     }
 
+    const healthModel = selectModel('standard');
+
     // Test the OpenAI connection with a minimal request
     const testCompletion = await openai.chat.completions.create({
-      model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+      model: healthModel,
       messages: [{ role: 'user', content: 'Test' }],
       max_tokens: 1,
       temperature: 0,
@@ -215,7 +231,8 @@ app.get('/api/ai/status', async (req, res) => {
     res.json({
       available: true,
       configured: true,
-      model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+      model: testCompletion.model || healthModel,
+      models: modelTiers,
       status: 'operational',
       usage: aiUsageStats
     });
@@ -237,6 +254,7 @@ app.get('/api/ai/status', async (req, res) => {
       configured: true,
       error: errorMessage,
       status: 'error',
+      models: modelTiers,
       usage: aiUsageStats
     });
   }
@@ -276,7 +294,7 @@ ${reportContent}
 Enhanced Report:`;
 
     const completion = await openai.chat.completions.create({
-      model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+      model: selectModel('premium'),
       messages: [
         {
           role: 'system',
@@ -328,7 +346,7 @@ app.post('/api/ai/summarize-note', async (req, res) => {
     const { noteContent, maxLength } = req.body;
 
     const completion = await openai.chat.completions.create({
-      model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+      model: selectModel('standard'),
       messages: [
         {
           role: 'system',
@@ -379,7 +397,7 @@ app.post('/api/ai/analyze-note', async (req, res) => {
     const { noteContent, youth } = req.body;
 
     const completion = await openai.chat.completions.create({
-      model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+      model: selectModel('premium'),
       messages: [
         {
           role: 'system',
@@ -420,7 +438,7 @@ app.post('/api/ai/categorize-incident', async (req, res) => {
     const { description } = req.body;
 
     const completion = await openai.chat.completions.create({
-      model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+      model: selectModel('standard'),
       messages: [
         {
           role: 'system',
@@ -476,7 +494,7 @@ Provide analysis in JSON format with:
 - recommendations: array of intervention recommendations`;
 
     const completion = await openai.chat.completions.create({
-      model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+      model: selectModel('premium'),
       messages: [
         {
           role: 'system',
@@ -532,7 +550,7 @@ Provide analysis in JSON format with:
 - recommendations: array of actionable recommendations`;
 
     const completion = await openai.chat.completions.create({
-      model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+      model: selectModel('standard'),
       messages: [
         {
           role: 'system',
@@ -593,7 +611,7 @@ Provide a clear, professional answer. If this involves calculations or data anal
     }
 
     const completion = await openai.chat.completions.create({
-      model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+      model: selectModel(isTextExpansion ? 'premium' : 'standard'),
       messages: [
         {
           role: 'system',
@@ -649,7 +667,7 @@ Provide in JSON format:
 - narrative: comprehensive narrative summary`;
 
     const completion = await openai.chat.completions.create({
-      model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+      model: selectModel('premium'),
       messages: [
         {
           role: 'system',
@@ -773,7 +791,7 @@ Important:
 - Be intelligent about parsing - look for common variations of field names`;
 
     const completion = await openai.chat.completions.create({
-      model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+      model: selectModel('premium'),
       messages: [
         {
           role: 'system',

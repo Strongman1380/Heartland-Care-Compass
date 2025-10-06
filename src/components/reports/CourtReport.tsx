@@ -14,6 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { draftsService } from '@/integrations/supabase/draftsService'
 import { useAuth } from '@/contexts/SupabaseAuthContext'
 import { getBehaviorPointsByYouth, getProgressNotesByYouth } from "@/lib/api";
+import * as aiService from "@/services/aiService";
 
 interface CourtReportProps {
   youth?: Youth;
@@ -29,40 +30,23 @@ interface CourtReportData {
   // Current Status
   currentPlacement: string;
   
-  // Treatment Goals & Progress
-  treatmentGoals: string;
-  goalProgress: string;
-  therapeuticParticipation: string;
-  medicationCompliance: string;
+  // Treatment Goals & Progress (consolidated)
+  treatmentProgressSummary: string;
   
-  // Behavioral Assessment
-  behavioralProgress: string;
-  significantIncidents: string;
-  behavioralInterventions: string;
+  // Behavioral Assessment (consolidated)
+  behavioralAssessmentSummary: string;
   
-  // Educational Progress
-  schoolPlacement: string;
-  academicProgress: string;
-  educationalChallenges: string;
-  vocationalGoals: string;
+  // Educational Progress (consolidated)
+  educationalProgressSummary: string;
   
-  // Family & Social Relationships
-  familyVisitation: string;
-  familyTherapy: string;
-  peerRelationships: string;
-  communityContacts: string;
+  // Family & Social Relationships (consolidated)
+  familySocialSummary: string;
   
-  // Program Participation
-  dailyStructure: string;
-  programCompliance: string;
-  skillsDevelopment: string;
-  incentivesEarned: string;
+  // Program Participation (consolidated)
+  programParticipationSummary: string;
   
-  // Future Planning
-  dischargeTimeline: string;
-  dischargePlanning: string;
-  aftercareRecommendations: string;
-  transitionPlan: string;
+  // Future Planning (consolidated)
+  futurePlanningSummary: string;
   
   // Summary & Recommendations
   overallAssessment: string;
@@ -141,61 +125,44 @@ const CourtReportPreview = ({ data }: CourtReportPreviewProps) => {
     },
     {
       title: 'Treatment Goals & Progress',
-      columns: 2,
+      columns: 1,
       fields: [
-        { label: 'Primary Treatment Goals', value: data.treatmentGoals },
-        { label: 'Progress Toward Goals', value: data.goalProgress },
-        { label: 'Therapeutic Participation', value: data.therapeuticParticipation },
-        { label: 'Medication Compliance', value: data.medicationCompliance },
+        { label: 'Treatment Progress Summary', value: data.treatmentProgressSummary },
       ],
     },
     {
       title: 'Behavioral Assessment',
-      columns: 2,
+      columns: 1,
       fields: [
-        { label: 'Behavioral Progress', value: data.behavioralProgress },
-        { label: 'Significant Incidents', value: data.significantIncidents },
-        { label: 'Behavioral Interventions', value: data.behavioralInterventions },
+        { label: 'Behavioral Assessment Summary', value: data.behavioralAssessmentSummary },
       ],
     },
     {
       title: 'Educational Progress',
-      columns: 2,
+      columns: 1,
       fields: [
-        { label: 'School Placement', value: data.schoolPlacement },
-        { label: 'Academic Progress', value: data.academicProgress },
-        { label: 'Educational Challenges', value: data.educationalChallenges },
-        { label: 'Vocational Goals', value: data.vocationalGoals },
+        { label: 'Educational Progress Summary', value: data.educationalProgressSummary },
       ],
     },
     {
       title: 'Family & Social Relationships',
       columns: 1,
       fields: [
-        { label: 'Family Visitation', value: data.familyVisitation },
-        { label: 'Family Therapy', value: data.familyTherapy },
-        { label: 'Peer Relationships', value: data.peerRelationships },
-        { label: 'Community Contacts', value: data.communityContacts },
+        { label: 'Family & Social Summary', value: data.familySocialSummary },
       ],
     },
     {
       title: 'Program Participation',
       columns: 1,
       fields: [
-        { label: 'Daily Structure Compliance', value: data.dailyStructure },
-        { label: 'Program Compliance', value: data.programCompliance },
-        { label: 'Skills Development', value: data.skillsDevelopment },
-        { label: 'Incentives and Consequences', value: data.incentivesEarned },
+        { label: 'Program Participation Summary', value: data.programParticipationSummary },
       ],
     },
     {
       title: 'Future Planning',
       columns: 1,
       fields: [
-        { label: 'Discharge Timeline', value: data.dischargeTimeline },
-        { label: 'Discharge Planning', value: data.dischargePlanning },
-        { label: 'Aftercare Recommendations', value: data.aftercareRecommendations },
-        { label: 'Transition Plan', value: data.transitionPlan },
+        { label: 'Future Planning Summary', value: data.futurePlanningSummary },
       ],
     },
   ];
@@ -284,34 +251,12 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
 
     currentPlacement: 'Heartland Boys Home - Residential Treatment',
     
-    treatmentGoals: '',
-    goalProgress: '',
-    therapeuticParticipation: '',
-    medicationCompliance: '',
-    
-    behavioralProgress: '',
-    significantIncidents: '',
-    behavioralInterventions: '',
-    
-    schoolPlacement: youth?.currentSchool || '',
-    academicProgress: '',
-    educationalChallenges: '',
-    vocationalGoals: '',
-    
-    familyVisitation: '',
-    familyTherapy: '',
-    peerRelationships: '',
-    communityContacts: '',
-    
-    dailyStructure: '',
-    programCompliance: '',
-    skillsDevelopment: '',
-    incentivesEarned: '',
-    
-    dischargeTimeline: '',
-    dischargePlanning: '',
-    aftercareRecommendations: '',
-    transitionPlan: '',
+    treatmentProgressSummary: '',
+    behavioralAssessmentSummary: '',
+    educationalProgressSummary: '',
+    familySocialSummary: '',
+    programParticipationSummary: '',
+    futurePlanningSummary: '',
     
     overallAssessment: '',
     courtRecommendations: '',
@@ -350,45 +295,201 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
       return;
     }
 
-    // Auto-populate from youth profile - but only for empty fields
+    // Auto-populate from youth profile - comprehensive demographic and clinical data
     const getBaseDataIfEmpty = (existingData: CourtReportData): Partial<CourtReportData> => {
       const result: Partial<CourtReportData> = {};
 
       // Always update basic info that should stay in sync with youth profile
       result.youthName = `${youth.firstName} ${youth.lastName}`;
       result.dateOfBirth = youth.dob ? format(new Date(youth.dob), 'MM/dd/yyyy') : '';
-      result.currentPlacement = existingData.currentPlacement || 'Heartland Boys Home - Residential Treatment';
 
-      // Only populate these if they're currently empty
-      if (!existingData.schoolPlacement && youth.currentSchool) {
-        result.schoolPlacement = youth.currentSchool;
+      // Construct comprehensive placement info
+      const placementParts = ['Heartland Boys Home - Residential Treatment'];
+      if (youth.admissionDate) {
+        const lengthOfStay = calculateLengthOfStay(youth.admissionDate);
+        placementParts.push(`Length of Stay: ${lengthOfStay}`);
       }
-      if (!existingData.academicProgress && youth.academicStrengths) {
-        result.academicProgress = `Strengths: ${youth.academicStrengths}`;
+      if (youth.level) {
+        placementParts.push(`Current Level: ${youth.level}`);
       }
-      if (!existingData.educationalChallenges && youth.academicChallenges) {
-        result.educationalChallenges = youth.academicChallenges;
+      result.currentPlacement = existingData.currentPlacement || placementParts.join('\n');
+
+      // Build consolidated educational summary from all available data
+      if (!existingData.educationalProgressSummary) {
+        const eduParts = [];
+
+        // School placement
+        if (youth.currentSchool) {
+          eduParts.push(`School Placement: ${youth.currentSchool}`);
+        }
+
+        // Academic strengths
+        if (youth.academicStrengths) {
+          eduParts.push(`Academic Strengths: ${youth.academicStrengths}`);
+        }
+
+        // Academic challenges
+        if (youth.academicChallenges) {
+          eduParts.push(`Academic Challenges: ${youth.academicChallenges}`);
+        }
+
+        // Education goals
+        if (youth.educationGoals) {
+          eduParts.push(`Educational Goals: ${youth.educationGoals}`);
+        }
+
+        if (eduParts.length > 0) {
+          result.educationalProgressSummary = eduParts.join('\n\n');
+        }
       }
-      if (!existingData.vocationalGoals && youth.educationGoals) {
-        result.vocationalGoals = youth.educationGoals;
+
+      // Build comprehensive treatment summary
+      if (!existingData.treatmentProgressSummary) {
+        const treatmentParts = [];
+
+        // Diagnoses
+        if (youth.currentDiagnoses) {
+          treatmentParts.push(`Current Diagnoses: ${youth.currentDiagnoses}`);
+        }
+
+        // Medications
+        if (youth.currentMedications) {
+          treatmentParts.push(`Current Medications: ${youth.currentMedications}`);
+        }
+
+        // Treatment goals
+        if (youth.treatmentGoals && youth.treatmentGoals.length > 0) {
+          const goalsList = youth.treatmentGoals
+            .map((goal: any, idx: number) => `${idx + 1}. ${goal.goal || goal}`)
+            .join('\n');
+          treatmentParts.push(`Treatment Goals:\n${goalsList}`);
+        }
+
+        if (treatmentParts.length > 0) {
+          result.treatmentProgressSummary = treatmentParts.join('\n\n');
+        }
       }
-      if (!existingData.medicationCompliance && youth.currentMedications) {
-        result.medicationCompliance = `Current medications: ${youth.currentMedications}`;
+
+      // Build comprehensive family & social summary
+      if (!existingData.familySocialSummary) {
+        const familyParts = [];
+
+        // Parent information
+        const parentInfo = [];
+        if (youth.mother?.name) {
+          const motherDetails = [`Mother: ${youth.mother.name}`];
+          if (youth.mother.contact) motherDetails.push(`Contact: ${youth.mother.contact}`);
+          parentInfo.push(motherDetails.join(', '));
+        }
+        if (youth.father?.name) {
+          const fatherDetails = [`Father: ${youth.father.name}`];
+          if (youth.father.contact) fatherDetails.push(`Contact: ${youth.father.contact}`);
+          parentInfo.push(fatherDetails.join(', '));
+        }
+        if (parentInfo.length > 0) {
+          familyParts.push(`Family Members:\n${parentInfo.join('\n')}`);
+        }
+
+        // Guardian information
+        if (youth.legalGuardian?.name || youth.legalGuardian?.relationship) {
+          const guardianDetails = [`Legal Guardian: ${youth.legalGuardian.name || 'Not specified'}`];
+          if (youth.legalGuardian.relationship) {
+            guardianDetails.push(`Relationship: ${youth.legalGuardian.relationship}`);
+          }
+          if (youth.legalGuardian.contact) {
+            guardianDetails.push(`Contact: ${youth.legalGuardian.contact}`);
+          }
+          familyParts.push(guardianDetails.join(', '));
+        }
+
+        // Probation officer
+        if (youth.probationOfficer?.name) {
+          const poDetails = [`Probation Officer: ${youth.probationOfficer.name}`];
+          if (youth.probationOfficer.contact) poDetails.push(`Contact: ${youth.probationOfficer.contact}`);
+          familyParts.push(poDetails.join(', '));
+        }
+
+        // Social strengths
+        if (youth.socialStrengths) {
+          familyParts.push(`Social Strengths: ${youth.socialStrengths}`);
+        }
+
+        if (familyParts.length > 0) {
+          result.familySocialSummary = familyParts.join('\n\n');
+        }
       }
-      if (!existingData.treatmentGoals && youth.currentDiagnoses) {
-        result.treatmentGoals = `Diagnoses: ${youth.currentDiagnoses}`;
+
+      // Build behavioral assessment from profile data
+      if (!existingData.behavioralAssessmentSummary) {
+        const behaviorParts = [];
+
+        // Strengths and talents
+        if (youth.strengthsTalents) {
+          behaviorParts.push(`Strengths & Talents: ${youth.strengthsTalents}`);
+        }
+
+        // Social strengths
+        if (youth.socialStrengths) {
+          behaviorParts.push(`Social Strengths: ${youth.socialStrengths}`);
+        }
+
+        // Social deficiencies
+        if (youth.socialDeficiencies) {
+          behaviorParts.push(`Areas for Growth: ${youth.socialDeficiencies}`);
+        }
+
+        // Current level as behavioral indicator
+        if (youth.level && youth.pointTotal) {
+          behaviorParts.push(`Current Level: ${youth.level} (${youth.pointTotal.toLocaleString()} total points)`);
+        }
+
+        if (behaviorParts.length > 0) {
+          result.behavioralAssessmentSummary = behaviorParts.join('\n\n');
+        }
       }
-      if (!existingData.familyVisitation && (youth.mother?.name || youth.father?.name)) {
-        result.familyVisitation = `Mother: ${youth.mother?.name || 'N/A'}, Father: ${youth.father?.name || 'N/A'}`;
-      }
-      if (!existingData.behavioralProgress && youth.strengthsTalents) {
-        result.behavioralProgress = `Strengths: ${youth.strengthsTalents}`;
-      }
-      if (!existingData.dischargePlanning && (youth.dischargePlan?.parents || youth.dischargePlan?.relative?.name)) {
-        result.dischargePlanning = `Planned discharge to: ${youth.dischargePlan.parents || youth.dischargePlan.relative?.name}`;
-      }
-      if (!existingData.dischargeTimeline && youth.dischargePlan?.estimatedLengthOfStayMonths) {
-        result.dischargeTimeline = `Estimated ${youth.dischargePlan.estimatedLengthOfStayMonths} months`;
+
+      // Build future planning summary from discharge plan
+      if (!existingData.futurePlanningSummary) {
+        const dischargeParts = [];
+
+        // Estimated length of stay
+        if (youth.dischargePlan?.estimatedLengthOfStayMonths) {
+          dischargeParts.push(`Estimated Length of Stay: ${youth.dischargePlan.estimatedLengthOfStayMonths} months`);
+        }
+
+        // Discharge destination
+        const dischargeDestination = [];
+        if (youth.dischargePlan?.parents) {
+          dischargeDestination.push(`Parents: ${youth.dischargePlan.parents}`);
+        }
+        if (youth.dischargePlan?.relative?.name) {
+          const relDetails = [`Relative: ${youth.dischargePlan.relative.name}`];
+          if (youth.dischargePlan.relative.relationship) {
+            relDetails.push(`(${youth.dischargePlan.relative.relationship})`);
+          }
+          dischargeDestination.push(relDetails.join(' '));
+        }
+        if (youth.dischargePlan?.groupHome) {
+          dischargeDestination.push(`Group Home: ${youth.dischargePlan.groupHome}`);
+        }
+        if (youth.dischargePlan?.independentLiving) {
+          dischargeDestination.push(`Independent Living: ${youth.dischargePlan.independentLiving}`);
+        }
+        if (dischargeDestination.length > 0) {
+          dischargeParts.push(`Planned Discharge Destination:\n${dischargeDestination.join('\n')}`);
+        }
+
+        // Aftercare services
+        if (youth.dischargePlan?.aftercareServices && youth.dischargePlan.aftercareServices.length > 0) {
+          const servicesList = youth.dischargePlan.aftercareServices
+            .map((service: string, idx: number) => `${idx + 1}. ${service}`)
+            .join('\n');
+          dischargeParts.push(`Aftercare Services Recommended:\n${servicesList}`);
+        }
+
+        if (dischargeParts.length > 0) {
+          result.futurePlanningSummary = dischargeParts.join('\n\n');
+        }
       }
 
       return result;
@@ -429,6 +530,63 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
 
   const handleInputChange = (field: keyof CourtReportData, value: string) => {
     setReportData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleEnhanceWithAI = async (field: keyof CourtReportData) => {
+    const currentValue = reportData[field] as string;
+    
+    if (!currentValue || currentValue.trim().length === 0) {
+      toast({
+        title: "No Content",
+        description: "Please enter some text before using AI enhancement.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const prompts: Record<string, string> = {
+      treatmentProgressSummary: "You are a clinical professional writing a court report. Expand the following brief notes about treatment goals and progress into a comprehensive 2-3 paragraph summary. Include details about primary treatment goals, progress toward those goals, therapeutic participation, and medication compliance. Use professional clinical language appropriate for court documentation.",
+      behavioralAssessmentSummary: "You are a clinical professional writing a court report. Expand the following brief notes about behavioral assessment into a comprehensive 2-3 paragraph summary. Include details about behavioral progress, significant incidents, and behavioral interventions used. Use professional clinical language appropriate for court documentation.",
+      educationalProgressSummary: "You are a clinical professional writing a court report. Expand the following brief notes about educational progress into a comprehensive 2-3 paragraph summary. Include details about school placement, academic progress, educational challenges, and vocational goals. Use professional clinical language appropriate for court documentation.",
+      familySocialSummary: "You are a clinical professional writing a court report. Expand the following brief notes about family and social relationships into a comprehensive 2-3 paragraph summary. Include details about family visitation, family therapy, peer relationships, and community contacts. Use professional clinical language appropriate for court documentation.",
+      programParticipationSummary: "You are a clinical professional writing a court report. Expand the following brief notes about program participation into a comprehensive 2-3 paragraph summary. Include details about daily structure compliance, program compliance, skills development, and incentives/consequences. Use professional clinical language appropriate for court documentation.",
+      futurePlanningSummary: "You are a clinical professional writing a court report. Expand the following brief notes about future planning into a comprehensive 2-3 paragraph summary. Include details about discharge timeline, discharge planning, aftercare recommendations, and transition plan. Use professional clinical language appropriate for court documentation.",
+      overallAssessment: "You are a clinical professional writing a court report. Expand the following brief notes about the youth's overall assessment into a comprehensive 2-3 paragraph summary. Synthesize information about the youth's progress, current status, strengths, challenges, and overall trajectory. Use professional clinical language appropriate for court documentation.",
+      courtRecommendations: "You are a clinical professional writing a court report. Expand the following brief notes into specific, actionable recommendations for the court. Include recommendations about continued placement, treatment needs, family involvement, educational planning, and any other relevant considerations. Use professional clinical language appropriate for court documentation.",
+      additionalComments: "You are a clinical professional writing a court report. Expand the following brief notes into a well-structured additional comments section. Include any relevant information not covered in other sections, special considerations, or contextual details that would be helpful for the court. Use professional clinical language appropriate for court documentation."
+    };
+
+    const prompt = prompts[field];
+    if (!prompt) {
+      toast({
+        title: "Enhancement Not Available",
+        description: "AI enhancement is not available for this field.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      toast({
+        title: "Enhancing...",
+        description: "AI is expanding your notes. This may take a moment.",
+      });
+
+      const enhanced = await aiService.enhanceText(currentValue, prompt);
+      handleInputChange(field, enhanced);
+
+      toast({
+        title: "Enhanced Successfully",
+        description: "Your text has been professionally expanded.",
+      });
+    } catch (error) {
+      console.error('AI enhancement error:', error);
+      toast({
+        title: "Enhancement Failed",
+        description: "Could not enhance text. Please try again.",
+        variant: "destructive"
+      });
+    }
   };
 
   const persistDraft = useCallback(
@@ -527,12 +685,10 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
       return;
     }
 
-    // Check if any behavioral fields already have data
+    // Check if any consolidated fields already have data
     const hasExistingData = !!(
-      reportData.behavioralProgress ||
-      reportData.significantIncidents ||
-      reportData.goalProgress ||
-      reportData.programCompliance
+      reportData.behavioralAssessmentSummary ||
+      reportData.programParticipationSummary
     );
 
     if (hasExistingData) {
@@ -563,17 +719,21 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
         ? recentBehavior.reduce((sum, bp) => sum + (bp.totalPoints ?? 0), 0) / recentBehavior.length
         : 0;
 
-      // Build behavioral progress summary
-      let behavioralSummary = `Average daily points over last 30 days: ${avgPoints.toFixed(1)}/15. `;
+      // Build consolidated behavioral assessment summary
+      const behavioralParts = [];
+      
+      // Behavioral progress
+      let behavioralProgress = `Average daily points over last 30 days: ${avgPoints.toFixed(1)}/15. `;
       if (avgPoints >= 12) {
-        behavioralSummary += "Demonstrates consistent positive behavior and engagement.";
+        behavioralProgress += "Demonstrates consistent positive behavior and engagement.";
       } else if (avgPoints >= 9) {
-        behavioralSummary += "Shows moderate progress with some behavioral challenges.";
+        behavioralProgress += "Shows moderate progress with some behavioral challenges.";
       } else {
-        behavioralSummary += "Continues to work on behavioral goals with staff support.";
+        behavioralProgress += "Continues to work on behavioral goals with staff support.";
       }
+      behavioralParts.push(behavioralProgress);
 
-      // Extract significant incidents from notes
+      // Significant incidents
       const incidentNotes = recentNotes.filter(note =>
         note.note?.toLowerCase().includes('incident') ||
         note.note?.toLowerCase().includes('altercation') ||
@@ -583,26 +743,44 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
         ? `${incidentNotes.length} incident(s) documented in the past 30 days. ` +
           incidentNotes.slice(0, 3).map(n => n.note).join(' ')
         : 'No significant behavioral incidents reported in the past 30 days.';
+      behavioralParts.push(significantIncidents);
 
-      // Extract positive progress from notes
+      // Behavioral interventions
+      const interventionNotes = recentNotes.filter(note =>
+        note.note?.toLowerCase().includes('intervention') ||
+        note.note?.toLowerCase().includes('consequence') ||
+        note.note?.toLowerCase().includes('redirect')
+      );
+      if (interventionNotes.length > 0) {
+        behavioralParts.push(`Interventions used: ${interventionNotes.slice(0, 2).map(n => n.note).join(' ')}`);
+      }
+
+      const behavioralAssessmentSummary = behavioralParts.join('\n\n');
+
+      // Build consolidated program participation summary
+      const programParts = [];
+      
+      // Daily structure compliance
+      const programCompliance = `Current level: ${youth.level}. ${avgPoints >= 10 ? 'Consistently meets program expectations.' : 'Working to improve program compliance.'}`;
+      programParts.push(programCompliance);
+
+      // Skills development
       const positiveNotes = recentNotes.filter(note =>
         note.note?.toLowerCase().includes('progress') ||
         note.note?.toLowerCase().includes('improvement') ||
         note.note?.toLowerCase().includes('positive')
       );
-      const goalProgress = positiveNotes.length > 0
-        ? positiveNotes.slice(0, 3).map(n => n.note).join(' ')
-        : 'Youth continues to work toward treatment goals.';
+      if (positiveNotes.length > 0) {
+        programParts.push(`Skills Development: ${positiveNotes.slice(0, 2).map(n => n.note).join(' ')}`);
+      }
 
-      const programCompliance = `Current level: ${youth.level}. ${avgPoints >= 10 ? 'Consistently meets program expectations.' : 'Working to improve program compliance.'}`;
+      const programParticipationSummary = programParts.join('\n\n');
 
       // Only update empty fields
       setReportData(prev => ({
         ...prev,
-        behavioralProgress: prev.behavioralProgress || behavioralSummary,
-        significantIncidents: prev.significantIncidents || significantIncidents,
-        goalProgress: prev.goalProgress || goalProgress,
-        programCompliance: prev.programCompliance || programCompliance,
+        behavioralAssessmentSummary: prev.behavioralAssessmentSummary || behavioralAssessmentSummary,
+        programParticipationSummary: prev.programParticipationSummary || programParticipationSummary,
       }));
 
       toast({
@@ -638,34 +816,12 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
 
         currentPlacement: 'Heartland Boys Home - Residential Treatment',
         
-        treatmentGoals: '',
-        goalProgress: '',
-        therapeuticParticipation: '',
-        medicationCompliance: '',
-        
-        behavioralProgress: '',
-        significantIncidents: '',
-        behavioralInterventions: '',
-        
-        schoolPlacement: youth?.currentSchool || '',
-        academicProgress: '',
-        educationalChallenges: '',
-        vocationalGoals: '',
-        
-        familyVisitation: '',
-        familyTherapy: '',
-        peerRelationships: '',
-        communityContacts: '',
-        
-        dailyStructure: '',
-        programCompliance: '',
-        skillsDevelopment: '',
-        incentivesEarned: '',
-        
-        dischargeTimeline: '',
-        dischargePlanning: '',
-        aftercareRecommendations: '',
-        transitionPlan: '',
+        treatmentProgressSummary: '',
+        behavioralAssessmentSummary: '',
+        educationalProgressSummary: '',
+        familySocialSummary: '',
+        programParticipationSummary: '',
+        futurePlanningSummary: '',
         
         overallAssessment: '',
         courtRecommendations: '',
@@ -918,47 +1074,26 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
           <h3 className="text-lg font-semibold mb-4 text-red-700 border-b border-red-200 pb-2">Treatment Goals & Progress</h3>
           <div className="space-y-4">
             <div>
-              <Label htmlFor="treatmentGoals">Treatment Goals</Label>
+              <div className="flex justify-between items-center mb-2">
+                <Label htmlFor="treatmentProgressSummary">Treatment Progress Summary</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleEnhanceWithAI('treatmentProgressSummary')}
+                  className="text-purple-600 hover:text-purple-700"
+                >
+                  <Sparkles className="mr-2 h-4 w-4" />
+                  Enhance with AI
+                </Button>
+              </div>
               <Textarea
-                id="treatmentGoals"
-                value={reportData.treatmentGoals}
-                onChange={(e) => handleInputChange('treatmentGoals', e.target.value)}
-                rows={3}
+                id="treatmentProgressSummary"
+                value={reportData.treatmentProgressSummary}
+                onChange={(e) => handleInputChange('treatmentProgressSummary', e.target.value)}
+                rows={8}
                 className="mt-1"
-                placeholder="List current treatment goals and objectives..."
-              />
-            </div>
-            <div>
-              <Label htmlFor="goalProgress">Progress Toward Goals</Label>
-              <Textarea
-                id="goalProgress"
-                value={reportData.goalProgress}
-                onChange={(e) => handleInputChange('goalProgress', e.target.value)}
-                rows={3}
-                className="mt-1"
-                placeholder="Describe progress made toward treatment goals..."
-              />
-            </div>
-            <div>
-              <Label htmlFor="therapeuticParticipation">Therapeutic Participation</Label>
-              <Textarea
-                id="therapeuticParticipation"
-                value={reportData.therapeuticParticipation}
-                onChange={(e) => handleInputChange('therapeuticParticipation', e.target.value)}
-                rows={3}
-                className="mt-1"
-                placeholder="Describe participation in individual and group therapy..."
-              />
-            </div>
-            <div>
-              <Label htmlFor="medicationCompliance">Medication Compliance</Label>
-              <Textarea
-                id="medicationCompliance"
-                value={reportData.medicationCompliance}
-                onChange={(e) => handleInputChange('medicationCompliance', e.target.value)}
-                rows={2}
-                className="mt-1"
-                placeholder="Describe medication compliance and any issues..."
+                placeholder="Provide a comprehensive summary including: treatment goals and objectives, progress toward goals, therapeutic participation (individual and group therapy), and medication compliance..."
               />
             </div>
           </div>
@@ -969,36 +1104,26 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
           <h3 className="text-lg font-semibold mb-4 text-red-700 border-b border-red-200 pb-2">Behavioral Assessment</h3>
           <div className="space-y-4">
             <div>
-              <Label htmlFor="behavioralProgress">Behavioral Progress</Label>
+              <div className="flex justify-between items-center mb-2">
+                <Label htmlFor="behavioralAssessmentSummary">Behavioral Assessment Summary</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleEnhanceWithAI('behavioralAssessmentSummary')}
+                  className="text-purple-600 hover:text-purple-700"
+                >
+                  <Sparkles className="mr-2 h-4 w-4" />
+                  Enhance with AI
+                </Button>
+              </div>
               <Textarea
-                id="behavioralProgress"
-                value={reportData.behavioralProgress}
-                onChange={(e) => handleInputChange('behavioralProgress', e.target.value)}
-                rows={3}
+                id="behavioralAssessmentSummary"
+                value={reportData.behavioralAssessmentSummary}
+                onChange={(e) => handleInputChange('behavioralAssessmentSummary', e.target.value)}
+                rows={8}
                 className="mt-1"
-                placeholder="Describe behavioral improvements and challenges..."
-              />
-            </div>
-            <div>
-              <Label htmlFor="significantIncidents">Significant Incidents</Label>
-              <Textarea
-                id="significantIncidents"
-                value={reportData.significantIncidents}
-                onChange={(e) => handleInputChange('significantIncidents', e.target.value)}
-                rows={3}
-                className="mt-1"
-                placeholder="Document any significant behavioral incidents..."
-              />
-            </div>
-            <div>
-              <Label htmlFor="behavioralInterventions">Behavioral Interventions</Label>
-              <Textarea
-                id="behavioralInterventions"
-                value={reportData.behavioralInterventions}
-                onChange={(e) => handleInputChange('behavioralInterventions', e.target.value)}
-                rows={3}
-                className="mt-1"
-                placeholder="Describe interventions and strategies used..."
+                placeholder="Provide a comprehensive summary including: behavioral progress and improvements, significant behavioral incidents, and behavioral interventions and strategies used..."
               />
             </div>
           </div>
@@ -1009,45 +1134,26 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
           <h3 className="text-lg font-semibold mb-4 text-red-700 border-b border-red-200 pb-2">Educational Progress</h3>
           <div className="space-y-4">
             <div>
-              <Label htmlFor="schoolPlacement">School Placement</Label>
-              <Input
-                id="schoolPlacement"
-                value={reportData.schoolPlacement}
-                onChange={(e) => handleInputChange('schoolPlacement', e.target.value)}
-                className="mt-1"
-              />
-            </div>
-            <div>
-              <Label htmlFor="academicProgress">Academic Progress</Label>
+              <div className="flex justify-between items-center mb-2">
+                <Label htmlFor="educationalProgressSummary">Educational Progress Summary</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleEnhanceWithAI('educationalProgressSummary')}
+                  className="text-purple-600 hover:text-purple-700"
+                >
+                  <Sparkles className="mr-2 h-4 w-4" />
+                  Enhance with AI
+                </Button>
+              </div>
               <Textarea
-                id="academicProgress"
-                value={reportData.academicProgress}
-                onChange={(e) => handleInputChange('academicProgress', e.target.value)}
-                rows={3}
+                id="educationalProgressSummary"
+                value={reportData.educationalProgressSummary}
+                onChange={(e) => handleInputChange('educationalProgressSummary', e.target.value)}
+                rows={8}
                 className="mt-1"
-                placeholder="Describe academic achievements and progress..."
-              />
-            </div>
-            <div>
-              <Label htmlFor="educationalChallenges">Educational Challenges</Label>
-              <Textarea
-                id="educationalChallenges"
-                value={reportData.educationalChallenges}
-                onChange={(e) => handleInputChange('educationalChallenges', e.target.value)}
-                rows={3}
-                className="mt-1"
-                placeholder="Describe any educational challenges or needs..."
-              />
-            </div>
-            <div>
-              <Label htmlFor="vocationalGoals">Vocational Goals</Label>
-              <Textarea
-                id="vocationalGoals"
-                value={reportData.vocationalGoals}
-                onChange={(e) => handleInputChange('vocationalGoals', e.target.value)}
-                rows={2}
-                className="mt-1"
-                placeholder="Describe vocational training and career goals..."
+                placeholder="Provide a comprehensive summary including: school placement, academic achievements and progress, educational challenges or needs, and vocational training/career goals..."
               />
             </div>
           </div>
@@ -1058,47 +1164,26 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
           <h3 className="text-lg font-semibold mb-4 text-red-700 border-b border-red-200 pb-2">Family & Social Relationships</h3>
           <div className="space-y-4">
             <div>
-              <Label htmlFor="familyVisitation">Family Visitation</Label>
+              <div className="flex justify-between items-center mb-2">
+                <Label htmlFor="familySocialSummary">Family & Social Summary</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleEnhanceWithAI('familySocialSummary')}
+                  className="text-purple-600 hover:text-purple-700"
+                >
+                  <Sparkles className="mr-2 h-4 w-4" />
+                  Enhance with AI
+                </Button>
+              </div>
               <Textarea
-                id="familyVisitation"
-                value={reportData.familyVisitation}
-                onChange={(e) => handleInputChange('familyVisitation', e.target.value)}
-                rows={3}
+                id="familySocialSummary"
+                value={reportData.familySocialSummary}
+                onChange={(e) => handleInputChange('familySocialSummary', e.target.value)}
+                rows={8}
                 className="mt-1"
-                placeholder="Describe family visits and contact..."
-              />
-            </div>
-            <div>
-              <Label htmlFor="familyTherapy">Family Therapy</Label>
-              <Textarea
-                id="familyTherapy"
-                value={reportData.familyTherapy}
-                onChange={(e) => handleInputChange('familyTherapy', e.target.value)}
-                rows={3}
-                className="mt-1"
-                placeholder="Describe family therapy participation and progress..."
-              />
-            </div>
-            <div>
-              <Label htmlFor="peerRelationships">Peer Relationships</Label>
-              <Textarea
-                id="peerRelationships"
-                value={reportData.peerRelationships}
-                onChange={(e) => handleInputChange('peerRelationships', e.target.value)}
-                rows={3}
-                className="mt-1"
-                placeholder="Describe relationships with peers..."
-              />
-            </div>
-            <div>
-              <Label htmlFor="communityContacts">Community Contacts</Label>
-              <Textarea
-                id="communityContacts"
-                value={reportData.communityContacts}
-                onChange={(e) => handleInputChange('communityContacts', e.target.value)}
-                rows={2}
-                className="mt-1"
-                placeholder="Describe community involvement and contacts..."
+                placeholder="Provide a comprehensive summary including: family visitation and contact, family therapy participation and progress, peer relationships, and community involvement/contacts..."
               />
             </div>
           </div>
@@ -1109,47 +1194,26 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
           <h3 className="text-lg font-semibold mb-4 text-red-700 border-b border-red-200 pb-2">Program Participation</h3>
           <div className="space-y-4">
             <div>
-              <Label htmlFor="dailyStructure">Daily Structure Compliance</Label>
+              <div className="flex justify-between items-center mb-2">
+                <Label htmlFor="programParticipationSummary">Program Participation Summary</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleEnhanceWithAI('programParticipationSummary')}
+                  className="text-purple-600 hover:text-purple-700"
+                >
+                  <Sparkles className="mr-2 h-4 w-4" />
+                  Enhance with AI
+                </Button>
+              </div>
               <Textarea
-                id="dailyStructure"
-                value={reportData.dailyStructure}
-                onChange={(e) => handleInputChange('dailyStructure', e.target.value)}
-                rows={3}
+                id="programParticipationSummary"
+                value={reportData.programParticipationSummary}
+                onChange={(e) => handleInputChange('programParticipationSummary', e.target.value)}
+                rows={8}
                 className="mt-1"
-                placeholder="Describe adherence to daily schedule and structure..."
-              />
-            </div>
-            <div>
-              <Label htmlFor="programCompliance">Program Compliance</Label>
-              <Textarea
-                id="programCompliance"
-                value={reportData.programCompliance}
-                onChange={(e) => handleInputChange('programCompliance', e.target.value)}
-                rows={3}
-                className="mt-1"
-                placeholder="Describe overall program compliance and participation..."
-              />
-            </div>
-            <div>
-              <Label htmlFor="skillsDevelopment">Skills Development</Label>
-              <Textarea
-                id="skillsDevelopment"
-                value={reportData.skillsDevelopment}
-                onChange={(e) => handleInputChange('skillsDevelopment', e.target.value)}
-                rows={3}
-                className="mt-1"
-                placeholder="Describe life skills and social skills development..."
-              />
-            </div>
-            <div>
-              <Label htmlFor="incentivesEarned">Incentives and Consequences</Label>
-              <Textarea
-                id="incentivesEarned"
-                value={reportData.incentivesEarned}
-                onChange={(e) => handleInputChange('incentivesEarned', e.target.value)}
-                rows={2}
-                className="mt-1"
-                placeholder="Describe incentives earned and consequences received..."
+                placeholder="Provide a comprehensive summary including: daily structure compliance, overall program compliance and participation, life skills and social skills development, and incentives earned/consequences received..."
               />
             </div>
           </div>
@@ -1160,47 +1224,26 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
           <h3 className="text-lg font-semibold mb-4 text-red-700 border-b border-red-200 pb-2">Future Planning</h3>
           <div className="space-y-4">
             <div>
-              <Label htmlFor="dischargeTimeline">Discharge Timeline</Label>
+              <div className="flex justify-between items-center mb-2">
+                <Label htmlFor="futurePlanningSummary">Future Planning Summary</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleEnhanceWithAI('futurePlanningSummary')}
+                  className="text-purple-600 hover:text-purple-700"
+                >
+                  <Sparkles className="mr-2 h-4 w-4" />
+                  Enhance with AI
+                </Button>
+              </div>
               <Textarea
-                id="dischargeTimeline"
-                value={reportData.dischargeTimeline}
-                onChange={(e) => handleInputChange('dischargeTimeline', e.target.value)}
-                rows={2}
+                id="futurePlanningSummary"
+                value={reportData.futurePlanningSummary}
+                onChange={(e) => handleInputChange('futurePlanningSummary', e.target.value)}
+                rows={8}
                 className="mt-1"
-                placeholder="Projected discharge timeline and criteria..."
-              />
-            </div>
-            <div>
-              <Label htmlFor="dischargePlanning">Discharge Planning</Label>
-              <Textarea
-                id="dischargePlanning"
-                value={reportData.dischargePlanning}
-                onChange={(e) => handleInputChange('dischargePlanning', e.target.value)}
-                rows={3}
-                className="mt-1"
-                placeholder="Describe discharge planning activities..."
-              />
-            </div>
-            <div>
-              <Label htmlFor="aftercareRecommendations">Aftercare Recommendations</Label>
-              <Textarea
-                id="aftercareRecommendations"
-                value={reportData.aftercareRecommendations}
-                onChange={(e) => handleInputChange('aftercareRecommendations', e.target.value)}
-                rows={3}
-                className="mt-1"
-                placeholder="Recommend aftercare services and supports..."
-              />
-            </div>
-            <div>
-              <Label htmlFor="transitionPlan">Transition Plan</Label>
-              <Textarea
-                id="transitionPlan"
-                value={reportData.transitionPlan}
-                onChange={(e) => handleInputChange('transitionPlan', e.target.value)}
-                rows={3}
-                className="mt-1"
-                placeholder="Describe transition plan to next level of care..."
+                placeholder="Provide a comprehensive summary including: projected discharge timeline and criteria, discharge planning activities, aftercare recommendations and supports, and transition plan to next level of care..."
               />
             </div>
           </div>
@@ -1211,7 +1254,19 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
           <h3 className="text-lg font-semibold mb-4 text-red-700 border-b border-red-200 pb-2">Summary & Recommendations</h3>
           <div className="space-y-4">
             <div>
-              <Label htmlFor="overallAssessment">Overall Assessment</Label>
+              <div className="flex justify-between items-center mb-2">
+                <Label htmlFor="overallAssessment">Overall Assessment</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleEnhanceWithAI('overallAssessment')}
+                  className="text-purple-600 hover:text-purple-700"
+                >
+                  <Sparkles className="mr-2 h-4 w-4" />
+                  Enhance with AI
+                </Button>
+              </div>
               <Textarea
                 id="overallAssessment"
                 value={reportData.overallAssessment}
@@ -1222,7 +1277,19 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
               />
             </div>
             <div>
-              <Label htmlFor="courtRecommendations">Recommendations to the Court</Label>
+              <div className="flex justify-between items-center mb-2">
+                <Label htmlFor="courtRecommendations">Recommendations to the Court</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleEnhanceWithAI('courtRecommendations')}
+                  className="text-purple-600 hover:text-purple-700"
+                >
+                  <Sparkles className="mr-2 h-4 w-4" />
+                  Enhance with AI
+                </Button>
+              </div>
               <Textarea
                 id="courtRecommendations"
                 value={reportData.courtRecommendations}
@@ -1233,7 +1300,19 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
               />
             </div>
             <div>
-              <Label htmlFor="additionalComments">Additional Comments</Label>
+              <div className="flex justify-between items-center mb-2">
+                <Label htmlFor="additionalComments">Additional Comments</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleEnhanceWithAI('additionalComments')}
+                  className="text-purple-600 hover:text-purple-700"
+                >
+                  <Sparkles className="mr-2 h-4 w-4" />
+                  Enhance with AI
+                </Button>
+              </div>
               <Textarea
                 id="additionalComments"
                 value={reportData.additionalComments}

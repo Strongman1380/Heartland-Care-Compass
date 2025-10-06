@@ -5,6 +5,97 @@ export interface AISummaryRequest {
   data: any;
 }
 
+export interface DPNFieldComments {
+  peerInteraction: string;
+  adultInteraction: string;
+  investmentLevel: string;
+  dealWithAuthority: string;
+  socialStrengths: string;
+  socialDeficiencies: string;
+  narrative: string;
+}
+
+// Generate AI comments for all DPN fields
+export function generateDPNFieldComments(payload: AISummaryRequest): DPNFieldComments {
+  const { youth, data } = payload;
+
+  // Extract insights from daily ratings
+  const ratings = data.dailyRatings || [];
+  const avgPeer = ratings.length ? ratings.reduce((sum: number, r: any) => sum + (r.peerInteraction || 0), 0) / ratings.length : 0;
+  const avgAdult = ratings.length ? ratings.reduce((sum: number, r: any) => sum + (r.adultInteraction || 0), 0) / ratings.length : 0;
+  const avgInvest = ratings.length ? ratings.reduce((sum: number, r: any) => sum + (r.investmentLevel || 0), 0) / ratings.length : 0;
+  const avgAuth = ratings.length ? ratings.reduce((sum: number, r: any) => sum + (r.dealAuthority || 0), 0) / ratings.length : 0;
+
+  // Extract comments from ratings
+  const peerComments = ratings.map((r: any) => r.peerInteractionComment).filter(Boolean);
+  const adultComments = ratings.map((r: any) => r.adultInteractionComment).filter(Boolean);
+  const investComments = ratings.map((r: any) => r.investmentLevelComment).filter(Boolean);
+  const authComments = ratings.map((r: any) => r.dealAuthorityComment).filter(Boolean);
+
+  // Extract case notes
+  const caseNotes = (data.progressNotes || []).map((note: any) => {
+    if (typeof note.note === 'string') {
+      try {
+        const parsed = JSON.parse(note.note);
+        if (parsed.sections) {
+          return {
+            summary: parsed.sections.summary,
+            strengths: parsed.sections.strengthsChallenges,
+            interventions: parsed.sections.interventionsResponse,
+            nextSteps: parsed.sections.planNextSteps
+          };
+        }
+      } catch {}
+    }
+    return null;
+  }).filter(Boolean);
+
+  const totalPoints = data.behaviorPoints?.reduce((sum: number, p: any) => sum + (p.totalPoints || 0), 0) || 0;
+  const avgPoints = data.behaviorPoints?.length ? Math.round(totalPoints / data.behaviorPoints.length) : 0;
+
+  return {
+    peerInteraction: avgPeer >= 3.5
+      ? `${youth.firstName} has demonstrated excellent peer interactions during this period, averaging ${avgPeer.toFixed(1)}/4. He consistently shows respect, cooperation, and positive social engagement with other residents. ${peerComments.length > 0 ? 'Staff noted: "' + peerComments.slice(0, 2).join('" and "') + '"' : 'He handles conflicts appropriately and often helps newer residents adjust to the program.'}`
+      : avgPeer >= 2.5
+      ? `${youth.firstName} shows solid progress in peer interactions (${avgPeer.toFixed(1)}/4 average). He's working on maintaining positive relationships and has shown improvement in conflict resolution. ${peerComments.length > 0 ? 'Staff observations include: "' + peerComments.slice(0, 2).join('" and "') + '"' : 'He generally gets along well with peers but occasionally needs staff support to navigate disagreements.'}`
+      : `Peer interactions remain an area of focus for ${youth.firstName} (averaging ${avgPeer.toFixed(1)}/4). ${peerComments.length > 0 ? 'Staff noted challenges: "' + peerComments.slice(0, 2).join('" and "') + '"' : 'He has experienced conflicts with other residents and benefits from staff coaching on appropriate social skills.'} The treatment team continues to work with him on respectful communication and conflict de-escalation.`,
+
+    adultInteraction: avgAdult >= 3.5
+      ? `${youth.firstName}'s interactions with staff have been exemplary this period (${avgAdult.toFixed(1)}/4). He is consistently respectful, responsive to redirection, and actively seeks appropriate support from staff. ${adultComments.length > 0 ? 'Staff commented: "' + adultComments.slice(0, 2).join('" and "') + '"' : 'He demonstrates maturity in how he communicates with adults and accepts feedback constructively.'}`
+      : avgAdult >= 2.5
+      ? `Staff interactions are generally positive (${avgAdult.toFixed(1)}/4 average). ${youth.firstName} is usually respectful and responsive, though he occasionally needs reminders about boundaries and expectations. ${adultComments.length > 0 ? 'Staff noted: "' + adultComments.slice(0, 2).join('" and "') + '"' : 'He is working on consistent compliance with directives and appropriate communication with adults.'}`
+      : `${youth.firstName} continues to work on appropriate interactions with authority figures (${avgAdult.toFixed(1)}/4). ${adultComments.length > 0 ? 'Staff documented: "' + adultComments.slice(0, 2).join('" and "') + '"' : 'He sometimes struggles with accepting redirection and maintaining respectful communication.'} Staff are providing consistent structure and modeling to support his growth in this area.`,
+
+    investmentLevel: avgInvest >= 3.5
+      ? `${youth.firstName} has shown impressive investment in his treatment and personal growth (${avgInvest.toFixed(1)}/4). He actively participates in therapy, engages meaningfully in groups, and demonstrates genuine buy-in to program goals. ${investComments.length > 0 ? 'Staff observed: "' + investComments.slice(0, 2).join('" and "') + '"' : 'He asks thoughtful questions, applies learned skills, and shows insight into his behaviors and triggers.'}`
+      : avgInvest >= 2.5
+      ? `${youth.firstName} demonstrates developing investment in his treatment goals (${avgInvest.toFixed(1)}/4). He participates when encouraged and is starting to make connections between behaviors and consequences. ${investComments.length > 0 ? 'Staff noted: "' + investComments.slice(0, 2).join('" and "') + '"' : 'He shows moments of genuine engagement and is working on maintaining consistent effort in all program areas.'}`
+      : `Investment level remains an area needing development (${avgInvest.toFixed(1)}/4). ${investComments.length > 0 ? 'Staff documented: "' + investComments.slice(0, 2).join('" and "') + '"' : `${youth.firstName} sometimes goes through the motions rather than fully engaging in treatment activities.`} Staff continue to work with him on understanding the value of treatment and connecting program participation to his personal goals.`,
+
+    dealWithAuthority: avgAuth >= 3.5
+      ? `${youth.firstName} has demonstrated strong skills in managing authority and structure (${avgAuth.toFixed(1)}/4). He follows program expectations consistently, accepts feedback appropriately, and shows maturity in how he navigates rules and limits. ${authComments.length > 0 ? 'Staff commented: "' + authComments.slice(0, 2).join('" and "') + '"' : 'He rarely challenges boundaries inappropriately and often helps model positive compliance for peers.'}`
+      : avgAuth >= 2.5
+      ? `${youth.firstName} is managing program structure reasonably well (${avgAuth.toFixed(1)}/4). While there are occasional power struggles, he generally works within the program expectations. ${authComments.length > 0 ? 'Staff noted: "' + authComments.slice(0, 2).join('" and "') + '"' : 'He is learning to accept limits more gracefully and is improving in his response to authority.'}`
+      : `Dealing with authority remains a focus area for ${youth.firstName} (${avgAuth.toFixed(1)}/4). ${authComments.length > 0 ? 'Staff documented: "' + authComments.slice(0, 2).join('" and "') + '"' : 'He has difficulty accepting limits and following through with expectations.'} The treatment team addresses this through consistent boundaries, natural consequences, and processing to build his understanding of healthy responses to authority.`,
+
+    socialStrengths: youth.strengthsTalents
+      ? `${youth.firstName}'s social strengths include ${youth.strengthsTalents.toLowerCase()}. ${avgPeer >= 3 ? `He demonstrates natural leadership abilities and often serves as a positive role model for peers. ` : ''}${caseNotes.length > 0 && caseNotes[0].strengths ? caseNotes[0].strengths.substring(0, 200) + '...' : 'Staff have observed his ability to connect with others positively when engaged and motivated.'}`
+      : `${youth.firstName} shows emerging social strengths including ${avgPeer >= 3 ? 'the ability to form positive peer connections and cooperate in group settings' : 'moments of empathy and willingness to help others'}. ${caseNotes.length > 0 && caseNotes[0].strengths ? caseNotes[0].strengths.substring(0, 200) + '...' : 'He is developing his capacity for healthy relationships and appropriate social engagement.'}`,
+
+    socialDeficiencies: avgPeer < 2.5 || avgAdult < 2.5
+      ? `Areas for continued growth include ${avgPeer < 2.5 ? 'peer conflict resolution and appropriate social boundaries' : ''}${avgPeer < 2.5 && avgAdult < 2.5 ? ', and ' : ''}${avgAdult < 2.5 ? 'respectful communication with authority figures' : ''}. ${youth.firstName} benefits from coaching on emotional regulation, impulse control, and expressing needs appropriately. Staff provide consistent modeling and skill-building opportunities to address these areas.`
+      : `While ${youth.firstName} has made progress in many areas, continued development is needed in ${avgInvest < 3 ? 'maintaining consistent investment in treatment goals' : 'generalizing positive social skills across all settings'}. ${caseNotes.length > 0 && caseNotes[0].interventions ? caseNotes[0].interventions.substring(0, 200) + '...' : 'The treatment team continues to work on building his social awareness and self-regulation skills.'}`,
+
+    narrative: `${youth.firstName}'s been doing ${avgPoints >= 15 ? 'really well' : avgPoints >= 12 ? 'pretty good' : 'alright, with some ups and downs'} during this evaluation period.
+
+**Overall Progress:** With an average of ${avgPoints} points per day and behavioral scores averaging ${((avgPeer + avgAdult + avgInvest + avgAuth) / 4).toFixed(1)}/4 across all domains, ${avgPoints >= 12 ? `${youth.firstName} is making positive strides in his treatment.` : `${youth.firstName} continues to work on meeting program expectations.`}
+
+${caseNotes.length > 0 && caseNotes[0].summary ? `**Recent Observations:** ${caseNotes[0].summary}` : ''}
+
+**Next Steps:** ${caseNotes.length > 0 && caseNotes[0].nextSteps ? caseNotes[0].nextSteps : `The treatment team will continue to monitor ${youth.firstName}'s progress, provide targeted interventions, and work with him on achieving his treatment goals.`}`
+  };
+}
+
 // Mock AI responses for troubleshooting when API is not available
 const generateMockAISummary = (payload: AISummaryRequest): string => {
   const { youth, reportType, period, data } = payload;
@@ -30,17 +121,71 @@ RECOMMENDATIONS: Continued residential treatment is recommended to consolidate g
     case 'dpnWeekly':
     case 'dpnBiWeekly':
     case 'dpnMonthly':
-      return `CLINICAL ASSESSMENT SUMMARY:
+      // Extract insights from daily ratings
+      const ratings = data.dailyRatings || [];
+      const avgPeer = ratings.length ? ratings.reduce((sum: number, r: any) => sum + (r.peerInteraction || 0), 0) / ratings.length : 0;
+      const avgAdult = ratings.length ? ratings.reduce((sum: number, r: any) => sum + (r.adultInteraction || 0), 0) / ratings.length : 0;
+      const avgInvest = ratings.length ? ratings.reduce((sum: number, r: any) => sum + (r.investmentLevel || 0), 0) / ratings.length : 0;
+      const avgAuth = ratings.length ? ratings.reduce((sum: number, r: any) => sum + (r.dealAuthority || 0), 0) / ratings.length : 0;
 
-${youth.firstName} ${youth.lastName} continues to make steady progress in the residential treatment program. During the evaluation period, behavioral data indicates ${avgPoints >= 12 ? 'consistent achievement of daily point goals with an average of ' + avgPoints + ' points per day' : 'variable performance with an average of ' + avgPoints + ' points per day, indicating need for continued behavioral support'}.
+      // Extract comments from ratings
+      const allComments = ratings.flatMap((r: any) => [
+        r.peerInteractionComment,
+        r.adultInteractionComment,
+        r.investmentLevelComment,
+        r.dealAuthorityComment
+      ]).filter(Boolean);
 
-THERAPEUTIC PROGRESS: Individual therapy sessions have focused on ${youth.traumaHistory?.length ? 'trauma processing and coping skill development' : 'behavioral modification and emotional regulation'}. ${youth.firstName} demonstrates ${avgPoints >= 15 ? 'excellent' : avgPoints >= 12 ? 'good' : 'developing'} engagement in treatment activities and shows increased insight into behavioral patterns.
+      // Extract case notes narratives
+      const caseNotesText = (data.progressNotes || [])
+        .map((note: any) => {
+          if (typeof note.note === 'string') {
+            try {
+              const parsed = JSON.parse(note.note);
+              if (parsed.sections) {
+                return [
+                  parsed.sections.summary,
+                  parsed.sections.strengthsChallenges,
+                  parsed.sections.interventionsResponse,
+                  parsed.sections.planNextSteps
+                ].filter(Boolean).join(' ');
+              }
+              return note.note;
+            } catch {
+              return note.note;
+            }
+          }
+          return '';
+        })
+        .filter(Boolean);
 
-PEER INTERACTIONS: Staff observations indicate ${youth.firstName} is ${youth.peerInteraction >= 4 ? 'developing positive peer relationships and demonstrating leadership qualities' : 'working on appropriate peer interactions and social skills development'}. Group therapy participation has been ${youth.investmentLevel >= 4 ? 'active and constructive' : 'variable with encouragement needed for full participation'}.
+      const periodLength = reportType === 'dpnWeekly' ? 'this week' : reportType === 'dpnBiWeekly' ? 'the past two weeks' : 'this month';
 
-FAMILY DYNAMICS: Contact with ${youth.legalGuardian || 'family members'} has been ${youth.guardianContact ? 'maintained regularly with positive outcomes' : 'limited but therapeutic team continues outreach efforts'}. Family therapy sessions focus on communication skills and discharge planning.
+      return `${youth.firstName}'s been doing ${avgPoints >= 15 ? 'really well' : avgPoints >= 12 ? 'pretty good' : 'alright, with some ups and downs'} ${periodLength}. Here's what we've been seeing:
 
-TREATMENT RECOMMENDATIONS: Continue current level of care with emphasis on ${avgPoints < 12 ? 'behavioral consistency and point achievement, ' : ''}therapeutic engagement, and preparation for step-down services. Estimated length of stay: ${youth.estimatedStay || '6-12 months'}.`;
+**Day-to-Day Observations:**
+
+${avgPeer >= 3.5 ? `${youth.firstName} has been great with peers lately - consistently showing respect, cooperation, and even some leadership qualities. The peer interaction scores (averaging ${avgPeer.toFixed(1)}/4) show he's really figured out how to navigate social situations better.` : avgPeer >= 2.5 ? `We're seeing solid progress with peer interactions (averaging ${avgPeer.toFixed(1)}/4). ${youth.firstName}'s working on keeping things positive with the other guys, and we're noticing fewer conflicts than before.` : `Peer interactions have been a bit of a challenge this period (averaging ${avgPeer.toFixed(1)}/4). ${youth.firstName}'s had some rough patches with the other residents, but we're actively working with him on better conflict resolution.`}
+
+${avgAdult >= 3.5 ? `His interactions with staff have been excellent (${avgAdult.toFixed(1)}/4 average). ${youth.firstName} is respectful, responsive to redirection, and actually seeks out staff support when he needs it.` : avgAdult >= 2.5 ? `Staff interactions are going well (${avgAdult.toFixed(1)}/4). ${youth.firstName} is generally respectful and responsive, though he still needs occasional reminders about boundaries and expectations.` : `We're seeing some struggles with staff interactions (${avgAdult.toFixed(1)}/4). ${youth.firstName}'s been a bit resistant to redirection at times, but we're working through it with consistent consequences and support.`}
+
+${avgInvest >= 3.5 ? `What's really impressive is how invested ${youth.firstName}'s been in his treatment (${avgInvest.toFixed(1)}/4). He's actively participating in therapy, engaging in groups, and showing real buy-in to the program.` : avgInvest >= 2.5 ? `${youth.firstName}'s showing decent investment in his treatment goals (${avgInvest.toFixed(1)}/4). He's participating when encouraged and starting to make connections between his behaviors and consequences.` : `Investment level has been lower than we'd like (${avgInvest.toFixed(1)}/4). ${youth.firstName} sometimes goes through the motions rather than really engaging, but we're working on helping him see the value in treatment.`}
+
+${avgAuth >= 3.5 ? `Dealing with authority has been one of ${youth.firstName}'s strengths this period (${avgAuth.toFixed(1)}/4). He's following expectations, accepting feedback well, and showing maturity in how he handles structure.` : avgAuth >= 2.5 ? `He's managing authority and rules reasonably well (${avgAuth.toFixed(1)}/4). There are occasional power struggles, but overall ${youth.firstName}'s learning to work within the program structure.` : `Authority issues have been a focus area (${avgAuth.toFixed(1)}/4). ${youth.firstName}'s had some difficulty accepting limits and following through with expectations, which we're addressing through consistent boundaries and processing.`}
+
+**What Staff Have Noticed:**
+
+${allComments.length > 0 ? allComments.slice(0, 3).map(c => `• ${c}`).join('\n') : '• Staff continue to document daily observations and interventions'}
+
+${caseNotesText.length > 0 ? `\n**From Recent Case Notes:**\n\n${caseNotesText.slice(0, 2).join('\n\n')}` : ''}
+
+**Bottom Line:**
+
+${avgPoints >= 15 ? `${youth.firstName}'s making excellent progress. His daily point average of ${avgPoints} shows consistent positive choices and engagement with the program. We're seeing real growth and maturity.` : avgPoints >= 12 ? `Overall, ${youth.firstName}'s trending in a positive direction with a ${avgPoints} point average. There's definitely room for continued growth, but we're pleased with his progress.` : `${youth.firstName}'s working through some challenges, averaging ${avgPoints} points daily. We're staying focused on supporting him, reinforcing positive behaviors, and addressing areas that need work. The treatment team remains committed to helping him succeed.`}
+
+${youth.strengthsTalents ? `\n**Strengths We're Building On:** ${youth.strengthsTalents}` : ''}
+
+**Next Steps:** We'll keep monitoring progress, adjusting interventions as needed, and working closely with ${youth.firstName} to help him meet his treatment goals and prepare for next steps.`;
 
     case 'progress':
     case 'progressMonthly':

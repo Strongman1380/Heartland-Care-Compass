@@ -463,6 +463,31 @@ export const useDailyRatings = (youthId?: string) => {
     }
   }, [toast])
 
+  const deleteDailyRating = useCallback(async (id: string) => {
+    try {
+      setLoading(true)
+      await dailyRatingsService.delete(id)
+
+      // Update local state by removing the deleted rating
+      setDailyRatings(prev => prev.filter(rating => rating.id !== id))
+
+      toast({
+        title: "Success",
+        description: "Daily rating has been deleted.",
+      })
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to delete daily rating'
+      toast({
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
+      })
+      throw err
+    } finally {
+      setLoading(false)
+    }
+  }, [toast])
+
   useEffect(() => {
     if (youthId) {
       loadDailyRatings(youthId)
@@ -476,6 +501,7 @@ export const useDailyRatings = (youthId?: string) => {
     loadDailyRatings,
     saveDailyRating,
     getDailyRatingForDate,
-    clearDailyRatings
+    clearDailyRatings,
+    deleteDailyRating
   }
 }

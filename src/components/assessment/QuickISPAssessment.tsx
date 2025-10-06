@@ -170,6 +170,15 @@ const QuickISPAssessment: React.FC<QuickISPAssessmentProps> = ({ selectedYouth, 
       toast.success("ISP draft auto-saved", { duration: 1500 });
     } catch (error) {
       console.error("Auto-save failed:", error);
+      // Log more details for debugging
+      if (error instanceof Error) {
+        console.error('Error details:', {
+          message: error.message,
+          name: error.name,
+          stack: error.stack
+        })
+      }
+      toast.error(error instanceof Error ? error.message : "Failed to save ISP assessment. Please try again.");
     } finally {
       setIsAutoSaving(false);
     }

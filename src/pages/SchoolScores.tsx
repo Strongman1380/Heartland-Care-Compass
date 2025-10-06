@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { useYouth } from '@/hooks/useSupabase'
-import { upsertScore, getScore, getYouthStats, calculateOverallAverage, getScoresForRange, type YouthScoreStats } from '@/utils/schoolScores'
+import { upsertScore, getScore, getYouthStats, calculateOverallAverage, getScoresForRange, waitForSync, type YouthScoreStats } from '@/utils/schoolScores'
 import { format } from 'date-fns'
 import { TrendingUp, TrendingDown, Minus, Sparkles, Save, CheckCircle2 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
@@ -82,34 +82,38 @@ const SchoolScores: React.FC = () => {
   useEffect(() => {
     if (!sortedYouths || sortedYouths.length === 0) return
 
-    // Trigger background sync from Supabase for the current week range
     const startDate = weekDates[0]
     const endDate = weekDates[weekDates.length - 1]
 
-    // Always trigger sync to get latest data from Supabase
     const loadScores = async () => {
       try {
-        // Force sync from Supabase for current week range
-        getScoresForRange(startDate, endDate, true)
+        // Batch fetch all scores for the date range instead of individual queries
+        const allScoresInRange = await getScoresForRange(startDate, endDate)
 
-        // Wait for the sync to complete
-        await new Promise(resolve => setTimeout(resolve, 500))
+        console.log('Fetched scores from Supabase:', allScoresInRange)
 
         const statsMap = new Map<string, YouthScoreStats>()
         const updated: GridValue = {}
 
+        // Initialize grid
         for (const y of sortedYouths) {
           updated[y.id] = {}
           for (let i = 0; i < weekdays.length; i++) {
             const iso = weekDates[i]
-
-            // Always load fresh from storage (which now has synced data)
-            const existing = getScore(y.id, iso)
-            updated[y.id][iso] = existing ? existing.score : ''
+            updated[y.id][iso] = ''
           }
+        }
 
-          // Calculate stats for each youth
-          const stats = getYouthStats(y.id)
+        // Populate grid with fetched scores
+        for (const score of allScoresInRange) {
+          if (updated[score.youth_id]) {
+            updated[score.youth_id][score.date] = score.score
+          }
+        }
+
+        // Calculate stats for each youth (this will fetch all their scores)
+        for (const y of sortedYouths) {
+          const stats = await getYouthStats(y.id)
           if (stats) {
             statsMap.set(y.id, stats)
           }
@@ -117,6 +121,13 @@ const SchoolScores: React.FC = () => {
 
         setGrid(updated)
         setYouthStats(statsMap)
+
+        console.log('School scores loaded from Supabase:', {
+          youthCount: sortedYouths.length,
+          dateRange: `${startDate} to ${endDate}`,
+          scoresInRange: allScoresInRange.length,
+          gridData: updated
+        })
       } catch (error) {
         console.error('Error loading scores:', error)
       }
@@ -126,18 +137,35 @@ const SchoolScores: React.FC = () => {
   }, [sortedYouths, weekDates.join('|')])
 
   // Auto-save functionality with debounce (0–4 rating scale)
-  const autoSave = useCallback((youthId: string, iso: string, weekdayIdx: number, value: number) => {
+  const autoSave = useCallback(async (youthId: string, iso: string, weekdayIdx: number, value: number) => {
     if (autoSaveEnabled && value >= 0 && value <= 4) {
-      upsertScore(youthId, iso, weekdayIdx, value)
-      setLastSaved(new Date())
-      
-      // Recalculate stats for this youth
-      const stats = getYouthStats(youthId)
-      if (stats) {
-        setYouthStats(prev => new Map(prev).set(youthId, stats))
+      try {
+        await upsertScore(youthId, iso, weekdayIdx, value)
+        setLastSaved(new Date())
+
+        // Recalculate stats for this youth
+        const stats = await getYouthStats(youthId)
+        if (stats) {
+          setYouthStats(prev => new Map(prev).set(youthId, stats))
+        }
+      } catch (error) {
+        console.error('Auto-save failed:', error)
+        // Log more details for debugging
+        if (error instanceof Error) {
+          console.error('Error details:', {
+            message: error.message,
+            name: error.name,
+            stack: error.stack
+          })
+        }
+        toast({
+          title: "Auto-save Failed",
+          description: error instanceof Error ? error.message : "Failed to save score. Please try again.",
+          variant: "destructive",
+        })
       }
     }
-  }, [autoSaveEnabled])
+  }, [autoSaveEnabled, toast])
 
   const handleChange = (youthId: string, iso: string, weekdayIdx: number, value: string) => {
     const numValue = value === '' ? '' : Number(value)
@@ -153,35 +181,44 @@ const SchoolScores: React.FC = () => {
     }
   }
 
-  const handleManualSave = () => {
-    let savedCount = 0
-    for (const y of sortedYouths) {
-      for (let i = 0; i < weekdays.length; i++) {
-        const iso = weekDates[i]
-        const val = grid?.[y.id]?.[iso]
-        if (val !== '' && typeof val === 'number') {
-          upsertScore(y.id, iso, weekdays[i].idx, val)
-          savedCount++
+  const handleManualSave = async () => {
+    try {
+      let savedCount = 0
+      for (const y of sortedYouths) {
+        for (let i = 0; i < weekdays.length; i++) {
+          const iso = weekDates[i]
+          const val = grid?.[y.id]?.[iso]
+          if (val !== '' && typeof val === 'number') {
+            await upsertScore(y.id, iso, weekdays[i].idx, val)
+            savedCount++
+          }
         }
       }
-    }
-    
-    setLastSaved(new Date())
-    toast({
-      title: "Scores Saved",
-      description: `Successfully saved ${savedCount} score(s).`,
-      duration: 3000,
-    })
-    
-    // Recalculate all stats
-    const statsMap = new Map<string, YouthScoreStats>()
-    for (const y of sortedYouths) {
-      const stats = getYouthStats(y.id)
-      if (stats) {
-        statsMap.set(y.id, stats)
+
+      setLastSaved(new Date())
+      toast({
+        title: "Scores Saved",
+        description: `Successfully saved ${savedCount} score(s).`,
+        duration: 3000,
+      })
+
+      // Recalculate all stats
+      const statsMap = new Map<string, YouthScoreStats>()
+      for (const y of sortedYouths) {
+        const stats = await getYouthStats(y.id)
+        if (stats) {
+          statsMap.set(y.id, stats)
+        }
       }
+      setYouthStats(statsMap)
+    } catch (error) {
+      console.error('Manual save failed:', error)
+      toast({
+        title: "Save Failed",
+        description: "Failed to save scores. Please try again.",
+        variant: "destructive",
+      })
     }
-    setYouthStats(statsMap)
   }
 
   // Calculate weekly averages for current view
@@ -208,7 +245,16 @@ const SchoolScores: React.FC = () => {
   }
 
   const weeklyAverages = calculateWeeklyAverages()
-  const overallAverage = calculateOverallAverage(30)
+  const [overallAverage, setOverallAverage] = useState<number | null>(null)
+
+  // Calculate overall average on load
+  useEffect(() => {
+    const loadOverallAverage = async () => {
+      const avg = await calculateOverallAverage(30)
+      setOverallAverage(avg)
+    }
+    loadOverallAverage()
+  }, [youthStats])
 
   // Rating helpers for 0–4 scale
   const ratingLabel = (val: number) => {
@@ -220,9 +266,16 @@ const SchoolScores: React.FC = () => {
 
   const ratingColor = (val: number) => {
     if (val >= 3.5) return 'text-green-600'
-    if (val >= 3.0) return 'text-blue-600'
-    if (val >= 2.0) return 'text-yellow-600'
+    if (val >= 3.0) return 'text-yellow-600'
+    if (val >= 2.0) return 'text-orange-600'
     return 'text-red-600'
+  }
+  
+  const ratingBgColor = (val: number) => {
+    if (val >= 3.5) return 'bg-green-100'
+    if (val >= 3.0) return 'bg-yellow-100'
+    if (val >= 2.0) return 'bg-orange-100'
+    return 'bg-red-100'
   }
 
   // Generate AI insights
@@ -387,9 +440,11 @@ const SchoolScores: React.FC = () => {
                   </div>
                   <div className="text-right">
                     <p className="text-sm text-gray-600">Performance Level</p>
-                    <p className={`text-lg font-semibold ${ratingColor(overallAverage)}`}>
-                      {ratingLabel(overallAverage)}
-                    </p>
+                    <div className={`inline-block px-4 py-2 rounded-lg ${ratingBgColor(overallAverage)}`}>
+                      <p className={`text-lg font-semibold ${ratingColor(overallAverage)}`}>
+                        {ratingLabel(overallAverage)}
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>

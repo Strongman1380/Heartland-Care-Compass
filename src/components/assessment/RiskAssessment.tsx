@@ -422,6 +422,15 @@ export const RiskAssessment = ({ youthId, youth, onAssessmentUpdated }: RiskAsse
       // Auto-save silently without toast notification
     } catch (error) {
       console.error("Auto-save failed:", error);
+      // Log more details for debugging
+      if (error instanceof Error) {
+        console.error('Error details:', {
+          message: error.message,
+          name: error.name,
+          stack: error.stack
+        })
+      }
+      // Risk assessment auto-save is silent, but we still log errors
     } finally {
       setIsAutoSaving(false);
     }

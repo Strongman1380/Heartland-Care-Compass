@@ -150,6 +150,15 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
       toast.success("Draft auto-saved", { duration: 1000 });
     } catch (error) {
       console.error("Auto-save failed:", error);
+      // Log more details for debugging
+      if (error instanceof Error) {
+        console.error('Error details:', {
+          message: error.message,
+          name: error.name,
+          stack: error.stack
+        })
+      }
+      toast.error(error instanceof Error ? error.message : "Failed to save notes. Please try again.");
     } finally {
       setIsAutoSaving(false);
     }
@@ -284,17 +293,13 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
 
     try {
       setIsDeleting(true);
-      // Attempt to delete from Supabase for each selected id
+      // Delete from Supabase for each selected id
       const ids = Array.from(selectedNotes);
       for (const id of ids) {
         if (id) {
-          try { await notesService.delete(id) } catch {}
+          await notesService.delete(id);
         }
       }
-      // Also prune local cache
-      const allNotes = JSON.parse(localStorage.getItem('heartland_notes') || '[]');
-      const remainingNotes = allNotes.filter((note: any) => !selectedNotes.has(note.id || ""));
-      localStorage.setItem('heartland_notes', JSON.stringify(remainingNotes));
       toast.success(`${selectedNotes.size} note(s) deleted successfully`);
       setSelectedNotes(new Set());
       fetchNotes();

@@ -27,5 +27,7 @@ services:
         sync: false
       - key: OPENAI_MODEL
         value: gpt-4o-mini
+      - key: OPENAI_MODEL_PREMIUM
+        value: gpt-4o
       - key: CORS_ORIGIN
         value: https://strongman1380.github.io,https://heartland-care-compass.vercel.app,http://localhost:8080

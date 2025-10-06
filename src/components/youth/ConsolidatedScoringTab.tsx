@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Calendar, Save, Plus, Download, FileText, Sparkles } from "lucide-react";
+import { Calendar, Save, Plus, Download, FileText, Sparkles, History, Trash2, AlertCircle, Edit, X, Check } from "lucide-react";
 import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { useDailyRatings } from "@/hooks/useSupabase";
@@ -25,7 +25,7 @@ export const ConsolidatedScoringTab = ({ youth, onRatingsUpdated }: Consolidated
   const [staffName, setStaffName] = useState("");
   const [timeOfDay, setTimeOfDay] = useState<'morning' | 'day' | 'evening'>('day');
   const { toast } = useToast();
-  const { dailyRatings, loadDailyRatings, saveDailyRating, getDailyRatingForDate } = useDailyRatings();
+  const { dailyRatings, loadDailyRatings, saveDailyRating, getDailyRatingForDate, deleteDailyRating } = useDailyRatings();
   const [aiEnhancing, setAiEnhancing] = useState(false);
 
   // DPN Export State
@@ -34,6 +34,11 @@ export const ConsolidatedScoringTab = ({ youth, onRatingsUpdated }: Consolidated
   const [dpnEndDate, setDpnEndDate] = useState(format(endOfWeek(new Date()), "yyyy-MM-dd"));
   const [dpnVariant, setDpnVariant] = useState<'weekly' | 'biweekly' | 'monthly'>('weekly');
   const [triggerDpnExport, setTriggerDpnExport] = useState(false);
+
+  // DPN History State
+  const [showDpnHistory, setShowDpnHistory] = useState(false);
+  const [editingRatingId, setEditingRatingId] = useState<string | null>(null);
+  const [editingRating, setEditingRating] = useState<any>(null);
 
 
 
@@ -347,6 +352,56 @@ CurrentComments: ${JSON.stringify(context.comments)}`;
     }
   };
 
+  // Handle edit rating
+  const handleEditRating = (rating: any) => {
+    setEditingRatingId(rating.id);
+    // Ensure date is in yyyy-MM-dd format for the date input
+    const dateStr = rating.date.includes('T')
+      ? rating.date.split('T')[0]
+      : rating.date;
+    setEditingRating({...rating, date: dateStr});
+  };
+
+  const handleCancelEdit = () => {
+    setEditingRatingId(null);
+    setEditingRating(null);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingRating) return;
+
+    try {
+      await saveDailyRating({
+        youth_id: editingRating.youth_id,
+        date: editingRating.date,
+        peerInteraction: editingRating.peerInteraction,
+        peerInteractionComment: editingRating.peerInteractionComment,
+        adultInteraction: editingRating.adultInteraction,
+        adultInteractionComment: editingRating.adultInteractionComment,
+        investmentLevel: editingRating.investmentLevel,
+        investmentLevelComment: editingRating.investmentLevelComment,
+        dealAuthority: editingRating.dealAuthority,
+        dealAuthorityComment: editingRating.dealAuthorityComment,
+        staff: editingRating.staff,
+        comments: editingRating.comments
+      });
+
+      setEditingRatingId(null);
+      setEditingRating(null);
+
+      toast({
+        title: "Success",
+        description: "DPN entry updated successfully",
+      });
+    } catch (error) {
+      console.error("Error updating DPN:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update DPN entry",
+        variant: "destructive"
+      });
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -531,6 +586,289 @@ CurrentComments: ${JSON.stringify(context.comments)}`;
                     Export DPN Report
                   </Button>
                 </div>
+              </div>
+            )}
+          </div>
+
+          {/* DPN History Section */}
+          <div className="mt-6 pt-6 border-t">
+            <div className="flex items-center justify-between mb-4">
+              <h4 className="text-sm font-medium text-gray-900">View All DPN Entries</h4>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowDpnHistory(!showDpnHistory)}
+                className="text-xs"
+              >
+                <History className="mr-2 h-3 w-3" />
+                {showDpnHistory ? 'Hide History' : 'Show History'}
+              </Button>
+            </div>
+
+            {showDpnHistory && (
+              <div className="space-y-4 bg-gray-50 p-4 rounded-lg max-h-[600px] overflow-y-auto">
+                {(() => {
+                  // Sort ratings by date (newest first)
+                  const sortedRatings = [...dailyRatings]
+                    .filter(r => r.youth_id === youth.id)
+                    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+                  // Identify potential duplicates (same date)
+                  const dateGroups = sortedRatings.reduce((acc, rating) => {
+                    const dateKey = rating.date;
+                    if (!acc[dateKey]) acc[dateKey] = [];
+                    acc[dateKey].push(rating);
+                    return acc;
+                  }, {} as Record<string, typeof dailyRatings>);
+
+                  if (sortedRatings.length === 0) {
+                    return (
+                      <div className="text-center py-8 text-gray-500">
+                        <History className="mx-auto h-12 w-12 mb-2 opacity-50" />
+                        <p>No DPN entries found for this youth</p>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between text-xs text-gray-600 mb-3">
+                        <span>Total Entries: <strong>{sortedRatings.length}</strong></span>
+                        <span>Dates with Multiple Entries: <strong>{Object.values(dateGroups).filter(g => g.length > 1).length}</strong></span>
+                      </div>
+
+                      {sortedRatings.map((rating, index) => {
+                        const isDuplicate = dateGroups[rating.date]?.length > 1;
+                        const duplicateIndex = dateGroups[rating.date]?.indexOf(rating) + 1;
+                        const isEditing = editingRatingId === rating.id;
+                        const displayRating = isEditing ? editingRating : rating;
+
+                        return (
+                          <div
+                            key={rating.id}
+                            className={`bg-white p-4 rounded-lg border-2 ${
+                              isDuplicate ? 'border-yellow-400 bg-yellow-50' : 'border-gray-200'
+                            } ${isEditing ? 'ring-2 ring-blue-400' : ''}`}
+                          >
+                            <div className="flex items-start justify-between mb-3">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-1">
+                                  {isEditing ? (
+                                    <Input
+                                      type="date"
+                                      value={editingRating.date}
+                                      onChange={(e) => setEditingRating({...editingRating, date: e.target.value})}
+                                      className="w-40 h-7 text-xs"
+                                    />
+                                  ) : (
+                                    <h5 className="font-semibold text-sm">
+                                      {(() => {
+                                        // Parse date without timezone conversion
+                                        const dateStr = rating.date.includes('T') ? rating.date.split('T')[0] : rating.date;
+                                        const [year, month, day] = dateStr.split('-');
+                                        const date = new Date(Number(year), Number(month) - 1, Number(day));
+                                        return format(date, 'MMM dd, yyyy');
+                                      })()}
+                                    </h5>
+                                  )}
+                                  {isDuplicate && (
+                                    <span className="bg-yellow-200 text-yellow-800 text-xs px-2 py-0.5 rounded-full flex items-center gap-1">
+                                      <AlertCircle className="h-3 w-3" />
+                                      Duplicate #{duplicateIndex}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-xs text-gray-600">
+                                  {isEditing ? (
+                                    <Input
+                                      type="text"
+                                      placeholder="Staff name"
+                                      value={editingRating.staff || ''}
+                                      onChange={(e) => setEditingRating({...editingRating, staff: e.target.value})}
+                                      className="w-48 h-6 text-xs"
+                                    />
+                                  ) : (
+                                    <p>
+                                      Staff: {rating.staff || 'Not specified'} •
+                                      Created: {rating.createdAt ? format(new Date(rating.createdAt), 'MMM dd, yyyy h:mm a') : 'Unknown'}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="flex gap-1">
+                                {isEditing ? (
+                                  <>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={handleSaveEdit}
+                                      className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                                    >
+                                      <Check className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={handleCancelEdit}
+                                      className="text-gray-600 hover:text-gray-700 hover:bg-gray-50"
+                                    >
+                                      <X className="h-4 w-4" />
+                                    </Button>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => handleEditRating(rating)}
+                                      className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                    >
+                                      <Edit className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={async () => {
+                                        if (window.confirm(`Are you sure you want to delete this DPN entry from ${format(new Date(rating.date), 'MMM dd, yyyy')}?`)) {
+                                          await deleteDailyRating(rating.id);
+                                        }
+                                      }}
+                                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                              <div>
+                                <span className="text-gray-600">Peer Interaction:</span>
+                                {isEditing ? (
+                                  <div className="space-y-1 mt-1">
+                                    <Input
+                                      type="number"
+                                      min="0"
+                                      max="4"
+                                      value={editingRating.peerInteraction ?? 0}
+                                      onChange={(e) => setEditingRating({...editingRating, peerInteraction: Number(e.target.value)})}
+                                      className="h-7 text-xs"
+                                    />
+                                    <Textarea
+                                      value={editingRating.peerInteractionComment || ''}
+                                      onChange={(e) => setEditingRating({...editingRating, peerInteractionComment: e.target.value})}
+                                      className="text-xs h-16"
+                                      placeholder="Comment..."
+                                    />
+                                  </div>
+                                ) : (
+                                  <>
+                                    <p className="font-semibold">{rating.peerInteraction ?? 'N/A'}</p>
+                                    {rating.peerInteractionComment && (
+                                      <p className="text-gray-500 mt-1 italic">{rating.peerInteractionComment}</p>
+                                    )}
+                                  </>
+                                )}
+                              </div>
+                              <div>
+                                <span className="text-gray-600">Adult Interaction:</span>
+                                {isEditing ? (
+                                  <div className="space-y-1 mt-1">
+                                    <Input
+                                      type="number"
+                                      min="0"
+                                      max="4"
+                                      value={editingRating.adultInteraction ?? 0}
+                                      onChange={(e) => setEditingRating({...editingRating, adultInteraction: Number(e.target.value)})}
+                                      className="h-7 text-xs"
+                                    />
+                                    <Textarea
+                                      value={editingRating.adultInteractionComment || ''}
+                                      onChange={(e) => setEditingRating({...editingRating, adultInteractionComment: e.target.value})}
+                                      className="text-xs h-16"
+                                      placeholder="Comment..."
+                                    />
+                                  </div>
+                                ) : (
+                                  <>
+                                    <p className="font-semibold">{rating.adultInteraction ?? 'N/A'}</p>
+                                    {rating.adultInteractionComment && (
+                                      <p className="text-gray-500 mt-1 italic">{rating.adultInteractionComment}</p>
+                                    )}
+                                  </>
+                                )}
+                              </div>
+                              <div>
+                                <span className="text-gray-600">Investment Level:</span>
+                                {isEditing ? (
+                                  <div className="space-y-1 mt-1">
+                                    <Input
+                                      type="number"
+                                      min="0"
+                                      max="4"
+                                      value={editingRating.investmentLevel ?? 0}
+                                      onChange={(e) => setEditingRating({...editingRating, investmentLevel: Number(e.target.value)})}
+                                      className="h-7 text-xs"
+                                    />
+                                    <Textarea
+                                      value={editingRating.investmentLevelComment || ''}
+                                      onChange={(e) => setEditingRating({...editingRating, investmentLevelComment: e.target.value})}
+                                      className="text-xs h-16"
+                                      placeholder="Comment..."
+                                    />
+                                  </div>
+                                ) : (
+                                  <>
+                                    <p className="font-semibold">{rating.investmentLevel ?? 'N/A'}</p>
+                                    {rating.investmentLevelComment && (
+                                      <p className="text-gray-500 mt-1 italic">{rating.investmentLevelComment}</p>
+                                    )}
+                                  </>
+                                )}
+                              </div>
+                              <div>
+                                <span className="text-gray-600">Deal w/ Authority:</span>
+                                {isEditing ? (
+                                  <div className="space-y-1 mt-1">
+                                    <Input
+                                      type="number"
+                                      min="0"
+                                      max="4"
+                                      value={editingRating.dealAuthority ?? 0}
+                                      onChange={(e) => setEditingRating({...editingRating, dealAuthority: Number(e.target.value)})}
+                                      className="h-7 text-xs"
+                                    />
+                                    <Textarea
+                                      value={editingRating.dealAuthorityComment || ''}
+                                      onChange={(e) => setEditingRating({...editingRating, dealAuthorityComment: e.target.value})}
+                                      className="text-xs h-16"
+                                      placeholder="Comment..."
+                                    />
+                                  </div>
+                                ) : (
+                                  <>
+                                    <p className="font-semibold">{rating.dealAuthority ?? 'N/A'}</p>
+                                    {rating.dealAuthorityComment && (
+                                      <p className="text-gray-500 mt-1 italic">{rating.dealAuthorityComment}</p>
+                                    )}
+                                  </>
+                                )}
+                              </div>
+                            </div>
+
+                            {rating.comments && (
+                              <div className="mt-3 pt-3 border-t text-xs">
+                                <span className="text-gray-600">Additional Comments:</span>
+                                <p className="text-gray-700 mt-1">{rating.comments}</p>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
               </div>
             )}
           </div>

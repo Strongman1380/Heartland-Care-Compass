@@ -1,8 +1,7 @@
-// Lightweight localStorage-based persistence for School daily scores
-// This can be migrated to Supabase later without changing the page’s UI logic.
+// Supabase-only persistence for School daily scores
+// All data is fetched directly from Supabase with no localStorage caching
 
-import { v4 as uuidv4 } from '@/utils/uuid'
-import { schoolScoresService } from '@/integrations/supabase/schoolScoresService'
+import { schoolScoresService, type SchoolScoreRow } from '@/integrations/supabase/schoolScoresService'
 
 export type SchoolDailyScore = {
   id: string
@@ -14,166 +13,85 @@ export type SchoolDailyScore = {
   updatedAt: string
 }
 
-const STORAGE_KEY = 'heartland_school_scores'
-
 type PlainScore = Omit<SchoolDailyScore, 'id' | 'createdAt' | 'updatedAt'>
 
-const readAll = (): SchoolDailyScore[] => {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    return raw ? JSON.parse(raw) : []
-  } catch {
-    return []
+// Convert Supabase row to our internal format
+const convertRow = (row: SchoolScoreRow): SchoolDailyScore => ({
+  id: row.id,
+  youth_id: row.youth_id,
+  date: row.date,
+  weekday: row.weekday,
+  score: row.score,
+  createdAt: row.created_at,
+  updatedAt: row.updated_at
+})
+
+export const upsertScore = async (youthId: string, dateISO: string, weekday: number, score: number): Promise<SchoolDailyScore> => {
+  const result = await schoolScoresService.upsert(youthId, dateISO, weekday, score)
+  return convertRow(result)
+}
+
+export const getScore = async (youthId: string, dateISO: string): Promise<SchoolDailyScore | null> => {
+  const result = await schoolScoresService.get(youthId, dateISO)
+  return result ? convertRow(result) : null
+}
+
+export const getScoresForRange = async (startISO: string, endISO: string): Promise<SchoolDailyScore[]> => {
+  const results = await schoolScoresService.range(startISO, endISO)
+  return results.map(convertRow)
+}
+
+// No-op for compatibility - sync is immediate with Supabase
+export const waitForSync = async (_startISO: string, _endISO: string): Promise<void> => {
+  // No-op: direct Supabase queries don't need sync waiting
+}
+
+export const bulkUpsert = async (items: PlainScore[]): Promise<void> => {
+  // Upsert each item sequentially
+  // Could be optimized with batch operations if needed
+  for (const item of items) {
+    await schoolScoresService.upsert(item.youth_id, item.date, item.weekday, item.score)
   }
 }
 
-const writeAll = (items: SchoolDailyScore[]) => {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(items))
-  } catch (e) {
-    console.error('Failed saving school scores', e)
-  }
+export const getAllScores = async (): Promise<SchoolDailyScore[]> => {
+  // Fetch all scores from Supabase
+  // Using a very wide date range to get all records
+  const farPast = '2000-01-01'
+  const farFuture = '2099-12-31'
+  const results = await schoolScoresService.range(farPast, farFuture)
+  return results.map(convertRow)
 }
 
-export const upsertScore = (youthId: string, dateISO: string, weekday: number, score: number): SchoolDailyScore => {
-  const now = new Date().toISOString()
-  // Try Supabase first; if it throws (env/offline), fallback to local
-  try {
-    // Fire and forget with optimistic local update; async persist to Supabase
-    void schoolScoresService.upsert(youthId, dateISO, weekday, score)
-  } catch {}
-
-  const all = readAll()
-  const idx = all.findIndex(s => s.youth_id === youthId && s.date === dateISO)
-  if (idx !== -1) {
-    const updated: SchoolDailyScore = { ...all[idx], weekday, score, updatedAt: now }
-    all[idx] = updated
-    writeAll(all)
-    return updated
-  }
-  const created: SchoolDailyScore = { id: uuidv4(), youth_id: youthId, date: dateISO, weekday, score, createdAt: now, updatedAt: now }
-  writeAll([created, ...all])
-  return created
+export const getScoresByYouth = async (youthId: string): Promise<SchoolDailyScore[]> => {
+  const results = await schoolScoresService.forYouth(youthId)
+  return results.map(convertRow)
 }
 
-export const getScore = (youthId: string, dateISO: string): SchoolDailyScore | null => {
-  // Prefer cached local for speed; remote can hydrate elsewhere
-  const all = readAll()
-  return all.find(s => s.youth_id === youthId && s.date === dateISO) || null
-}
-
-// Cache to prevent infinite API calls
-const syncCache = new Map<string, number>();
-const SYNC_COOLDOWN = 10000; // 10 seconds between syncs for same range to prevent resource exhaustion
-
-export const getScoresForRange = (startISO: string, endISO: string, forceSync: boolean = false): SchoolDailyScore[] => {
-  // Attempt to refresh from Supabase in the background (with cooldown)
-  const cacheKey = `${startISO}|${endISO}`;
-  const lastSync = syncCache.get(cacheKey) || 0;
-  const now = Date.now();
-
-  if (forceSync || now - lastSync > SYNC_COOLDOWN) {
-    syncCache.set(cacheKey, now);
-
-    // Fire and forget with proper error handling
-    (async () => {
-      try {
-        const remote = await schoolScoresService.range(startISO, endISO)
-        if (remote && remote.length) {
-          // Merge into local cache, preferring remote data (it's the source of truth)
-          const map = new Map<string, SchoolDailyScore>()
-
-          // First add all local scores
-          const all = readAll()
-          for (const l of all) map.set(`${l.youth_id}|${l.date}`, l)
-
-          // Then overwrite with remote scores (remote is source of truth)
-          for (const r of remote) {
-            map.set(`${r.youth_id}|${r.date}`, {
-              id: r.id,
-              youth_id: r.youth_id,
-              date: r.date,
-              weekday: r.weekday,
-              score: r.score,
-              createdAt: r.created_at,
-              updatedAt: r.updated_at,
-            })
-          }
-
-          writeAll(Array.from(map.values()))
-        }
-      } catch (error) {
-        // Silently fail - we'll use local cache
-        console.warn('School scores sync failed, using local cache:', error);
-      }
-    })()
-  }
-
-  const all = readAll()
-  const start = new Date(startISO).getTime()
-  const end = new Date(endISO).getTime()
-  return all.filter(s => {
-    const t = new Date(s.date).getTime()
-    return t >= start && t <= end
-  })
-}
-
-export const bulkUpsert = (items: PlainScore[]) => {
-  const all = readAll()
-  const now = new Date().toISOString()
-  const map = new Map<string, SchoolDailyScore>()
-
-  // seed existing
-  for (const s of all) map.set(`${s.youth_id}|${s.date}`, s)
-
-  for (const it of items) {
-    const key = `${it.youth_id}|${it.date}`
-    const existing = map.get(key)
-    if (existing) {
-      map.set(key, { ...existing, weekday: it.weekday, score: it.score, updatedAt: now })
-    } else {
-      map.set(key, { id: uuidv4(), youth_id: it.youth_id, date: it.date, weekday: it.weekday, score: it.score, createdAt: now, updatedAt: now })
-    }
-  }
-
-  writeAll(Array.from(map.values()))
-}
-
-export const getAllScores = (): SchoolDailyScore[] => {
-  return readAll()
-}
-
-export const getScoresByYouth = (youthId: string): SchoolDailyScore[] => {
-  const all = readAll()
-  return all.filter(s => s.youth_id === youthId).sort((a, b) => 
-    new Date(b.date).getTime() - new Date(a.date).getTime()
-  )
-}
-
-export const calculateYouthAverage = (youthId: string, days: number = 30): number | null => {
-  const scores = getScoresByYouth(youthId)
+export const calculateYouthAverage = async (youthId: string, days: number = 30): Promise<number | null> => {
+  const scores = await getScoresByYouth(youthId)
   if (scores.length === 0) return null
-  
+
   const cutoffDate = new Date()
   cutoffDate.setDate(cutoffDate.getDate() - days)
-  
+
   const recentScores = scores.filter(s => new Date(s.date) >= cutoffDate)
   if (recentScores.length === 0) return null
-  
+
   const sum = recentScores.reduce((acc, s) => acc + s.score, 0)
   return sum / recentScores.length
 }
 
-export const calculateOverallAverage = (days: number = 30): number | null => {
-  const all = readAll()
+export const calculateOverallAverage = async (days: number = 30): Promise<number | null> => {
+  const all = await getAllScores()
   if (all.length === 0) return null
-  
+
   const cutoffDate = new Date()
   cutoffDate.setDate(cutoffDate.getDate() - days)
-  
+
   const recentScores = all.filter(s => new Date(s.date) >= cutoffDate)
   if (recentScores.length === 0) return null
-  
+
   const sum = recentScores.reduce((acc, s) => acc + s.score, 0)
   return sum / recentScores.length
 }
@@ -189,40 +107,54 @@ export type YouthScoreStats = {
   previousAverage: number // Previous 7 days before that
 }
 
-export const getYouthStats = (youthId: string): YouthScoreStats | null => {
-  const scores = getScoresByYouth(youthId)
+export const getYouthStats = async (youthId: string): Promise<YouthScoreStats | null> => {
+  const scores = await getScoresByYouth(youthId)
   if (scores.length === 0) return null
-  
+
   const allScoresValues = scores.map(s => s.score)
   const average = allScoresValues.reduce((a, b) => a + b, 0) / allScoresValues.length
   const highest = Math.max(...allScoresValues)
   const lowest = Math.min(...allScoresValues)
-  
-  // Calculate recent vs previous average for trend
-  const now = new Date()
-  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
-  const fourteenDaysAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000)
-  
-  const recentScores = scores.filter(s => new Date(s.date) >= sevenDaysAgo)
-  const previousScores = scores.filter(s => {
-    const date = new Date(s.date)
-    return date >= fourteenDaysAgo && date < sevenDaysAgo
-  })
-  
-  const recentAverage = recentScores.length > 0
-    ? recentScores.reduce((a, b) => a + b.score, 0) / recentScores.length
-    : average
-  
-  const previousAverage = previousScores.length > 0
-    ? previousScores.reduce((a, b) => a + b.score, 0) / previousScores.length
-    : average
-  
-  // Trend thresholds adjusted for 0–4 rating scale
+
+  // Calculate trend by comparing most recent 5 scores vs previous 5 scores
+  // This approach works better for sparse data than fixed date ranges
   let trend: 'improving' | 'declining' | 'stable' = 'stable'
-  const diff = recentAverage - previousAverage
-  if (diff > 0.2) trend = 'improving'
-  else if (diff < -0.2) trend = 'declining'
-  
+  let recentAverage = average
+  let previousAverage = average
+
+  if (scores.length >= 2) {
+    // Sort scores by date descending (most recent first)
+    const sortedScores = [...scores].sort((a, b) =>
+      new Date(b.date).getTime() - new Date(a.date).getTime()
+    )
+
+    // Use flexible sliding window based on available data
+    const windowSize = Math.min(5, Math.floor(scores.length / 2))
+
+    if (windowSize >= 1 && scores.length >= windowSize * 2) {
+      // Recent: Most recent windowSize scores
+      const recentScores = sortedScores.slice(0, windowSize)
+      recentAverage = recentScores.reduce((a, b) => a + b.score, 0) / recentScores.length
+
+      // Previous: Next windowSize scores (older)
+      const previousScores = sortedScores.slice(windowSize, windowSize * 2)
+      previousAverage = previousScores.reduce((a, b) => a + b.score, 0) / previousScores.length
+
+      // Calculate trend with 0.2 threshold for 0-4 scale
+      const diff = recentAverage - previousAverage
+      if (diff > 0.2) {
+        trend = 'improving'
+      } else if (diff < -0.2) {
+        trend = 'declining'
+      }
+
+      console.log(`[Trend] ${youthId}: Recent ${windowSize} avg=${recentAverage.toFixed(1)}, Previous ${windowSize} avg=${previousAverage.toFixed(1)}, Diff=${diff.toFixed(2)}, Trend=${trend}`)
+    } else {
+      // Not enough data for trend comparison
+      console.log(`[Trend] ${youthId}: Insufficient data for trend (${scores.length} scores, need at least ${windowSize * 2})`)
+    }
+  }
+
   return {
     youthId,
     totalScores: scores.length,

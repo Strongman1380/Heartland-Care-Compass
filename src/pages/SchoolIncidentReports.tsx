@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect, useCallback } from "react";
 import {
   listSchoolIncidents,
   saveSchoolIncident,
@@ -9,37 +9,82 @@ import SchoolIncidentForm from "@/components/school/SchoolIncidentForm";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Eye, Edit, Trash2, AlertTriangle } from "lucide-react";
+import { Plus, Eye, Edit, Trash2, AlertTriangle, Loader2 } from "lucide-react";
 import { format } from "date-fns";
+import { toast } from "sonner";
+import SupabaseTest from "@/components/debug/SupabaseTest";
 
 export default function SchoolIncidentReports() {
   const [showForm, setShowForm] = useState(false);
   const [selectedIncident, setSelectedIncident] = useState<SchoolIncidentReport | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'form' | 'view'>('list');
   const [refreshKey, setRefreshKey] = useState(0);
+  const [incidents, setIncidents] = useState<SchoolIncidentReport[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const incidents = useMemo(() => {
-    const items = listSchoolIncidents();
-    // Sort by date desc
-    return items.sort((a, b) =>
+  const loadIncidents = useCallback(async () => {
+    try {
+      const data = await listSchoolIncidents();
+      // Ensure data is always an array
+      setIncidents(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error('Error loading incidents:', error);
+      toast.error('Failed to load incident reports');
+      setIncidents([]);
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadIncidents();
+  }, [loadIncidents, refreshKey]);
+
+  const sortedIncidents = useMemo(() => {
+    // Ensure incidents is always an array before sorting
+    const safeIncidents = Array.isArray(incidents) ? incidents : [];
+    return [...safeIncidents].sort((a, b) =>
       new Date(b.date_time).getTime() - new Date(a.date_time).getTime()
     );
-  }, [refreshKey]);
+  }, [incidents]);
 
-  const handleSave = (data: SchoolIncidentFormData) => {
-    saveSchoolIncident(data);
-    setRefreshKey((k) => k + 1);
-    setShowForm(false);
-    setViewMode('list');
-    setSelectedIncident(null);
-  };
-
-  const handleDelete = (incidentId: string) => {
-    if (confirm('Are you sure you want to delete this incident report?')) {
-      deleteSchoolIncident(incidentId);
+  const handleSave = useCallback(async (data: SchoolIncidentFormData) => {
+    try {
+      setIsRefreshing(true);
+      await saveSchoolIncident(data);
+      toast.success('Incident report saved successfully');
       setRefreshKey((k) => k + 1);
+      setShowForm(false);
+      setViewMode('list');
+      setSelectedIncident(null);
+    } catch (error) {
+      console.error('Error saving incident:', error);
+      toast.error('Failed to save incident report');
+      setIsRefreshing(false);
     }
-  };
+  }, []);
+
+  const handleDelete = useCallback(async (incidentId: string) => {
+    if (confirm('Are you sure you want to delete this incident report?')) {
+      try {
+        setIsRefreshing(true);
+        await deleteSchoolIncident(incidentId);
+        toast.success('Incident report deleted successfully');
+        setRefreshKey((k) => k + 1);
+      } catch (error) {
+        console.error('Error deleting incident:', error);
+        toast.error('Failed to delete incident report');
+        setIsRefreshing(false);
+      }
+    }
+  }, []);
+
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    await loadIncidents();
+  }, [loadIncidents]);
 
   const handleView = (incident: SchoolIncidentReport) => {
     setSelectedIncident(incident);
@@ -266,30 +311,64 @@ export default function SchoolIncidentReports() {
     );
   }
 
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-800">
+            School Incident Reports
+          </h1>
+        </div>
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="w-8 h-8 animate-spin text-slate-400" />
+          <span className="ml-2 text-slate-600">Loading incident reports...</span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold tracking-tight text-slate-800">
           School Incident Reports
         </h1>
-        <Button
-          onClick={() => setShowForm(true)}
-          className="bg-red-600 hover:bg-red-700"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          New Incident Report
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            onClick={handleRefresh}
+            variant="outline"
+            disabled={isRefreshing}
+          >
+            {isRefreshing ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+              <AlertTriangle className="w-4 h-4 mr-2" />
+            )}
+            {isRefreshing ? 'Refreshing...' : 'Refresh'}
+          </Button>
+          <Button
+            onClick={() => setShowForm(true)}
+            className="bg-red-600 hover:bg-red-700"
+            disabled={isRefreshing}
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            New Incident Report
+          </Button>
+        </div>
       </div>
+
+      {/* Debug Component - Remove after testing */}
+      <SupabaseTest />
 
       {/* List */}
       <div className="bg-white border rounded-lg shadow-sm">
         <div className="px-4 py-3 border-b">
           <h2 className="text-sm font-semibold text-slate-700">
-            Recent Incidents ({incidents.length})
+            Recent Incidents ({sortedIncidents.length})
           </h2>
         </div>
         <div className="divide-y">
-          {incidents.length === 0 ? (
+          {sortedIncidents.length === 0 ? (
             <div className="p-8 text-center">
               <AlertTriangle className="w-12 h-12 text-slate-300 mx-auto mb-3" />
               <p className="text-sm text-slate-500">No incidents reported yet.</p>
@@ -298,7 +377,7 @@ export default function SchoolIncidentReports() {
               </p>
             </div>
           ) : (
-            incidents.map((inc) => (
+            sortedIncidents.map((inc) => (
               <IncidentRow
                 key={inc.incident_id}
                 incident={inc}
@@ -328,6 +407,14 @@ function IncidentRow({
   onDelete: (id: string) => void;
   getSeverityColor: (severity: string) => string;
 }) {
+  const involvedCount = Array.isArray(incident.involved_residents)
+    ? incident.involved_residents.length
+    : 0;
+
+  const reporterName = typeof incident.reported_by === 'object' && incident.reported_by !== null
+    ? (incident.reported_by.name || 'Unknown reporter')
+    : String(incident.reported_by || 'Unknown reporter');
+
   return (
     <div className="p-4 hover:bg-slate-50 transition-colors">
       <div className="flex items-start justify-between gap-4">
@@ -350,9 +437,9 @@ function IncidentRow({
             {incident.summary}
           </div>
           <div className="flex items-center gap-4 text-xs text-slate-500">
-            <span>Reported by: {incident.reported_by.name}</span>
-            {incident.involved_residents.length > 0 && (
-              <span>• {incident.involved_residents.length} resident(s) involved</span>
+            <span>Reported by: {reporterName}</span>
+            {involvedCount > 0 && (
+              <span>• {involvedCount} resident(s) involved</span>
             )}
             {incident.medical_needed && (
               <span className="text-red-600">• Medical attention required</span>

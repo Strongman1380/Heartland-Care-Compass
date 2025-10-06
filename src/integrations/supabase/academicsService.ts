@@ -49,14 +49,17 @@ export const academicsService = {
   },
   steps: {
     async list(): Promise<StepRow[]> {
-      const { data, error } = await supabase.from('academic_steps').select('*').order('date_completed', { ascending: false })
+      const { data, error } = await supabase
+        .from('academic_steps_completed')
+        .select('*')
+        .order('date_completed', { ascending: false })
       if (error) throw error
       return (data || []) as StepRow[]
     },
     async save(row: Partial<StepRow> & { student_id: string; date_completed: string; steps_count: number }): Promise<StepRow> {
       const payload: any = { ...row }
       const { data, error } = await supabase
-        .from('academic_steps')
+        .from('academic_steps_completed')
         .upsert(payload, { onConflict: 'id' })
         .select()
         .single()
@@ -64,9 +67,8 @@ export const academicsService = {
       return data as StepRow
     },
     async delete(id: string): Promise<void> {
-      const { error } = await supabase.from('academic_steps').delete().eq('id', id)
+      const { error } = await supabase.from('academic_steps_completed').delete().eq('id', id)
       if (error) throw error
     }
   }
 }
-

@@ -53,4 +53,3 @@ export const schoolScoresService = {
     return (data || []) as SchoolScoreRow[]
   }
 }
-

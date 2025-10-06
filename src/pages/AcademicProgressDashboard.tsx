@@ -17,8 +17,15 @@ export default function AcademicProgressDashboard() {
   const { youths, loadYouths } = useYouth()
   const { toast } = useToast()
   const [isLoading, setIsLoading] = useState(true)
+  const [isRefreshing, setIsRefreshing] = useState(false)
   const [dateRange, setDateRange] = useState<'all' | '7' | '30' | '90' | '180' | '365'>('30')
   const [selectedStudent, setSelectedStudent] = useState<'all' | string>('all')
+  const [dataVersion, setDataVersion] = useState(0)
+
+  // Academic data state
+  const [credits, setCredits] = useState<any[]>([])
+  const [grades, setGrades] = useState<any[]>([])
+  const [steps, setSteps] = useState<any[]>([])
 
   // Quick entry state
   const [entryStudent, setEntryStudent] = useState<string>('')
@@ -28,21 +35,93 @@ export default function AcademicProgressDashboard() {
   const [entryCourseName, setEntryCourseName] = useState<string>('')
   const [entrySteps, setEntrySteps] = useState<string>('')
 
+  const loadAcademicData = useCallback(async () => {
+    try {
+      console.log('Loading academic data...')
+      const [creditsData, gradesData, stepsData] = await Promise.all([
+        listCredits().catch(err => {
+          console.error('Failed to load credits:', err)
+          return []
+        }),
+        listGrades().catch(err => {
+          console.error('Failed to load grades:', err)
+          return []
+        }),
+        listSteps().catch(err => {
+          console.error('Failed to load steps:', err)
+          return []
+        })
+      ])
+      
+      console.log('Academic data loaded:', {
+        credits: creditsData.length,
+        grades: gradesData.length,
+        steps: stepsData.length
+      })
+      
+      setCredits(creditsData)
+      setGrades(gradesData)
+      setSteps(stepsData)
+      setDataVersion(prev => prev + 1)
+    } catch (error) {
+      console.error('Failed to load academic data:', error)
+      // Set empty arrays as fallback
+      setCredits([])
+      setGrades([])
+      setSteps([])
+    }
+  }, [])
+
   const handleRefresh = useCallback(async () => {
-    setIsLoading(true)
-    await loadYouths()
-    setIsLoading(false)
-  }, [loadYouths])
+    setIsRefreshing(true)
+    try {
+      await Promise.all([loadYouths(), loadAcademicData()])
+      toast({
+        title: "Refreshed",
+        description: "Dashboard data has been refreshed successfully.",
+      })
+    } catch (error) {
+      console.error('Refresh failed:', error)
+      toast({
+        title: "Refresh Failed",
+        description: "Failed to refresh dashboard data. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsRefreshing(false)
+    }
+  }, [loadYouths, loadAcademicData, toast])
 
   useEffect(() => {
-    loadYouths().finally(() => setIsLoading(false))
-  }, [loadYouths])
+    const initializeData = async () => {
+      setIsLoading(true)
+      try {
+        console.log('Initializing Academic Progress Dashboard...')
+        
+        // Load youths first
+        await loadYouths()
+        console.log('Youths loaded successfully')
+        
+        // Then load academic data
+        await loadAcademicData()
+        console.log('Academic data loaded successfully')
+        
+      } catch (error) {
+        console.error('Failed to initialize data:', error)
+        toast({
+          title: "Initialization Failed",
+          description: "Failed to load dashboard data. Some features may not work properly.",
+          variant: "destructive",
+        })
+      } finally {
+        setIsLoading(false)
+        console.log('Dashboard initialization complete')
+      }
+    }
+    initializeData()
+  }, []) // Remove dependencies to prevent infinite re-renders
 
-  const credits = listCredits()
-  const grades = listGrades()
-  const steps = listSteps()
-
-  const getFilteredData = () => {
+  const getFilteredData = useCallback(() => {
     const selectedId = selectedStudent === 'all' ? null : String(selectedStudent)
     let filteredCredits = credits
     let filteredGrades = grades
@@ -63,9 +142,9 @@ export default function AcademicProgressDashboard() {
     }
 
     return { filteredCredits, filteredGrades, filteredSteps }
-  }
+  }, [credits, grades, steps, dateRange, selectedStudent, dataVersion])
 
-  const getOverallMetrics = () => {
+  const getOverallMetrics = useCallback(() => {
     const { filteredCredits, filteredGrades, filteredSteps } = getFilteredData()
     const totalCredits = filteredCredits.reduce((sum, c) => sum + (Number(c.credit_value) || 0), 0)
     const avgGrade = filteredGrades.length > 0
@@ -87,9 +166,14 @@ export default function AcademicProgressDashboard() {
       avgCreditsPerStudent: studentsWithCredits > 0 ? truncateDecimal(totalCredits / studentsWithCredits, 2) : 0,
       avgStepsPerStudent: studentsWithSteps > 0 ? truncateDecimal(totalSteps / studentsWithSteps, 0) : 0,
     }
-  }
+  }, [getFilteredData])
 
   const studentComparison = useMemo(() => {
+    if (!youths || youths.length === 0) {
+      console.log('No youths available for comparison')
+      return []
+    }
+    
     const { filteredCredits, filteredGrades, filteredSteps } = getFilteredData()
     return youths.map(y => {
       const studentCredits = filteredCredits.filter(c => String(c.student_id) === String(y.id))
@@ -112,10 +196,9 @@ export default function AcademicProgressDashboard() {
       }
     }).filter(s => s.credits > 0 || s.avgGrade > 0 || s.steps > 0)
       .sort((a, b) => b.credits - a.credits)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [youths, dateRange, selectedStudent, credits.length, grades.length, steps.length])
+  }, [youths, dateRange, selectedStudent, dataVersion])
 
-  const overall = getOverallMetrics()
+  const overall = useMemo(() => getOverallMetrics(), [getOverallMetrics])
 
   // Chart data preparation
   const chartData = useMemo(() => {
@@ -167,7 +250,7 @@ export default function AcademicProgressDashboard() {
     return (<span className="ml-2 inline-flex items-center text-slate-500 text-xs"><Minus className="w-3 h-3 mr-0.5"/>0.00</span>)
   }
 
-  const handleQuickSave = () => {
+  const handleQuickSave = async () => {
     try {
       if (!entryStudent) {
         toast({ title: 'Select a student', variant: 'destructive' })
@@ -176,35 +259,48 @@ export default function AcademicProgressDashboard() {
       const sid = String(entryStudent)
       const date = entryDate
       let saved = 0
+      
+      const savePromises = []
+      
       if (entryCredits !== '' && !Number.isNaN(Number(entryCredits))) {
-        saveCredit({ student_id: sid, date_earned: date, credit_value: Number(entryCredits) })
+        savePromises.push(saveCredit({ student_id: sid, date_earned: date, credit_value: Number(entryCredits) }))
         saved++
       }
       if (entryGrade !== '' && !Number.isNaN(Number(entryGrade))) {
-        saveGrade({
+        savePromises.push(saveGrade({
           student_id: sid,
           date_entered: date,
           grade_value: Number(entryGrade),
           course_name: entryCourseName.trim() || undefined
-        })
+        }))
         saved++
       }
       if (entrySteps !== '' && !Number.isNaN(Number(entrySteps))) {
-        saveStep({ student_id: sid, date_completed: date, steps_count: Number(entrySteps) })
+        savePromises.push(saveStep({ student_id: sid, date_completed: date, steps_count: Number(entrySteps) }))
         saved++
       }
+      
       if (saved === 0) {
         toast({ title: 'Enter at least one value to save', variant: 'destructive' })
         return
       }
-      toast({ title: 'Saved', description: 'Academic entries saved locally.' })
+      
+      // Wait for all saves to complete
+      await Promise.all(savePromises)
+      
+      // Refresh the academic data
+      await loadAcademicData()
+      
+      toast({ title: 'Saved', description: 'Academic entries saved successfully.' })
+      
       // Clear inputs but keep student/date
       setEntryCredits('')
       setEntryGrade('')
       setEntryCourseName('')
       setEntrySteps('')
     } catch (e) {
-      toast({ title: 'Save failed', variant: 'destructive' })
+      console.error('Save failed:', e)
+      toast({ title: 'Save failed', description: 'Failed to save academic entries. Please try again.', variant: 'destructive' })
     }
   }
 
@@ -214,7 +310,56 @@ export default function AcademicProgressDashboard() {
         <div className="text-center py-10">
           <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-red-600 mx-auto"></div>
           <p className="mt-4 text-slate-600">Loading Academic Progress Dashboard...</p>
+          <p className="mt-2 text-xs text-slate-500">Loading students and academic data...</p>
         </div>
+      </div>
+    )
+  }
+
+  // Show a message if no students are loaded
+  if (!youths || youths.length === 0) {
+    return (
+      <div className="space-y-4">
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
+            <div className="flex-1">
+              <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 mb-2 flex items-center gap-2">
+                <GraduationCap className="w-6 h-6 text-red-600" />
+                <span>Academic Progress Dashboard</span>
+              </h1>
+              <p className="text-slate-600 flex items-center gap-2 text-sm">
+                <Calendar className="w-4 h-4" />
+                <span>Track credits, grades, and student progress</span>
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button onClick={handleRefresh} variant="outline" className="h-10" disabled={isRefreshing}>
+                <RefreshCw className={`w-4 h-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+                {isRefreshing ? 'Refreshing...' : 'Refresh'}
+              </Button>
+            </div>
+          </div>
+        </div>
+        
+        <Card>
+          <CardContent className="p-8 text-center">
+            <div className="flex flex-col items-center gap-4">
+              <div className="p-4 bg-slate-100 rounded-full">
+                <Users className="w-8 h-8 text-slate-400" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-slate-900 mb-2">No Students Found</h3>
+                <p className="text-slate-600 mb-4">
+                  No students are currently loaded. This could be due to a connection issue or no students being registered in the system.
+                </p>
+                <Button onClick={handleRefresh} className="bg-red-600 hover:bg-red-700" disabled={isRefreshing}>
+                  <RefreshCw className={`w-4 h-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+                  {isRefreshing ? 'Loading...' : 'Try Again'}
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     )
   }
@@ -235,9 +380,9 @@ export default function AcademicProgressDashboard() {
             </p>
           </div>
           <div className="flex gap-2">
-            <Button onClick={handleRefresh} variant="outline" className="h-10">
-              <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-              Refresh
+            <Button onClick={handleRefresh} variant="outline" className="h-10" disabled={isRefreshing}>
+              <RefreshCw className={`w-4 h-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+              {isRefreshing ? 'Refreshing...' : 'Refresh'}
             </Button>
           </div>
         </div>
@@ -257,11 +402,17 @@ export default function AcademicProgressDashboard() {
                   <SelectValue placeholder="Select student" />
                 </SelectTrigger>
                 <SelectContent>
-                  {youths.map(y => (
-                    <SelectItem key={y.id} value={String(y.id)}>
-                      {y.firstName} {y.lastName}
+                  {youths && youths.length > 0 ? (
+                    youths.map(y => (
+                      <SelectItem key={y.id} value={String(y.id)}>
+                        {y.firstName} {y.lastName}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="" disabled>
+                      No students available
                     </SelectItem>
-                  ))}
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -320,11 +471,17 @@ export default function AcademicProgressDashboard() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Students</SelectItem>
-                  {youths.map(y => (
-                    <SelectItem key={y.id} value={String(y.id)}>
-                      {y.firstName} {y.lastName}
+                  {youths && youths.length > 0 ? (
+                    youths.map(y => (
+                      <SelectItem key={y.id} value={String(y.id)}>
+                        {y.firstName} {y.lastName}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="" disabled>
+                      No students available
                     </SelectItem>
-                  ))}
+                  )}
                 </SelectContent>
               </Select>
             </div>

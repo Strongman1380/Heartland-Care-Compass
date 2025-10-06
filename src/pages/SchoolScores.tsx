@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { useYouth } from '@/hooks/useSupabase'
 import { upsertScore, getScore, getYouthStats, calculateOverallAverage, getScoresForRange, waitForSync, type YouthScoreStats } from '@/utils/schoolScores'
 import { format } from 'date-fns'
-import { TrendingUp, TrendingDown, Minus, Sparkles, Save, CheckCircle2 } from 'lucide-react'
+import { TrendingUp, TrendingDown, Minus, Sparkles, Save, CheckCircle2, RefreshCw } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 
 // Helpers
@@ -89,8 +89,10 @@ const SchoolScores: React.FC = () => {
       try {
         // Batch fetch all scores for the date range instead of individual queries
         const allScoresInRange = await getScoresForRange(startDate, endDate)
+        // Ensure we have an array before iterating
+        const scoresArray = Array.isArray(allScoresInRange) ? allScoresInRange : []
 
-        console.log('Fetched scores from Supabase:', allScoresInRange)
+        console.log('Fetched scores from Supabase:', scoresArray)
 
         const statsMap = new Map<string, YouthScoreStats>()
         const updated: GridValue = {}
@@ -105,7 +107,7 @@ const SchoolScores: React.FC = () => {
         }
 
         // Populate grid with fetched scores
-        for (const score of allScoresInRange) {
+        for (const score of scoresArray) {
           if (updated[score.youth_id]) {
             updated[score.youth_id][score.date] = score.score
           }
@@ -125,7 +127,7 @@ const SchoolScores: React.FC = () => {
         console.log('School scores loaded from Supabase:', {
           youthCount: sortedYouths.length,
           dateRange: `${startDate} to ${endDate}`,
-          scoresInRange: allScoresInRange.length,
+          scoresInRange: scoresArray.length,
           gridData: updated
         })
       } catch (error) {
@@ -143,11 +145,18 @@ const SchoolScores: React.FC = () => {
         await upsertScore(youthId, iso, weekdayIdx, value)
         setLastSaved(new Date())
 
-        // Recalculate stats for this youth
-        const stats = await getYouthStats(youthId)
-        if (stats) {
-          setYouthStats(prev => new Map(prev).set(youthId, stats))
-        }
+        // Recalculate stats for this youth with a small delay to ensure data is persisted
+        setTimeout(async () => {
+          try {
+            const stats = await getYouthStats(youthId)
+            if (stats) {
+              setYouthStats(prev => new Map(prev).set(youthId, stats))
+              console.log(`[AutoSave] Updated stats for ${youthId}:`, stats)
+            }
+          } catch (statsError) {
+            console.error('Failed to update stats after auto-save:', statsError)
+          }
+        }, 100)
       } catch (error) {
         console.error('Auto-save failed:', error)
         // Log more details for debugging
@@ -175,9 +184,9 @@ const SchoolScores: React.FC = () => {
       [youthId]: { ...(prev[youthId] || {}), [iso]: numValue },
     }))
     
-    // Auto-save after a short delay (200ms for faster saves)
+    // Auto-save immediately for better responsiveness
     if (numValue !== '' && typeof numValue === 'number') {
-      setTimeout(() => autoSave(youthId, iso, weekdayIdx, numValue), 200)
+      autoSave(youthId, iso, weekdayIdx, numValue)
     }
   }
 
@@ -216,6 +225,33 @@ const SchoolScores: React.FC = () => {
       toast({
         title: "Save Failed",
         description: "Failed to save scores. Please try again.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const refreshTrends = async () => {
+    try {
+      console.log('Refreshing trends for all students...')
+      const statsMap = new Map<string, YouthScoreStats>()
+      for (const y of sortedYouths) {
+        const stats = await getYouthStats(y.id)
+        if (stats) {
+          statsMap.set(y.id, stats)
+          console.log(`Refreshed trends for ${y.firstName}:`, stats)
+        }
+      }
+      setYouthStats(statsMap)
+      toast({
+        title: "Trends Refreshed",
+        description: "All trend arrows have been updated.",
+        duration: 2000,
+      })
+    } catch (error) {
+      console.error('Failed to refresh trends:', error)
+      toast({
+        title: "Refresh Failed",
+        description: "Failed to refresh trends. Please try again.",
         variant: "destructive",
       })
     }
@@ -384,17 +420,25 @@ const SchoolScores: React.FC = () => {
     }
   }
 
-  const shiftWeek = (delta: number) => setWeekStart(prev => addDays(prev, delta * 7))
+  const shiftWeek = (delta: number) => {
+    setWeekStart(prev => addDays(prev, delta * 7))
+    // Refresh trends when week changes to ensure they're up to date
+    setTimeout(() => refreshTrends(), 500)
+  }
   const isToday = (iso: string) => toISO(today) === iso
 
-  const getTrendIcon = (trend: 'improving' | 'declining' | 'stable') => {
+  const getTrendIcon = (trend: 'improving' | 'declining' | 'stable', stats?: YouthScoreStats) => {
+    const title = stats 
+      ? `${trend.charAt(0).toUpperCase() + trend.slice(1)} (Recent: ${stats.recentAverage}, Previous: ${stats.previousAverage})`
+      : trend.charAt(0).toUpperCase() + trend.slice(1)
+    
     switch (trend) {
       case 'improving':
-        return <TrendingUp className="w-4 h-4 text-green-600" />
+        return <TrendingUp className="w-4 h-4 text-green-600" title={title} />
       case 'declining':
-        return <TrendingDown className="w-4 h-4 text-red-600" />
+        return <TrendingDown className="w-4 h-4 text-red-600" title={title} />
       default:
-        return <Minus className="w-4 h-4 text-gray-600" />
+        return <Minus className="w-4 h-4 text-gray-600" title={title} />
     }
   }
 
@@ -496,6 +540,10 @@ const SchoolScores: React.FC = () => {
               <Button variant="outline" size="sm" onClick={() => shiftWeek(-1)}>Previous</Button>
               <Button variant="outline" size="sm" onClick={() => setWeekStart(startOfWeekMon(new Date()))}>This Week</Button>
               <Button variant="outline" size="sm" onClick={() => shiftWeek(1)}>Next</Button>
+              <Button variant="outline" size="sm" onClick={refreshTrends} title="Refresh trend arrows">
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Refresh Trends
+              </Button>
               <Button onClick={handleManualSave} size="sm" className="bg-red-600 hover:bg-red-700">
                 <Save className="w-4 h-4 mr-2" />
                 Save All
@@ -573,7 +621,7 @@ const SchoolScores: React.FC = () => {
                           {stats ? stats.average : '-'}
                         </td>
                         <td className="px-3 py-2 text-center">
-                          {stats && getTrendIcon(stats.trend)}
+                          {stats && getTrendIcon(stats.trend, stats)}
                         </td>
                       </tr>
                     )
@@ -587,6 +635,8 @@ const SchoolScores: React.FC = () => {
             <p>✓ Scores are automatically saved as you type (when auto-save is enabled)</p>
             <p>✓ All historical scores are preserved and used for trend analysis</p>
             <p>✓ Week Average: Current week only | 30-Day Average: Last 30 days of scores</p>
+            <p>✓ Trend arrows update automatically and compare recent vs previous score periods</p>
+            <p>✓ Hover over trend arrows to see detailed comparison values</p>
           </div>
         </CardContent>
       </Card>

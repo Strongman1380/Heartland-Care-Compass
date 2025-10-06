@@ -275,18 +275,24 @@ export const dailyRatingsService = {
 
   // Get daily rating for a specific date
   async getByDate(youthId: string, date: string, timeOfDay?: 'morning' | 'day' | 'evening'): Promise<DailyRatings | null> {
-    const { data, error } = await supabase
-      .from('daily_ratings')
-      .select('*')
-      .eq('youth_id', youthId)
-      .eq('date', date)
-      .single();
+    try {
+      const { data, error } = await supabase
+        .from('daily_ratings')
+        .select('*')
+        .eq('youth_id', youthId)
+        .eq('date', date)
+        .maybeSingle(); // Use maybeSingle() instead of single() to handle no results gracefully
 
-    if (error) {
-      if (error.code === 'PGRST116') return null // Not found
-      throw error
+      if (error) {
+        console.error('Error fetching daily rating:', error);
+        throw error;
+      }
+      
+      return data;
+    } catch (error) {
+      console.error('Daily rating fetch error:', error);
+      return null;
     }
-    return data
   },
 
   // Create or update daily rating

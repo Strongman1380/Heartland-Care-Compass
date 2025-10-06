@@ -218,8 +218,15 @@ export const truncateDecimal = (num: number, places: number) => {
 
 // School Incident Reports (New Structured Format)
 export const listSchoolIncidents = async (): Promise<SchoolIncidentReport[]> => {
-  const remote = await schoolIncidentsService.list();
-  return (remote || []) as SchoolIncidentReport[];
+  try {
+    const remote = await schoolIncidentsService.list();
+    // Ensure we always return an array
+    return Array.isArray(remote) ? remote as SchoolIncidentReport[] : [];
+  } catch (error) {
+    console.error('Error loading school incidents:', error);
+    // Always return an empty array on error
+    return [];
+  }
 };
 
 export const getSchoolIncident = async (incidentId: string): Promise<SchoolIncidentReport | undefined> => {

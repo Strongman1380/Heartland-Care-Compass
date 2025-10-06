@@ -67,11 +67,14 @@ const SchoolPrintReports: React.FC = () => {
       try {
         const items = listSchoolIncidents()
         console.log('Loaded school incidents:', items) // Debug log
+        // Ensure items is an array before filtering
+        const itemsArray = Array.isArray(items) ? items : []
         // Filter out soft-deleted incidents
-        const activeIncidents = items.filter(incident => !incident.deleted_at)
+        const activeIncidents = itemsArray.filter(incident => !incident.deleted_at)
         setSchoolIncidents(activeIncidents)
       } catch (err) {
         console.error('Failed to load school incidents', err)
+        setSchoolIncidents([]) // Ensure we set an empty array on error
         toast({
           title: 'Unable to load incidents',
           description: 'There was a problem reading saved incident reports.',
@@ -203,9 +206,11 @@ const SchoolPrintReports: React.FC = () => {
     if (!sortedYouths || sortedYouths.length === 0) return []
 
     const scores = getScoresForRange(startDate, endDate)
+    // Ensure scores is an array before iterating
+    const scoresArray = Array.isArray(scores) ? scores : []
     const youthAverages = new Map<string, { total: number; count: number; name: string; firstName: string }>()
 
-    for (const score of scores) {
+    for (const score of scoresArray) {
       const youth = sortedYouths.find(y => y.id === score.youth_id)
       if (!youth) continue
 
@@ -248,7 +253,10 @@ const SchoolPrintReports: React.FC = () => {
     const youth = sortedYouths.find(y => y.id === selectedYouthId)
     if (!youth) return null
 
-    const scores = getScoresForRange(startDate, endDate).filter(s => s.youth_id === selectedYouthId)
+    const allScores = getScoresForRange(startDate, endDate)
+    // Ensure we have an array before filtering
+    const scoresArray = Array.isArray(allScores) ? allScores : []
+    const scores = scoresArray.filter(s => s.youth_id === selectedYouthId)
     const total = scores.reduce((sum, s) => sum + s.score, 0)
     const average = scores.length > 0 ? (total / scores.length).toFixed(1) : 'N/A'
 
@@ -507,8 +515,10 @@ const SchoolPrintReports: React.FC = () => {
 
     // Get scores for all students
     const allScores = getScoresForRange(startDate, endDate)
+    // Ensure we have an array before filtering
+    const scoresArray = Array.isArray(allScores) ? allScores : []
     const studentData = sortedYouths.map(youth => {
-      const youthScores = allScores.filter(s => s.youth_id === youth.id)
+      const youthScores = scoresArray.filter(s => s.youth_id === youth.id)
       const total = youthScores.reduce((sum, s) => sum + s.score, 0)
       const average = youthScores.length > 0 ? (total / youthScores.length).toFixed(1) : 'N/A'
       

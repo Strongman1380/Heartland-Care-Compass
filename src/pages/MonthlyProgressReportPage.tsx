@@ -103,7 +103,7 @@ export const MonthlyProgressReportPage = () => {
 
           {/* Report Component */}
           {selectedYouth ? (
-            <MonthlyProgressReport youth={selectedYouth} />
+            <MonthlyProgressReport key={selectedYouth.id} youth={selectedYouth} />
           ) : (
             <Card>
               <CardContent className="p-8 text-center">

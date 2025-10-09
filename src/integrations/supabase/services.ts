@@ -300,15 +300,15 @@ export const dailyRatingsService = {
     // Remove time_of_day from payload as it doesn't exist in the database schema
     const { time_of_day, ...cleanPayload } = dailyRating as any;
 
+    // Instead of using upsert with unique constraint, use insert to allow multiple entries per day
     const { data, error } = await supabase
       .from('daily_ratings')
-      // Use youth_id and date as unique constraint (one rating per day per youth)
-      .upsert(cleanPayload, { onConflict: 'youth_id,date' })
+      .insert(cleanPayload)
       .select()
       .single()
 
     if (error) {
-      console.error('Daily rating upsert error:', error);
+      console.error('Daily rating insert error:', error);
       throw error;
     }
     return data

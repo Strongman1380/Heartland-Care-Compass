@@ -13,7 +13,8 @@ import { format, subMonths } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { draftsService } from '@/integrations/supabase/draftsService'
 import { useAuth } from '@/contexts/SupabaseAuthContext'
-import { getBehaviorPointsByYouth, getProgressNotesByYouth } from "@/lib/api";
+import { getBehaviorPointsByYouth, getProgressNotesByYouth, getDailyRatingsByYouth } from "@/lib/api";
+import { getScoresByYouth, type SchoolDailyScore } from "@/utils/schoolScores";
 import * as aiService from "@/services/aiService";
 
 interface CourtReportProps {
@@ -287,6 +288,63 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
       return `${months} month${months > 1 ? 's' : ''}, ${days} day${days !== 1 ? 's' : ''}`;
     }
     return `${days} day${days !== 1 ? 's' : ''}`;
+  };
+
+  const extractCaseNoteContent = (note: any): string => {
+    if (!note) return '';
+    if (typeof note.summary === 'string' && note.summary.trim().length > 0) {
+      return note.summary.trim();
+    }
+    const raw = typeof note.note === 'string' ? note.note : '';
+    if (!raw) return '';
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed?.sections) {
+        return Object.values(parsed.sections)
+          .filter((value) => typeof value === 'string' && value.trim().length > 0)
+          .join(' ');
+      }
+      if (typeof parsed?.content === 'string') {
+        return parsed.content;
+      }
+    } catch {
+      // not JSON formatted
+    }
+    return raw;
+  };
+
+  const buildCaseNoteHighlights = (
+    notes: any[],
+    limit = 3,
+    filter?: (content: string) => boolean
+  ): string[] => {
+    if (!notes || notes.length === 0) return [];
+    const mapped = notes
+      .map(note => {
+        const content = extractCaseNoteContent(note)?.trim();
+        if (!content) return null;
+        return { note, content };
+      })
+      .filter(Boolean) as { note: any; content: string }[];
+
+    const filtered = filter
+      ? mapped.filter(item => filter(item.content.toLowerCase()))
+      : mapped;
+
+    if (filtered.length === 0) return [];
+
+    const sorted = filtered.sort((a, b) => {
+      const dateA = a.note?.date ? new Date(a.note.date).getTime() : 0;
+      const dateB = b.note?.date ? new Date(b.note.date).getTime() : 0;
+      return dateA - dateB;
+    });
+
+    return sorted.slice(-limit).map(item => {
+      const snippet = item.content.length > 180 ? `${item.content.slice(0, 177)}...` : item.content;
+      const dateStr = item.note?.date ? format(new Date(item.note.date), 'MMM d') : '';
+      const staff = item.note?.staff ? ` (${item.note.staff})` : '';
+      return `${dateStr ? `${dateStr}: ` : ''}${snippet}${staff}`;
+    });
   };
 
   // Sync report data when youth changes or saved data exists
@@ -699,10 +757,15 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
     }
 
     try {
-      // Fetch recent behavior points and progress notes
-      const [behaviorPoints, progressNotes] = await Promise.all([
+      // Fetch recent behavior points, case notes, daily ratings, and school scores
+      const [behaviorPoints, progressNotes, dailyRatings, schoolScores] = await Promise.all([
         getBehaviorPointsByYouth(youth.id),
-        getProgressNotesByYouth(youth.id)
+        getProgressNotesByYouth(youth.id),
+        getDailyRatingsByYouth(youth.id),
+        getScoresByYouth(youth.id).catch((error) => {
+          console.warn('Failed to load school scores for court report auto-populate:', error);
+          return [];
+        })
       ]);
 
       // Filter to last 30 days
@@ -713,6 +776,37 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
       const recentNotes = progressNotes.filter(note =>
         note.date && new Date(note.date) >= thirtyDaysAgo
       );
+      const recentRatings = dailyRatings.filter(rating =>
+        rating.date && new Date(rating.date) >= thirtyDaysAgo
+      );
+      const recentSchoolScores = (schoolScores as SchoolDailyScore[]).filter(score =>
+        score.date && new Date(score.date) >= thirtyDaysAgo
+      );
+
+      const ratingCount = recentRatings.length;
+      const avgPeer = ratingCount > 0
+        ? recentRatings.reduce((sum, rating) => sum + (rating.peerInteraction ?? 0), 0) / ratingCount
+        : 0;
+      const avgAdult = ratingCount > 0
+        ? recentRatings.reduce((sum, rating) => sum + (rating.adultInteraction ?? 0), 0) / ratingCount
+        : 0;
+      const avgInvestment = ratingCount > 0
+        ? recentRatings.reduce((sum, rating) => sum + (rating.investmentLevel ?? 0), 0) / ratingCount
+        : 0;
+      const avgAuthority = ratingCount > 0
+        ? recentRatings.reduce((sum, rating) => sum + (rating.dealAuthority ?? 0), 0) / ratingCount
+        : 0;
+
+      const schoolScoreCount = recentSchoolScores.length;
+      const schoolAverage = schoolScoreCount > 0
+        ? recentSchoolScores.reduce((sum, score) => sum + Number(score.score ?? 0), 0) / schoolScoreCount
+        : null;
+      const schoolHigh = schoolScoreCount > 0
+        ? Math.max(...recentSchoolScores.map(score => Number(score.score ?? 0)))
+        : null;
+      const schoolLow = schoolScoreCount > 0
+        ? Math.min(...recentSchoolScores.map(score => Number(score.score ?? 0)))
+        : null;
 
       // Calculate average behavior points
       const avgPoints = recentBehavior.length > 0
@@ -734,25 +828,39 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
       behavioralParts.push(behavioralProgress);
 
       // Significant incidents
-      const incidentNotes = recentNotes.filter(note =>
-        note.note?.toLowerCase().includes('incident') ||
-        note.note?.toLowerCase().includes('altercation') ||
-        note.note?.toLowerCase().includes('conflict')
-      );
-      const significantIncidents = incidentNotes.length > 0
-        ? `${incidentNotes.length} incident(s) documented in the past 30 days. ` +
-          incidentNotes.slice(0, 3).map(n => n.note).join(' ')
+      const incidentNotes = recentNotes.filter(note => {
+        const content = extractCaseNoteContent(note).toLowerCase();
+        return content.includes('incident') ||
+          content.includes('altercation') ||
+          content.includes('conflict') ||
+          content.includes('physical') ||
+          content.includes('aggression');
+      });
+      const incidentHighlights = buildCaseNoteHighlights(incidentNotes, 3);
+      const significantIncidents = incidentHighlights.length > 0
+        ? `${incidentHighlights.length} incident(s) documented in the past 30 days. ${incidentHighlights.join(' ')}`
         : 'No significant behavioral incidents reported in the past 30 days.';
       behavioralParts.push(significantIncidents);
 
       // Behavioral interventions
-      const interventionNotes = recentNotes.filter(note =>
-        note.note?.toLowerCase().includes('intervention') ||
-        note.note?.toLowerCase().includes('consequence') ||
-        note.note?.toLowerCase().includes('redirect')
-      );
+      const interventionNotes = recentNotes.filter(note => {
+        const content = extractCaseNoteContent(note).toLowerCase();
+        return content.includes('intervention') ||
+          content.includes('consequence') ||
+          content.includes('redirect') ||
+          content.includes('safety plan') ||
+          content.includes('support');
+      });
       if (interventionNotes.length > 0) {
-        behavioralParts.push(`Interventions used: ${interventionNotes.slice(0, 2).map(n => n.note).join(' ')}`);
+        const interventionHighlights = buildCaseNoteHighlights(interventionNotes, 2);
+        behavioralParts.push(`Interventions used: ${interventionHighlights.join(' ')}`);
+      }
+
+      const generalBehaviorHighlights = buildCaseNoteHighlights(recentNotes, 2, (content) =>
+        content.includes('behavior') || content.includes('progress') || content.includes('de-escalated')
+      );
+      if (generalBehaviorHighlights.length > 0) {
+        behavioralParts.push(`Staff observations: ${generalBehaviorHighlights.join(' ')}`);
       }
 
       const behavioralAssessmentSummary = behavioralParts.join('\n\n');
@@ -764,23 +872,71 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
       const programCompliance = `Current level: ${youth.level}. ${avgPoints >= 10 ? 'Consistently meets program expectations.' : 'Working to improve program compliance.'}`;
       programParts.push(programCompliance);
 
+      if (ratingCount > 0) {
+        programParts.push(
+          `Quick score averages (${ratingCount} entries): peer ${avgPeer.toFixed(1)}/5, staff ${avgAdult.toFixed(1)}/5, investment ${avgInvestment.toFixed(1)}/5, authority ${avgAuthority.toFixed(1)}/5.`
+        );
+      } else {
+        programParts.push('No quick score entries recorded in the past 30 days.');
+      }
+
       // Skills development
-      const positiveNotes = recentNotes.filter(note =>
-        note.note?.toLowerCase().includes('progress') ||
-        note.note?.toLowerCase().includes('improvement') ||
-        note.note?.toLowerCase().includes('positive')
-      );
+      const positiveNotes = recentNotes.filter(note => {
+        const content = extractCaseNoteContent(note).toLowerCase();
+        return content.includes('progress') ||
+          content.includes('improvement') ||
+          content.includes('positive') ||
+          content.includes('earned');
+      });
       if (positiveNotes.length > 0) {
-        programParts.push(`Skills Development: ${positiveNotes.slice(0, 2).map(n => n.note).join(' ')}`);
+        const skillHighlights = buildCaseNoteHighlights(positiveNotes, 2);
+        programParts.push(`Skills development: ${skillHighlights.join(' ')}`);
       }
 
       const programParticipationSummary = programParts.join('\n\n');
+
+      // Educational summary with school scores
+      const educationParts: string[] = [];
+      if (schoolScoreCount > 0 && schoolAverage !== null && schoolHigh !== null && schoolLow !== null) {
+        educationParts.push(
+          `School daily scores recorded (${schoolScoreCount} entries) with an average of ${schoolAverage.toFixed(1)}/4 (range ${schoolLow.toFixed(1)}–${schoolHigh.toFixed(1)}).`
+        );
+      } else {
+        educationParts.push('No school daily scores recorded in the past 30 days.');
+      }
+
+      const academicHighlights = buildCaseNoteHighlights(recentNotes, 2, (content) =>
+        content.includes('school') ||
+        content.includes('academic') ||
+        content.includes('class') ||
+        content.includes('grade')
+      );
+      if (academicHighlights.length > 0) {
+        educationParts.push(`Academic notes: ${academicHighlights.join(' ')}`);
+      }
+
+      const educationalProgressSummary = educationParts.join('\n\n');
+
+      const treatmentHighlights = buildCaseNoteHighlights(recentNotes, 2, (content) =>
+        content.includes('therapy') ||
+        content.includes('session') ||
+        content.includes('coping') ||
+        content.includes('treatment plan') ||
+        content.includes('goal')
+      );
+      const treatmentSummary = treatmentHighlights.length > 0
+        ? `Recent therapeutic work: ${treatmentHighlights.join(' ')}`
+        : recentNotes.length > 0
+          ? `Treatment team documented ${recentNotes.length} case note${recentNotes.length === 1 ? '' : 's'} this period highlighting intervention follow-through and ongoing counseling participation.`
+          : '';
 
       // Only update empty fields
       setReportData(prev => ({
         ...prev,
         behavioralAssessmentSummary: prev.behavioralAssessmentSummary || behavioralAssessmentSummary,
         programParticipationSummary: prev.programParticipationSummary || programParticipationSummary,
+        educationalProgressSummary: prev.educationalProgressSummary || educationalProgressSummary,
+        treatmentProgressSummary: prev.treatmentProgressSummary || treatmentSummary || prev.treatmentProgressSummary
       }));
 
       toast({

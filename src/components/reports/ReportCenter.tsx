@@ -11,6 +11,7 @@ import { CourtReport } from "./CourtReport";
 import { DpnReport } from "./DpnReport";
 import { summarizeReport } from "@/lib/aiClient";
 import { getBehaviorPointsByYouth, getDailyRatingsByYouth, getProgressNotesByYouth } from "@/lib/api";
+import { getScoresByYouth } from "@/utils/schoolScores";
 import { fetchBehaviorPoints, fetchDailyRatings, fetchProgressNotes } from "@/utils/local-storage-utils";
 
 interface ReportCenterProps {
@@ -69,16 +70,21 @@ export const ReportCenter = ({ youthId, youth }: ReportCenterProps) => {
                 return { start: new Date('2020-01-01'), end: now };
             }
           })();
-          const [allPoints, allNotes, allRatings] = await Promise.all([
+          const [allPoints, allNotes, allRatings, allSchoolScores] = await Promise.all([
             getBehaviorPointsByYouth(youth.id).catch(() => fetchBehaviorPoints(youth.id)),
             getProgressNotesByYouth(youth.id).catch(() => fetchProgressNotes(youth.id) as any),
             getDailyRatingsByYouth(youth.id).catch(() => fetchDailyRatings(youth.id) as any),
+            getScoresByYouth(youth.id).catch((error) => {
+              console.warn('Failed to load school scores for AI report generation:', error);
+              return [];
+            }),
           ]);
           const inRange = (d?: any) => d && new Date(d) >= range.start && new Date(d) <= range.end;
           const data = {
             behaviorPoints: (allPoints || []).filter((p:any)=> inRange(p.date)),
             progressNotes: (allNotes || []).filter((n:any)=> inRange(n.date)),
             dailyRatings: (allRatings || []).filter((r:any)=> inRange(r.date)),
+            schoolScores: (allSchoolScores || []).filter((s:any)=> inRange(s.date)),
           };
           const aiText = await summarizeReport({
             youth,
@@ -142,12 +148,13 @@ export const ReportCenter = ({ youthId, youth }: ReportCenterProps) => {
 
       {showCourtReport && (
         <div className="space-y-4">
-          <CourtReport youth={youth} />
+          <CourtReport key={youth?.id || 'court-report'} youth={youth} />
         </div>
       )}
       {dpnVariant && (
         <div className="space-y-4">
           <DpnReport 
+            key={`${youth?.id || 'dpn-report'}-${dpnVariant}`}
             youth={youth} 
             variant={dpnVariant}
             onAutoExportComplete={() => {

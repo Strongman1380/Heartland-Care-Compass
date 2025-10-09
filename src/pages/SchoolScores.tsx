@@ -11,9 +11,23 @@ import { useToast } from '@/hooks/use-toast'
 // Helpers
 const toISO = (d: Date) => format(d, 'yyyy-MM-dd')
 
-const startOfWeekMon = (d: Date) => {
+// Heartland week: Thursday to Wednesday
+const startOfWeekThursday = (d: Date) => {
   const day = d.getDay() // 0 Sun .. 6 Sat
-  const diff = (day === 0 ? -6 : 1) - day // make Monday start
+  // Calculate days to go back to reach Thursday
+  // If today is Thu (4), diff = 0
+  // If today is Fri (5), diff = -1
+  // If today is Sat (6), diff = -2
+  // If today is Sun (0), diff = -3
+  // If today is Mon (1), diff = -4
+  // If today is Tue (2), diff = -5
+  // If today is Wed (3), diff = -6
+  let diff: number
+  if (day >= 4) {
+    diff = 4 - day // Thu=0, Fri=-1, Sat=-2
+  } else {
+    diff = -(3 + day) // Sun=-3, Mon=-4, Tue=-5, Wed=-6
+  }
   const res = new Date(d)
   res.setDate(d.getDate() + diff)
   res.setHours(0,0,0,0)
@@ -27,11 +41,13 @@ const addDays = (d: Date, n: number) => {
 }
 
 const weekdays = [
+  { key: 'Thu', idx: 4 },
+  { key: 'Fri', idx: 5 },
+  { key: 'Sat', idx: 6 },
+  { key: 'Sun', idx: 0 },
   { key: 'Mon', idx: 1 },
   { key: 'Tue', idx: 2 },
   { key: 'Wed', idx: 3 },
-  { key: 'Thu', idx: 4 },
-  { key: 'Fri', idx: 5 },
 ]
 
 type GridValue = { [youthId: string]: { [iso: string]: number | '' } }
@@ -40,7 +56,7 @@ const SchoolScores: React.FC = () => {
   const { youths, loadYouths, loading } = useYouth()
   const { toast } = useToast()
   const today = new Date()
-  const [weekStart, setWeekStart] = useState<Date>(startOfWeekMon(today))
+  const [weekStart, setWeekStart] = useState<Date>(startOfWeekThursday(today))
   const [grid, setGrid] = useState<GridValue>({})
   const [autoSaveEnabled, setAutoSaveEnabled] = useState(true)
   const [lastSaved, setLastSaved] = useState<Date | null>(null)
@@ -257,7 +273,7 @@ const SchoolScores: React.FC = () => {
     }
   }
 
-  // Calculate weekly averages for current view
+  // Calculate weekly averages for current view (Thursday to Wednesday)
   const calculateWeeklyAverages = () => {
     const averages = new Map<string, number>()
     
@@ -273,7 +289,8 @@ const SchoolScores: React.FC = () => {
       
       if (scores.length > 0) {
         const avg = scores.reduce((a, b) => a + b, 0) / scores.length
-        averages.set(y.id, avg)
+        // Round to nearest tenth
+        averages.set(y.id, Math.round(avg * 10) / 10)
       }
     }
     
@@ -532,13 +549,13 @@ const SchoolScores: React.FC = () => {
                   value={toISO(weekStart)}
                   onChange={(e) => {
                     const d = new Date(e.target.value)
-                    setWeekStart(startOfWeekMon(d))
+                    setWeekStart(startOfWeekThursday(d))
                   }}
                   className="w-40"
                 />
               </div>
               <Button variant="outline" size="sm" onClick={() => shiftWeek(-1)}>Previous</Button>
-              <Button variant="outline" size="sm" onClick={() => setWeekStart(startOfWeekMon(new Date()))}>This Week</Button>
+              <Button variant="outline" size="sm" onClick={() => setWeekStart(startOfWeekThursday(new Date()))}>This Week</Button>
               <Button variant="outline" size="sm" onClick={() => shiftWeek(1)}>Next</Button>
               <Button variant="outline" size="sm" onClick={refreshTrends} title="Refresh trend arrows">
                 <RefreshCw className="w-4 h-4 mr-2" />
@@ -557,7 +574,7 @@ const SchoolScores: React.FC = () => {
           </div>
           <div className="mb-4 flex items-center justify-between">
             <div className="text-sm text-gray-700">
-              <div className="font-medium">Week: {toISO(weekStart)} to {toISO(addDays(weekStart, 4))}</div>
+              <div className="font-medium">Week: {toISO(weekStart)} to {toISO(addDays(weekStart, 6))}</div>
             </div>
             <div className="flex items-center gap-2">
               <label className="text-sm text-gray-600 flex items-center gap-2">
@@ -590,9 +607,9 @@ const SchoolScores: React.FC = () => {
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan={9} className="px-3 py-6 text-center text-gray-500">Loading youths…</td></tr>
+                  <tr><td colSpan={11} className="px-3 py-6 text-center text-gray-500">Loading youths…</td></tr>
                 ) : sortedYouths.length === 0 ? (
-                  <tr><td colSpan={9} className="px-3 py-6 text-center text-gray-500">No youths found.</td></tr>
+                  <tr><td colSpan={11} className="px-3 py-6 text-center text-gray-500">No youths found.</td></tr>
                 ) : (
                   sortedYouths.map(y => {
                     const weekAvg = weeklyAverages.get(y.id)

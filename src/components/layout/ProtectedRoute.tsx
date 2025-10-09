@@ -9,6 +9,11 @@ interface ProtectedRouteProps {
 export const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
   const { user, loading } = useAuth();
 
+  // Bypass authentication in development for testing
+  if (import.meta.env.DEV) {
+    return <>{children}</>;
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-red-50 via-yellow-50 to-red-100 flex items-center justify-center">

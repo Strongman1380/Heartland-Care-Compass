@@ -15,6 +15,7 @@ import { exportElementToPDF } from "@/utils/export";
 import { fetchBehaviorPoints, fetchDailyRatings, fetchProgressNotes } from "@/utils/local-storage-utils";
 import { getBehaviorPointsByYouth, getDailyRatingsByYouth, getProgressNotesByYouth } from "@/lib/api";
 import { calculateTotalPoints, calculatePointsForPeriod } from "@/utils/pointCalculations";
+import { getScoresByYouth, type SchoolDailyScore } from "@/utils/schoolScores";
 import * as aiService from "@/services/aiService";
 
 // API fetch functions with fallback to localStorage
@@ -139,10 +140,14 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
       console.log('Selected month range:', format(monthStart, 'yyyy-MM-dd'), 'to', format(monthEnd, 'yyyy-MM-dd'));
 
       // Fetch data for the selected month
-      const [behaviorPoints, progressNotes, dailyRatings] = await Promise.all([
+      const [behaviorPoints, progressNotes, dailyRatings, schoolScores] = await Promise.all([
         fetchBehaviorPointsAPI(youth.id).catch(() => fetchBehaviorPoints(youth.id)),
         fetchProgressNotesAPI(youth.id).catch(() => fetchProgressNotes(youth.id)),
-        fetchDailyRatingsAPI(youth.id).catch(() => fetchDailyRatings(youth.id))
+        fetchDailyRatingsAPI(youth.id).catch(() => fetchDailyRatings(youth.id)),
+        getScoresByYouth(youth.id).catch((error) => {
+          console.warn('Failed to load school scores, continuing without them:', error);
+          return [];
+        })
       ]);
 
       console.log('Fetched data:', {
@@ -170,6 +175,11 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
         return ratingDate >= monthStart && ratingDate <= monthEnd;
       });
 
+      const monthSchoolScores = (schoolScores as SchoolDailyScore[]).filter(score => {
+        if (!score?.date) return false;
+        const scoreDate = new Date(score.date);
+        return scoreDate >= monthStart && scoreDate <= monthEnd;
+      });
       // Calculate statistics
       const totalPoints = monthBehaviorPoints.reduce((sum, point) => sum + (point.totalPoints || 0), 0);
       const avgPoints = monthBehaviorPoints.length > 0 ? Math.round(totalPoints / monthBehaviorPoints.length) : 0;
@@ -276,7 +286,12 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
         ),
 
         // Academic Progress (consolidated)
-        academicProgressSummary: generateAcademicProgressSummary(youth),
+        academicProgressSummary: generateAcademicProgressSummary(
+          youth,
+          monthSchoolScores,
+          format(monthStart, "MMMM yyyy"),
+          monthProgressNotes
+        ),
 
         // Behavioral Summary
         behavioralSummary: generateBehavioralSummary(monthBehaviorPoints, monthProgressNotes),
@@ -393,11 +408,11 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
 
     let summary = `${behaviorPoints.length} days tracked with ${totalPoints} total points earned (average: ${avgPoints} points/day). `;
 
-    if (progressNotes.length > 0) {
-      const recentNotes = progressNotes.slice(-3);
-      summary += `Recent progress notes indicate ${recentNotes.length} documented activities/interactions.`;
+    const highlights = collectCaseNoteHighlights(progressNotes, 3);
+    if (highlights.length > 0) {
+      summary += `Recent case notes highlight: ${highlights.join(' | ')}.`;
     } else {
-      summary += "Regular program participation observed.";
+      summary += "Recent case notes emphasize consistent program engagement without notable incidents.";
     }
 
     return summary;
@@ -467,6 +482,51 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
     return "Continue skill development, academic progress, and positive relationships to prepare for next phase of care";
   };
 
+  const extractCaseNoteContent = (note: any): string => {
+    if (!note) return "";
+    if (typeof note.summary === 'string' && note.summary.trim().length > 0) {
+      return note.summary.trim();
+    }
+    const rawNote = typeof note.note === 'string' ? note.note : "";
+    if (!rawNote) return "";
+    try {
+      const parsed = JSON.parse(rawNote);
+      if (parsed?.sections) {
+        return Object.values(parsed.sections)
+          .filter((value) => typeof value === 'string' && value.trim().length > 0)
+          .join(' ');
+      }
+      if (parsed?.content && typeof parsed.content === 'string') {
+        return parsed.content;
+      }
+    } catch {
+      // Not JSON - return raw text
+    }
+    return rawNote;
+  };
+
+  const formatCaseNoteHighlight = (note: any): string => {
+    const content = extractCaseNoteContent(note);
+    if (!content) return "";
+    const noteDate = note.date ? format(new Date(note.date), "MMM d") : "";
+    const staff = note.staff ? ` (${note.staff})` : "";
+    const snippet = content.length > 180 ? `${content.slice(0, 177)}...` : content;
+    return `${noteDate ? `${noteDate}: ` : ""}${snippet}${staff}`;
+  };
+
+  const collectCaseNoteHighlights = (notes: any[], limit = 3): string[] => {
+    if (!notes || notes.length === 0) return [];
+    const sorted = [...notes].sort((a, b) => {
+      const dateA = a.date ? new Date(a.date).getTime() : 0;
+      const dateB = b.date ? new Date(b.date).getTime() : 0;
+      return dateA - dateB;
+    });
+    return sorted
+      .slice(-limit)
+      .map(formatCaseNoteHighlight)
+      .filter(Boolean);
+  };
+
   // New consolidated generator functions
   const generateProgramParticipationSummary = (
     totalPoints: number,
@@ -514,10 +574,21 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
       }
     }
 
+    if (dailyRatings.length > 0) {
+      summary += ` Quick scoring snapshot (${dailyRatings.length} entries): peer ${peerAvg.toFixed(1)}/5, staff ${adultAvg.toFixed(1)}/5, investment ${investmentAvg.toFixed(1)}/5, authority ${authorityAvg.toFixed(1)}/5.`;
+    } else {
+      summary += " No quick scoring entries were recorded during this period.";
+    }
+
     return summary;
   };
 
-  const generateAcademicProgressSummary = (youth: Youth): string => {
+  const generateAcademicProgressSummary = (
+    youth: Youth,
+    schoolScores: SchoolDailyScore[],
+    periodLabel: string,
+    progressNotes: any[]
+  ): string => {
     let summary = `${youth.firstName} is currently enrolled in ${youth.currentGrade || 'education program'}`;
     
     if (youth.currentSchool || youth.lastSchoolAttended) {
@@ -539,6 +610,28 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
 
     if (youth.schoolContact) {
       summary += `School contact: ${youth.schoolContact}${youth.schoolPhone ? ` (${youth.schoolPhone})` : ''}.`;
+    }
+
+    if (schoolScores.length > 0) {
+      const total = schoolScores.reduce((acc, score) => acc + Number(score.score ?? 0), 0);
+      const average = (total / schoolScores.length).toFixed(1);
+      const highest = Math.max(...schoolScores.map(score => Number(score.score ?? 0))).toFixed(1);
+      const lowest = Math.min(...schoolScores.map(score => Number(score.score ?? 0))).toFixed(1);
+      summary += ` During ${periodLabel}, ${schoolScores.length} school daily scores were recorded with an average of ${average}/4 (range ${lowest}–${highest}). `;
+    } else {
+      summary += ` No school daily scores were recorded for ${periodLabel}. `;
+    }
+
+    const academicNotes = collectCaseNoteHighlights(
+      progressNotes.filter(note => {
+        const content = extractCaseNoteContent(note).toLowerCase();
+        return content.includes('school') || content.includes('academic') || content.includes('class') || content.includes('grade');
+      }),
+      2
+    );
+
+    if (academicNotes.length > 0) {
+      summary += `Recent academic case notes highlight: ${academicNotes.join(' | ')}. `;
     }
 
     if (!youth.academicStrengths && !youth.academicChallenges && !youth.educationGoals) {
@@ -571,11 +664,6 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
       summary += `${youth.firstName} is engaged in an individualized treatment plan focused on behavioral modification, skill development, and emotional regulation. `;
     }
 
-    // Progress notes
-    if (progressNotes.length > 0) {
-      summary += `During this period, ${progressNotes.length} progress notes were documented, indicating active engagement in treatment activities and therapeutic interventions. `;
-    }
-
     // Therapy participation
     if (youth.currentCounseling && youth.currentCounseling.length > 0) {
       summary += `${youth.firstName} is participating in: ${youth.currentCounseling.join(', ')}. `;
@@ -584,6 +672,26 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
       }
     } else {
       summary += `Regular therapy participation continues as scheduled by the treatment team. `;
+    }
+
+    if (progressNotes.length > 0) {
+      const treatmentFocusedNotes = collectCaseNoteHighlights(
+        progressNotes.filter(note => {
+          const content = extractCaseNoteContent(note).toLowerCase();
+          return content.includes('therapy') ||
+            content.includes('session') ||
+            content.includes('coping') ||
+            content.includes('intervention') ||
+            content.includes('goal');
+        }),
+        3
+      );
+
+      if (treatmentFocusedNotes.length > 0) {
+        summary += `Recent case notes emphasize: ${treatmentFocusedNotes.join(' | ')}. `;
+      } else {
+        summary += `During this period, ${progressNotes.length} progress notes were documented, capturing therapeutic interventions and team observations. `;
+      }
     }
 
     if (!youth.treatmentFocus && progressNotes.length === 0 && (!youth.currentCounseling || youth.currentCounseling.length === 0)) {

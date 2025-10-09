@@ -1,0 +1,326 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e2]:
+  - region "Notifications (F8)":
+    - list
+  - generic [ref=e3]:
+    - banner [ref=e4]:
+      - generic [ref=e6]:
+        - link "Heartland Boys Home Logo Heartland Youth Compass Care Management System" [ref=e7] [cursor=pointer]:
+          - /url: /
+          - img "Heartland Boys Home Logo" [ref=e9]
+          - generic [ref=e10]:
+            - heading "Heartland Youth Compass" [level=1] [ref=e11]
+            - paragraph [ref=e12]: Care Management System
+        - navigation [ref=e13]:
+          - generic [ref=e14]:
+            - link "School" [ref=e15] [cursor=pointer]:
+              - /url: /school
+              - img [ref=e16]
+              - generic [ref=e20]: School
+            - link "Monthly Progress Report" [ref=e21] [cursor=pointer]:
+              - /url: /monthly-progress
+              - img [ref=e22]
+              - generic [ref=e27]: Monthly Progress Report
+            - link "Court Report" [ref=e28] [cursor=pointer]:
+              - /url: /court-report
+              - img [ref=e29]
+              - generic [ref=e35]: Court Report
+        - generic [ref=e36]:
+          - generic [ref=e37]: Offline
+          - link "KPI" [ref=e39] [cursor=pointer]:
+            - /url: /assessment-kpi
+            - button "KPI" [ref=e40]:
+              - img
+              - generic [ref=e41]: KPI
+          - button "Sign In" [ref=e42] [cursor=pointer]:
+            - img
+            - text: Sign In
+          - button "Add Youth" [ref=e43] [cursor=pointer]:
+            - img
+            - generic [ref=e44]: Add Youth
+    - main [ref=e45]:
+      - generic [ref=e47]:
+        - img "Heartland Boys Home Logo" [ref=e48]
+        - heading "Welcome to the Heartland Boys Home Platform" [level=1] [ref=e49]
+        - paragraph [ref=e50]: Select a youth from the profiles below to manage their information and track their progress.
+        - paragraph [ref=e52]: Building character, one day at a time.
+      - generic [ref=e53]:
+        - heading "Youth Profiles" [level=2] [ref=e54]
+        - generic [ref=e55]:
+          - generic [ref=e56] [cursor=pointer]:
+            - generic [ref=e57]:
+              - img [ref=e59]
+              - heading "Tristan Bishop" [level=3] [ref=e62]
+              - generic [ref=e63]:
+                - button "Edit Tristan's Profile" [ref=e64]:
+                  - img
+                - button "Delete Tristan's Profile" [ref=e65]:
+                  - img
+            - generic [ref=e66]:
+              - generic [ref=e67]:
+                - generic [ref=e68]:
+                  - generic [ref=e69]: "Age:"
+                  - generic [ref=e70]: "16"
+                - generic [ref=e71]:
+                  - generic [ref=e72]: "Level:"
+                  - generic [ref=e73]: Level 1
+                - generic [ref=e74]:
+                  - generic [ref=e75]: "Points:"
+                  - generic [ref=e76]: "0"
+                - generic [ref=e77]:
+                  - generic [ref=e78]: "Admission:"
+                  - generic [ref=e79]: Sep 21, 2025
+                - generic [ref=e80]:
+                  - generic [ref=e81]: "Length of Stay:"
+                  - generic [ref=e82]: 18d
+              - button "View Profile" [ref=e83]
+          - generic [ref=e84] [cursor=pointer]:
+            - generic [ref=e85]:
+              - img [ref=e87]
+              - heading "Jason Masters" [level=3] [ref=e90]
+              - generic [ref=e91]:
+                - button "Edit Jason's Profile" [ref=e92]:
+                  - img
+                - button "Delete Jason's Profile" [ref=e93]:
+                  - img
+            - generic [ref=e94]:
+              - generic [ref=e95]:
+                - generic [ref=e96]:
+                  - generic [ref=e97]: "Age:"
+                  - generic [ref=e98]: "17"
+                - generic [ref=e99]:
+                  - generic [ref=e100]: "Level:"
+                  - generic [ref=e101]: Level 3
+                - generic [ref=e102]:
+                  - generic [ref=e103]: "Points:"
+                  - generic [ref=e104]: "0"
+                - generic [ref=e105]:
+                  - generic [ref=e106]: "Admission:"
+                  - generic [ref=e107]: Apr 11, 2025
+                - generic [ref=e108]:
+                  - generic [ref=e109]: "Length of Stay:"
+                  - generic [ref=e110]: 5m 28d
+              - button "View Profile" [ref=e111]
+          - generic [ref=e112] [cursor=pointer]:
+            - generic [ref=e113]:
+              - img [ref=e115]
+              - heading "Chance Thaller" [level=3] [ref=e118]
+              - generic [ref=e119]:
+                - button "Edit Chance's Profile" [ref=e120]:
+                  - img
+                - button "Delete Chance's Profile" [ref=e121]:
+                  - img
+            - generic [ref=e122]:
+              - generic [ref=e123]:
+                - generic [ref=e124]:
+                  - generic [ref=e125]: "Age:"
+                  - generic [ref=e126]: "15"
+                - generic [ref=e127]:
+                  - generic [ref=e128]: "Level:"
+                  - generic [ref=e129]: Level 2
+                - generic [ref=e130]:
+                  - generic [ref=e131]: "Points:"
+                  - generic [ref=e132]: "0"
+                - generic [ref=e133]:
+                  - generic [ref=e134]: "Admission:"
+                  - generic [ref=e135]: Jul 23, 2025
+                - generic [ref=e136]:
+                  - generic [ref=e137]: "Length of Stay:"
+                  - generic [ref=e138]: 2m 16d
+              - button "View Profile" [ref=e139]
+          - generic [ref=e140] [cursor=pointer]:
+            - generic [ref=e141]:
+              - img [ref=e143]
+              - heading "Dagen Dickey" [level=3] [ref=e146]
+              - generic [ref=e147]:
+                - button "Edit Dagen's Profile" [ref=e148]:
+                  - img
+                - button "Delete Dagen's Profile" [ref=e149]:
+                  - img
+            - generic [ref=e150]:
+              - generic [ref=e151]:
+                - generic [ref=e152]:
+                  - generic [ref=e153]: "Age:"
+                  - generic [ref=e154]: "17"
+                - generic [ref=e155]:
+                  - generic [ref=e156]: "Level:"
+                  - generic [ref=e157]: Level 3
+                - generic [ref=e158]:
+                  - generic [ref=e159]: "Points:"
+                  - generic [ref=e160]: "0"
+                - generic [ref=e161]:
+                  - generic [ref=e162]: "Admission:"
+                  - generic [ref=e163]: Aug 26, 2025
+                - generic [ref=e164]:
+                  - generic [ref=e165]: "Length of Stay:"
+                  - generic [ref=e166]: 1m 13d
+              - button "View Profile" [ref=e167]
+          - generic [ref=e168] [cursor=pointer]:
+            - generic [ref=e169]:
+              - img [ref=e171]
+              - heading "Curtis Hodges" [level=3] [ref=e174]
+              - generic [ref=e175]:
+                - button "Edit Curtis's Profile" [ref=e176]:
+                  - img
+                - button "Delete Curtis's Profile" [ref=e177]:
+                  - img
+            - generic [ref=e178]:
+              - generic [ref=e179]:
+                - generic [ref=e180]:
+                  - generic [ref=e181]: "Age:"
+                  - generic [ref=e182]: "17"
+                - generic [ref=e183]:
+                  - generic [ref=e184]: "Level:"
+                  - generic [ref=e185]: Level 4
+                - generic [ref=e186]:
+                  - generic [ref=e187]: "Points:"
+                  - generic [ref=e188]: "0"
+                - generic [ref=e189]:
+                  - generic [ref=e190]: "Admission:"
+                  - generic [ref=e191]: Jun 23, 2025
+                - generic [ref=e192]:
+                  - generic [ref=e193]: "Length of Stay:"
+                  - generic [ref=e194]: 3m 16d
+              - button "View Profile" [ref=e195]
+          - generic [ref=e196] [cursor=pointer]:
+            - generic [ref=e197]:
+              - img [ref=e199]
+              - heading "Emilano (Nano) Ramirez" [level=3] [ref=e202]
+              - generic [ref=e203]:
+                - button "Edit Emilano (Nano)'s Profile" [ref=e204]:
+                  - img
+                - button "Delete Emilano (Nano)'s Profile" [ref=e205]:
+                  - img
+            - generic [ref=e206]:
+              - generic [ref=e207]:
+                - generic [ref=e208]:
+                  - generic [ref=e209]: "Age:"
+                  - generic [ref=e210]: "15"
+                - generic [ref=e211]:
+                  - generic [ref=e212]: "Level:"
+                  - generic [ref=e213]: Level 7
+                - generic [ref=e214]:
+                  - generic [ref=e215]: "Points:"
+                  - generic [ref=e216]: "0"
+                - generic [ref=e217]:
+                  - generic [ref=e218]: "Admission:"
+                  - generic [ref=e219]: Mar 8, 2025
+                - generic [ref=e220]:
+                  - generic [ref=e221]: "Length of Stay:"
+                  - generic [ref=e222]: 7m 1d
+              - button "View Profile" [ref=e223]
+          - generic [ref=e224] [cursor=pointer]:
+            - generic [ref=e225]:
+              - img [ref=e227]
+              - heading "Theodore (TJ) Boganowski" [level=3] [ref=e230]
+              - generic [ref=e231]:
+                - button "Edit Theodore (TJ)'s Profile" [ref=e232]:
+                  - img
+                - button "Delete Theodore (TJ)'s Profile" [ref=e233]:
+                  - img
+            - generic [ref=e234]:
+              - generic [ref=e235]:
+                - generic [ref=e236]:
+                  - generic [ref=e237]: "Age:"
+                  - generic [ref=e238]: "15"
+                - generic [ref=e239]:
+                  - generic [ref=e240]: "Level:"
+                  - generic [ref=e241]: Level 8
+                - generic [ref=e242]:
+                  - generic [ref=e243]: "Points:"
+                  - generic [ref=e244]: "0"
+                - generic [ref=e245]:
+                  - generic [ref=e246]: "Admission:"
+                  - generic [ref=e247]: Jan 19, 2025
+                - generic [ref=e248]:
+                  - generic [ref=e249]: "Length of Stay:"
+                  - generic [ref=e250]: 8m 20d
+              - button "View Profile" [ref=e251]
+          - generic [ref=e252] [cursor=pointer]:
+            - generic [ref=e253]:
+              - img [ref=e255]
+              - heading "Elijah Christian" [level=3] [ref=e258]
+              - generic [ref=e259]:
+                - button "Edit Elijah's Profile" [ref=e260]:
+                  - img
+                - button "Delete Elijah's Profile" [ref=e261]:
+                  - img
+            - generic [ref=e262]:
+              - generic [ref=e263]:
+                - generic [ref=e264]:
+                  - generic [ref=e265]: "Age:"
+                  - generic [ref=e266]: "14"
+                - generic [ref=e267]:
+                  - generic [ref=e268]: "Level:"
+                  - generic [ref=e269]: Level 3
+                - generic [ref=e270]:
+                  - generic [ref=e271]: "Points:"
+                  - generic [ref=e272]: "0"
+                - generic [ref=e273]:
+                  - generic [ref=e274]: "Admission:"
+                  - generic [ref=e275]: Jun 29, 2025
+                - generic [ref=e276]:
+                  - generic [ref=e277]: "Length of Stay:"
+                  - generic [ref=e278]: 3m 10d
+              - button "View Profile" [ref=e279]
+          - generic [ref=e280] [cursor=pointer]:
+            - generic [ref=e281]:
+              - img [ref=e283]
+              - heading "Paytin Brady" [level=3] [ref=e286]
+              - generic [ref=e287]:
+                - button "Edit Paytin's Profile" [ref=e288]:
+                  - img
+                - button "Delete Paytin's Profile" [ref=e289]:
+                  - img
+            - generic [ref=e290]:
+              - generic [ref=e291]:
+                - generic [ref=e292]:
+                  - generic [ref=e293]: "Age:"
+                  - generic [ref=e294]: "17"
+                - generic [ref=e295]:
+                  - generic [ref=e296]: "Level:"
+                  - generic [ref=e297]: Level 7
+                - generic [ref=e298]:
+                  - generic [ref=e299]: "Points:"
+                  - generic [ref=e300]: "0"
+                - generic [ref=e301]:
+                  - generic [ref=e302]: "Admission:"
+                  - generic [ref=e303]: Nov 11, 2024
+                - generic [ref=e304]:
+                  - generic [ref=e305]: "Length of Stay:"
+                  - generic [ref=e306]: 10m 28d
+              - button "View Profile" [ref=e307]
+          - generic [ref=e308] [cursor=pointer]:
+            - generic [ref=e309]:
+              - img [ref=e311]
+              - heading "Jaeden Forbes" [level=3] [ref=e314]
+              - generic [ref=e315]:
+                - button "Edit Jaeden's Profile" [ref=e316]:
+                  - img
+                - button "Delete Jaeden's Profile" [ref=e317]:
+                  - img
+            - generic [ref=e318]:
+              - generic [ref=e319]:
+                - generic [ref=e320]:
+                  - generic [ref=e321]: "Age:"
+                  - generic [ref=e322]: "17"
+                - generic [ref=e323]:
+                  - generic [ref=e324]: "Level:"
+                  - generic [ref=e325]: Level 1
+                - generic [ref=e326]:
+                  - generic [ref=e327]: "Points:"
+                  - generic [ref=e328]: "0"
+                - generic [ref=e329]:
+                  - generic [ref=e330]: "Admission:"
+                  - generic [ref=e331]: Aug 10, 2025
+                - generic [ref=e332]:
+                  - generic [ref=e333]: "Length of Stay:"
+                  - generic [ref=e334]: 1m 29d
+              - button "View Profile" [ref=e335]
+    - contentinfo [ref=e336]:
+      - generic [ref=e337]:
+        - paragraph [ref=e338]: Heartland Boys Home Platform © 2025
+        - paragraph [ref=e339]: Empowering Youth Through Structure and Support
+```

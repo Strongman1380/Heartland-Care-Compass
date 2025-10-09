@@ -101,64 +101,103 @@ const generateMockAISummary = (payload: AISummaryRequest): string => {
   const { youth, reportType, period, data } = payload;
   
   // Calculate some basic statistics from the data
-  const totalPoints = data.behaviorPoints?.reduce((sum: number, p: any) => sum + (p.totalPoints || 0), 0) || 0;
-  const avgPoints = data.behaviorPoints?.length ? Math.round(totalPoints / data.behaviorPoints.length) : 0;
+  const behaviorEntries = data.behaviorPoints || [];
+  const totalPoints = behaviorEntries.reduce((sum: number, p: any) => sum + (p.totalPoints || 0), 0);
+  const avgPoints = behaviorEntries.length ? Math.round(totalPoints / behaviorEntries.length) : 0;
   const noteCount = data.progressNotes?.length || 0;
+  const dailyRatings = data.dailyRatings || [];
+  const quickScoreCount = dailyRatings.length;
+  const avgPeer = quickScoreCount
+    ? dailyRatings.reduce((sum: number, rating: any) => sum + (rating.peerInteraction ?? 0), 0) / quickScoreCount
+    : 0;
+  const avgAdult = quickScoreCount
+    ? dailyRatings.reduce((sum: number, rating: any) => sum + (rating.adultInteraction ?? 0), 0) / quickScoreCount
+    : 0;
+  const avgInvest = quickScoreCount
+    ? dailyRatings.reduce((sum: number, rating: any) => sum + (rating.investmentLevel ?? 0), 0) / quickScoreCount
+    : 0;
+  const avgAuthority = quickScoreCount
+    ? dailyRatings.reduce((sum: number, rating: any) => sum + (rating.dealAuthority ?? 0), 0) / quickScoreCount
+    : 0;
+  const quickScoreComments = dailyRatings
+    .flatMap((rating: any) => [
+      rating.peerInteractionComment,
+      rating.adultInteractionComment,
+      rating.investmentLevelComment,
+      rating.dealAuthorityComment
+    ])
+    .filter(Boolean);
+  const schoolScores = (data.schoolScores || []) as Array<{ score?: number; date?: string }>;
+  const schoolScoreCount = schoolScores.length;
+  const avgSchoolScore = schoolScoreCount
+    ? schoolScores.reduce((sum, score) => sum + Number(score.score ?? 0), 0) / schoolScoreCount
+    : null;
+  const highSchoolScore = schoolScoreCount
+    ? Math.max(...schoolScores.map(score => Number(score.score ?? 0)))
+    : null;
+  const lowSchoolScore = schoolScoreCount
+    ? Math.min(...schoolScores.map(score => Number(score.score ?? 0)))
+    : null;
+  const caseNotesText = (data.progressNotes || [])
+    .map((note: any) => {
+      if (typeof note?.note === 'string') {
+        try {
+          const parsed = JSON.parse(note.note);
+          if (parsed?.sections) {
+            return [
+              parsed.sections.summary,
+              parsed.sections.strengthsChallenges,
+              parsed.sections.interventionsResponse,
+              parsed.sections.planNextSteps
+            ].filter(Boolean).join(' ');
+          }
+          if (typeof parsed?.content === 'string') {
+            return parsed.content;
+          }
+          return note.note;
+        } catch {
+          return note.note;
+        }
+      }
+      if (typeof note?.summary === 'string' && note.summary.trim().length > 0) {
+        return note.summary;
+      }
+      return '';
+    })
+    .filter((entry: string) => entry && entry.trim().length > 0);
+
+  const quickScoreSummary = quickScoreCount
+    ? `Quick scoring (${quickScoreCount} entr${quickScoreCount === 1 ? 'y' : 'ies'}) averages peer ${avgPeer.toFixed(1)}/5, staff ${avgAdult.toFixed(1)}/5, investment ${avgInvest.toFixed(1)}/5, and authority ${avgAuthority.toFixed(1)}/5.`
+    : 'No quick scoring entries were recorded during this period.';
+
+  const schoolScoreSummary = schoolScoreCount && avgSchoolScore !== null && lowSchoolScore !== null && highSchoolScore !== null
+    ? `School daily scores (${schoolScoreCount} entr${schoolScoreCount === 1 ? 'y' : 'ies'}) averaged ${avgSchoolScore.toFixed(1)}/4 with a range of ${lowSchoolScore.toFixed(1)}–${highSchoolScore.toFixed(1)}.`
+    : 'School daily scores were not recorded during this period.';
+
+  const caseNotesSummary = caseNotesText.length > 0
+    ? caseNotesText.slice(0, 2).map((entry, idx) => `${idx + 1}. ${entry}`).join(' ')
+    : 'Staff continue to document treatment interventions, family contacts, and academic updates.';
   
   // Generate contextual narrative based on report type
   switch (reportType) {
     case 'court':
       return `Based on comprehensive assessment data, ${youth.firstName} ${youth.lastName} has demonstrated measurable progress during the reporting period from ${period.startDate} to ${period.endDate}. 
 
-BEHAVIORAL PROGRESS: During this period, ${youth.firstName} earned a total of ${totalPoints} behavior points across ${data.behaviorPoints?.length || 0} days, averaging ${avgPoints} points per day. This performance indicates ${avgPoints >= 12 ? 'consistent compliance with program expectations and positive engagement with treatment goals' : 'areas for continued focus on behavioral expectations and program engagement'}.
+BEHAVIORAL PROGRESS: During this period, ${youth.firstName} earned a total of ${totalPoints} behavior points across ${behaviorEntries.length} day${behaviorEntries.length === 1 ? '' : 's'}, averaging ${avgPoints} points per day. This performance indicates ${avgPoints >= 12 ? 'consistent compliance with program expectations and positive engagement with treatment goals' : 'areas for continued focus on behavioral expectations and program engagement'}.
 
-TREATMENT ENGAGEMENT: Staff documented ${noteCount} progress notes highlighting ${youth.firstName}'s participation in individual and group therapy sessions. Key areas of growth include improved conflict resolution skills, increased emotional regulation, and better peer interactions. ${youth.firstName} has shown particular strength in ${youth.academicStrengths || 'academic pursuits'} and continues to work on challenges related to ${youth.academicChallenges || 'behavioral consistency'}.
+PROGRAM PARTICIPATION: ${quickScoreSummary}
 
-CLINICAL OBSERVATIONS: ${youth.firstName}'s current diagnoses of ${youth.currentDiagnoses || youth.diagnoses || 'various behavioral and emotional challenges'} are being addressed through evidence-based interventions. The treatment team notes improved coping strategies and increased insight into behavioral triggers.
+CASE NOTES SNAPSHOT: ${noteCount} progress note${noteCount === 1 ? '' : 's'} were entered during this period. ${caseNotesSummary}
+
+EDUCATIONAL STATUS: ${schoolScoreSummary}
+
+CLINICAL OBSERVATIONS: ${youth.firstName}'s current diagnoses of ${youth.currentDiagnoses || youth.diagnoses || 'behavioral and emotional challenges'} are being addressed through evidence-based interventions. The treatment team notes improved coping strategies and increased insight into behavioral triggers.
 
 RECOMMENDATIONS: Continued residential treatment is recommended to consolidate gains and address remaining treatment objectives. ${youth.firstName} would benefit from ongoing therapeutic support and structured programming to maintain progress and prepare for successful community reintegration.`;
 
     case 'dpnWeekly':
     case 'dpnBiWeekly':
     case 'dpnMonthly':
-      // Extract insights from daily ratings
-      const ratings = data.dailyRatings || [];
-      const avgPeer = ratings.length ? ratings.reduce((sum: number, r: any) => sum + (r.peerInteraction || 0), 0) / ratings.length : 0;
-      const avgAdult = ratings.length ? ratings.reduce((sum: number, r: any) => sum + (r.adultInteraction || 0), 0) / ratings.length : 0;
-      const avgInvest = ratings.length ? ratings.reduce((sum: number, r: any) => sum + (r.investmentLevel || 0), 0) / ratings.length : 0;
-      const avgAuth = ratings.length ? ratings.reduce((sum: number, r: any) => sum + (r.dealAuthority || 0), 0) / ratings.length : 0;
-
-      // Extract comments from ratings
-      const allComments = ratings.flatMap((r: any) => [
-        r.peerInteractionComment,
-        r.adultInteractionComment,
-        r.investmentLevelComment,
-        r.dealAuthorityComment
-      ]).filter(Boolean);
-
-      // Extract case notes narratives
-      const caseNotesText = (data.progressNotes || [])
-        .map((note: any) => {
-          if (typeof note.note === 'string') {
-            try {
-              const parsed = JSON.parse(note.note);
-              if (parsed.sections) {
-                return [
-                  parsed.sections.summary,
-                  parsed.sections.strengthsChallenges,
-                  parsed.sections.interventionsResponse,
-                  parsed.sections.planNextSteps
-                ].filter(Boolean).join(' ');
-              }
-              return note.note;
-            } catch {
-              return note.note;
-            }
-          }
-          return '';
-        })
-        .filter(Boolean);
-
       const periodLength = reportType === 'dpnWeekly' ? 'this week' : reportType === 'dpnBiWeekly' ? 'the past two weeks' : 'this month';
 
       return `${youth.firstName}'s been doing ${avgPoints >= 15 ? 'really well' : avgPoints >= 12 ? 'pretty good' : 'alright, with some ups and downs'} ${periodLength}. Here's what we've been seeing:
@@ -175,7 +214,7 @@ ${avgAuth >= 3.5 ? `Dealing with authority has been one of ${youth.firstName}'s 
 
 **What Staff Have Noticed:**
 
-${allComments.length > 0 ? allComments.slice(0, 3).map(c => `• ${c}`).join('\n') : '• Staff continue to document daily observations and interventions'}
+${quickScoreComments.length > 0 ? quickScoreComments.slice(0, 3).map(c => `• ${c}`).join('\n') : '• Staff continue to document daily observations and interventions'}
 
 ${caseNotesText.length > 0 ? `\n**From Recent Case Notes:**\n\n${caseNotesText.slice(0, 2).join('\n\n')}` : ''}
 
@@ -195,9 +234,13 @@ ${youth.firstName} ${youth.lastName} has been in residential treatment for ${you
 
 BEHAVIORAL ACHIEVEMENTS: Point system performance shows ${totalPoints} total points earned with daily averages of ${avgPoints} points. This represents ${avgPoints >= 15 ? 'excellent compliance and engagement' : avgPoints >= 12 ? 'satisfactory progress with room for improvement' : 'need for increased focus on behavioral expectations'}. ${youth.firstName} has ${youth.pointTotal >= 2000 ? 'achieved significant milestones' : 'made steady progress'} toward level advancement goals.
 
+PROGRAM PARTICIPATION: ${quickScoreSummary}
+
 CLINICAL PROGRESS: Treatment addressing ${youth.currentDiagnoses || youth.diagnoses || 'behavioral and emotional challenges'} has resulted in improved emotional regulation and coping strategies. ${youth.firstName} demonstrates increased insight into triggers and has developed healthier response patterns.
 
-EDUCATIONAL PROGRESS: Academic performance in ${youth.currentSchool || 'on-site education program'} shows ${youth.academicStrengths ? 'particular strength in ' + youth.academicStrengths : 'steady improvement across subjects'}. ${youth.hasIEP ? 'IEP goals are being addressed through specialized instruction and accommodations.' : 'Educational goals are being met through individualized programming.'}
+EDUCATIONAL PROGRESS: Academic performance in ${youth.currentSchool || 'on-site education program'} shows ${youth.academicStrengths ? 'particular strength in ' + youth.academicStrengths : 'steady improvement across subjects'}. ${youth.hasIEP ? 'IEP goals are being addressed through specialized instruction and accommodations.' : 'Educational goals are being met through individualized programming.'} ${schoolScoreSummary}
+
+CASE NOTES SNAPSHOT: ${caseNotesSummary}
 
 DISCHARGE PLANNING: Current discharge plan involves ${youth.dischargePlan?.parents ? 'return to parents' : youth.dischargePlan?.relative ? 'placement with relative (' + youth.dischargePlan.relative.name + ')' : 'continued placement planning'}. Estimated timeline: ${youth.estimatedStay || 'to be determined based on continued progress'}.`;
 
@@ -208,7 +251,11 @@ ${youth.firstName} ${youth.lastName} continues to participate in residential tre
 
 Treatment interventions addressing ${youth.currentDiagnoses || youth.diagnoses || 'identified clinical needs'} have resulted in observable improvements in emotional regulation, peer interactions, and compliance with program structure. ${youth.firstName} demonstrates ${youth.investmentLevel >= 4 ? 'high investment' : 'developing investment'} in treatment goals and shows increased insight into behavioral patterns and triggers.
 
-Educational programming continues to address ${youth.hasIEP ? 'IEP goals and specialized learning needs' : 'academic objectives'} with noted strengths in ${youth.academicStrengths || 'various subject areas'} and continued focus on ${youth.academicChallenges || 'academic skill development'}.
+PROGRAM PARTICIPATION: ${quickScoreSummary}
+
+Educational programming continues to address ${youth.hasIEP ? 'IEP goals and specialized learning needs' : 'academic objectives'} with noted strengths in ${youth.academicStrengths || 'various subject areas'} and continued focus on ${youth.academicChallenges || 'academic skill development'}. ${schoolScoreSummary}
+
+CASE NOTES OVERVIEW: ${caseNotesSummary}
 
 Family engagement includes regular contact with ${youth.legalGuardian || 'identified support system'} and participation in discharge planning activities. Treatment team recommends continued residential services to consolidate therapeutic gains and prepare for successful community reintegration.`;
   }

@@ -57,7 +57,8 @@ npm run start
 No Docker configuration found in the repository.
 
 ## Testing
-No dedicated testing framework or test files found in the repository.
+**targetFramework**: Jest
+**Existing Tests**: API tests using Jest with supertest for incident reporting endpoints
 
 ## Deployment
 **GitHub Pages**:

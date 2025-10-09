@@ -276,20 +276,15 @@ export const dailyRatingsService = {
   // Get daily rating for a specific date
   async getByDate(youthId: string, date: string, timeOfDay?: 'morning' | 'day' | 'evening'): Promise<DailyRatings | null> {
     try {
-      let query = supabase
+      // Get the most recent rating for this date
+      const { data, error } = await supabase
         .from('daily_ratings')
         .select('*')
         .eq('youth_id', youthId)
-        .eq('date', date);
-
-      // If timeOfDay is specified, filter by it, otherwise get the 'day' entry as default
-      if (timeOfDay) {
-        query = query.eq('time_of_day', timeOfDay);
-      } else {
-        query = query.eq('time_of_day', 'day');
-      }
-
-      const { data, error } = await query.maybeSingle();
+        .eq('date', date)
+        .order('createdAt', { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
       if (error) {
         console.error('Error fetching daily rating:', error);
@@ -305,26 +300,37 @@ export const dailyRatingsService = {
 
   // Create or update daily rating
   async upsert(dailyRating: DailyRatingsInsert & { time_of_day?: 'morning' | 'day' | 'evening' }): Promise<DailyRatings> {
-    // Ensure time_of_day is included with a default value if not provided
-    const payload = {
-      ...dailyRating,
-      time_of_day: dailyRating.time_of_day || 'day'
-    };
+    // Remove time_of_day as it may not exist in the database yet
+    const { time_of_day, ...payload } = dailyRating as any;
 
-    // Use upsert with the correct unique constraint (youth_id, date, time_of_day)
+    // If there's an id, update the existing record
+    if ('id' in payload && payload.id) {
+      const { data, error } = await supabase
+        .from('daily_ratings')
+        .update(payload)
+        .eq('id', payload.id)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Daily rating update error:', error);
+        throw error;
+      }
+      return data;
+    }
+
+    // Otherwise, insert a new record (allows multiple entries per day)
     const { data, error } = await supabase
       .from('daily_ratings')
-      .upsert(payload, {
-        onConflict: 'youth_id,date,time_of_day'
-      })
+      .insert(payload)
       .select()
-      .single()
+      .single();
 
     if (error) {
-      console.error('Daily rating upsert error:', error);
+      console.error('Daily rating insert error:', error);
       throw error;
     }
-    return data
+    return data;
   },
 
   // Delete daily rating

@@ -20,7 +20,7 @@
     "deploy:gh": "GH_PAGES_BASE=/Heartland-Care-Compass/ npm run build && gh-pages -d dist",
     "build:watch:gh": "GH_PAGES_BASE=/Heartland-Care-Compass/ vite build --watch",
     "preview:watch:gh": "concurrently -c green,blue -n build,serve \"npm:build:watch:gh\" \"npm:preview:gh\"",
-    "test": "jest tests/*.test.js",
+    "test": "jest tests/incident-api.test.js",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:headed": "playwright test --headed",

@@ -43,8 +43,6 @@ const addDays = (d: Date, n: number) => {
 const weekdays = [
   { key: 'Thu', idx: 4 },
   { key: 'Fri', idx: 5 },
-  { key: 'Sat', idx: 6 },
-  { key: 'Sun', idx: 0 },
   { key: 'Mon', idx: 1 },
   { key: 'Tue', idx: 2 },
   { key: 'Wed', idx: 3 },
@@ -92,7 +90,17 @@ const SchoolScores: React.FC = () => {
     })
   }, [youths])
 
-  const weekDates = useMemo(() => weekdays.map((_, i) => toISO(addDays(weekStart, i))), [weekStart])
+  // Calculate weekDates: Thu (day 0), Fri (day 1), skip Sat/Sun, Mon (day 3), Tue (day 4), Wed (day 5)
+  const weekDates = useMemo(() => {
+    const dates: string[] = []
+    dates.push(toISO(addDays(weekStart, 0))) // Thursday
+    dates.push(toISO(addDays(weekStart, 1))) // Friday
+    // Skip Saturday (day 2) and Sunday (day 3)
+    dates.push(toISO(addDays(weekStart, 4))) // Monday
+    dates.push(toISO(addDays(weekStart, 5))) // Tuesday
+    dates.push(toISO(addDays(weekStart, 6))) // Wednesday
+    return dates
+  }, [weekStart])
 
   // Load existing scores and calculate stats
   useEffect(() => {
@@ -574,7 +582,7 @@ const SchoolScores: React.FC = () => {
           </div>
           <div className="mb-4 flex items-center justify-between">
             <div className="text-sm text-gray-700">
-              <div className="font-medium">Week: {toISO(weekStart)} to {toISO(addDays(weekStart, 6))}</div>
+              <div className="font-medium">Week: {toISO(weekStart)} to {toISO(addDays(weekStart, 6))} (excluding Sat/Sun)</div>
             </div>
             <div className="flex items-center gap-2">
               <label className="text-sm text-gray-600 flex items-center gap-2">
@@ -607,9 +615,9 @@ const SchoolScores: React.FC = () => {
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan={11} className="px-3 py-6 text-center text-gray-500">Loading youths…</td></tr>
+                  <tr><td colSpan={9} className="px-3 py-6 text-center text-gray-500">Loading youths…</td></tr>
                 ) : sortedYouths.length === 0 ? (
-                  <tr><td colSpan={11} className="px-3 py-6 text-center text-gray-500">No youths found.</td></tr>
+                  <tr><td colSpan={9} className="px-3 py-6 text-center text-gray-500">No youths found.</td></tr>
                 ) : (
                   sortedYouths.map(y => {
                     const weekAvg = weeklyAverages.get(y.id)

@@ -248,6 +248,7 @@ export type Database = {
           peerInteraction: number | null
           peerInteractionComment: string | null
           staff: string | null
+          time_of_day: string
           updatedAt: string | null
           youth_id: string
         }
@@ -265,6 +266,7 @@ export type Database = {
           peerInteraction?: number | null
           peerInteractionComment?: string | null
           staff?: string | null
+          time_of_day?: string
           updatedAt?: string | null
           youth_id: string
         }
@@ -282,6 +284,7 @@ export type Database = {
           peerInteraction?: number | null
           peerInteractionComment?: string | null
           staff?: string | null
+          time_of_day?: string
           updatedAt?: string | null
           youth_id?: string
         }

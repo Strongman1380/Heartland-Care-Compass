@@ -508,8 +508,16 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
   const formatCaseNoteHighlight = (note: any): string => {
     const content = extractCaseNoteContent(note);
     if (!content) return "";
-    const noteDate = note.date ? format(new Date(note.date), "MMM d") : "";
-    const staff = note.staff ? ` (${note.staff})` : "";
+
+    let noteDate = "";
+    if (note?.date) {
+      const parsedDate = new Date(note.date);
+      if (!Number.isNaN(parsedDate.getTime())) {
+        noteDate = format(parsedDate, "MMM d");
+      }
+    }
+
+    const staff = note?.staff ? ` (${note.staff})` : "";
     const snippet = content.length > 180 ? `${content.slice(0, 177)}...` : content;
     return `${noteDate ? `${noteDate}: ` : ""}${snippet}${staff}`;
   };
@@ -743,16 +751,20 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
       const saved = localStorage.getItem(saveKey);
 
       if (saved) {
-        // If saved data exists, load it first
         try {
-          const savedData = JSON.parse(saved);
+          const savedData = JSON.parse(saved) as Partial<MonthlyReportData>;
 
-          // Auto-populate to get fresh data from youth profile
           await autoPopulateForm();
 
-          // Then merge saved data on top, preserving user edits
-          // Saved data takes priority over auto-populated data
-          setReportData(prev => ({ ...prev, ...savedData }));
+          setReportData(prev => {
+            const merged = { ...prev };
+            Object.entries(savedData).forEach(([key, value]) => {
+              if (value === undefined || value === null) return;
+              if (typeof value === 'string' && value.trim().length === 0) return;
+              merged[key as keyof MonthlyReportData] = value as any;
+            });
+            return merged;
+          });
         } catch (error) {
           console.error("Error loading saved data:", error);
           await autoPopulateForm();

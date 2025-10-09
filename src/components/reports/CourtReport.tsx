@@ -341,7 +341,15 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
 
     return sorted.slice(-limit).map(item => {
       const snippet = item.content.length > 180 ? `${item.content.slice(0, 177)}...` : item.content;
-      const dateStr = item.note?.date ? format(new Date(item.note.date), 'MMM d') : '';
+
+      let dateStr = '';
+      if (item.note?.date) {
+        const parsedDate = new Date(item.note.date);
+        if (!Number.isNaN(parsedDate.getTime())) {
+          dateStr = format(parsedDate, 'MMM d');
+        }
+      }
+
       const staff = item.note?.staff ? ` (${item.note.staff})` : '';
       return `${dateStr ? `${dateStr}: ` : ''}${snippet}${staff}`;
     });
@@ -560,8 +568,15 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
         if (draft?.data) {
           const savedData = draft.data as CourtReportData;
           const baseData = getBaseDataIfEmpty(savedData);
-          // Saved data takes priority, baseData only fills empty fields
-          setReportData(prev => ({ ...prev, ...baseData, ...savedData }));
+          setReportData(prev => {
+            const merged = { ...prev, ...baseData };
+            Object.entries(savedData).forEach(([key, value]) => {
+              if (value === undefined || value === null) return;
+              if (typeof value === 'string' && value.trim().length === 0) return;
+              merged[key as keyof CourtReportData] = value as any;
+            });
+            return merged;
+          });
           setAutoSaveStatus('saved');
           return;
         }
@@ -572,8 +587,15 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
         try {
           const savedData = JSON.parse(savedDataStr) as CourtReportData;
           const baseData = getBaseDataIfEmpty(savedData);
-          // Saved data takes priority, baseData only fills empty fields
-          setReportData(prev => ({ ...prev, ...baseData, ...savedData }));
+          setReportData(prev => {
+            const merged = { ...prev, ...baseData };
+            Object.entries(savedData).forEach(([key, value]) => {
+              if (value === undefined || value === null) return;
+              if (typeof value === 'string' && value.trim().length === 0) return;
+              merged[key as keyof CourtReportData] = value as any;
+            });
+            return merged;
+          });
           return;
         } catch (error) {
           console.error('Error loading saved court report data:', error);

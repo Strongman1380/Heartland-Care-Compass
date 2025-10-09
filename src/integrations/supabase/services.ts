@@ -276,12 +276,20 @@ export const dailyRatingsService = {
   // Get daily rating for a specific date
   async getByDate(youthId: string, date: string, timeOfDay?: 'morning' | 'day' | 'evening'): Promise<DailyRatings | null> {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('daily_ratings')
         .select('*')
         .eq('youth_id', youthId)
-        .eq('date', date)
-        .maybeSingle(); // Use maybeSingle() instead of single() to handle no results gracefully
+        .eq('date', date);
+
+      // If timeOfDay is specified, filter by it, otherwise get the 'day' entry as default
+      if (timeOfDay) {
+        query = query.eq('time_of_day', timeOfDay);
+      } else {
+        query = query.eq('time_of_day', 'day');
+      }
+
+      const { data, error } = await query.maybeSingle();
 
       if (error) {
         console.error('Error fetching daily rating:', error);
@@ -297,18 +305,23 @@ export const dailyRatingsService = {
 
   // Create or update daily rating
   async upsert(dailyRating: DailyRatingsInsert & { time_of_day?: 'morning' | 'day' | 'evening' }): Promise<DailyRatings> {
-    // Remove time_of_day from payload as it doesn't exist in the database schema
-    const { time_of_day, ...cleanPayload } = dailyRating as any;
+    // Ensure time_of_day is included with a default value if not provided
+    const payload = {
+      ...dailyRating,
+      time_of_day: dailyRating.time_of_day || 'day'
+    };
 
-    // Instead of using upsert with unique constraint, use insert to allow multiple entries per day
+    // Use upsert with the correct unique constraint (youth_id, date, time_of_day)
     const { data, error } = await supabase
       .from('daily_ratings')
-      .insert(cleanPayload)
+      .upsert(payload, {
+        onConflict: 'youth_id,date,time_of_day'
+      })
       .select()
       .single()
 
     if (error) {
-      console.error('Daily rating insert error:', error);
+      console.error('Daily rating upsert error:', error);
       throw error;
     }
     return data

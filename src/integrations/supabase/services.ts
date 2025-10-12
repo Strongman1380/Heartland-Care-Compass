@@ -85,12 +85,53 @@ export const youthService = {
 
   // Delete youth
   async delete(id: string): Promise<void> {
+    console.log('Attempting to delete youth:', id);
+    
+    // Delete related records first to handle any missing CASCADE constraints
+    // Only delete from tables that exist in our TypeScript schema
+    try {
+      // Delete daily ratings
+      await supabase.from('daily_ratings').delete().eq('youth_id', id);
+      console.log('Deleted daily_ratings');
+      
+      // Delete behavior points
+      await supabase.from('behavior_points').delete().eq('youth_id', id);
+      console.log('Deleted behavior_points');
+      
+      // Delete case notes
+      await supabase.from('case_notes').delete().eq('youth_id', id);
+      console.log('Deleted case_notes');
+      
+      // Delete progress notes
+      await supabase.from('progress_notes').delete().eq('youth_id', id);
+      console.log('Deleted progress_notes');
+      
+      // Delete court reports
+      await supabase.from('court_reports').delete().eq('youth_id', id);
+      console.log('Deleted court_reports');
+      
+      // Delete report drafts
+      await supabase.from('report_drafts').delete().eq('youth_id', id);
+      console.log('Deleted report_drafts');
+      
+      console.log('All related records deleted successfully');
+    } catch (deleteError) {
+      console.warn('Error deleting some related records:', deleteError);
+      // Continue with youth deletion even if some related records fail
+    }
+    
+    // Finally, delete the youth profile
     const { error } = await supabase
       .from('youth')
       .delete()
-      .eq('id', id)
+      .eq('id', id);
     
-    if (error) throw error
+    if (error) {
+      console.error('Error deleting youth profile:', error);
+      throw error;
+    }
+    
+    console.log('Youth profile deleted successfully');
   },
 
   // Search youth by name

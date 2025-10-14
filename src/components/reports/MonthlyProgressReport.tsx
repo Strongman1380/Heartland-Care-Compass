@@ -751,26 +751,19 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
       const saved = localStorage.getItem(saveKey);
 
       if (saved) {
+        // If we have saved data, load it and DON'T auto-populate (preserve manual edits)
         try {
-          const savedData = JSON.parse(saved) as Partial<MonthlyReportData>;
-
-          await autoPopulateForm();
-
-          setReportData(prev => {
-            const merged = { ...prev };
-            Object.entries(savedData).forEach(([key, value]) => {
-              if (value === undefined || value === null) return;
-              if (typeof value === 'string' && value.trim().length === 0) return;
-              merged[key as keyof MonthlyReportData] = value as any;
-            });
-            return merged;
-          });
+          const savedData = JSON.parse(saved) as MonthlyReportData;
+          setReportData(savedData);
+          console.log('Loaded saved report data from localStorage');
         } catch (error) {
           console.error("Error loading saved data:", error);
+          // Only auto-populate if there's an error loading saved data
           await autoPopulateForm();
         }
       } else {
-        // No saved data, auto-populate form with youth profile data
+        // No saved data exists, auto-populate form with youth profile data
+        console.log('No saved data found, auto-populating form');
         await autoPopulateForm();
       }
     };

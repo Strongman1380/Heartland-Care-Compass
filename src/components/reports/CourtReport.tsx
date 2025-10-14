@@ -567,42 +567,30 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
         const draft = await draftsService.get(youth.id, 'court_report', user?.id || null)
         if (draft?.data) {
           const savedData = draft.data as CourtReportData;
-          const baseData = getBaseDataIfEmpty(savedData);
-          setReportData(prev => {
-            const merged = { ...prev, ...baseData };
-            Object.entries(savedData).forEach(([key, value]) => {
-              if (value === undefined || value === null) return;
-              if (typeof value === 'string' && value.trim().length === 0) return;
-              merged[key as keyof CourtReportData] = value as any;
-            });
-            return merged;
-          });
+          // Load saved data directly - preserve all manual edits
+          setReportData(savedData);
           setAutoSaveStatus('saved');
+          console.log('Loaded saved court report from Supabase');
           return;
         }
       } catch {}
 
+      // Try localStorage
       const savedDataStr = localStorage.getItem(`court-report-${youth.id}`);
       if (savedDataStr) {
         try {
           const savedData = JSON.parse(savedDataStr) as CourtReportData;
-          const baseData = getBaseDataIfEmpty(savedData);
-          setReportData(prev => {
-            const merged = { ...prev, ...baseData };
-            Object.entries(savedData).forEach(([key, value]) => {
-              if (value === undefined || value === null) return;
-              if (typeof value === 'string' && value.trim().length === 0) return;
-              merged[key as keyof CourtReportData] = value as any;
-            });
-            return merged;
-          });
+          // Load saved data directly - preserve all manual edits
+          setReportData(savedData);
+          console.log('Loaded saved court report from localStorage');
           return;
         } catch (error) {
           console.error('Error loading saved court report data:', error);
         }
       }
 
-      // No saved data, use base data for initial population
+      // No saved data, populate with base data from youth profile
+      console.log('No saved court report found, auto-populating from youth profile');
       const baseData = getBaseDataIfEmpty(reportData);
       setReportData(prev => ({ ...prev, ...baseData }));
     })();

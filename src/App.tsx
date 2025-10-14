@@ -13,7 +13,6 @@ import Dashboard from "./pages/Dashboard";
 import Alerts from "./pages/Alerts";
 import Reports from "./pages/Reports";
 import AssessmentKPIDashboard from "./pages/AssessmentKPIDashboard";
-import SupabaseTestPage from "./pages/SupabaseTest";
 import DataMigrationPage from "./pages/DataMigrationPage";
 import { MonthlyProgressReportPage } from "./pages/MonthlyProgressReportPage";
 import { CourtReportPage } from "./pages/CourtReportPage";
@@ -66,7 +65,6 @@ const App = () => {
             <Route path="print-reports" element={<SchoolPrintReports />} />
           </Route>
 
-          <Route path="/supabase-test" element={<ProtectedRoute><SupabaseTestPage /></ProtectedRoute>} />
           <Route path="/migrate-data" element={<ProtectedRoute><DataMigrationPage /></ProtectedRoute>} />
           <Route path="*" element={<NotFound />} />
         </Routes>

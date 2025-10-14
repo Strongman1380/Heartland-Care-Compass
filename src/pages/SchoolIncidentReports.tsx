@@ -12,7 +12,6 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, Eye, Edit, Trash2, AlertTriangle, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
-import SupabaseTest from "@/components/debug/SupabaseTest";
 
 export default function SchoolIncidentReports() {
   const [showForm, setShowForm] = useState(false);
@@ -356,9 +355,6 @@ export default function SchoolIncidentReports() {
           </Button>
         </div>
       </div>
-
-      {/* Debug Component - Remove after testing */}
-      <SupabaseTest />
 
       {/* List */}
       <div className="bg-white border rounded-lg shadow-sm">

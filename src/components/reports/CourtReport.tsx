@@ -94,6 +94,7 @@ const CourtReportPreview = ({ data }: CourtReportPreviewProps) => {
   const sectionBreakStyle: CSSProperties = {
     breakInside: 'avoid',
     pageBreakInside: 'avoid',
+    // @ts-ignore - Vendor prefixes not in standard CSSProperties type
     WebkitColumnBreakInside: 'avoid',
     WebkitPageBreakInside: 'avoid',
     MozPageBreakInside: 'avoid'
@@ -199,9 +200,6 @@ const CourtReportPreview = ({ data }: CourtReportPreviewProps) => {
             <section key={section.title} className={sectionClass} style={sectionBreakStyle}>
               <header className={sectionHeaderClass}>
                 <h3 className="text-lg font-semibold text-red-800 print:text-gray-900 print:text-base">{section.title}</h3>
-                {section.description && (
-                  <p className="text-sm text-slate-600 print:text-gray-600">{section.description}</p>
-                )}
               </header>
               <div className={section.columns === 2 ? "grid grid-cols-2 gap-x-8 gap-y-3 print:gap-y-2" : "space-y-3 print:space-y-2"}>
                 {section.fields.map(renderField)}
@@ -640,18 +638,28 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
         description: "AI is expanding your notes. This may take a moment.",
       });
 
-      const enhanced = await aiService.enhanceText(currentValue, prompt);
-      handleInputChange(field, enhanced);
-
-      toast({
-        title: "Enhanced Successfully",
-        description: "Your text has been professionally expanded.",
+      const response = await aiService.queryData(prompt, {
+        youth,
+        currentText: currentValue,
+        fieldType: field
       });
-    } catch (error) {
+
+      if (response.success && response.data) {
+        const enhanced = response.data; // response.data is directly the string
+        handleInputChange(field, enhanced);
+
+        toast({
+          title: "Enhanced Successfully",
+          description: "Your text has been professionally expanded.",
+        });
+      } else {
+        throw new Error(response.error || 'Failed to enhance text');
+      }
+    } catch (error: any) {
       console.error('AI enhancement error:', error);
       toast({
         title: "Enhancement Failed",
-        description: "Could not enhance text. Please try again.",
+        description: error.message || "Could not enhance text. Please try again.",
         variant: "destructive"
       });
     }

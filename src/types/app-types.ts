@@ -43,14 +43,18 @@ export interface Youth {
   mother?: {
     name?: string | null;
     phone?: string | null;
+    contact?: string | null; // Added for CourtReport compatibility
   } | null;
   father?: {
     name?: string | null;
     phone?: string | null;
+    contact?: string | null; // Added for CourtReport compatibility
   } | null;
   legalGuardian?: {
     name?: string | null;
     phone?: string | null;
+    contact?: string | null; // Added for CourtReport compatibility
+    relationship?: string | null; // Added for CourtReport compatibility
   } | null;
   nextOfKin?: {
     name?: string | null;
@@ -64,6 +68,7 @@ export interface Youth {
     name?: string | null;
     phone?: string | null;
     email?: string | null;
+    contact?: string | null; // Added for CourtReport compatibility
   } | null;
   caseworker?: {
     name?: string | null;
@@ -96,6 +101,9 @@ export interface Youth {
   historyVandalism?: boolean | null;
   gangInvolvement?: boolean | null;
   familyViolentCrimes?: boolean | null;
+  socialStrengths?: string | null; // Added for CourtReport compatibility
+  socialDeficiencies?: string | null; // Added for CourtReport compatibility
+  treatmentGoals?: Array<{ goal: string; [key: string]: any }> | string[] | null; // Added for CourtReport compatibility
   
   // Substance Use
   tobaccoPast6To12Months?: boolean | null;
@@ -142,6 +150,9 @@ export interface Youth {
     } | null;
     regularFosterCare?: boolean | null;
     estimatedLengthOfStayMonths?: number | null;
+    groupHome?: string | null; // Added for CourtReport compatibility
+    independentLiving?: string | null; // Added for CourtReport compatibility
+    aftercareServices?: string[] | null; // Added for CourtReport compatibility
   } | null;
   
   // Emergency Shelter Care
@@ -183,12 +194,11 @@ export interface Youth {
 
   // Additional fields from form data
   idNumber?: string | null;
-  legalGuardian?: string | null;
+  // Note: legalGuardian and probationOfficer are objects defined above, removed duplicate string types
   guardianRelationship?: string | null;
   guardianContact?: string | null;
   guardianPhone?: string | null;
   guardianEmail?: string | null;
-  probationOfficer?: string | null;
   probationContact?: string | null;
   probationPhone?: string | null;
   placementAuthority?: string | null;

@@ -140,6 +140,13 @@ export const EnhancedCaseNotes = ({ youthId, youth, onYouthChange, onBackToSelec
       );
     }
 
+    // Sort notes chronologically by date (newest first)
+    filtered.sort((a, b) => {
+      const dateA = a.date ? new Date(a.date).getTime() : 0;
+      const dateB = b.date ? new Date(b.date).getTime() : 0;
+      return dateB - dateA; // Descending order (newest first)
+    });
+
     setFilteredNotes(filtered);
   };
 
@@ -164,8 +171,9 @@ export const EnhancedCaseNotes = ({ youthId, youth, onYouthChange, onBackToSelec
         fieldType: fieldName
       });
 
-      if (response.success && response.data?.answer) {
-        const enhancedText = response.data.answer;
+      if (response.success && response.data) {
+        // response.data is a string, use it directly
+        const enhancedText = typeof response.data === 'string' ? response.data : String(response.data);
 
         if (fieldType === 'session') {
           setSessionFormData(prev => ({
@@ -862,8 +870,15 @@ export const EnhancedCaseNotes = ({ youthId, youth, onYouthChange, onBackToSelec
       return;
     }
 
+    if (filteredNotes.length === 0) {
+      toast.error("No case notes to export");
+      return;
+    }
+
     try {
       setIsExporting(true);
+      toast.info("Generating PDF... This may take a moment.");
+      
       const html = generateNotesHTML();
 
       // Create a temporary container for the HTML
@@ -872,16 +887,22 @@ export const EnhancedCaseNotes = ({ youthId, youth, onYouthChange, onBackToSelec
       tempContainer.style.width = '816px'; // Letter width in pixels at 96 DPI
       tempContainer.style.position = 'fixed';
       tempContainer.style.left = '-9999px';
+      tempContainer.style.top = '0';
       document.body.appendChild(tempContainer);
 
       const filename = `${selectedYouth?.firstName}_${selectedYouth?.lastName}_Case_Notes_${format(new Date(), 'yyyy-MM-dd')}.pdf`;
+      
+      // Wait a moment for styles to apply
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
       await exportElementToPDF(tempContainer, filename);
 
       document.body.removeChild(tempContainer);
       toast.success("PDF exported successfully!");
-    } catch (error) {
+    } catch (error: any) {
       console.error('Export error:', error);
-      toast.error("Failed to export PDF. Please try again.");
+      const errorMessage = error?.message || String(error);
+      toast.error(`Failed to export PDF: ${errorMessage}. Check browser console for details.`);
     } finally {
       setIsExporting(false);
     }

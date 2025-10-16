@@ -221,10 +221,10 @@ CurrentComments: ${JSON.stringify(context.comments)}`;
       const res = await queryData(prompt, context);
 
       let suggestions: any = null;
-      if (res.success && res.data) {
+      if (res.success && res.data?.answer) {
         // Try to parse a JSON object from the AI response
         try {
-          const parsed = typeof res.data === 'string' ? JSON.parse(res.data) : res.data;
+          const parsed = typeof res.data.answer === 'string' ? JSON.parse(res.data.answer) : res.data.answer;
           suggestions = parsed;
         } catch {
           // If not JSON, try a simple heuristic split

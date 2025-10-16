@@ -943,8 +943,8 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
         fieldType: fieldName
       });
 
-      if (response.success && response.data) {
-        const enhancedText = response.data; // response.data is directly the string
+      if (response.success && response.data?.answer) {
+        const enhancedText = response.data.answer;
         handleFieldChange(fieldName, enhancedText);
         toast({
           title: "Success",

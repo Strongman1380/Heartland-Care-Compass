@@ -96,11 +96,11 @@ export function AIQueryInterface({
       // Query AI service
       const response = await aiService.queryData(query, context);
 
-      if (response.success && response.data) {
+      if (response.success && response.data?.answer) {
         const assistantMessage: Message = {
           id: (Date.now() + 1).toString(),
           type: 'assistant',
-          content: response.data.answer || response.data,
+          content: response.data.answer,
           timestamp: new Date(),
           data: response.data,
         };

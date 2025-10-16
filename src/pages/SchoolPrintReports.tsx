@@ -189,17 +189,17 @@ Format your response as JSON with these exact keys: progressNotes, strengths, ar
         incidents: youthIncidents
       })
 
-      if (response.success && response.data) {
+      if (response.success && response.data?.answer) {
         try {
           // Try to parse as JSON first
-          const analysis = JSON.parse(response.data)
+          const analysis = JSON.parse(response.data.answer)
           setProgressNotes(analysis.progressNotes || '')
           setStrengths(analysis.strengths || '')
           setAreasForImprovement(analysis.areasForImprovement || '')
           setRecommendations(analysis.recommendations || '')
         } catch {
           // If not JSON, use as progress notes
-          setProgressNotes(response.data)
+          setProgressNotes(response.data.answer)
         }
 
         toast({
@@ -258,8 +258,8 @@ Write 3-4 paragraphs in a professional tone suitable for program directors.`
         incidents: filteredIncidents
       })
 
-      if (response.success && response.data) {
-        setWeeklyAnalysis(response.data)
+      if (response.success && response.data?.answer) {
+        setWeeklyAnalysis(response.data.answer)
         toast({
           title: 'Analysis Generated',
           description: 'AI has generated the weekly analysis.',

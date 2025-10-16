@@ -704,8 +704,8 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
         fieldType: field
       });
 
-      if (response.success && response.data) {
-        const enhanced = response.data; // response.data is directly the string
+      if (response.success && response.data?.answer) {
+        const enhanced = response.data.answer;
         handleInputChange(field, enhanced);
 
         toast({

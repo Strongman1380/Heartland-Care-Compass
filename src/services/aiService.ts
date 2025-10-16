@@ -145,7 +145,7 @@ export async function searchData(searchQuery: SearchQuery): Promise<AIResponse<S
  * Natural language query interface
  * Example: "What interventions have been most effective for youth with trauma history?"
  */
-export async function queryData(question: string, context?: any): Promise<AIResponse<string>> {
+export async function queryData(question: string, context?: any): Promise<AIResponse<{ answer: string }>> {
   return makeAIRequest('/api/ai/query', { question, context });
 }
 

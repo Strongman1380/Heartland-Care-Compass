@@ -288,6 +288,22 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
     return `${days} day${days !== 1 ? 's' : ''}`;
   };
 
+  const parseCaseNoteJson = (note: any): any | null => {
+    if (!note?.note || typeof note.note !== 'string') {
+      return null;
+    }
+    try {
+      return JSON.parse(note.note);
+    } catch {
+      return null;
+    }
+  };
+
+  const isSchoolCaseNote = (note: any): boolean => {
+    const parsed = parseCaseNoteJson(note);
+    return parsed?.noteType === 'school';
+  };
+
   const extractCaseNoteContent = (note: any): string => {
     if (!note) return '';
     if (typeof note.summary === 'string' && note.summary.trim().length > 0) {
@@ -295,18 +311,36 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
     }
     const raw = typeof note.note === 'string' ? note.note : '';
     if (!raw) return '';
-    try {
-      const parsed = JSON.parse(raw);
-      if (parsed?.sections) {
-        return Object.values(parsed.sections)
-          .filter((value) => typeof value === 'string' && value.trim().length > 0)
-          .join(' ');
+    const parsed = parseCaseNoteJson(note);
+    if (parsed?.noteType === 'school' && parsed.sections) {
+      const { overview, behavior, academics, interventions, followUp } = parsed.sections;
+      const parts: string[] = [];
+      if (typeof overview === 'string' && overview.trim()) {
+        parts.push(overview.trim());
       }
-      if (typeof parsed?.content === 'string') {
-        return parsed.content;
+      if (typeof behavior === 'string' && behavior.trim()) {
+        parts.push(`Behavior: ${behavior.trim()}`);
       }
-    } catch {
-      // not JSON formatted
+      if (typeof academics === 'string' && academics.trim()) {
+        parts.push(`Academics: ${academics.trim()}`);
+      }
+      if (typeof interventions === 'string' && interventions.trim()) {
+        parts.push(`Supports: ${interventions.trim()}`);
+      }
+      if (typeof followUp === 'string' && followUp.trim()) {
+        parts.push(`Follow-up: ${followUp.trim()}`);
+      }
+      if (parts.length > 0) {
+        return parts.join(' ');
+      }
+    }
+    if (parsed?.sections) {
+      return Object.values(parsed.sections)
+        .filter((value) => typeof value === 'string' && value.trim().length > 0)
+        .join(' ');
+    }
+    if (typeof parsed?.content === 'string') {
+      return parsed.content;
     }
     return raw;
   };
@@ -321,9 +355,9 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
       .map(note => {
         const content = extractCaseNoteContent(note)?.trim();
         if (!content) return null;
-        return { note, content };
+        return { note, content, parsed: parseCaseNoteJson(note) };
       })
-      .filter(Boolean) as { note: any; content: string }[];
+      .filter(Boolean) as { note: any; content: string; parsed: any }[];
 
     const filtered = filter
       ? mapped.filter(item => filter(item.content.toLowerCase()))
@@ -338,7 +372,33 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
     });
 
     return sorted.slice(-limit).map(item => {
-      const snippet = item.content.length > 180 ? `${item.content.slice(0, 177)}...` : item.content;
+      let snippet = item.content;
+      if (item.parsed?.noteType === 'school' && item.parsed?.sections) {
+        const { overview, behavior, academics, interventions, followUp } = item.parsed.sections;
+        const parts: string[] = [];
+        if (typeof overview === 'string' && overview.trim()) {
+          parts.push(overview.trim());
+        }
+        if (typeof behavior === 'string' && behavior.trim()) {
+          parts.push(`Behavior: ${behavior.trim()}`);
+        }
+        if (typeof academics === 'string' && academics.trim()) {
+          parts.push(`Academics: ${academics.trim()}`);
+        }
+        if (typeof interventions === 'string' && interventions.trim()) {
+          parts.push(`Supports: ${interventions.trim()}`);
+        }
+        if (typeof followUp === 'string' && followUp.trim()) {
+          parts.push(`Follow-up: ${followUp.trim()}`);
+        }
+        if (parts.length > 0) {
+          snippet = parts.join(' | ');
+        }
+      }
+
+      if (snippet.length > 180) {
+        snippet = `${snippet.slice(0, 177)}...`;
+      }
 
       let dateStr = '';
       if (item.note?.date) {
@@ -923,11 +983,22 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
         educationParts.push('No school daily scores recorded in the past 30 days.');
       }
 
-      const academicHighlights = buildCaseNoteHighlights(recentNotes, 2, (content) =>
-        content.includes('school') ||
-        content.includes('academic') ||
-        content.includes('class') ||
-        content.includes('grade')
+      const schoolCaseNotes = recentNotes.filter(isSchoolCaseNote);
+      if (schoolCaseNotes.length > 0) {
+        const schoolHighlights = buildCaseNoteHighlights(schoolCaseNotes, 3);
+        if (schoolHighlights.length > 0) {
+          educationParts.push(`School day documentation: ${schoolHighlights.join(' ')}`);
+        }
+      }
+
+      const academicHighlights = buildCaseNoteHighlights(
+        recentNotes.filter(note => !isSchoolCaseNote(note)),
+        2,
+        (content) =>
+          content.includes('school') ||
+          content.includes('academic') ||
+          content.includes('class') ||
+          content.includes('grade')
       );
       if (academicHighlights.length > 0) {
         educationParts.push(`Academic notes: ${academicHighlights.join(' ')}`);

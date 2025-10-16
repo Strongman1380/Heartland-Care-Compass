@@ -482,6 +482,22 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
     return "Continue skill development, academic progress, and positive relationships to prepare for next phase of care";
   };
 
+  const parseCaseNoteJson = (note: any): any | null => {
+    if (!note?.note || typeof note.note !== 'string') {
+      return null;
+    }
+    try {
+      return JSON.parse(note.note);
+    } catch {
+      return null;
+    }
+  };
+
+  const isSchoolCaseNote = (note: any): boolean => {
+    const parsed = parseCaseNoteJson(note);
+    return parsed?.noteType === 'school';
+  };
+
   const extractCaseNoteContent = (note: any): string => {
     if (!note) return "";
     if (typeof note.summary === 'string' && note.summary.trim().length > 0) {
@@ -489,23 +505,42 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
     }
     const rawNote = typeof note.note === 'string' ? note.note : "";
     if (!rawNote) return "";
-    try {
-      const parsed = JSON.parse(rawNote);
-      if (parsed?.sections) {
-        return Object.values(parsed.sections)
-          .filter((value) => typeof value === 'string' && value.trim().length > 0)
-          .join(' ');
+    const parsed = parseCaseNoteJson(note);
+    if (parsed?.noteType === 'school' && parsed.sections) {
+      const { overview, behavior, academics, interventions, followUp } = parsed.sections;
+      const parts: string[] = [];
+      if (typeof overview === 'string' && overview.trim()) {
+        parts.push(overview.trim());
       }
-      if (parsed?.content && typeof parsed.content === 'string') {
-        return parsed.content;
+      if (typeof behavior === 'string' && behavior.trim()) {
+        parts.push(`Behavior: ${behavior.trim()}`);
       }
-    } catch {
-      // Not JSON - return raw text
+      if (typeof academics === 'string' && academics.trim()) {
+        parts.push(`Academics: ${academics.trim()}`);
+      }
+      if (typeof interventions === 'string' && interventions.trim()) {
+        parts.push(`Supports: ${interventions.trim()}`);
+      }
+      if (typeof followUp === 'string' && followUp.trim()) {
+        parts.push(`Follow-up: ${followUp.trim()}`);
+      }
+      if (parts.length > 0) {
+        return parts.join(' ');
+      }
+    }
+    if (parsed?.sections) {
+      return Object.values(parsed.sections)
+        .filter((value) => typeof value === 'string' && value.trim().length > 0)
+        .join(' ');
+    }
+    if (parsed?.content && typeof parsed.content === 'string') {
+      return parsed.content;
     }
     return rawNote;
   };
 
   const formatCaseNoteHighlight = (note: any): string => {
+    const parsed = parseCaseNoteJson(note);
     const content = extractCaseNoteContent(note);
     if (!content) return "";
 
@@ -518,7 +553,34 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
     }
 
     const staff = note?.staff ? ` (${note.staff})` : "";
-    const snippet = content.length > 180 ? `${content.slice(0, 177)}...` : content;
+    let snippet = content;
+
+    if (parsed?.noteType === 'school' && parsed?.sections) {
+      const { overview, behavior, academics, interventions, followUp } = parsed.sections;
+      const labeled: string[] = [];
+      if (typeof overview === 'string' && overview.trim()) {
+        labeled.push(overview.trim());
+      }
+      if (typeof behavior === 'string' && behavior.trim()) {
+        labeled.push(`Behavior: ${behavior.trim()}`);
+      }
+      if (typeof academics === 'string' && academics.trim()) {
+        labeled.push(`Academics: ${academics.trim()}`);
+      }
+      if (typeof interventions === 'string' && interventions.trim()) {
+        labeled.push(`Supports: ${interventions.trim()}`);
+      }
+      if (typeof followUp === 'string' && followUp.trim()) {
+        labeled.push(`Follow-up: ${followUp.trim()}`);
+      }
+      if (labeled.length > 0) {
+        snippet = labeled.join(' | ');
+      }
+    }
+
+    if (snippet.length > 180) {
+      snippet = `${snippet.slice(0, 177)}...`;
+    }
     return `${noteDate ? `${noteDate}: ` : ""}${snippet}${staff}`;
   };
 
@@ -630,8 +692,19 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
       summary += ` No school daily scores were recorded for ${periodLabel}. `;
     }
 
+    const schoolCaseNotes = progressNotes.filter(isSchoolCaseNote);
+    if (schoolCaseNotes.length > 0) {
+      const schoolHighlights = collectCaseNoteHighlights(schoolCaseNotes, 3);
+      if (schoolHighlights.length > 0) {
+        summary += ` School day documentation highlights: ${schoolHighlights.join(' | ')}.`;
+      }
+    }
+
     const academicNotes = collectCaseNoteHighlights(
       progressNotes.filter(note => {
+        if (isSchoolCaseNote(note)) {
+          return false;
+        }
         const content = extractCaseNoteContent(note).toLowerCase();
         return content.includes('school') || content.includes('academic') || content.includes('class') || content.includes('grade');
       }),

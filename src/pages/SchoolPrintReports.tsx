@@ -11,8 +11,9 @@ import { listSchoolIncidents } from '@/utils/academicStore'
 import { exportElementToPDF } from '@/utils/export'
 import { SchoolIncidentReport } from '@/types/school-incident-types'
 import { format, addDays, subDays } from 'date-fns'
-import { FileText, Calendar, TrendingUp, FileDown, Loader2 } from 'lucide-react'
+import { FileText, Calendar, TrendingUp, FileDown, Loader2, Sparkles } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
+import { aiService } from '@/services/aiService'
 
 // Helper to get Thursday-to-Wednesday week
 const getThursdayWeek = (referenceDate: Date = new Date()) => {
@@ -43,6 +44,7 @@ const SchoolPrintReports: React.FC = () => {
   const [downloading, setDownloading] = useState(false)
   const [downloadingAll, setDownloadingAll] = useState(false)
   const [schoolIncidents, setSchoolIncidents] = useState<SchoolIncidentReport[]>([])
+  const [generatingAI, setGeneratingAI] = useState(false)
   
   const [reportType, setReportType] = useState<ReportType>('weekly-average')
   const [selectedYouthId, setSelectedYouthId] = useState<string>('')
@@ -57,6 +59,7 @@ const SchoolPrintReports: React.FC = () => {
   const [strengths, setStrengths] = useState('')
   const [areasForImprovement, setAreasForImprovement] = useState('')
   const [recommendations, setRecommendations] = useState('')
+  const [weeklyAnalysis, setWeeklyAnalysis] = useState('')
   
   useEffect(() => {
     loadYouths()
@@ -128,6 +131,151 @@ const SchoolPrintReports: React.FC = () => {
       }
     }
   }, [reportType, selectedYouthId, youths])
+  
+  // Generate AI analysis for individual student
+  const generateAIAnalysis = async () => {
+    if (!selectedYouthId) {
+      toast({
+        title: 'No student selected',
+        description: 'Please select a student first.',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    if (!studentProgress || studentProgress.scores.length === 0) {
+      toast({
+        title: 'No data available',
+        description: 'Cannot generate analysis without school score data.',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    setGeneratingAI(true)
+    try {
+      const youth = studentProgress.youth
+      const scores = studentProgress.scores
+      const average = studentProgress.average
+      
+      // Get related incidents for context
+      const youthIncidents = filteredIncidents.filter(
+        inc => inc.involved_residents?.some(r => r.resident_id === selectedYouthId)
+      )
+
+      const prompt = `Generate a comprehensive academic progress analysis for ${youth.firstName} ${youth.lastName}.
+
+Current Academic Performance:
+- Weekly Average: ${average} out of 4.0
+- Days Recorded: ${scores.length}
+- Daily Scores: ${scores.map(s => `${format(new Date(s.date), 'MMM dd')}: ${s.score}`).join(', ')}
+- Current Grade: ${youth.currentGrade || 'Not specified'}
+- School: ${youth.currentSchool || 'Not specified'}
+- Has IEP: ${youth.hasIEP ? 'Yes' : 'No'}
+
+${youthIncidents.length > 0 ? `Recent Incidents: ${youthIncidents.length} incidents during this period` : 'No incidents during this period'}
+
+Based on this data, provide:
+1. **Progress Notes** (2-3 sentences): Overall academic performance summary
+2. **Academic Strengths** (2-3 bullet points): What the student is doing well
+3. **Areas for Improvement** (2-3 bullet points): Specific areas needing attention
+4. **Recommendations** (3-4 actionable items): Concrete next steps for teachers/staff
+
+Format your response as JSON with these exact keys: progressNotes, strengths, areasForImprovement, recommendations`
+
+      const response = await aiService.queryData(prompt, {
+        youth,
+        scores,
+        incidents: youthIncidents
+      })
+
+      if (response.success && response.data) {
+        try {
+          // Try to parse as JSON first
+          const analysis = JSON.parse(response.data)
+          setProgressNotes(analysis.progressNotes || '')
+          setStrengths(analysis.strengths || '')
+          setAreasForImprovement(analysis.areasForImprovement || '')
+          setRecommendations(analysis.recommendations || '')
+        } catch {
+          // If not JSON, use as progress notes
+          setProgressNotes(response.data)
+        }
+
+        toast({
+          title: 'Analysis Generated',
+          description: 'AI has generated the academic analysis.',
+        })
+      }
+    } catch (error: any) {
+      console.error('AI analysis error:', error)
+      toast({
+        title: 'Generation Failed',
+        description: error.message || 'Could not generate AI analysis.',
+        variant: 'destructive',
+      })
+    } finally {
+      setGeneratingAI(false)
+    }
+  }
+
+  // Generate AI analysis for weekly report
+  const generateWeeklyAIAnalysis = async () => {
+    if (weeklyAverages.length === 0) {
+      toast({
+        title: 'No data available',
+        description: 'Cannot generate analysis without school score data.',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    setGeneratingAI(true)
+    try {
+      const prompt = `Generate a comprehensive weekly academic performance analysis for Heartland Boys Home.
+
+Program Overview:
+- Overall Program Average: ${overallAverage}
+- Number of Students: ${weeklyAverages.length}
+- Report Period: ${formatRangeDate(startDate)} - ${formatRangeDate(endDate)}
+
+Student Performance:
+${weeklyAverages.map(item => `- ${item.name}: ${item.average} avg (${item.daysRecorded} days)`).join('\n')}
+
+${filteredIncidents.length > 0 ? `School Incidents This Week: ${filteredIncidents.length}` : 'No school incidents this week'}
+
+Provide a professional analysis including:
+1. Overall program performance trends
+2. Students excelling and those needing additional support
+3. Notable improvements or concerns
+4. Recommendations for staff and programming
+
+Write 3-4 paragraphs in a professional tone suitable for program directors.`
+
+      const response = await aiService.queryData(prompt, {
+        averages: weeklyAverages,
+        overallAverage,
+        incidents: filteredIncidents
+      })
+
+      if (response.success && response.data) {
+        setWeeklyAnalysis(response.data)
+        toast({
+          title: 'Analysis Generated',
+          description: 'AI has generated the weekly analysis.',
+        })
+      }
+    } catch (error: any) {
+      console.error('AI analysis error:', error)
+      toast({
+        title: 'Generation Failed',
+        description: error.message || 'Could not generate AI analysis.',
+        variant: 'destructive',
+      })
+    } finally {
+      setGeneratingAI(false)
+    }
+  }
   
   const handleDownloadPDF = async () => {
     if (!printRef.current) {
@@ -379,6 +527,19 @@ const SchoolPrintReports: React.FC = () => {
               <li className="text-red-700 font-medium">Unsatisfactory: Below 2.0</li>
             </ul>
           </div>
+
+          {/* AI-Generated Weekly Analysis */}
+          {weeklyAnalysis && (
+            <div className="mt-6 p-4 bg-blue-50 rounded-lg border-2 border-blue-200 no-break">
+              <h3 className="text-sm font-bold text-blue-900 mb-3 flex items-center gap-2">
+                <Sparkles className="w-4 h-4" />
+                Program Analysis & Insights
+              </h3>
+              <div className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
+                {weeklyAnalysis}
+              </div>
+            </div>
+          )}
         </>
       )}
     </section>
@@ -804,6 +965,18 @@ const SchoolPrintReports: React.FC = () => {
           {/* Additional fields for Student Progress Report */}
           {reportType === 'student-progress' && selectedYouthId && (
             <div className="space-y-4 border-t pt-4">
+              <div className="flex justify-between items-center mb-4">
+                <p className="text-sm text-gray-600">Fill in the fields below or use AI to generate analysis</p>
+                <Button 
+                  onClick={generateAIAnalysis}
+                  disabled={generatingAI || !studentProgress}
+                  variant="outline"
+                  size="sm"
+                >
+                  <Sparkles className="w-4 h-4 mr-2" />
+                  {generatingAI ? 'Generating...' : 'Generate AI Analysis'}
+                </Button>
+              </div>
               <div>
                 <Label htmlFor="strengths">Academic Strengths</Label>
                 <Textarea
@@ -844,6 +1017,27 @@ const SchoolPrintReports: React.FC = () => {
                   rows={3}
                 />
               </div>
+            </div>
+          )}
+          
+          {/* Generate AI Analysis Button for Weekly Report */}
+          {reportType === 'weekly-average' && weeklyAverages.length > 0 && (
+            <div className="border-t pt-4">
+              <Button 
+                onClick={generateWeeklyAIAnalysis}
+                disabled={generatingAI}
+                variant="outline"
+                className="w-full"
+              >
+                <Sparkles className="w-4 h-4 mr-2" />
+                {generatingAI ? 'Generating Weekly Analysis...' : 'Generate AI Weekly Analysis'}
+              </Button>
+              {weeklyAnalysis && (
+                <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                  <p className="text-sm font-semibold text-blue-900 mb-2">Generated Analysis (will appear in report):</p>
+                  <p className="text-sm text-gray-700 whitespace-pre-wrap">{weeklyAnalysis}</p>
+                </div>
+              )}
             </div>
           )}
           

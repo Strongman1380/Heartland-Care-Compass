@@ -6,6 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ChevronDown, ChevronRight, FileText, Search, Download, Printer, Sparkles, Loader2, Edit2, X, Save, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { format, parseISO } from "date-fns";
@@ -22,7 +23,7 @@ interface EnhancedCaseNotesProps {
   onBackToSelection?: () => void;
 }
 
-type NoteType = 'session' | 'general' | 'shift';
+type NoteType = 'session' | 'general' | 'shift' | 'school';
 
 type SessionNoteSections = {
   summary: string;
@@ -33,7 +34,33 @@ type SessionNoteSections = {
 
 type SimpleNoteData = {
   summary: string;
+  programmingFocus?: string;
 };
+
+type SchoolNoteFormData = {
+  date: string;
+  staff: string;
+  summary: string;
+  behavior: string;
+  academics: string;
+  interventions: string;
+  followUp: string;
+};
+
+const PROGRAMMING_OPTIONS = [
+  { value: "day_programming", label: "Day Programming" },
+  { value: "night_programming", label: "Night Programming" },
+  { value: "education_programming", label: "Education Programming" },
+  { value: "morning_focus", label: "Morning Focus" },
+  { value: "evening_focus", label: "Evening Focus" },
+  { value: "overnight_focus", label: "Overnight Focus" },
+  { value: "all_day_programming", label: "All-Day Programming" },
+] as const;
+
+const programmingLabelMap = PROGRAMMING_OPTIONS.reduce<Record<string, string>>((acc, option) => {
+  acc[option.value] = option.label;
+  return acc;
+}, {});
 
 export const EnhancedCaseNotes = ({ youthId, youth, onYouthChange, onBackToSelection }: EnhancedCaseNotesProps) => {
   const [filteredNotes, setFilteredNotes] = useState<CaseNote[]>([]);
@@ -74,6 +101,17 @@ export const EnhancedCaseNotes = ({ youthId, youth, onYouthChange, onBackToSelec
     date: format(new Date(), 'yyyy-MM-dd'),
     staff: "",
     summary: "",
+    programmingFocus: "",
+  });
+
+  const [schoolFormData, setSchoolFormData] = useState<SchoolNoteFormData>({
+    date: format(new Date(), 'yyyy-MM-dd'),
+    staff: "",
+    summary: "",
+    behavior: "",
+    academics: "",
+    interventions: "",
+    followUp: "",
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -106,7 +144,11 @@ export const EnhancedCaseNotes = ({ youthId, youth, onYouthChange, onBackToSelec
   };
 
   // AI Enhancement Functions
-  const enhanceTextField = async (fieldName: string, currentValue: string, fieldType: 'session' | 'simple') => {
+  const enhanceTextField = async (
+    fieldName: string,
+    currentValue: string,
+    fieldType: 'session' | 'simple' | 'school'
+  ) => {
     if (!currentValue.trim()) {
       toast.error("Please enter some text first before enhancing");
       return;
@@ -127,6 +169,11 @@ export const EnhancedCaseNotes = ({ youthId, youth, onYouthChange, onBackToSelec
 
         if (fieldType === 'session') {
           setSessionFormData(prev => ({
+            ...prev,
+            [fieldName]: enhancedText
+          }));
+        } else if (fieldType === 'school') {
+          setSchoolFormData(prev => ({
             ...prev,
             [fieldName]: enhancedText
           }));
@@ -162,6 +209,12 @@ export const EnhancedCaseNotes = ({ youthId, youth, onYouthChange, onBackToSelec
       general_summary: `Take these brief notes and expand them into a clear, professional paragraph for ${youth.firstName}'s case note:\n\n"${currentValue}"\n\nExpand this into 2-3 well-written sentences that capture the key information.`,
 
       shift_summary: `Take these brief notes and expand them into a clear paragraph summarizing the shift for ${youth.firstName}:\n\n"${currentValue}"\n\nExpand this into 2-3 sentences that capture the key events and observations.`
+      ,
+      school_summary: `Take these short notes about ${youth.firstName}'s school day and expand them into a clear overview paragraph. Keep it focused on key events, behavior, and academic engagement:\n\n"${currentValue}"\n\nExpand this into 2-3 professional sentences.`,
+      school_behavior: `Take these brief behavior observations from ${youth.firstName}'s school day and expand them into a descriptive paragraph highlighting specific behaviors, responses to staff, and classroom conduct:\n\n"${currentValue}"\n\nExpand this into 2-3 sentences with professional tone.`,
+      school_academics: `Take these quick academic notes about ${youth.firstName} and expand them into a paragraph about academic participation, comprehension, and classwork performance:\n\n"${currentValue}"\n\nExpand this into 2-3 well-structured sentences.`,
+      school_interventions: `Take these notes about interventions or supports provided to ${youth.firstName} during the school day and expand them into a clear description of what was done and how ${youth.firstName} responded:\n\n"${currentValue}"\n\nExpand this into 2-3 sentences in professional language.`,
+      school_followUp: `Take these notes about follow-up needs or communication after ${youth.firstName}'s school day and expand them into specific next steps or coordination items:\n\n"${currentValue}"\n\nExpand this into 2-3 sentences with clear action steps.`
     };
 
     return prompts[fieldName] || prompts.general_summary;
@@ -175,6 +228,15 @@ export const EnhancedCaseNotes = ({ youthId, youth, onYouthChange, onBackToSelec
   const handleSimpleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setSimpleFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleSimpleSelectChange = (field: string, value: string) => {
+    setSimpleFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleSchoolInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setSchoolFormData(prev => ({ ...prev, [name]: value }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -227,6 +289,57 @@ export const EnhancedCaseNotes = ({ youthId, youth, onYouthChange, onBackToSelec
           interventionsResponse: "",
           planNextSteps: "",
         });
+      } else if (noteType === 'school') {
+        const hasContent = [
+          schoolFormData.summary,
+          schoolFormData.behavior,
+          schoolFormData.academics,
+          schoolFormData.interventions,
+          schoolFormData.followUp,
+        ].some(section => section.trim().length > 0);
+
+        if (!hasContent) {
+          toast.error("Please enter at least one section for the school day note");
+          return;
+        }
+
+        const structuredNote = {
+          formatVersion: "v3",
+          noteType: "school",
+          sections: {
+            overview: schoolFormData.summary.trim(),
+            behavior: schoolFormData.behavior.trim(),
+            academics: schoolFormData.academics.trim(),
+            interventions: schoolFormData.interventions.trim(),
+            followUp: schoolFormData.followUp.trim(),
+          },
+        };
+
+        const summaryText =
+          schoolFormData.summary.trim() ||
+          schoolFormData.behavior.trim() ||
+          schoolFormData.academics.trim() ||
+          "School Day Note";
+
+        const baseSummary = summaryText.trim();
+
+        newNote = {
+          youth_id: youthId,
+          date: schoolFormData.date,
+          summary: baseSummary.substring(0, 100) + (baseSummary.length > 100 ? "..." : ""),
+          note: JSON.stringify(structuredNote),
+          staff: schoolFormData.staff.trim() || "School Staff",
+        };
+
+        setSchoolFormData({
+          date: format(new Date(), 'yyyy-MM-dd'),
+          staff: "",
+          summary: "",
+          behavior: "",
+          academics: "",
+          interventions: "",
+          followUp: "",
+        });
       } else {
         // General or Shift note validation
         if (!simpleFormData.summary.trim()) {
@@ -238,12 +351,21 @@ export const EnhancedCaseNotes = ({ youthId, youth, onYouthChange, onBackToSelec
           formatVersion: "v3",
           noteType: noteType,
           summary: simpleFormData.summary.trim(),
+          ...(noteType === 'general' && simpleFormData.programmingFocus
+            ? { programmingFocus: simpleFormData.programmingFocus }
+            : {}),
         };
+
+        const rawSummary = simpleFormData.summary.trim();
+        const summaryWithFocus =
+          noteType === 'general' && simpleFormData.programmingFocus
+            ? `[${programmingLabelMap[simpleFormData.programmingFocus]}] ${rawSummary}`
+            : rawSummary;
 
         newNote = {
           youth_id: youthId,
           date: simpleFormData.date, // Keep as-is, no need to re-format
-          summary: simpleFormData.summary.trim().substring(0, 100) + (simpleFormData.summary.length > 100 ? '...' : ''),
+          summary: summaryWithFocus.substring(0, 100) + (summaryWithFocus.length > 100 ? '...' : ''),
           note: JSON.stringify(simpleNote),
           staff: simpleFormData.staff.trim() || "Staff Member",
         };
@@ -253,11 +375,27 @@ export const EnhancedCaseNotes = ({ youthId, youth, onYouthChange, onBackToSelec
           date: format(new Date(), 'yyyy-MM-dd'),
           staff: "",
           summary: "",
+          programmingFocus: "",
         });
       }
 
       await createCaseNote(newNote);
-      toast.success(`${noteType === 'session' ? 'Session' : noteType === 'general' ? 'General' : 'Shift'} note added successfully!`);
+      const successLabel = (() => {
+        switch (noteType) {
+          case 'session':
+            return 'Session';
+          case 'general':
+            return 'General';
+          case 'shift':
+            return 'Shift';
+          case 'school':
+            return 'School Day';
+          default:
+            return 'Case';
+        }
+      })();
+
+      toast.success(`${successLabel} note added successfully!`);
 
       // Switch to history tab after saving
       setActiveTab('history');
@@ -284,12 +422,24 @@ export const EnhancedCaseNotes = ({ youthId, youth, onYouthChange, onBackToSelec
         noteType: 'session',
         ...parsed.sections
       });
+    } else if (parsed?.noteType === 'school') {
+      setEditFormData({
+        date: note.date,
+        staff: note.staff,
+        noteType: 'school',
+        summary: parsed.sections?.overview || '',
+        behavior: parsed.sections?.behavior || '',
+        academics: parsed.sections?.academics || '',
+        interventions: parsed.sections?.interventions || '',
+        followUp: parsed.sections?.followUp || '',
+      });
     } else {
       setEditFormData({
         date: note.date,
         staff: note.staff,
         noteType: parsed?.noteType || 'general',
-        summary: parsed?.summary || note.note || ''
+        summary: parsed?.summary || note.note || '',
+        programmingFocus: parsed?.programmingFocus || '',
       });
     }
     setExpandedNote(note.id!);
@@ -324,16 +474,52 @@ export const EnhancedCaseNotes = ({ youthId, youth, onYouthChange, onBackToSelec
           note: JSON.stringify(structuredNote),
           staff: editFormData.staff?.trim() || "Staff Member",
         };
+      } else if (editFormData.noteType === 'school') {
+        const structuredNote = {
+          formatVersion: "v3",
+          noteType: "school",
+          sections: {
+            overview: editFormData.summary?.trim() || '',
+            behavior: editFormData.behavior?.trim() || '',
+            academics: editFormData.academics?.trim() || '',
+            interventions: editFormData.interventions?.trim() || '',
+            followUp: editFormData.followUp?.trim() || '',
+          },
+        };
+
+        const summaryText =
+          (editFormData.summary?.trim() || '') ||
+          (editFormData.behavior?.trim() || '') ||
+          (editFormData.academics?.trim() || '') ||
+          "School Day Note";
+
+        const baseSummary = summaryText.trim();
+
+        updatedNote = {
+          date: editFormData.date,
+          summary: baseSummary.substring(0, 100) + (baseSummary.length > 100 ? '...' : ''),
+          note: JSON.stringify(structuredNote),
+          staff: editFormData.staff?.trim() || "School Staff",
+        };
       } else {
         const simpleNote = {
           formatVersion: "v3",
           noteType: editFormData.noteType,
           summary: editFormData.summary?.trim() || '',
+          ...(editFormData.noteType === 'general' && editFormData.programmingFocus
+            ? { programmingFocus: editFormData.programmingFocus }
+            : {}),
         };
+
+        const rawSummary = editFormData.summary?.trim() || '';
+        const summaryWithFocus =
+          editFormData.noteType === 'general' && editFormData.programmingFocus
+            ? `[${programmingLabelMap[editFormData.programmingFocus]}] ${rawSummary}`
+            : rawSummary;
 
         updatedNote = {
           date: editFormData.date,
-          summary: editFormData.summary?.trim().substring(0, 100) + (editFormData.summary.length > 100 ? '...' : ''),
+          summary: summaryWithFocus.substring(0, 100) + (summaryWithFocus.length > 100 ? '...' : ''),
           note: JSON.stringify(simpleNote),
           staff: editFormData.staff?.trim() || "Staff Member",
         };
@@ -391,7 +577,8 @@ export const EnhancedCaseNotes = ({ youthId, youth, onYouthChange, onBackToSelec
       const parsed = parseNote(note.note);
       const noteTypeBadge = parsed?.noteType === 'session' ? 'Session Note' :
                            parsed?.noteType === 'shift' ? 'Shift Summary' :
-                           parsed?.noteType === 'general' ? 'General Note' : 'Case Note';
+                           parsed?.noteType === 'general' ? 'General Note' :
+                           parsed?.noteType === 'school' ? 'School Day Note' : 'Case Note';
 
       let contentHTML = '';
 
@@ -428,9 +615,56 @@ export const EnhancedCaseNotes = ({ youthId, youth, onYouthChange, onBackToSelec
             </div>
           `;
         }
+      } else if (parsed?.noteType === 'school') {
+        const sections = parsed.sections || {};
+        if (sections.overview) {
+          contentHTML += `
+            <div class="note-section">
+              <h4>School Day Overview</h4>
+              <p>${sections.overview.replace(/\n/g, '<br>').replace(/  /g, '&nbsp;&nbsp;')}</p>
+            </div>
+          `;
+        }
+        if (sections.behavior) {
+          contentHTML += `
+            <div class="note-section">
+              <h4>Behavior Observations</h4>
+              <p>${sections.behavior.replace(/\n/g, '<br>').replace(/  /g, '&nbsp;&nbsp;')}</p>
+            </div>
+          `;
+        }
+        if (sections.academics) {
+          contentHTML += `
+            <div class="note-section">
+              <h4>Academic Engagement</h4>
+              <p>${sections.academics.replace(/\n/g, '<br>').replace(/  /g, '&nbsp;&nbsp;')}</p>
+            </div>
+          `;
+        }
+        if (sections.interventions) {
+          contentHTML += `
+            <div class="note-section">
+              <h4>Interventions & Supports</h4>
+              <p>${sections.interventions.replace(/\n/g, '<br>').replace(/  /g, '&nbsp;&nbsp;')}</p>
+            </div>
+          `;
+        }
+        if (sections.followUp) {
+          contentHTML += `
+            <div class="note-section">
+              <h4>Follow-up / Communication</h4>
+              <p>${sections.followUp.replace(/\n/g, '<br>').replace(/  /g, '&nbsp;&nbsp;')}</p>
+            </div>
+          `;
+        }
       } else if (parsed?.summary) {
+        const programmingLabel = parsed?.noteType === 'general' && parsed?.programmingFocus
+          ? programmingLabelMap[parsed.programmingFocus] || parsed.programmingFocus
+          : null;
+
         contentHTML = `
           <div class="note-section">
+            ${programmingLabel ? `<p><strong>Programming Focus:</strong> ${programmingLabel}</p>` : ''}
             <p>${parsed.summary.replace(/\n/g, '<br>').replace(/  /g, '&nbsp;&nbsp;')}</p>
           </div>
         `;
@@ -764,6 +998,93 @@ export const EnhancedCaseNotes = ({ youthId, youth, onYouthChange, onBackToSelec
           </div>
         </div>
       );
+    } else if (editFormData.noteType === 'school') {
+      return (
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label>Date</Label>
+              <Input
+                type="date"
+                value={editFormData.date}
+                onChange={(e) => handleEditInputChange('date', e.target.value)}
+              />
+            </div>
+            <div>
+              <Label>Recorded By</Label>
+              <Input
+                value={editFormData.staff}
+                onChange={(e) => handleEditInputChange('staff', e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div>
+            <Label>School Day Overview</Label>
+            <Textarea
+              value={editFormData.summary || ''}
+              onChange={(e) => handleEditInputChange('summary', e.target.value)}
+              rows={3}
+            />
+          </div>
+
+          <div>
+            <Label>Behavior Observations</Label>
+            <Textarea
+              value={editFormData.behavior || ''}
+              onChange={(e) => handleEditInputChange('behavior', e.target.value)}
+              rows={3}
+            />
+          </div>
+
+          <div>
+            <Label>Academic Engagement</Label>
+            <Textarea
+              value={editFormData.academics || ''}
+              onChange={(e) => handleEditInputChange('academics', e.target.value)}
+              rows={3}
+            />
+          </div>
+
+          <div>
+            <Label>Interventions & Supports</Label>
+            <Textarea
+              value={editFormData.interventions || ''}
+              onChange={(e) => handleEditInputChange('interventions', e.target.value)}
+              rows={3}
+            />
+          </div>
+
+          <div>
+            <Label>Follow-up / Communication</Label>
+            <Textarea
+              value={editFormData.followUp || ''}
+              onChange={(e) => handleEditInputChange('followUp', e.target.value)}
+              rows={3}
+            />
+          </div>
+
+          <div className="flex gap-2 justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={cancelEditing}
+              disabled={isSubmitting}
+            >
+              <X className="w-4 h-4 mr-2" />
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={() => saveEdit(note.id!)}
+              disabled={isSubmitting}
+            >
+              <Save className="w-4 h-4 mr-2" />
+              {isSubmitting ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </div>
+        </div>
+      );
     } else {
       // General or Shift note edit
       return (
@@ -794,6 +1115,30 @@ export const EnhancedCaseNotes = ({ youthId, youth, onYouthChange, onBackToSelec
               rows={6}
             />
           </div>
+
+          {editFormData.noteType === 'general' && (
+            <div className="space-y-2">
+              <Label htmlFor="edit-programming-focus">Programming Focus</Label>
+              <Select
+                value={editFormData.programmingFocus || undefined}
+                onValueChange={(value) => handleEditInputChange('programmingFocus', value)}
+              >
+                <SelectTrigger id="edit-programming-focus">
+                  <SelectValue placeholder="Select programming focus" />
+                </SelectTrigger>
+                <SelectContent>
+                  {PROGRAMMING_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-gray-500">
+                Update the program or shift context for this general note.
+              </p>
+            </div>
+          )}
 
           <div className="flex gap-2 justify-end">
             <Button
@@ -860,11 +1205,54 @@ export const EnhancedCaseNotes = ({ youthId, youth, onYouthChange, onBackToSelec
           )}
         </div>
       );
+    } else if (parsed.noteType === 'school') {
+      const sections = parsed.sections || {};
+      return (
+        <div className="space-y-4">
+          {sections.overview && (
+            <div>
+              <h4 className="font-semibold text-sm mb-1">School Day Overview</h4>
+              <p className="text-sm text-gray-700 whitespace-pre-wrap">{sections.overview}</p>
+            </div>
+          )}
+          {sections.behavior && (
+            <div>
+              <h4 className="font-semibold text-sm mb-1">Behavior Observations</h4>
+              <p className="text-sm text-gray-700 whitespace-pre-wrap">{sections.behavior}</p>
+            </div>
+          )}
+          {sections.academics && (
+            <div>
+              <h4 className="font-semibold text-sm mb-1">Academic Engagement</h4>
+              <p className="text-sm text-gray-700 whitespace-pre-wrap">{sections.academics}</p>
+            </div>
+          )}
+          {sections.interventions && (
+            <div>
+              <h4 className="font-semibold text-sm mb-1">Interventions & Supports</h4>
+              <p className="text-sm text-gray-700 whitespace-pre-wrap">{sections.interventions}</p>
+            </div>
+          )}
+          {sections.followUp && (
+            <div>
+              <h4 className="font-semibold text-sm mb-1">Follow-up / Communication</h4>
+              <p className="text-sm text-gray-700 whitespace-pre-wrap">{sections.followUp}</p>
+            </div>
+          )}
+        </div>
+      );
     } else {
       // General or Shift note
       return (
-        <div>
-          <p className="text-sm text-gray-700 whitespace-pre-wrap">{parsed.summary}</p>
+        <div className="space-y-2">
+          {parsed?.noteType === 'general' && parsed?.programmingFocus && (
+            <Badge variant="outline" className="w-fit">
+              {programmingLabelMap[parsed.programmingFocus] || parsed.programmingFocus}
+            </Badge>
+          )}
+          <p className="text-sm text-gray-700 whitespace-pre-wrap">
+            {parsed.summary || parsed.sections?.summary || note.note}
+          </p>
         </div>
       );
     }
@@ -878,6 +1266,7 @@ export const EnhancedCaseNotes = ({ youthId, youth, onYouthChange, onBackToSelec
       session: { label: 'Session', variant: 'default' },
       general: { label: 'General', variant: 'secondary' },
       shift: { label: 'Shift', variant: 'outline' },
+      school: { label: 'School Day', variant: 'secondary' },
       legacy: { label: 'Note', variant: 'outline' }
     };
 
@@ -919,7 +1308,7 @@ export const EnhancedCaseNotes = ({ youthId, youth, onYouthChange, onBackToSelec
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Note Type Selector */}
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <Button
                   type="button"
                   variant={noteType === 'session' ? 'default' : 'outline'}
@@ -935,6 +1324,14 @@ export const EnhancedCaseNotes = ({ youthId, youth, onYouthChange, onBackToSelec
                   className="flex-1"
                 >
                   General Note
+                </Button>
+                <Button
+                  type="button"
+                  variant={noteType === 'school' ? 'default' : 'outline'}
+                  onClick={() => setNoteType('school')}
+                  className="flex-1"
+                >
+                  School Day Note
                 </Button>
                 <Button
                   type="button"
@@ -955,8 +1352,20 @@ export const EnhancedCaseNotes = ({ youthId, youth, onYouthChange, onBackToSelec
                       id="date"
                       name="date"
                       type="date"
-                      value={noteType === 'session' ? sessionFormData.date : simpleFormData.date}
-                      onChange={noteType === 'session' ? handleSessionInputChange : handleSimpleInputChange}
+                      value={
+                        noteType === 'session'
+                          ? sessionFormData.date
+                          : noteType === 'school'
+                          ? schoolFormData.date
+                          : simpleFormData.date
+                      }
+                      onChange={
+                        noteType === 'session'
+                          ? handleSessionInputChange
+                          : noteType === 'school'
+                          ? handleSchoolInputChange
+                          : handleSimpleInputChange
+                      }
                       required
                     />
                   </div>
@@ -965,8 +1374,20 @@ export const EnhancedCaseNotes = ({ youthId, youth, onYouthChange, onBackToSelec
                     <Input
                       id="staff"
                       name="staff"
-                      value={noteType === 'session' ? sessionFormData.staff : simpleFormData.staff}
-                      onChange={noteType === 'session' ? handleSessionInputChange : handleSimpleInputChange}
+                      value={
+                        noteType === 'session'
+                          ? sessionFormData.staff
+                          : noteType === 'school'
+                          ? schoolFormData.staff
+                          : simpleFormData.staff
+                      }
+                      onChange={
+                        noteType === 'session'
+                          ? handleSessionInputChange
+                          : noteType === 'school'
+                          ? handleSchoolInputChange
+                          : handleSimpleInputChange
+                      }
                       placeholder="Your name"
                       required
                     />
@@ -1098,6 +1519,161 @@ export const EnhancedCaseNotes = ({ youthId, youth, onYouthChange, onBackToSelec
                   </div>
                 )}
 
+                {/* SCHOOL NOTE FIELDS */}
+                {noteType === 'school' && (
+                  <div className="space-y-4">
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <Label htmlFor="school-summary">School Day Overview</Label>
+                        {aiStatus?.available && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => enhanceTextField('school_summary', schoolFormData.summary, 'school')}
+                            disabled={isEnhancing === 'school_summary' || !schoolFormData.summary.trim()}
+                          >
+                            {isEnhancing === 'school_summary' ? (
+                              <Loader2 className="w-4 h-4 animate-spin mr-1" />
+                            ) : (
+                              <Sparkles className="w-4 h-4 mr-1" />
+                            )}
+                            Enhance
+                          </Button>
+                        )}
+                      </div>
+                      <Textarea
+                        id="school-summary"
+                        name="summary"
+                        value={schoolFormData.summary}
+                        onChange={handleSchoolInputChange}
+                        placeholder="Brief overview of attendance, mood, and general tone of the school day..."
+                        rows={3}
+                      />
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <Label htmlFor="school-behavior">Behavior Observations</Label>
+                        {aiStatus?.available && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => enhanceTextField('school_behavior', schoolFormData.behavior, 'school')}
+                            disabled={isEnhancing === 'school_behavior' || !schoolFormData.behavior.trim()}
+                          >
+                            {isEnhancing === 'school_behavior' ? (
+                              <Loader2 className="w-4 h-4 animate-spin mr-1" />
+                            ) : (
+                              <Sparkles className="w-4 h-4 mr-1" />
+                            )}
+                            Enhance
+                          </Button>
+                        )}
+                      </div>
+                      <Textarea
+                        id="school-behavior"
+                        name="behavior"
+                        value={schoolFormData.behavior}
+                        onChange={handleSchoolInputChange}
+                        placeholder="Classroom conduct, peer interactions, responsiveness to staff direction..."
+                        rows={3}
+                      />
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <Label htmlFor="school-academics">Academic Engagement</Label>
+                        {aiStatus?.available && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => enhanceTextField('school_academics', schoolFormData.academics, 'school')}
+                            disabled={isEnhancing === 'school_academics' || !schoolFormData.academics.trim()}
+                          >
+                            {isEnhancing === 'school_academics' ? (
+                              <Loader2 className="w-4 h-4 animate-spin mr-1" />
+                            ) : (
+                              <Sparkles className="w-4 h-4 mr-1" />
+                            )}
+                            Enhance
+                          </Button>
+                        )}
+                      </div>
+                      <Textarea
+                        id="school-academics"
+                        name="academics"
+                        value={schoolFormData.academics}
+                        onChange={handleSchoolInputChange}
+                        placeholder="Participation, comprehension, assignments completed, strengths or struggles..."
+                        rows={3}
+                      />
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <Label htmlFor="school-interventions">Interventions & Supports</Label>
+                        {aiStatus?.available && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => enhanceTextField('school_interventions', schoolFormData.interventions, 'school')}
+                            disabled={isEnhancing === 'school_interventions' || !schoolFormData.interventions.trim()}
+                          >
+                            {isEnhancing === 'school_interventions' ? (
+                              <Loader2 className="w-4 h-4 animate-spin mr-1" />
+                            ) : (
+                              <Sparkles className="w-4 h-4 mr-1" />
+                            )}
+                            Enhance
+                          </Button>
+                        )}
+                      </div>
+                      <Textarea
+                        id="school-interventions"
+                        name="interventions"
+                        value={schoolFormData.interventions}
+                        onChange={handleSchoolInputChange}
+                        placeholder="Supports provided, interventions attempted, youth response..."
+                        rows={3}
+                      />
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <Label htmlFor="school-followUp">Follow-up / Communication</Label>
+                        {aiStatus?.available && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => enhanceTextField('school_followUp', schoolFormData.followUp, 'school')}
+                            disabled={isEnhancing === 'school_followUp' || !schoolFormData.followUp.trim()}
+                          >
+                            {isEnhancing === 'school_followUp' ? (
+                              <Loader2 className="w-4 h-4 animate-spin mr-1" />
+                            ) : (
+                              <Sparkles className="w-4 h-4 mr-1" />
+                            )}
+                            Enhance
+                          </Button>
+                        )}
+                      </div>
+                      <Textarea
+                        id="school-followUp"
+                        name="followUp"
+                        value={schoolFormData.followUp}
+                        onChange={handleSchoolInputChange}
+                        placeholder="Communication with school or caretakers, next steps needed..."
+                        rows={3}
+                      />
+                    </div>
+                  </div>
+                )}
+
                 {/* GENERAL/SHIFT NOTE FIELDS */}
                 {(noteType === 'general' || noteType === 'shift') && (
                   <div>
@@ -1143,8 +1719,42 @@ export const EnhancedCaseNotes = ({ youthId, youth, onYouthChange, onBackToSelec
                   </div>
                 )}
 
+                {noteType === 'general' && (
+                  <div className="space-y-2">
+                    <Label htmlFor="programmingFocus">Programming Focus</Label>
+                    <Select
+                      value={simpleFormData.programmingFocus || undefined}
+                      onValueChange={(value) => handleSimpleSelectChange('programmingFocus', value)}
+                    >
+                      <SelectTrigger id="programmingFocus">
+                        <SelectValue placeholder="Select programming focus" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {PROGRAMMING_OPTIONS.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-gray-500">
+                      Choose the program or shift context this general note covers.
+                    </p>
+                  </div>
+                )}
+
                 <Button type="submit" disabled={isSubmitting} className="w-full">
-                  {isSubmitting ? "Saving..." : `Save ${noteType === 'session' ? 'Session' : noteType === 'general' ? 'General' : 'Shift'} Note`}
+                  {isSubmitting
+                    ? "Saving..."
+                    : `Save ${
+                        noteType === 'session'
+                          ? 'Session'
+                          : noteType === 'general'
+                          ? 'General'
+                          : noteType === 'shift'
+                          ? 'Shift'
+                          : 'School Day'
+                      } Note`}
                 </Button>
               </form>
             </CardContent>

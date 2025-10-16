@@ -488,6 +488,16 @@ export type Database = {
           traumaHistory: string[] | null
           treatmentFocus: Json | null
           updatedAt: string | null
+          restrictionLevel: number | null
+          restrictionPointsRequired: number | null
+          restrictionStartDate: string | null
+          restrictionPointsEarned: number | null
+          restrictionReason: string | null
+          subsystemActive: boolean | null
+          subsystemPointsRequired: number | null
+          subsystemStartDate: string | null
+          subsystemPointsEarned: number | null
+          subsystemReason: string | null
         }
         Insert: {
           academicChallenges?: string | null
@@ -602,6 +612,16 @@ export type Database = {
           traumaHistory?: string[] | null
           treatmentFocus?: Json | null
           updatedAt?: string | null
+          restrictionLevel?: number | null
+          restrictionPointsRequired?: number | null
+          restrictionStartDate?: string | null
+          restrictionPointsEarned?: number | null
+          restrictionReason?: string | null
+          subsystemActive?: boolean | null
+          subsystemPointsRequired?: number | null
+          subsystemStartDate?: string | null
+          subsystemPointsEarned?: number | null
+          subsystemReason?: string | null
         }
         Update: {
           academicChallenges?: string | null
@@ -716,6 +736,16 @@ export type Database = {
           traumaHistory?: string[] | null
           treatmentFocus?: Json | null
           updatedAt?: string | null
+          restrictionLevel?: number | null
+          restrictionPointsRequired?: number | null
+          restrictionStartDate?: string | null
+          restrictionPointsEarned?: number | null
+          restrictionReason?: string | null
+          subsystemActive?: boolean | null
+          subsystemPointsRequired?: number | null
+          subsystemStartDate?: string | null
+          subsystemPointsEarned?: number | null
+          subsystemReason?: string | null
         }
         Relationships: []
       }

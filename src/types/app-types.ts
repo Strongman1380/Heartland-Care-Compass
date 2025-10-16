@@ -192,6 +192,20 @@ export interface Youth {
   createdAt?: Date | null;
   updatedAt?: Date | null;
 
+  // Restriction tracking
+  restrictionLevel?: number | null; // 1 or 2
+  restrictionPointsRequired?: number | null;
+  restrictionStartDate?: Date | null;
+  restrictionPointsEarned?: number | null;
+  restrictionReason?: string | null;
+
+  // Subsystem tracking
+  subsystemActive?: boolean | null;
+  subsystemPointsRequired?: number | null;
+  subsystemStartDate?: Date | null;
+  subsystemPointsEarned?: number | null;
+  subsystemReason?: string | null;
+
   // Additional fields from form data
   idNumber?: string | null;
   // Note: legalGuardian and probationOfficer are objects defined above, removed duplicate string types

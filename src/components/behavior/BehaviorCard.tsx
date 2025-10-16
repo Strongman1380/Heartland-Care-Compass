@@ -9,11 +9,12 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { format, startOfWeek, endOfWeek, eachDayOfInterval } from "date-fns";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, ArrowRight, Calendar, Download, FileText, TrendingUp, TrendingDown, Users, History } from "lucide-react";
+import { AlertCircle, ArrowRight, Calendar, Download, FileText, TrendingUp, TrendingDown, Users, History, Shield, Ban, X } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useBehaviorPoints, useYouth } from "@/hooks/useSupabase";
 import { type BehaviorPoints } from "@/integrations/supabase/services";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { calculatePointsNeededForNextLevel, syncYouthTotalPoints } from "@/utils/pointCalculations";
 import { syncYouthPoints } from "@/utils/pointSyncService";
 import { alertService } from "@/utils/alertService";
@@ -76,6 +77,15 @@ export const BehaviorCard = ({ youthId, youth, onYouthUpdated }: BehaviorCardPro
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isAutoSaving, setIsAutoSaving] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
+  
+  // Restriction and subsystem state
+  const [showRestrictionDialog, setShowRestrictionDialog] = useState(false);
+  const [showSubsystemDialog, setShowSubsystemDialog] = useState(false);
+  const [restrictionLevel, setRestrictionLevel] = useState<1 | 2 | null>(null);
+  const [restrictionPoints, setRestrictionPoints] = useState("");
+  const [restrictionReason, setRestrictionReason] = useState("");
+  const [subsystemPoints, setSubsystemPoints] = useState("");
+  const [subsystemReason, setSubsystemReason] = useState("");
 
   // Handle case where youth is null or undefined
   if (!youth) {
@@ -396,7 +406,43 @@ export const BehaviorCard = ({ youthId, youth, onYouthUpdated }: BehaviorCardPro
         const current = youth.pointTotal || 0
         const nextTotal = Math.max(0, current + delta)
         setCurrentTotal(nextTotal)
-        await updateYouth(youthId, { pointTotal: nextTotal as any })
+        
+        // Update restriction/subsystem progress if active
+        const updates: any = { pointTotal: nextTotal };
+        
+        // Check restriction progress
+        if (youth.restrictionLevel && delta > 0) {
+          const restrictionEarned = (youth.restrictionPointsEarned || 0) + delta;
+          updates.restrictionPointsEarned = restrictionEarned;
+          
+          // Check if restriction goal met
+          if (restrictionEarned >= (youth.restrictionPointsRequired || 0)) {
+            updates.restrictionLevel = null;
+            updates.restrictionPointsRequired = null;
+            updates.restrictionStartDate = null;
+            updates.restrictionPointsEarned = 0;
+            updates.restrictionReason = null;
+            toast.success(`🎉 Restriction completed! Earned ${formatPoints(restrictionEarned)} points!`);
+          }
+        }
+        
+        // Check subsystem progress
+        if (youth.subsystemActive && delta > 0) {
+          const subsystemEarned = (youth.subsystemPointsEarned || 0) + delta;
+          updates.subsystemPointsEarned = subsystemEarned;
+          
+          // Check if subsystem goal met
+          if (subsystemEarned >= (youth.subsystemPointsRequired || 0)) {
+            updates.subsystemActive = false;
+            updates.subsystemPointsRequired = null;
+            updates.subsystemStartDate = null;
+            updates.subsystemPointsEarned = 0;
+            updates.subsystemReason = null;
+            toast.success(`🎉 Subsystem completed! Earned ${formatPoints(subsystemEarned)} points!`);
+          }
+        }
+        
+        await updateYouth(youthId, updates)
         // Trigger parent component refresh
         onYouthUpdated?.()
       }
@@ -439,11 +485,11 @@ export const BehaviorCard = ({ youthId, youth, onYouthUpdated }: BehaviorCardPro
     loadBehaviorPoints(youthId);
   };
 
-  const handleLevelUp = () => {
+  const handleLevelUp = async () => {
     if (nextLevel) {
       try {
         // Update youth level and reset points
-        updateYouth(youthId, {
+        await updateYouth(youthId, {
           level: youth.level + 1,
           pointTotal: 0  // Reset points to 0 when leveling up
         });
@@ -461,16 +507,17 @@ export const BehaviorCard = ({ youthId, youth, onYouthUpdated }: BehaviorCardPro
         onYouthUpdated?.();
       } catch (error) {
         console.error("Error updating level:", error);
-        toast.error("Failed to update level");
+        const errorMessage = error instanceof Error ? error.message : "Failed to update level";
+        toast.error(errorMessage);
       }
     }
   };
 
-  const handleLevelDemotion = () => {
+  const handleLevelDemotion = async () => {
     if (youth.level > 1) {
       try {
         // Update youth level and reset points
-        updateYouth(youthId, {
+        await updateYouth(youthId, {
           level: youth.level - 1,
           pointTotal: 0  // Reset points to 0 when demoting
         });
@@ -489,8 +536,100 @@ export const BehaviorCard = ({ youthId, youth, onYouthUpdated }: BehaviorCardPro
         onYouthUpdated?.();
       } catch (error) {
         console.error("Error updating level:", error);
-        toast.error("Failed to update level");
+        const errorMessage = error instanceof Error ? error.message : "Failed to update level";
+        toast.error(errorMessage);
       }
+    }
+  };
+
+  // Restriction management
+  const handlePlaceOnRestriction = async () => {
+    if (!restrictionLevel || !restrictionPoints) {
+      toast.error("Please select restriction level and enter points required");
+      return;
+    }
+
+    try {
+      await updateYouth(youthId, {
+        restrictionLevel: restrictionLevel,
+        restrictionPointsRequired: parseInt(restrictionPoints),
+        restrictionStartDate: new Date().toISOString(),
+        restrictionPointsEarned: 0,
+        restrictionReason: restrictionReason || "N/A"
+      });
+
+      toast.success(`Placed on Restriction Level ${restrictionLevel}. Must earn ${restrictionPoints} points to get off.`);
+      setShowRestrictionDialog(false);
+      setRestrictionLevel(null);
+      setRestrictionPoints("");
+      setRestrictionReason("");
+      onYouthUpdated?.();
+    } catch (error) {
+      console.error("Error placing on restriction:", error);
+      toast.error("Failed to place on restriction");
+    }
+  };
+
+  const handleRemoveRestriction = async () => {
+    try {
+      await updateYouth(youthId, {
+        restrictionLevel: null,
+        restrictionPointsRequired: null,
+        restrictionStartDate: null,
+        restrictionPointsEarned: 0,
+        restrictionReason: null
+      });
+
+      toast.success("Restriction removed");
+      onYouthUpdated?.();
+    } catch (error) {
+      console.error("Error removing restriction:", error);
+      toast.error("Failed to remove restriction");
+    }
+  };
+
+  // Subsystem management
+  const handlePlaceOnSubsystem = async () => {
+    if (!subsystemPoints) {
+      toast.error("Please enter points required");
+      return;
+    }
+
+    try {
+      await updateYouth(youthId, {
+        subsystemActive: true,
+        subsystemPointsRequired: parseInt(subsystemPoints),
+        subsystemStartDate: new Date().toISOString(),
+        subsystemPointsEarned: 0,
+        subsystemReason: subsystemReason || "N/A"
+      });
+
+      toast.success(`Placed on Subsystem. Must earn ${subsystemPoints} points to get off.`);
+      setShowSubsystemDialog(false);
+      setSubsystemPoints("");
+      setSubsystemReason("");
+      onYouthUpdated?.();
+    } catch (error) {
+      console.error("Error placing on subsystem:", error);
+      toast.error("Failed to place on subsystem");
+    }
+  };
+
+  const handleRemoveSubsystem = async () => {
+    try {
+      await updateYouth(youthId, {
+        subsystemActive: false,
+        subsystemPointsRequired: null,
+        subsystemStartDate: null,
+        subsystemPointsEarned: 0,
+        subsystemReason: null
+      });
+
+      toast.success("Subsystem removed");
+      onYouthUpdated?.();
+    } catch (error) {
+      console.error("Error removing subsystem:", error);
+      toast.error("Failed to remove subsystem");
     }
   };
 
@@ -997,6 +1136,218 @@ export const BehaviorCard = ({ youthId, youth, onYouthUpdated }: BehaviorCardPro
             </CardContent>
           </Tabs>
         </Card>
+
+        {/* Restriction & Subsystem Management */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 print:hidden">
+          {/* Restriction Card */}
+          <Card className={youth.restrictionLevel ? "border-2 border-orange-500" : ""}>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Shield className="w-5 h-5" />
+                Restriction Status
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {youth.restrictionLevel ? (
+                <div className="space-y-3">
+                  <Alert className="bg-orange-50 border-orange-200">
+                    <AlertCircle className="h-4 w-4 text-orange-600" />
+                    <AlertTitle className="text-orange-800">On Restriction Level {youth.restrictionLevel}</AlertTitle>
+                    <AlertDescription className="text-orange-700">
+                      Placed on {youth.restrictionStartDate ? format(new Date(youth.restrictionStartDate), 'MMM dd, yyyy') : 'N/A'}
+                    </AlertDescription>
+                  </Alert>
+                  
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="font-medium">Progress:</span>
+                      <span>{youth.restrictionPointsEarned || 0} / {youth.restrictionPointsRequired || 0} points</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-3">
+                      <div 
+                        className="bg-orange-500 h-3 rounded-full transition-all"
+                        style={{ 
+                          width: `${Math.min(100, ((youth.restrictionPointsEarned || 0) / (youth.restrictionPointsRequired || 1)) * 100)}%` 
+                        }}
+                      />
+                    </div>
+                    {youth.restrictionReason && (
+                      <p className="text-sm text-gray-600">
+                        <strong>Reason:</strong> {youth.restrictionReason}
+                      </p>
+                    )}
+                  </div>
+
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={handleRemoveRestriction}
+                    className="w-full"
+                  >
+                    <X className="w-4 h-4 mr-2" />
+                    Remove Restriction
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <p className="text-sm text-gray-600">Youth is not currently on restriction</p>
+                  <Dialog open={showRestrictionDialog} onOpenChange={setShowRestrictionDialog}>
+                    <DialogTrigger asChild>
+                      <Button variant="outline" className="w-full">
+                        <Shield className="w-4 h-4 mr-2" />
+                        Place on Restriction
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>Place on Restriction</DialogTitle>
+                        <DialogDescription>
+                          Set restriction level and points required to earn privileges back
+                        </DialogDescription>
+                      </DialogHeader>
+                      <div className="space-y-4 py-4">
+                        <div>
+                          <Label>Restriction Level</Label>
+                          <Select 
+                            value={restrictionLevel?.toString() || ""} 
+                            onValueChange={(val) => setRestrictionLevel(parseInt(val) as 1 | 2)}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select level..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="1">Level 1 (Less Restrictive)</SelectItem>
+                              <SelectItem value="2">Level 2 (More Restrictive)</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label>Points Required to Get Off</Label>
+                          <Input
+                            type="number"
+                            placeholder="e.g., 50000"
+                            value={restrictionPoints}
+                            onChange={(e) => setRestrictionPoints(e.target.value)}
+                          />
+                          <p className="text-xs text-gray-500 mt-1">Enter points in thousands (e.g., 50000 = 50k)</p>
+                        </div>
+                        <div>
+                          <Label>Reason (Optional)</Label>
+                          <Textarea
+                            placeholder="Reason for restriction..."
+                            value={restrictionReason}
+                            onChange={(e) => setRestrictionReason(e.target.value)}
+                            rows={3}
+                          />
+                        </div>
+                        <Button onClick={handlePlaceOnRestriction} className="w-full">
+                          Confirm Restriction
+                        </Button>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Subsystem Card */}
+          <Card className={youth.subsystemActive ? "border-2 border-red-500" : ""}>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Ban className="w-5 h-5" />
+                Subsystem Status
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {youth.subsystemActive ? (
+                <div className="space-y-3">
+                  <Alert className="bg-red-50 border-red-200">
+                    <AlertCircle className="h-4 w-4 text-red-600" />
+                    <AlertTitle className="text-red-800">On Subsystem</AlertTitle>
+                    <AlertDescription className="text-red-700">
+                      Placed on {youth.subsystemStartDate ? format(new Date(youth.subsystemStartDate), 'MMM dd, yyyy') : 'N/A'}
+                    </AlertDescription>
+                  </Alert>
+                  
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="font-medium">Progress:</span>
+                      <span>{youth.subsystemPointsEarned || 0} / {youth.subsystemPointsRequired || 0} points</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-3">
+                      <div 
+                        className="bg-red-500 h-3 rounded-full transition-all"
+                        style={{ 
+                          width: `${Math.min(100, ((youth.subsystemPointsEarned || 0) / (youth.subsystemPointsRequired || 1)) * 100)}%` 
+                        }}
+                      />
+                    </div>
+                    {youth.subsystemReason && (
+                      <p className="text-sm text-gray-600">
+                        <strong>Reason:</strong> {youth.subsystemReason}
+                      </p>
+                    )}
+                  </div>
+
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={handleRemoveSubsystem}
+                    className="w-full"
+                  >
+                    <X className="w-4 h-4 mr-2" />
+                    Remove from Subsystem
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <p className="text-sm text-gray-600">Youth is not currently on subsystem</p>
+                  <Dialog open={showSubsystemDialog} onOpenChange={setShowSubsystemDialog}>
+                    <DialogTrigger asChild>
+                      <Button variant="outline" className="w-full">
+                        <Ban className="w-4 h-4 mr-2" />
+                        Place on Subsystem
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>Place on Subsystem</DialogTitle>
+                        <DialogDescription>
+                          Set points required to earn subsystem completion
+                        </DialogDescription>
+                      </DialogHeader>
+                      <div className="space-y-4 py-4">
+                        <div>
+                          <Label>Points Required to Get Off</Label>
+                          <Input
+                            type="number"
+                            placeholder="e.g., 30000"
+                            value={subsystemPoints}
+                            onChange={(e) => setSubsystemPoints(e.target.value)}
+                          />
+                          <p className="text-xs text-gray-500 mt-1">Enter points in thousands (e.g., 30000 = 30k)</p>
+                        </div>
+                        <div>
+                          <Label>Reason (Optional)</Label>
+                          <Textarea
+                            placeholder="Reason for subsystem..."
+                            value={subsystemReason}
+                            onChange={(e) => setSubsystemReason(e.target.value)}
+                            rows={3}
+                          />
+                        </div>
+                        <Button onClick={handlePlaceOnSubsystem} className="w-full">
+                          Confirm Subsystem
+                        </Button>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
       {/* Print-only individualized report section */}

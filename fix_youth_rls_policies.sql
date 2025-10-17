@@ -65,17 +65,17 @@ WHERE tablename = 'youth';
 -- ====================================
 -- STEP 5: Test INSERT
 -- ====================================
--- This should work now
-INSERT INTO youth (firstName, lastName, level, pointTotal)
-VALUES ('Test', 'User', 1, 0)
+-- This should work now (columns are quoted because they use camelCase)
+INSERT INTO youth ("firstName", "lastName")
+VALUES ('Test', 'User')
 RETURNING *;
 
 -- ====================================
 -- STEP 6: Clean up test data
 -- ====================================
--- Delete the test user
+-- Delete the test user (columns must be quoted)
 DELETE FROM youth
-WHERE firstName = 'Test' AND lastName = 'User';
+WHERE "firstName" = 'Test' AND "lastName" = 'User';
 
 -- ====================================
 -- VERIFICATION

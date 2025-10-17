@@ -171,9 +171,9 @@ export const EnhancedCaseNotes = ({ youthId, youth, onYouthChange, onBackToSelec
         fieldType: fieldName
       });
 
-      if (response.success && response.data) {
-        // response.data is a string, use it directly
-        const enhancedText = typeof response.data === 'string' ? response.data : String(response.data);
+      if (response.success && response.data?.answer) {
+        // response.data.answer is the enhanced text
+        const enhancedText = response.data.answer;
 
         if (fieldType === 'session') {
           setSessionFormData(prev => ({

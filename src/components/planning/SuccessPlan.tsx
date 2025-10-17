@@ -315,7 +315,7 @@ export const SuccessPlan = ({ youthId, youth }: SuccessPlanProps) => {
       
       setHasUnsavedChanges(false);
     } catch (error) {
-      console.error("Error auto-saving success plan:", error);
+      console.error("Error auto-saving service plan:", error);
     } finally {
       setIsSaving(false);
     }
@@ -331,13 +331,89 @@ export const SuccessPlan = ({ youthId, youth }: SuccessPlanProps) => {
   const fetchPlan = async () => {
     try {
       setIsLoading(true);
-      
+
       const planData = await fetchAssessment(youthId, 'successplans', 'heartlandSuccessPlan') as SuccessPlanData | null;
-      
+
+      // Helper functions for data enrichment
+      const formatDOBAge = () => {
+        if (youth?.dob) {
+          const dobDate = new Date(youth.dob);
+          const formattedDOB = dobDate.toLocaleDateString('en-US');
+          const age = youth.age || calculateAge(dobDate);
+          return `${formattedDOB} (Age: ${age})`;
+        } else if (youth?.age) {
+          return `Age: ${youth.age}`;
+        }
+        return "N/A";
+      };
+
+      const calculateAge = (birthDate: Date) => {
+        const today = new Date();
+        let age = today.getFullYear() - birthDate.getFullYear();
+        const monthDiff = today.getMonth() - birthDate.getMonth();
+        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+          age--;
+        }
+        return age;
+      };
+
+      const getContactInfo = () => {
+        const contacts = [];
+        if (youth?.legalGuardian?.phone) contacts.push(`Guardian: ${youth.legalGuardian.phone}`);
+        if (youth?.mother?.phone) contacts.push(`Mother: ${youth.mother.phone}`);
+        if (youth?.father?.phone) contacts.push(`Father: ${youth.father.phone}`);
+        if (youth?.probationOfficer?.phone) contacts.push(`PO: ${youth.probationOfficer.phone}`);
+        return contacts.length > 0 ? contacts.join('\n') : "N/A";
+      };
+
+      // Enrich resident info with youth data (fills in blanks/placeholders, doesn't override real existing data)
+      const enrichResidentInfo = (existingInfo: ResidentInfo | undefined) => {
+        const existing = existingInfo || { ...EMPTY_RESIDENT_INFO };
+
+        // Helper to check if value is empty, placeholder, or default
+        const isEmpty = (value: string | undefined, placeholders: string[] = []) => {
+          if (!value || value === "N/A" || value === "") return true;
+          return placeholders.some(p => value.includes(p));
+        };
+
+        return {
+          residentName: isEmpty(existing.residentName, ["Sample Resident"])
+            ? (youth ? `${youth.firstName} ${youth.lastName}` : "N/A")
+            : existing.residentName,
+          dateOfAdmission: isEmpty(existing.dateOfAdmission) || existing.dateOfAdmission === new Date().toISOString().split('T')[0]
+            ? (youth?.admissionDate ? new Date(youth.admissionDate).toISOString().split('T')[0] : "N/A")
+            : existing.dateOfAdmission,
+          idNumber: isEmpty(existing.idNumber, ["HR-001"])
+            ? (youth?.id || "N/A")
+            : existing.idNumber,
+          dobAge: isEmpty(existing.dobAge, ["01/01/2008", "Age: 16"])
+            ? formatDOBAge()
+            : existing.dobAge,
+          referringAgency: isEmpty(existing.referringAgency, ["Department of Children Services"])
+            ? (youth?.placingAgencyCounty || "N/A")
+            : existing.referringAgency,
+          caseWorker: isEmpty(existing.caseWorker, ["[Case Worker Name]"])
+            ? (youth?.caseworker?.name || "N/A")
+            : existing.caseWorker,
+          probationOfficer: isEmpty(existing.probationOfficer, ["[Probation Officer Name]"])
+            ? (youth?.probationOfficer?.name || "N/A")
+            : existing.probationOfficer,
+          levelStatus: isEmpty(existing.levelStatus) || existing.levelStatus === "Level 1"
+            ? (youth?.level ? `Level ${youth.level}` : "N/A")
+            : existing.levelStatus,
+          primaryGuardian: isEmpty(existing.primaryGuardian, ["[Guardian Name]"])
+            ? (youth?.legalGuardian?.name || "N/A")
+            : existing.primaryGuardian,
+          contactInfo: isEmpty(existing.contactInfo, ["Phone:", "Email:", "[Phone Number]", "[Email Address]"])
+            ? getContactInfo()
+            : existing.contactInfo
+        };
+      };
+
       if (planData) {
         setPlan({
           id: planData.id,
-          residentInfo: planData.residentinfo || { ...EMPTY_RESIDENT_INFO },
+          residentInfo: enrichResidentInfo(planData.residentinfo),
           assessmentSummary: planData.assessmentsummary || { ...EMPTY_ASSESSMENT_SUMMARY },
           permanencyObjective: planData.permanencyobjective || {
             permanencyGoal: "",
@@ -389,19 +465,12 @@ export const SuccessPlan = ({ youthId, youth }: SuccessPlanProps) => {
         // Initialize with default plan and populate with youth information
         setPlan(prev => ({
           ...prev,
-          residentInfo: {
-            ...prev.residentInfo,
-            residentName: youth ? `${youth.firstName} ${youth.lastName}` : "",
-            dateOfAdmission: youth?.dateOfAdmission || "",
-            idNumber: youth?.id || "",
-            dobAge: youth?.dateOfBirth || "",
-            levelStatus: youth?.level ? `Level ${youth.level}` : ""
-          }
+          residentInfo: enrichResidentInfo(undefined)
         }));
       }
     } catch (error) {
-      console.error("Error fetching success plan:", error);
-      toast.error("Failed to load success plan");
+      console.error("Error fetching service plan:", error);
+      toast.error("Failed to load service plan");
     } finally {
       setIsLoading(false);
     }
@@ -433,10 +502,10 @@ export const SuccessPlan = ({ youthId, youth }: SuccessPlanProps) => {
         formattedData
       );
       
-      toast.success("Heartland Success Plan saved successfully");
+      toast.success("Heartland Service Plan saved successfully");
     } catch (error) {
-      console.error("Error saving success plan:", error);
-      toast.error("Failed to save success plan");
+      console.error("Error saving service plan:", error);
+      toast.error("Failed to save service plan");
     } finally {
       setIsSaving(false);
     }
@@ -631,20 +700,66 @@ export const SuccessPlan = ({ youthId, youth }: SuccessPlanProps) => {
       }
 
       // Ensure we have basic resident info populated from youth data if empty
+      const formatDOBAge = () => {
+        if (youth?.dob) {
+          const dobDate = new Date(youth.dob);
+          const formattedDOB = dobDate.toLocaleDateString('en-US');
+          const age = youth.age || (() => {
+            const today = new Date();
+            let calcAge = today.getFullYear() - dobDate.getFullYear();
+            const monthDiff = today.getMonth() - dobDate.getMonth();
+            if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dobDate.getDate())) {
+              calcAge--;
+            }
+            return calcAge;
+          })();
+          return `${formattedDOB} (Age: ${age})`;
+        } else if (youth?.age) {
+          return `Age: ${youth.age}`;
+        }
+        return 'N/A';
+      };
+
       const enrichedPlan = {
         ...plan,
         residentInfo: {
           ...plan.residentInfo,
-          residentName: plan.residentInfo.residentName || `${youth?.firstName || ''} ${youth?.lastName || ''}`.trim() || 'Sample Resident',
-          dateOfAdmission: plan.residentInfo.dateOfAdmission || youth?.admissionDate || new Date().toISOString().split('T')[0],
-          dobAge: plan.residentInfo.dobAge || youth?.dateOfBirth || (youth?.age ? `Age: ${youth.age}` : '16'),
-          levelStatus: plan.residentInfo.levelStatus || youth?.currentLevel || youth?.level || 'Level 1',
-          primaryGuardian: plan.residentInfo.primaryGuardian || youth?.legalGuardian || 'Not specified'
+          residentName: plan.residentInfo.residentName || `${youth?.firstName || ''} ${youth?.lastName || ''}`.trim() || 'N/A',
+          dateOfAdmission: plan.residentInfo.dateOfAdmission || (youth?.admissionDate ? new Date(youth.admissionDate).toISOString().split('T')[0] : 'N/A'),
+          idNumber: plan.residentInfo.idNumber || youth?.id || 'N/A',
+          dobAge: plan.residentInfo.dobAge || formatDOBAge(),
+          referringAgency: plan.residentInfo.referringAgency || youth?.placingAgencyCounty || 'N/A',
+          caseWorker: plan.residentInfo.caseWorker || youth?.caseworker?.name || 'N/A',
+          probationOfficer: plan.residentInfo.probationOfficer || youth?.probationOfficer?.name || 'N/A',
+          levelStatus: plan.residentInfo.levelStatus || (youth?.level ? `Level ${youth.level}` : 'N/A'),
+          primaryGuardian: plan.residentInfo.primaryGuardian || youth?.legalGuardian?.name || 'N/A',
+          contactInfo: plan.residentInfo.contactInfo || (() => {
+            const contacts = [];
+            if (youth?.legalGuardian?.phone) contacts.push(`Guardian: ${youth.legalGuardian.phone}`);
+            if (youth?.mother?.phone) contacts.push(`Mother: ${youth.mother.phone}`);
+            if (youth?.father?.phone) contacts.push(`Father: ${youth.father.phone}`);
+            if (youth?.probationOfficer?.phone) contacts.push(`PO: ${youth.probationOfficer.phone}`);
+            return contacts.length > 0 ? contacts.join('\n') : 'N/A';
+          })()
         },
         assessmentSummary: {
           ...plan.assessmentSummary,
-          identifiedStrengths: plan.assessmentSummary.identifiedStrengths || youth?.academicStrengths || 'Strong communication skills, eager to learn',
-          presentingConcerns: plan.assessmentSummary.presentingConcerns || youth?.currentDiagnoses || 'Initial assessment in progress'
+          identifiedStrengths: plan.assessmentSummary.identifiedStrengths || youth?.strengthsTalents || 'N/A',
+          presentingConcerns: plan.assessmentSummary.presentingConcerns || youth?.behaviorProblems || youth?.referralReason || 'N/A',
+          academicStatus: plan.assessmentSummary.academicStatus || (() => {
+            const parts = [];
+            if (youth?.currentGrade) parts.push(`Grade: ${youth.currentGrade}`);
+            if (youth?.lastSchoolAttended) parts.push(`School: ${youth.lastSchoolAttended}`);
+            if (youth?.hasIEP) parts.push('Has IEP');
+            return parts.length > 0 ? parts.join(', ') : 'N/A';
+          })(),
+          familyDynamics: plan.assessmentSummary.familyDynamics || (() => {
+            const parts = [];
+            if (youth?.mother?.name) parts.push(`Mother: ${youth.mother.name}`);
+            if (youth?.father?.name) parts.push(`Father: ${youth.father.name}`);
+            if (youth?.legalGuardian?.name && youth.legalGuardian.relationship) parts.push(`Guardian: ${youth.legalGuardian.name} (${youth.legalGuardian.relationship})`);
+            return parts.length > 0 ? parts.join(', ') : 'N/A';
+          })()
         }
       };
 
@@ -657,7 +772,7 @@ export const SuccessPlan = ({ youthId, youth }: SuccessPlanProps) => {
       // Create a secure popup window
       const printWindow = window.open('about:blank', '_blank', 'width=800,height=600,scrollbars=yes,resizable=yes');
       if (!printWindow) {
-        toast.error("Please allow pop-ups to print the success plan");
+        toast.error("Please allow pop-ups to print the service plan");
         return;
       }
 
@@ -689,8 +804,8 @@ export const SuccessPlan = ({ youthId, youth }: SuccessPlanProps) => {
         }, { once: true });
       }
     } catch (error) {
-      console.error("Error printing success plan:", error);
-      toast.error("Failed to print success plan");
+      console.error("Error printing service plan:", error);
+      toast.error("Failed to print service plan");
     }
   };
   
@@ -700,20 +815,66 @@ export const SuccessPlan = ({ youthId, youth }: SuccessPlanProps) => {
       const { format } = await import('date-fns');
 
       // Use the same enrichment logic as print for consistency
+      const formatDOBAge = () => {
+        if (youth?.dob) {
+          const dobDate = new Date(youth.dob);
+          const formattedDOB = dobDate.toLocaleDateString('en-US');
+          const age = youth.age || (() => {
+            const today = new Date();
+            let calcAge = today.getFullYear() - dobDate.getFullYear();
+            const monthDiff = today.getMonth() - dobDate.getMonth();
+            if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dobDate.getDate())) {
+              calcAge--;
+            }
+            return calcAge;
+          })();
+          return `${formattedDOB} (Age: ${age})`;
+        } else if (youth?.age) {
+          return `Age: ${youth.age}`;
+        }
+        return 'N/A';
+      };
+
       const enrichedPlan = {
         ...plan,
         residentInfo: {
           ...plan.residentInfo,
-          residentName: plan.residentInfo.residentName || `${youth?.firstName || ''} ${youth?.lastName || ''}`.trim() || 'Sample Resident',
-          dateOfAdmission: plan.residentInfo.dateOfAdmission || youth?.admissionDate || new Date().toISOString().split('T')[0],
-          dobAge: plan.residentInfo.dobAge || youth?.dateOfBirth || (youth?.age ? `Age: ${youth.age}` : '16'),
-          levelStatus: plan.residentInfo.levelStatus || youth?.currentLevel || youth?.level || 'Level 1',
-          primaryGuardian: plan.residentInfo.primaryGuardian || youth?.legalGuardian || 'Not specified'
+          residentName: plan.residentInfo.residentName || `${youth?.firstName || ''} ${youth?.lastName || ''}`.trim() || 'N/A',
+          dateOfAdmission: plan.residentInfo.dateOfAdmission || (youth?.admissionDate ? new Date(youth.admissionDate).toISOString().split('T')[0] : 'N/A'),
+          idNumber: plan.residentInfo.idNumber || youth?.id || 'N/A',
+          dobAge: plan.residentInfo.dobAge || formatDOBAge(),
+          referringAgency: plan.residentInfo.referringAgency || youth?.placingAgencyCounty || 'N/A',
+          caseWorker: plan.residentInfo.caseWorker || youth?.caseworker?.name || 'N/A',
+          probationOfficer: plan.residentInfo.probationOfficer || youth?.probationOfficer?.name || 'N/A',
+          levelStatus: plan.residentInfo.levelStatus || (youth?.level ? `Level ${youth.level}` : 'N/A'),
+          primaryGuardian: plan.residentInfo.primaryGuardian || youth?.legalGuardian?.name || 'N/A',
+          contactInfo: plan.residentInfo.contactInfo || (() => {
+            const contacts = [];
+            if (youth?.legalGuardian?.phone) contacts.push(`Guardian: ${youth.legalGuardian.phone}`);
+            if (youth?.mother?.phone) contacts.push(`Mother: ${youth.mother.phone}`);
+            if (youth?.father?.phone) contacts.push(`Father: ${youth.father.phone}`);
+            if (youth?.probationOfficer?.phone) contacts.push(`PO: ${youth.probationOfficer.phone}`);
+            return contacts.length > 0 ? contacts.join('\n') : 'N/A';
+          })()
         },
         assessmentSummary: {
           ...plan.assessmentSummary,
-          identifiedStrengths: plan.assessmentSummary.identifiedStrengths || youth?.academicStrengths || 'Strong communication skills, eager to learn',
-          presentingConcerns: plan.assessmentSummary.presentingConcerns || youth?.currentDiagnoses || 'Initial assessment in progress'
+          identifiedStrengths: plan.assessmentSummary.identifiedStrengths || youth?.strengthsTalents || 'N/A',
+          presentingConcerns: plan.assessmentSummary.presentingConcerns || youth?.behaviorProblems || youth?.referralReason || 'N/A',
+          academicStatus: plan.assessmentSummary.academicStatus || (() => {
+            const parts = [];
+            if (youth?.currentGrade) parts.push(`Grade: ${youth.currentGrade}`);
+            if (youth?.lastSchoolAttended) parts.push(`School: ${youth.lastSchoolAttended}`);
+            if (youth?.hasIEP) parts.push('Has IEP');
+            return parts.length > 0 ? parts.join(', ') : 'N/A';
+          })(),
+          familyDynamics: plan.assessmentSummary.familyDynamics || (() => {
+            const parts = [];
+            if (youth?.mother?.name) parts.push(`Mother: ${youth.mother.name}`);
+            if (youth?.father?.name) parts.push(`Father: ${youth.father.name}`);
+            if (youth?.legalGuardian?.name && youth.legalGuardian.relationship) parts.push(`Guardian: ${youth.legalGuardian.name} (${youth.legalGuardian.relationship})`);
+            return parts.length > 0 ? parts.join(', ') : 'N/A';
+          })()
         }
       };
 
@@ -726,13 +887,13 @@ export const SuccessPlan = ({ youthId, youth }: SuccessPlanProps) => {
 
       // Generate filename with current date
       const residentName = enrichedPlan.residentInfo.residentName.replace(/[^a-zA-Z0-9]/g, '_');
-      const filename = `${residentName}_Heartland_Success_Plan_${format(new Date(), 'yyyy-MM-dd')}.pdf`;
+      const filename = `${residentName}_Heartland_Service_Plan_${format(new Date(), 'yyyy-MM-dd')}.pdf`;
 
       await exportHTMLToPDF(html, filename);
-      toast.success("Success plan exported successfully!");
+      toast.success("Service plan exported successfully!");
     } catch (error) {
-      console.error("Error exporting success plan:", error);
-      toast.error("Failed to export success plan");
+      console.error("Error exporting service plan:", error);
+      toast.error("Failed to export service plan");
     }
   };
 
@@ -776,7 +937,7 @@ export const SuccessPlan = ({ youthId, youth }: SuccessPlanProps) => {
           <div class="header">
             <img src="${import.meta.env.BASE_URL}files/BoysHomeLogo.png" alt="Heartland Boys Home Logo" class="logo" crossorigin="anonymous" />
             <h1>Heartland Boys Home</h1>
-            <h2>Resident Success Plan</h2>
+            <h2>Resident Service Plan</h2>
             <p>Generated on ${data.exportDate || new Date().toLocaleDateString()}</p>
           </div>
 
@@ -784,23 +945,43 @@ export const SuccessPlan = ({ youthId, youth }: SuccessPlanProps) => {
             <h3>Resident Information</h3>
             <div class="field">
               <span class="field-label">Resident Name:</span>
-              <span class="field-value">${data.plan.residentInfo?.residentName || (data.youth ? `${data.youth.firstName || ''} ${data.youth.lastName || ''}`.trim() : 'Sample Resident')}</span>
+              <span class="field-value">${data.plan.residentInfo?.residentName || 'N/A'}</span>
             </div>
             <div class="field">
               <span class="field-label">Date of Admission:</span>
-              <span class="field-value">${data.plan.residentInfo?.dateOfAdmission || 'Not specified'}</span>
+              <span class="field-value">${data.plan.residentInfo?.dateOfAdmission || 'N/A'}</span>
             </div>
             <div class="field">
               <span class="field-label">ID Number:</span>
-              <span class="field-value">${data.plan.residentInfo?.idNumber || 'Not specified'}</span>
+              <span class="field-value">${data.plan.residentInfo?.idNumber || 'N/A'}</span>
             </div>
             <div class="field">
               <span class="field-label">DOB/Age:</span>
-              <span class="field-value">${data.plan.residentInfo?.dobAge || data.youth?.dateOfBirth || 'Age: 16'}</span>
+              <span class="field-value">${data.plan.residentInfo?.dobAge || 'N/A'}</span>
+            </div>
+            <div class="field">
+              <span class="field-label">Referring Agency:</span>
+              <span class="field-value">${data.plan.residentInfo?.referringAgency || 'N/A'}</span>
+            </div>
+            <div class="field">
+              <span class="field-label">Case Worker:</span>
+              <span class="field-value">${data.plan.residentInfo?.caseWorker || 'N/A'}</span>
+            </div>
+            <div class="field">
+              <span class="field-label">Probation Officer:</span>
+              <span class="field-value">${data.plan.residentInfo?.probationOfficer || 'N/A'}</span>
             </div>
             <div class="field">
               <span class="field-label">Level Status:</span>
-              <span class="field-value">${data.plan.residentInfo?.levelStatus || data.youth?.currentLevel || 'Level 1'}</span>
+              <span class="field-value">${data.plan.residentInfo?.levelStatus || 'N/A'}</span>
+            </div>
+            <div class="field">
+              <span class="field-label">Primary Guardian:</span>
+              <span class="field-value">${data.plan.residentInfo?.primaryGuardian || 'N/A'}</span>
+            </div>
+            <div class="field">
+              <span class="field-label">Contact Info:</span>
+              <span class="field-value">${data.plan.residentInfo?.contactInfo || 'N/A'}</span>
             </div>
           </div>
 
@@ -808,23 +989,23 @@ export const SuccessPlan = ({ youthId, youth }: SuccessPlanProps) => {
             <div class="section-title">Assessment Summary</div>
             <div class="field">
               <span class="field-label">Presenting Concerns:</span>
-              <span class="field-value">${data.plan.assessmentSummary?.presentingConcerns || 'Not specified'}</span>
+              <span class="field-value">${data.plan.assessmentSummary?.presentingConcerns || 'N/A'}</span>
             </div>
             <div class="field">
               <span class="field-label">Identified Strengths:</span>
-              <span class="field-value">${data.plan.assessmentSummary?.identifiedStrengths || 'Not specified'}</span>
+              <span class="field-value">${data.plan.assessmentSummary?.identifiedStrengths || 'N/A'}</span>
             </div>
             <div class="field">
               <span class="field-label">Academic Status:</span>
-              <span class="field-value">${data.plan.assessmentSummary?.academicStatus || 'Not specified'}</span>
+              <span class="field-value">${data.plan.assessmentSummary?.academicStatus || 'N/A'}</span>
             </div>
             <div class="field">
               <span class="field-label">Family Dynamics:</span>
-              <span class="field-value">${data.plan.assessmentSummary?.familyDynamics || 'Not specified'}</span>
+              <span class="field-value">${data.plan.assessmentSummary?.familyDynamics || 'N/A'}</span>
             </div>
             <div class="field">
               <span class="field-label">Risk Factors:</span>
-              <span class="field-value">${data.plan.assessmentSummary?.riskFactors?.join(', ') || 'None identified'}</span>
+              <span class="field-value">${data.plan.assessmentSummary?.riskFactors?.join(', ') || 'N/A'}</span>
             </div>
           </div>
 
@@ -832,15 +1013,15 @@ export const SuccessPlan = ({ youthId, youth }: SuccessPlanProps) => {
             <div class="section-title">Permanency Objective</div>
             <div class="field">
               <span class="field-label">Permanency Goal:</span>
-              <span class="field-value">${data.plan.permanencyObjective?.permanencyGoal || 'Not specified'}</span>
+              <span class="field-value">${data.plan.permanencyObjective?.permanencyGoal || 'N/A'}</span>
             </div>
             <div class="field">
               <span class="field-label">Anticipated Length of Stay:</span>
-              <span class="field-value">${data.plan.permanencyObjective?.anticipatedLengthOfStay || 'Not specified'}</span>
+              <span class="field-value">${data.plan.permanencyObjective?.anticipatedLengthOfStay || 'N/A'}</span>
             </div>
             <div class="field">
               <span class="field-label">Transition Timeline Benchmarks:</span>
-              <span class="field-value">${data.plan.permanencyObjective?.transitionTimelineBenchmarks || 'Not specified'}</span>
+              <span class="field-value">${data.plan.permanencyObjective?.transitionTimelineBenchmarks || 'N/A'}</span>
             </div>
           </div>
 
@@ -848,23 +1029,23 @@ export const SuccessPlan = ({ youthId, youth }: SuccessPlanProps) => {
             <div class="section-title">Treatment Objectives</div>
             <div class="field">
               <span class="field-label">Behavioral Objective 1:</span>
-              <span class="field-value">${data.plan.treatmentObjectives?.behavioralObjective1 || 'Not specified'}</span>
+              <span class="field-value">${data.plan.treatmentObjectives?.behavioralObjective1 || 'N/A'}</span>
             </div>
             <div class="field">
               <span class="field-label">Behavioral Objective 2:</span>
-              <span class="field-value">${data.plan.treatmentObjectives?.behavioralObjective2 || 'Not specified'}</span>
+              <span class="field-value">${data.plan.treatmentObjectives?.behavioralObjective2 || 'N/A'}</span>
             </div>
             <div class="field">
               <span class="field-label">Social Skills Focus:</span>
-              <span class="field-value">${data.plan.treatmentObjectives?.socialSkillsFocus || 'Not specified'}</span>
+              <span class="field-value">${data.plan.treatmentObjectives?.socialSkillsFocus || 'N/A'}</span>
             </div>
             <div class="field">
               <span class="field-label">Academic Goals:</span>
-              <span class="field-value">${data.plan.treatmentObjectives?.academicGoals || 'Not specified'}</span>
+              <span class="field-value">${data.plan.treatmentObjectives?.academicGoals || 'N/A'}</span>
             </div>
             <div class="field">
               <span class="field-label">Family Engagement Goals:</span>
-              <span class="field-value">${data.plan.treatmentObjectives?.familyEngagementGoals || 'Not specified'}</span>
+              <span class="field-value">${data.plan.treatmentObjectives?.familyEngagementGoals || 'N/A'}</span>
             </div>
           </div>
 
@@ -872,11 +1053,11 @@ export const SuccessPlan = ({ youthId, youth }: SuccessPlanProps) => {
             <div class="section-title">Level System Integration</div>
             <div class="field">
               <span class="field-label">Current Level Status:</span>
-              <span class="field-value">${data.plan.levelSystemIntegration?.currentLevelStatus || 'Not specified'}</span>
+              <span class="field-value">${data.plan.levelSystemIntegration?.currentLevelStatus || 'N/A'}</span>
             </div>
             <div class="field">
               <span class="field-label">Requirements for Next Level:</span>
-              <span class="field-value">${data.plan.levelSystemIntegration?.requirementsForNextLevel || 'Not specified'}</span>
+              <span class="field-value">${data.plan.levelSystemIntegration?.requirementsForNextLevel || 'N/A'}</span>
             </div>
           </div>
 
@@ -892,7 +1073,7 @@ export const SuccessPlan = ({ youthId, youth }: SuccessPlanProps) => {
             </div>
             <div class="field">
               <span class="field-label">Additional Services:</span>
-              <span class="field-value">${data.plan.specializedServices?.additionalServices?.join(', ') || 'None'}</span>
+              <span class="field-value">${data.plan.specializedServices?.additionalServices?.join(', ') || 'N/A'}</span>
             </div>
           </div>
 
@@ -900,15 +1081,15 @@ export const SuccessPlan = ({ youthId, youth }: SuccessPlanProps) => {
             <div class="section-title">Transition & Discharge Planning</div>
             <div class="field">
               <span class="field-label">Community Integration Activities:</span>
-              <span class="field-value">${data.plan.transitionPlanning?.communityIntegrationActivities || 'Not specified'}</span>
+              <span class="field-value">${data.plan.transitionPlanning?.communityIntegrationActivities || 'N/A'}</span>
             </div>
             <div class="field">
               <span class="field-label">Support System Development:</span>
-              <span class="field-value">${data.plan.transitionPlanning?.supportSystemDevelopment || 'Not specified'}</span>
+              <span class="field-value">${data.plan.transitionPlanning?.supportSystemDevelopment || 'N/A'}</span>
             </div>
             <div class="field">
               <span class="field-label">Post-Discharge Resources:</span>
-              <span class="field-value">${data.plan.transitionPlanning?.postDischargeResources || 'Not specified'}</span>
+              <span class="field-value">${data.plan.transitionPlanning?.postDischargeResources || 'N/A'}</span>
             </div>
           </div>
 
@@ -940,7 +1121,7 @@ export const SuccessPlan = ({ youthId, youth }: SuccessPlanProps) => {
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading success plan...</p>
+          <p className="text-gray-600">Loading service plan...</p>
         </div>
       </div>
     );
@@ -950,9 +1131,9 @@ export const SuccessPlan = ({ youthId, youth }: SuccessPlanProps) => {
     <div className="space-y-6">
       <div className="flex justify-between items-start flex-col sm:flex-row">
         <div>
-          <h2 className="text-2xl font-bold mb-2">Heartland Boys Home - Resident Success Plan</h2>
+          <h2 className="text-2xl font-bold mb-2">Heartland Boys Home - Resident Service Plan</h2>
           <p className="text-gray-600 mb-4">
-            Comprehensive treatment plan for residential facility residents.
+            Comprehensive service plan for residential facility residents.
           </p>
         </div>
         
@@ -974,9 +1155,9 @@ export const SuccessPlan = ({ youthId, youth }: SuccessPlanProps) => {
 
       <Card>
         <CardHeader>
-          <CardTitle>Heartland Boys Home - Resident Success Plan</CardTitle>
+          <CardTitle>Heartland Boys Home - Resident Service Plan</CardTitle>
           <CardDescription>
-            Comprehensive treatment plan documenting all aspects of residential care and treatment objectives.
+            Comprehensive service plan documenting all aspects of residential care and treatment objectives.
           </CardDescription>
         </CardHeader>
         <CardContent>

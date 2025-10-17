@@ -121,17 +121,24 @@ export const youthService = {
     }
     
     // Finally, delete the youth profile
-    const { error } = await supabase
+    const { data, error, count } = await supabase
       .from('youth')
       .delete()
-      .eq('id', id);
+      .eq('id', id)
+      .select();
     
     if (error) {
       console.error('Error deleting youth profile:', error);
       throw error;
     }
     
-    console.log('Youth profile deleted successfully');
+    // Verify the deletion actually happened
+    if (!data || data.length === 0) {
+      console.error('Youth deletion failed - no rows were deleted. This may be due to RLS policies.');
+      throw new Error('Failed to delete youth profile. Please check database permissions.');
+    }
+    
+    console.log('Youth profile deleted successfully:', data);
   },
 
   // Search youth by name

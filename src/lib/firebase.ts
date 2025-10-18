@@ -11,11 +11,14 @@ const firebaseConfig = {
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 };
 
-// Check if Firebase is configured
-const isFirebaseConfigured = firebaseConfig.apiKey && 
-  firebaseConfig.authDomain && 
-  firebaseConfig.projectId && 
-  firebaseConfig.appId;
+// Check if Firebase is configured with valid-looking values (avoid placeholder keys)
+const looksLikeRealApiKey = (key?: string) => !!key && key.startsWith('AIza');
+const looksLikeNonPlaceholder = (value?: string) => !!value && !/^your[_-]/i.test(value);
+
+const isFirebaseConfigured = looksLikeRealApiKey(firebaseConfig.apiKey) &&
+  looksLikeNonPlaceholder(firebaseConfig.authDomain) &&
+  looksLikeNonPlaceholder(firebaseConfig.projectId) &&
+  looksLikeNonPlaceholder(firebaseConfig.appId);
 
 // Only initialize Firebase if configured (used for AI service authentication)
 // If not configured, the app will use Supabase auth only
@@ -26,7 +29,7 @@ if (isFirebaseConfigured) {
   app = initializeApp(firebaseConfig);
   auth = getAuth(app);
 } else {
-  console.warn('Firebase not configured. AI service will work without Firebase authentication.');
+  console.warn('Firebase not configured or using placeholder keys. Skipping Firebase initialization.');
   // Create a mock auth object to prevent errors
   auth = {
     currentUser: null,

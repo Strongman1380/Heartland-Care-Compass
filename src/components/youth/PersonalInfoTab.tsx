@@ -291,7 +291,7 @@ export const PersonalInfoTab = ({ formData, handleChange, handleSelectChange, ha
               <SelectValue placeholder="Select level" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="orientation">Orientation</SelectItem>
+              <SelectItem value="0">Orientation</SelectItem>
               <SelectItem value="1">Level 1</SelectItem>
               <SelectItem value="2">Level 2</SelectItem>
               <SelectItem value="3">Level 3</SelectItem>

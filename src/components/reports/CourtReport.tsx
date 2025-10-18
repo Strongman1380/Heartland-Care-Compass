@@ -7,8 +7,9 @@ import { Label } from "@/components/ui/label";
 import { ReportHeader } from "@/components/reports/ReportHeader";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Youth } from "@/types/app-types";
-import { Save, Printer, RotateCcw, Gavel, Eye, Sparkles } from "lucide-react";
+import { Save, Printer, RotateCcw, Gavel, Eye, Sparkles, CheckCircle2, Circle } from "lucide-react";
 import { format, subMonths } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { draftsService } from '@/integrations/supabase/draftsService'
@@ -242,6 +243,7 @@ const CourtReportPreview = ({ data }: CourtReportPreviewProps) => {
 };
 
 export const CourtReport = ({ youth }: CourtReportProps) => {
+  const [activeTab, setActiveTab] = useState<string>("basic-info");
   const [reportData, setReportData] = useState<CourtReportData>({
     youthName: youth ? `${youth.firstName} ${youth.lastName}` : '',
     dateOfBirth: youth?.dob ? format(new Date(youth.dob), 'MM/dd/yyyy') : '',
@@ -249,14 +251,14 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
     reportingOfficer: '',
 
     currentPlacement: 'Heartland Boys Home - Residential Treatment',
-    
+
     treatmentProgressSummary: '',
     behavioralAssessmentSummary: '',
     educationalProgressSummary: '',
     familySocialSummary: '',
     programParticipationSummary: '',
     futurePlanningSummary: '',
-    
+
     overallAssessment: '',
     courtRecommendations: '',
     additionalComments: ''
@@ -271,6 +273,32 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
   const printRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
   const { user } = useAuth();
+
+  // Helper function to check if a section is complete
+  const isSectionComplete = (section: string): boolean => {
+    switch (section) {
+      case "basic-info":
+        return !!(reportData.youthName && reportData.dateOfBirth && reportData.reportingOfficer);
+      case "current-placement":
+        return reportData.currentPlacement.length > 20;
+      case "treatment":
+        return reportData.treatmentProgressSummary.length > 50;
+      case "behavioral":
+        return reportData.behavioralAssessmentSummary.length > 50;
+      case "educational":
+        return reportData.educationalProgressSummary.length > 50;
+      case "family-social":
+        return reportData.familySocialSummary.length > 50;
+      case "program":
+        return reportData.programParticipationSummary.length > 50;
+      case "future":
+        return reportData.futurePlanningSummary.length > 50;
+      case "summary":
+        return !!(reportData.overallAssessment && reportData.courtRecommendations);
+      default:
+        return false;
+    }
+  };
 
   // Calculate length of stay
   const calculateLengthOfStay = (admissionDate?: Date | null): string => {
@@ -824,17 +852,28 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
     // Check if any consolidated fields already have data
     const hasExistingData = !!(
       reportData.behavioralAssessmentSummary ||
-      reportData.programParticipationSummary
+      reportData.programParticipationSummary ||
+      reportData.treatmentProgressSummary ||
+      reportData.educationalProgressSummary ||
+      reportData.familySocialSummary ||
+      reportData.futurePlanningSummary
     );
 
     if (hasExistingData) {
       const confirmed = confirm(
-        'Some fields already contain data. Auto-populate will only update empty fields. Continue?'
+        'Some fields already contain data. AI will generate comprehensive summaries for ALL sections based on case notes and documentation. Continue?'
       );
       if (!confirmed) return;
     }
 
+    setIsSaving(true);
+
     try {
+      toast({
+        title: "AI Processing",
+        description: "Analyzing case notes and data from the last 30 days to generate comprehensive summaries...",
+      });
+
       // Fetch recent behavior points, case notes, daily ratings, and school scores
       const [behaviorPoints, progressNotes, dailyRatings, schoolScores] = await Promise.all([
         getBehaviorPointsByYouth(youth.id),
@@ -861,176 +900,148 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
         score.date && new Date(score.date) >= thirtyDaysAgo
       );
 
+      // Prepare case notes summary for AI
+      const caseNotesText = recentNotes.map(note => {
+        const content = extractCaseNoteContent(note);
+        const date = note.date ? format(new Date(note.date), 'MMM d, yyyy') : 'No date';
+        return `[${date}] ${content}`;
+      }).join('\n\n');
+
+      // Calculate statistics for context
       const ratingCount = recentRatings.length;
       const avgPeer = ratingCount > 0
-        ? recentRatings.reduce((sum, rating) => sum + (rating.peerInteraction ?? 0), 0) / ratingCount
-        : 0;
+        ? (recentRatings.reduce((sum, rating) => sum + (rating.peerInteraction ?? 0), 0) / ratingCount).toFixed(1)
+        : '0';
       const avgAdult = ratingCount > 0
-        ? recentRatings.reduce((sum, rating) => sum + (rating.adultInteraction ?? 0), 0) / ratingCount
-        : 0;
+        ? (recentRatings.reduce((sum, rating) => sum + (rating.adultInteraction ?? 0), 0) / ratingCount).toFixed(1)
+        : '0';
       const avgInvestment = ratingCount > 0
-        ? recentRatings.reduce((sum, rating) => sum + (rating.investmentLevel ?? 0), 0) / ratingCount
-        : 0;
+        ? (recentRatings.reduce((sum, rating) => sum + (rating.investmentLevel ?? 0), 0) / ratingCount).toFixed(1)
+        : '0';
       const avgAuthority = ratingCount > 0
-        ? recentRatings.reduce((sum, rating) => sum + (rating.dealAuthority ?? 0), 0) / ratingCount
-        : 0;
+        ? (recentRatings.reduce((sum, rating) => sum + (rating.dealAuthority ?? 0), 0) / ratingCount).toFixed(1)
+        : '0';
+
+      const avgPoints = recentBehavior.length > 0
+        ? (recentBehavior.reduce((sum, bp) => sum + (bp.totalPoints ?? 0), 0) / recentBehavior.length).toFixed(1)
+        : '0';
 
       const schoolScoreCount = recentSchoolScores.length;
       const schoolAverage = schoolScoreCount > 0
-        ? recentSchoolScores.reduce((sum, score) => sum + Number(score.score ?? 0), 0) / schoolScoreCount
-        : null;
-      const schoolHigh = schoolScoreCount > 0
-        ? Math.max(...recentSchoolScores.map(score => Number(score.score ?? 0)))
-        : null;
-      const schoolLow = schoolScoreCount > 0
-        ? Math.min(...recentSchoolScores.map(score => Number(score.score ?? 0)))
-        : null;
+        ? (recentSchoolScores.reduce((sum, score) => sum + Number(score.score ?? 0), 0) / schoolScoreCount).toFixed(1)
+        : 'N/A';
 
-      // Calculate average behavior points
-      const avgPoints = recentBehavior.length > 0
-        ? recentBehavior.reduce((sum, bp) => sum + (bp.totalPoints ?? 0), 0) / recentBehavior.length
-        : 0;
+      // Calculate length of stay
+      const lengthOfStay = youth.admissionDate
+        ? calculateLengthOfStay(youth.admissionDate)
+        : 'Not available';
 
-      // Build consolidated behavioral assessment summary
-      const behavioralParts = [];
-      
-      // Behavioral progress
-      let behavioralProgress = `Average daily points over last 30 days: ${avgPoints.toFixed(1)}/15. `;
-      if (avgPoints >= 12) {
-        behavioralProgress += "Demonstrates consistent positive behavior and engagement.";
-      } else if (avgPoints >= 9) {
-        behavioralProgress += "Shows moderate progress with some behavioral challenges.";
-      } else {
-        behavioralProgress += "Continues to work on behavioral goals with staff support.";
-      }
-      behavioralParts.push(behavioralProgress);
+      // Use AI to generate each section based on case notes
+      const aiPrompts = {
+        treatmentProgressSummary: `You are a clinical professional writing a court report. Based on the following case notes and data for ${youth.firstName} ${youth.lastName}, write a comprehensive 3-4 paragraph summary about their treatment goals, progress toward goals, therapeutic participation, and clinical observations.
 
-      // Significant incidents
-      const incidentNotes = recentNotes.filter(note => {
-        const content = extractCaseNoteContent(note).toLowerCase();
-        return content.includes('incident') ||
-          content.includes('altercation') ||
-          content.includes('conflict') ||
-          content.includes('physical') ||
-          content.includes('aggression');
-      });
-      const incidentHighlights = buildCaseNoteHighlights(incidentNotes, 3);
-      const significantIncidents = incidentHighlights.length > 0
-        ? `${incidentHighlights.length} incident(s) documented in the past 30 days. ${incidentHighlights.join(' ')}`
-        : 'No significant behavioral incidents reported in the past 30 days.';
-      behavioralParts.push(significantIncidents);
+Treatment Information:
+- Current Diagnoses: ${youth.currentDiagnoses || youth.diagnoses || 'Not documented'}
+- Current Counseling: ${youth.currentCounseling?.join(', ') || 'Not specified'}
+- Therapist: ${youth.therapistName || 'Not specified'}
+- Length of Stay: ${lengthOfStay}
 
-      // Behavioral interventions
-      const interventionNotes = recentNotes.filter(note => {
-        const content = extractCaseNoteContent(note).toLowerCase();
-        return content.includes('intervention') ||
-          content.includes('consequence') ||
-          content.includes('redirect') ||
-          content.includes('safety plan') ||
-          content.includes('support');
-      });
-      if (interventionNotes.length > 0) {
-        const interventionHighlights = buildCaseNoteHighlights(interventionNotes, 2);
-        behavioralParts.push(`Interventions used: ${interventionHighlights.join(' ')}`);
-      }
+Case Notes:
+${caseNotesText || 'No case notes available for this period.'}
 
-      const generalBehaviorHighlights = buildCaseNoteHighlights(recentNotes, 2, (content) =>
-        content.includes('behavior') || content.includes('progress') || content.includes('de-escalated')
-      );
-      if (generalBehaviorHighlights.length > 0) {
-        behavioralParts.push(`Staff observations: ${generalBehaviorHighlights.join(' ')}`);
-      }
+Write a professional, clinical summary suitable for a court report.`,
 
-      const behavioralAssessmentSummary = behavioralParts.join('\n\n');
+        behavioralAssessmentSummary: `You are a clinical professional writing a court report. Based on the following case notes and data for ${youth.firstName} ${youth.lastName}, write a comprehensive 3-4 paragraph summary about their behavioral progress, significant incidents, and behavioral interventions.
 
-      // Build consolidated program participation summary
-      const programParts = [];
-      
-      // Daily structure compliance
-      const programCompliance = `Current level: ${youth.level}. ${avgPoints >= 10 ? 'Consistently meets program expectations.' : 'Working to improve program compliance.'}`;
-      programParts.push(programCompliance);
+Behavioral Data:
+- Average Daily Points: ${avgPoints}/15 over ${recentBehavior.length} days
+- Peer Interaction: ${avgPeer}/5
+- Adult Interaction: ${avgAdult}/5
+- Authority/Compliance: ${avgAuthority}/5
+- Current Level: ${youth.level || 'Not specified'}
 
-      if (ratingCount > 0) {
-        programParts.push(
-          `Quick score averages (${ratingCount} entries): peer ${avgPeer.toFixed(1)}/5, staff ${avgAdult.toFixed(1)}/5, investment ${avgInvestment.toFixed(1)}/5, authority ${avgAuthority.toFixed(1)}/5.`
-        );
-      } else {
-        programParts.push('No quick score entries recorded in the past 30 days.');
-      }
+Case Notes:
+${caseNotesText || 'No case notes available for this period.'}
 
-      // Skills development
-      const positiveNotes = recentNotes.filter(note => {
-        const content = extractCaseNoteContent(note).toLowerCase();
-        return content.includes('progress') ||
-          content.includes('improvement') ||
-          content.includes('positive') ||
-          content.includes('earned');
-      });
-      if (positiveNotes.length > 0) {
-        const skillHighlights = buildCaseNoteHighlights(positiveNotes, 2);
-        programParts.push(`Skills development: ${skillHighlights.join(' ')}`);
-      }
+Write a professional, clinical summary suitable for a court report focusing on behavioral assessment.`,
 
-      const programParticipationSummary = programParts.join('\n\n');
+        educationalProgressSummary: `You are a clinical professional writing a court report. Based on the following case notes and data for ${youth.firstName} ${youth.lastName}, write a comprehensive 2-3 paragraph summary about their academic progress, school performance, achievements, and challenges.
 
-      // Educational summary with school scores
-      const educationParts: string[] = [];
-      if (schoolScoreCount > 0 && schoolAverage !== null && schoolHigh !== null && schoolLow !== null) {
-        educationParts.push(
-          `School daily scores recorded (${schoolScoreCount} entries) with an average of ${schoolAverage.toFixed(1)}/4 (range ${schoolLow.toFixed(1)}–${schoolHigh.toFixed(1)}).`
-        );
-      } else {
-        educationParts.push('No school daily scores recorded in the past 30 days.');
-      }
+Educational Data:
+- School: ${youth.currentSchool || youth.lastSchoolAttended || 'Not specified'}
+- Grade: ${youth.currentGrade || 'Not specified'}
+- Average School Score: ${schoolAverage}/4 (${schoolScoreCount} entries)
+- Academic Strengths: ${youth.academicStrengths || 'Not documented'}
+- Academic Challenges: ${youth.academicChallenges || 'Not documented'}
 
-      const schoolCaseNotes = recentNotes.filter(isSchoolCaseNote);
-      if (schoolCaseNotes.length > 0) {
-        const schoolHighlights = buildCaseNoteHighlights(schoolCaseNotes, 3);
-        if (schoolHighlights.length > 0) {
-          educationParts.push(`School day documentation: ${schoolHighlights.join(' ')}`);
+Case Notes:
+${caseNotesText || 'No case notes available for this period.'}
+
+Write a professional, educational summary suitable for a court report.`,
+
+        familySocialSummary: `You are a clinical professional writing a court report. Based on the following case notes and data for ${youth.firstName} ${youth.lastName}, write a comprehensive 2-3 paragraph summary about their family relationships, social development, peer relationships, and community involvement.
+
+Social-Emotional Data:
+- Peer Interaction Rating: ${avgPeer}/5
+- Adult Interaction Rating: ${avgAdult}/5
+- Family Members: ${youth.familyMembers?.map((fm: any) => `${fm.firstName} ${fm.lastName} (${fm.relation})`).join(', ') || 'Not documented'}
+
+Case Notes:
+${caseNotesText || 'No case notes available for this period.'}
+
+Write a professional, clinical summary suitable for a court report focusing on family and social relationships.`,
+
+        programParticipationSummary: `You are a clinical professional writing a court report. Based on the following case notes and data for ${youth.firstName} ${youth.lastName}, write a comprehensive 2-3 paragraph summary about their program participation, daily structure compliance, life skills development, and overall engagement.
+
+Program Data:
+- Current Level: ${youth.level || 'Not specified'}
+- Average Points: ${avgPoints}/15
+- Investment Level: ${avgInvestment}/5
+- Number of Case Notes: ${recentNotes.length}
+
+Case Notes:
+${caseNotesText || 'No case notes available for this period.'}
+
+Write a professional summary suitable for a court report focusing on program participation.`,
+
+        futurePlanningSummary: `You are a clinical professional writing a court report. Based on the following case notes and data for ${youth.firstName} ${youth.lastName}, write a comprehensive 2-3 paragraph summary about discharge planning, transition timeline, aftercare recommendations, and future goals.
+
+Planning Information:
+- Length of Stay: ${lengthOfStay}
+- Current Level: ${youth.level || 'Not specified'}
+- Placement Status: ${youth.placementStatus || 'Not specified'}
+
+Case Notes:
+${caseNotesText || 'No case notes available for this period.'}
+
+Write a professional summary suitable for a court report focusing on future planning and discharge recommendations.`
+      };
+
+      // Generate AI summaries for each section
+      const updates: Partial<CourtReportData> = {};
+
+      for (const [field, prompt] of Object.entries(aiPrompts)) {
+        try {
+          const response = await aiService.queryData(prompt, {
+            youth,
+            period: 'Last 30 days',
+            caseNotes: caseNotesText
+          });
+
+          if (response.success && response.data?.answer) {
+            updates[field as keyof CourtReportData] = response.data.answer as any;
+          }
+        } catch (error) {
+          console.error(`Error generating ${field}:`, error);
         }
       }
 
-      const academicHighlights = buildCaseNoteHighlights(
-        recentNotes.filter(note => !isSchoolCaseNote(note)),
-        2,
-        (content) =>
-          content.includes('school') ||
-          content.includes('academic') ||
-          content.includes('class') ||
-          content.includes('grade')
-      );
-      if (academicHighlights.length > 0) {
-        educationParts.push(`Academic notes: ${academicHighlights.join(' ')}`);
-      }
-
-      const educationalProgressSummary = educationParts.join('\n\n');
-
-      const treatmentHighlights = buildCaseNoteHighlights(recentNotes, 2, (content) =>
-        content.includes('therapy') ||
-        content.includes('session') ||
-        content.includes('coping') ||
-        content.includes('treatment plan') ||
-        content.includes('goal')
-      );
-      const treatmentSummary = treatmentHighlights.length > 0
-        ? `Recent therapeutic work: ${treatmentHighlights.join(' ')}`
-        : recentNotes.length > 0
-          ? `Treatment team documented ${recentNotes.length} case note${recentNotes.length === 1 ? '' : 's'} this period highlighting intervention follow-through and ongoing counseling participation.`
-          : '';
-
-      // Only update empty fields
-      setReportData(prev => ({
-        ...prev,
-        behavioralAssessmentSummary: prev.behavioralAssessmentSummary || behavioralAssessmentSummary,
-        programParticipationSummary: prev.programParticipationSummary || programParticipationSummary,
-        educationalProgressSummary: prev.educationalProgressSummary || educationalProgressSummary,
-        treatmentProgressSummary: prev.treatmentProgressSummary || treatmentSummary || prev.treatmentProgressSummary
-      }));
+      // Update all fields with AI-generated summaries
+      setReportData(prev => ({ ...prev, ...updates }));
 
       toast({
-        title: "Data Auto-Populated",
-        description: "Empty fields have been filled with recent behavioral and progress data",
+        title: "Success",
+        description: "All sections have been populated with AI-generated summaries from case notes and documentation. Review and edit as needed.",
       });
     } catch (error) {
       console.error('Error auto-populating data:', error);
@@ -1039,6 +1050,8 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
         description: "Failed to auto-populate data",
         variant: "destructive"
       });
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -1259,8 +1272,87 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
           className="mb-6"
         />
 
-        {/* Basic Information */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+        {/* Tabbed Form Interface */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="grid w-full grid-cols-9 mb-6">
+            <TabsTrigger value="basic-info" className="flex items-center gap-1 text-xs">
+              {isSectionComplete("basic-info") ? (
+                <CheckCircle2 className="h-3 w-3 text-green-600" />
+              ) : (
+                <Circle className="h-3 w-3" />
+              )}
+              <span>Basic</span>
+            </TabsTrigger>
+            <TabsTrigger value="current-placement" className="flex items-center gap-1 text-xs">
+              {isSectionComplete("current-placement") ? (
+                <CheckCircle2 className="h-3 w-3 text-green-600" />
+              ) : (
+                <Circle className="h-3 w-3" />
+              )}
+              <span>Placement</span>
+            </TabsTrigger>
+            <TabsTrigger value="treatment" className="flex items-center gap-1 text-xs">
+              {isSectionComplete("treatment") ? (
+                <CheckCircle2 className="h-3 w-3 text-green-600" />
+              ) : (
+                <Circle className="h-3 w-3" />
+              )}
+              <span>Treatment</span>
+            </TabsTrigger>
+            <TabsTrigger value="behavioral" className="flex items-center gap-1 text-xs">
+              {isSectionComplete("behavioral") ? (
+                <CheckCircle2 className="h-3 w-3 text-green-600" />
+              ) : (
+                <Circle className="h-3 w-3" />
+              )}
+              <span>Behavioral</span>
+            </TabsTrigger>
+            <TabsTrigger value="educational" className="flex items-center gap-1 text-xs">
+              {isSectionComplete("educational") ? (
+                <CheckCircle2 className="h-3 w-3 text-green-600" />
+              ) : (
+                <Circle className="h-3 w-3" />
+              )}
+              <span>Education</span>
+            </TabsTrigger>
+            <TabsTrigger value="family-social" className="flex items-center gap-1 text-xs">
+              {isSectionComplete("family-social") ? (
+                <CheckCircle2 className="h-3 w-3 text-green-600" />
+              ) : (
+                <Circle className="h-3 w-3" />
+              )}
+              <span>Family</span>
+            </TabsTrigger>
+            <TabsTrigger value="program" className="flex items-center gap-1 text-xs">
+              {isSectionComplete("program") ? (
+                <CheckCircle2 className="h-3 w-3 text-green-600" />
+              ) : (
+                <Circle className="h-3 w-3" />
+              )}
+              <span>Program</span>
+            </TabsTrigger>
+            <TabsTrigger value="future" className="flex items-center gap-1 text-xs">
+              {isSectionComplete("future") ? (
+                <CheckCircle2 className="h-3 w-3 text-green-600" />
+              ) : (
+                <Circle className="h-3 w-3" />
+              )}
+              <span>Future</span>
+            </TabsTrigger>
+            <TabsTrigger value="summary" className="flex items-center gap-1 text-xs">
+              {isSectionComplete("summary") ? (
+                <CheckCircle2 className="h-3 w-3 text-green-600" />
+              ) : (
+                <Circle className="h-3 w-3" />
+              )}
+              <span>Summary</span>
+            </TabsTrigger>
+          </TabsList>
+
+          {/* Tab 1: Basic Information */}
+          <TabsContent value="basic-info" className="space-y-4">
+            <h3 className="text-lg font-semibold mb-4 text-red-700 border-b border-red-200 pb-2">Basic Information</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <Label htmlFor="youthName">Youth Name</Label>
             <Input
@@ -1289,217 +1381,218 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
               className="mt-1"
             />
           </div>
-          <div>
-            <Label htmlFor="reportingOfficer">Reporting Officer</Label>
-            <Input
-              id="reportingOfficer"
-              value={reportData.reportingOfficer}
-              onChange={(e) => handleInputChange('reportingOfficer', e.target.value)}
-              className="mt-1"
-            />
-          </div>
-        </div>
-
-        {/* Current Placement */}
-        <div className="mb-8">
-          <h3 className="text-lg font-semibold mb-4 text-red-700 border-b border-red-200 pb-2">Current Placement</h3>
-          <div>
-            <Label htmlFor="currentPlacement">Current Placement</Label>
-            <Input
-              id="currentPlacement"
-              value={reportData.currentPlacement}
-              onChange={(e) => handleInputChange('currentPlacement', e.target.value)}
-              className="mt-1"
-            />
-          </div>
-        </div>
-
-        {/* Treatment Goals & Progress */}
-        <div className="mb-8">
-          <h3 className="text-lg font-semibold mb-4 text-red-700 border-b border-red-200 pb-2">Treatment Goals & Progress</h3>
-          <div className="space-y-4">
-            <div>
-              <div className="flex justify-between items-center mb-2">
-                <Label htmlFor="treatmentProgressSummary">Treatment Progress Summary</Label>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleEnhanceWithAI('treatmentProgressSummary')}
-                  className="text-purple-600 hover:text-purple-700"
-                >
-                  <Sparkles className="mr-2 h-4 w-4" />
-                  Enhance with AI
-                </Button>
+              <div>
+                <Label htmlFor="reportingOfficer">Reporting Officer</Label>
+                <Input
+                  id="reportingOfficer"
+                  value={reportData.reportingOfficer}
+                  onChange={(e) => handleInputChange('reportingOfficer', e.target.value)}
+                  className="mt-1"
+                />
               </div>
-              <Textarea
-                id="treatmentProgressSummary"
-                value={reportData.treatmentProgressSummary}
-                onChange={(e) => handleInputChange('treatmentProgressSummary', e.target.value)}
-                rows={8}
+            </div>
+          </TabsContent>
+
+          {/* Tab 2: Current Placement */}
+          <TabsContent value="current-placement" className="space-y-4">
+            <h3 className="text-lg font-semibold mb-4 text-red-700 border-b border-red-200 pb-2">Current Placement</h3>
+            <div>
+              <Label htmlFor="currentPlacement">Current Placement</Label>
+              <Input
+                id="currentPlacement"
+                value={reportData.currentPlacement}
+                onChange={(e) => handleInputChange('currentPlacement', e.target.value)}
                 className="mt-1"
-                placeholder="Provide a comprehensive summary including: treatment goals and objectives, progress toward goals, therapeutic participation (individual and group therapy), and medication compliance..."
               />
             </div>
-          </div>
-        </div>
+          </TabsContent>
 
-        {/* Behavioral Assessment */}
-        <div className="mb-8">
-          <h3 className="text-lg font-semibold mb-4 text-red-700 border-b border-red-200 pb-2">Behavioral Assessment</h3>
-          <div className="space-y-4">
-            <div>
-              <div className="flex justify-between items-center mb-2">
-                <Label htmlFor="behavioralAssessmentSummary">Behavioral Assessment Summary</Label>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleEnhanceWithAI('behavioralAssessmentSummary')}
-                  className="text-purple-600 hover:text-purple-700"
-                >
-                  <Sparkles className="mr-2 h-4 w-4" />
-                  Enhance with AI
-                </Button>
+          {/* Tab 3: Treatment Goals & Progress */}
+          <TabsContent value="treatment" className="space-y-4">
+            <h3 className="text-lg font-semibold mb-4 text-red-700 border-b border-red-200 pb-2">Treatment Goals & Progress</h3>
+            <div className="space-y-4">
+              <div>
+                <div className="flex justify-between items-center mb-2">
+                  <Label htmlFor="treatmentProgressSummary">Treatment Progress Summary</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleEnhanceWithAI('treatmentProgressSummary')}
+                    className="text-purple-600 hover:text-purple-700"
+                  >
+                    <Sparkles className="mr-2 h-4 w-4" />
+                    Enhance with AI
+                  </Button>
+                </div>
+                <Textarea
+                  id="treatmentProgressSummary"
+                  value={reportData.treatmentProgressSummary}
+                  onChange={(e) => handleInputChange('treatmentProgressSummary', e.target.value)}
+                  rows={8}
+                  className="mt-1"
+                  placeholder="Provide a comprehensive summary including: treatment goals and objectives, progress toward goals, therapeutic participation (individual and group therapy), and medication compliance..."
+                />
               </div>
-              <Textarea
-                id="behavioralAssessmentSummary"
-                value={reportData.behavioralAssessmentSummary}
-                onChange={(e) => handleInputChange('behavioralAssessmentSummary', e.target.value)}
-                rows={8}
-                className="mt-1"
-                placeholder="Provide a comprehensive summary including: behavioral progress and improvements, significant behavioral incidents, and behavioral interventions and strategies used..."
-              />
             </div>
-          </div>
-        </div>
+          </TabsContent>
 
-        {/* Educational Progress */}
-        <div className="mb-8">
-          <h3 className="text-lg font-semibold mb-4 text-red-700 border-b border-red-200 pb-2">Educational Progress</h3>
-          <div className="space-y-4">
-            <div>
-              <div className="flex justify-between items-center mb-2">
-                <Label htmlFor="educationalProgressSummary">Educational Progress Summary</Label>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleEnhanceWithAI('educationalProgressSummary')}
-                  className="text-purple-600 hover:text-purple-700"
-                >
-                  <Sparkles className="mr-2 h-4 w-4" />
-                  Enhance with AI
-                </Button>
+          {/* Tab 4: Behavioral Assessment */}
+          <TabsContent value="behavioral" className="space-y-4">
+            <h3 className="text-lg font-semibold mb-4 text-red-700 border-b border-red-200 pb-2">Behavioral Assessment</h3>
+            <div className="space-y-4">
+              <div>
+                <div className="flex justify-between items-center mb-2">
+                  <Label htmlFor="behavioralAssessmentSummary">Behavioral Assessment Summary</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleEnhanceWithAI('behavioralAssessmentSummary')}
+                    className="text-purple-600 hover:text-purple-700"
+                  >
+                    <Sparkles className="mr-2 h-4 w-4" />
+                    Enhance with AI
+                  </Button>
+                </div>
+                <Textarea
+                  id="behavioralAssessmentSummary"
+                  value={reportData.behavioralAssessmentSummary}
+                  onChange={(e) => handleInputChange('behavioralAssessmentSummary', e.target.value)}
+                  rows={8}
+                  className="mt-1"
+                  placeholder="Provide a comprehensive summary including: behavioral progress and improvements, significant behavioral incidents, and behavioral interventions and strategies used..."
+                />
               </div>
-              <Textarea
-                id="educationalProgressSummary"
-                value={reportData.educationalProgressSummary}
-                onChange={(e) => handleInputChange('educationalProgressSummary', e.target.value)}
-                rows={8}
-                className="mt-1"
-                placeholder="Provide a comprehensive summary including: school placement, academic achievements and progress, educational challenges or needs, and vocational training/career goals..."
-              />
             </div>
-          </div>
-        </div>
+          </TabsContent>
 
-        {/* Family & Social Relationships */}
-        <div className="mb-8">
-          <h3 className="text-lg font-semibold mb-4 text-red-700 border-b border-red-200 pb-2">Family & Social Relationships</h3>
-          <div className="space-y-4">
-            <div>
-              <div className="flex justify-between items-center mb-2">
-                <Label htmlFor="familySocialSummary">Family & Social Summary</Label>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleEnhanceWithAI('familySocialSummary')}
-                  className="text-purple-600 hover:text-purple-700"
-                >
-                  <Sparkles className="mr-2 h-4 w-4" />
-                  Enhance with AI
-                </Button>
+          {/* Tab 5: Educational Progress */}
+          <TabsContent value="educational" className="space-y-4">
+            <h3 className="text-lg font-semibold mb-4 text-red-700 border-b border-red-200 pb-2">Educational Progress</h3>
+            <div className="space-y-4">
+              <div>
+                <div className="flex justify-between items-center mb-2">
+                  <Label htmlFor="educationalProgressSummary">Educational Progress Summary</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleEnhanceWithAI('educationalProgressSummary')}
+                    className="text-purple-600 hover:text-purple-700"
+                  >
+                    <Sparkles className="mr-2 h-4 w-4" />
+                    Enhance with AI
+                  </Button>
+                </div>
+                <Textarea
+                  id="educationalProgressSummary"
+                  value={reportData.educationalProgressSummary}
+                  onChange={(e) => handleInputChange('educationalProgressSummary', e.target.value)}
+                  rows={8}
+                  className="mt-1"
+                  placeholder="Provide a comprehensive summary including: school placement, academic achievements and progress, educational challenges or needs, and vocational training/career goals..."
+                />
               </div>
-              <Textarea
-                id="familySocialSummary"
-                value={reportData.familySocialSummary}
-                onChange={(e) => handleInputChange('familySocialSummary', e.target.value)}
-                rows={8}
-                className="mt-1"
-                placeholder="Provide a comprehensive summary including: family visitation and contact, family therapy participation and progress, peer relationships, and community involvement/contacts..."
-              />
             </div>
-          </div>
-        </div>
+          </TabsContent>
 
-        {/* Program Participation */}
-        <div className="mb-8">
-          <h3 className="text-lg font-semibold mb-4 text-red-700 border-b border-red-200 pb-2">Program Participation</h3>
-          <div className="space-y-4">
-            <div>
-              <div className="flex justify-between items-center mb-2">
-                <Label htmlFor="programParticipationSummary">Program Participation Summary</Label>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleEnhanceWithAI('programParticipationSummary')}
-                  className="text-purple-600 hover:text-purple-700"
-                >
-                  <Sparkles className="mr-2 h-4 w-4" />
-                  Enhance with AI
-                </Button>
+          {/* Tab 6: Family & Social Relationships */}
+          <TabsContent value="family-social" className="space-y-4">
+            <h3 className="text-lg font-semibold mb-4 text-red-700 border-b border-red-200 pb-2">Family & Social Relationships</h3>
+            <div className="space-y-4">
+              <div>
+                <div className="flex justify-between items-center mb-2">
+                  <Label htmlFor="familySocialSummary">Family & Social Summary</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleEnhanceWithAI('familySocialSummary')}
+                    className="text-purple-600 hover:text-purple-700"
+                  >
+                    <Sparkles className="mr-2 h-4 w-4" />
+                    Enhance with AI
+                  </Button>
+                </div>
+                <Textarea
+                  id="familySocialSummary"
+                  value={reportData.familySocialSummary}
+                  onChange={(e) => handleInputChange('familySocialSummary', e.target.value)}
+                  rows={8}
+                  className="mt-1"
+                  placeholder="Provide a comprehensive summary including: family visitation and contact, family therapy participation and progress, peer relationships, and community involvement/contacts..."
+                />
               </div>
-              <Textarea
-                id="programParticipationSummary"
-                value={reportData.programParticipationSummary}
-                onChange={(e) => handleInputChange('programParticipationSummary', e.target.value)}
-                rows={8}
-                className="mt-1"
-                placeholder="Provide a comprehensive summary including: daily structure compliance, overall program compliance and participation, life skills and social skills development, and incentives earned/consequences received..."
-              />
             </div>
-          </div>
-        </div>
+          </TabsContent>
 
-        {/* Future Planning */}
-        <div className="mb-8">
-          <h3 className="text-lg font-semibold mb-4 text-red-700 border-b border-red-200 pb-2">Future Planning</h3>
-          <div className="space-y-4">
-            <div>
-              <div className="flex justify-between items-center mb-2">
-                <Label htmlFor="futurePlanningSummary">Future Planning Summary</Label>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleEnhanceWithAI('futurePlanningSummary')}
-                  className="text-purple-600 hover:text-purple-700"
-                >
-                  <Sparkles className="mr-2 h-4 w-4" />
-                  Enhance with AI
-                </Button>
+          {/* Tab 7: Program Participation */}
+          <TabsContent value="program" className="space-y-4">
+            <h3 className="text-lg font-semibold mb-4 text-red-700 border-b border-red-200 pb-2">Program Participation</h3>
+            <div className="space-y-4">
+              <div>
+                <div className="flex justify-between items-center mb-2">
+                  <Label htmlFor="programParticipationSummary">Program Participation Summary</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleEnhanceWithAI('programParticipationSummary')}
+                    className="text-purple-600 hover:text-purple-700"
+                  >
+                    <Sparkles className="mr-2 h-4 w-4" />
+                    Enhance with AI
+                  </Button>
+                </div>
+                <Textarea
+                  id="programParticipationSummary"
+                  value={reportData.programParticipationSummary}
+                  onChange={(e) => handleInputChange('programParticipationSummary', e.target.value)}
+                  rows={8}
+                  className="mt-1"
+                  placeholder="Provide a comprehensive summary including: daily structure compliance, overall program compliance and participation, life skills and social skills development, and incentives earned/consequences received..."
+                />
               </div>
-              <Textarea
-                id="futurePlanningSummary"
-                value={reportData.futurePlanningSummary}
-                onChange={(e) => handleInputChange('futurePlanningSummary', e.target.value)}
-                rows={8}
-                className="mt-1"
-                placeholder="Provide a comprehensive summary including: projected discharge timeline and criteria, discharge planning activities, aftercare recommendations and supports, and transition plan to next level of care..."
-              />
             </div>
-          </div>
-        </div>
+          </TabsContent>
 
-        {/* Summary & Recommendations */}
-        <div className="mb-8">
-          <h3 className="text-lg font-semibold mb-4 text-red-700 border-b border-red-200 pb-2">Summary & Recommendations</h3>
-          <div className="space-y-4">
-            <div>
-              <div className="flex justify-between items-center mb-2">
+          {/* Tab 8: Future Planning */}
+          <TabsContent value="future" className="space-y-4">
+            <h3 className="text-lg font-semibold mb-4 text-red-700 border-b border-red-200 pb-2">Future Planning</h3>
+            <div className="space-y-4">
+              <div>
+                <div className="flex justify-between items-center mb-2">
+                  <Label htmlFor="futurePlanningSummary">Future Planning Summary</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleEnhanceWithAI('futurePlanningSummary')}
+                    className="text-purple-600 hover:text-purple-700"
+                  >
+                    <Sparkles className="mr-2 h-4 w-4" />
+                    Enhance with AI
+                  </Button>
+                </div>
+                <Textarea
+                  id="futurePlanningSummary"
+                  value={reportData.futurePlanningSummary}
+                  onChange={(e) => handleInputChange('futurePlanningSummary', e.target.value)}
+                  rows={8}
+                  className="mt-1"
+                  placeholder="Provide a comprehensive summary including: projected discharge timeline and criteria, discharge planning activities, aftercare recommendations and supports, and transition plan to next level of care..."
+                />
+              </div>
+            </div>
+          </TabsContent>
+
+          {/* Tab 9: Summary & Recommendations */}
+          <TabsContent value="summary" className="space-y-4">
+            <h3 className="text-lg font-semibold mb-4 text-red-700 border-b border-red-200 pb-2">Summary & Recommendations</h3>
+            <div className="space-y-4">
+              <div>
+                <div className="flex justify-between items-center mb-2">
                 <Label htmlFor="overallAssessment">Overall Assessment</Label>
                 <Button
                   type="button"
@@ -1567,8 +1660,9 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
                 placeholder="Any additional comments or information..."
               />
             </div>
-          </div>
-        </div>
+            </div>
+          </TabsContent>
+        </Tabs>
 
         {/* Signatures */}
         <div className="mt-8 pt-6 border-t">

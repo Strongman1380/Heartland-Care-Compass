@@ -2,6 +2,10 @@ import { useState, useEffect, useCallback } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Upload, Loader2, CheckCircle, AlertCircle } from "lucide-react";
+import { parseYouthProfileText } from "@/services/aiService";
 import { toast } from "sonner";
 import { useYouth } from "@/hooks/useSupabase";
 import { useYouthForm } from "@/hooks/useYouthForm";
@@ -19,6 +23,10 @@ interface AddYouthDialogProps {
 export const AddYouthDialog = ({ onClose, onSuccess }: AddYouthDialogProps) => {
   const [activeTab, setActiveTab] = useState("personal");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Import feature state
+  const [importText, setImportText] = useState("");
+  const [isImporting, setIsImporting] = useState(false);
+  const [importStatus, setImportStatus] = useState<'idle' | 'success' | 'error'>('idle');
   
   // Use Supabase hook for youth operations
   const { createYouth, youths } = useYouth();
@@ -83,6 +91,112 @@ export const AddYouthDialog = ({ onClose, onSuccess }: AddYouthDialogProps) => {
     return age;
   };
 
+  const handleImportProfile = async () => {
+    if (!importText.trim()) {
+      toast.error("Please paste some profile text to import");
+      return;
+    }
+
+    setIsImporting(true);
+    setImportStatus('idle');
+
+    try {
+      const response = await parseYouthProfileText(importText);
+      if (!response.success || !response.data) {
+        throw new Error(response.error || "Failed to parse profile text");
+      }
+      const parsedData: any = (response as any).data.parsedData || response.data;
+
+      const updatedFormData = {
+        ...formData,
+        ...(parsedData.firstName && { firstName: parsedData.firstName }),
+        ...(parsedData.lastName && { lastName: parsedData.lastName }),
+        ...(parsedData.dob && { dob: parsedData.dob }),
+        ...(parsedData.age && { age: parsedData.age.toString() }),
+        ...(parsedData.sex && { sex: parsedData.sex }),
+        ...(parsedData.race && { race: parsedData.race }),
+        ...(parsedData.religion && { religion: parsedData.religion }),
+        ...(parsedData.placeOfBirth && { placeOfBirth: parsedData.placeOfBirth }),
+        ...(parsedData.socialSecurityNumber && { socialSecurityNumber: parsedData.socialSecurityNumber }),
+        ...(parsedData.address && { address: parsedData.address }),
+        ...(parsedData.height && { height: parsedData.height }),
+        ...(parsedData.weight && { weight: parsedData.weight }),
+        ...(parsedData.hairColor && { hairColor: parsedData.hairColor }),
+        ...(parsedData.eyeColor && { eyeColor: parsedData.eyeColor }),
+        ...(parsedData.tattoosScars && { tattoosScars: parsedData.tattoosScars }),
+        ...(parsedData.admissionDate && { admissionDate: parsedData.admissionDate }),
+        ...(parsedData.level !== undefined && { level: String(parsedData.level), currentLevel: parsedData.level }),
+        ...(parsedData.legalGuardian && { legalGuardian: parsedData.legalGuardian }),
+        ...(parsedData.guardianRelationship && { guardianRelationship: parsedData.guardianRelationship }),
+        ...(parsedData.guardianContact && { guardianContact: parsedData.guardianContact }),
+        ...(parsedData.guardianPhone && { guardianPhone: parsedData.guardianPhone }),
+        ...(parsedData.guardianEmail && { guardianEmail: parsedData.guardianEmail }),
+        ...(parsedData.probationOfficer && { probationOfficer: parsedData.probationOfficer }),
+        ...(parsedData.probationContact && { probationContact: parsedData.probationContact }),
+        ...(parsedData.probationPhone && { probationPhone: parsedData.probationPhone }),
+        ...(parsedData.placementAuthority && { placementAuthority: parsedData.placementAuthority }),
+        ...(parsedData.estimatedStay && { estimatedStay: parsedData.estimatedStay }),
+        ...(parsedData.referralSource && { referralSource: parsedData.referralSource }),
+        ...(parsedData.referralReason && { referralReason: parsedData.referralReason }),
+        ...(parsedData.priorPlacements && { priorPlacements: parsedData.priorPlacements }),
+        ...(parsedData.numPriorPlacements && { numPriorPlacements: parsedData.numPriorPlacements }),
+        ...(parsedData.lengthRecentPlacement && { lengthRecentPlacement: parsedData.lengthRecentPlacement }),
+        ...(parsedData.courtInvolvement && { courtInvolvement: parsedData.courtInvolvement }),
+        ...(parsedData.currentSchool && { currentSchool: parsedData.currentSchool }),
+        ...(parsedData.grade && { grade: parsedData.grade }),
+        ...(parsedData.hasIEP !== undefined && { hasIEP: parsedData.hasIEP }),
+        ...(parsedData.academicStrengths && { academicStrengths: parsedData.academicStrengths }),
+        ...(parsedData.academicChallenges && { academicChallenges: parsedData.academicChallenges }),
+        ...(parsedData.educationGoals && { educationGoals: parsedData.educationGoals }),
+        ...(parsedData.schoolContact && { schoolContact: parsedData.schoolContact }),
+        ...(parsedData.schoolPhone && { schoolPhone: parsedData.schoolPhone }),
+        ...(parsedData.physician && { physician: parsedData.physician }),
+        ...(parsedData.physicianPhone && { physicianPhone: parsedData.physicianPhone }),
+        ...(parsedData.insuranceProvider && { insuranceProvider: parsedData.insuranceProvider }),
+        ...(parsedData.policyNumber && { policyNumber: parsedData.policyNumber }),
+        ...(parsedData.allergies && { allergies: parsedData.allergies }),
+        ...(parsedData.medicalConditions && { medicalConditions: parsedData.medicalConditions }),
+        ...(parsedData.medicalRestrictions && { medicalRestrictions: parsedData.medicalRestrictions }),
+        ...(parsedData.currentDiagnoses && { currentDiagnoses: parsedData.currentDiagnoses }),
+        ...(parsedData.diagnoses && { diagnoses: parsedData.diagnoses }),
+        ...(parsedData.traumaHistory && { traumaHistory: parsedData.traumaHistory }),
+        ...(parsedData.previousTreatment && { previousTreatment: parsedData.previousTreatment }),
+        ...(parsedData.currentCounseling && { currentCounseling: parsedData.currentCounseling }),
+        ...(parsedData.therapistName && { therapistName: parsedData.therapistName }),
+        ...(parsedData.therapistContact && { therapistContact: parsedData.therapistContact }),
+        ...(parsedData.sessionFrequency && { sessionFrequency: parsedData.sessionFrequency }),
+        ...(parsedData.sessionTime && { sessionTime: parsedData.sessionTime }),
+        ...(parsedData.selfHarmHistory && { selfHarmHistory: parsedData.selfHarmHistory }),
+        ...(parsedData.lastIncidentDate && { lastIncidentDate: parsedData.lastIncidentDate }),
+        ...(parsedData.hasSafetyPlan !== undefined && { hasSafetyPlan: parsedData.hasSafetyPlan }),
+        ...(parsedData.onSubsystem !== undefined && { onSubsystem: parsedData.onSubsystem }),
+        ...(parsedData.pointsInCurrentLevel !== undefined && { pointsInCurrentLevel: parsedData.pointsInCurrentLevel }),
+        ...(parsedData.dailyPointsForPrivileges !== undefined && { dailyPointsForPrivileges: parsedData.dailyPointsForPrivileges }),
+        ...(parsedData.hyrnaRiskLevel && { hyrnaRiskLevel: parsedData.hyrnaRiskLevel }),
+        ...(parsedData.hyrnaScore && { hyrnaScore: parsedData.hyrnaScore }),
+        ...(parsedData.hyrnaAssessmentDate && { hyrnaAssessmentDate: parsedData.hyrnaAssessmentDate }),
+      } as typeof formData;
+
+      setFormData(updatedFormData);
+      setImportStatus('success');
+
+      if (parsedData.warnings && parsedData.warnings.length > 0) {
+        toast.warning("Import completed with warnings", { description: parsedData.warnings.join(", ") });
+      } else {
+        toast.success("Profile data imported successfully!", { description: `Confidence: ${parsedData.confidence ? Math.round(parsedData.confidence * 100) : 'N/A'}%` });
+      }
+
+      setImportText("");
+      setActiveTab("personal");
+    } catch (error) {
+      console.error("Import error:", error);
+      setImportStatus('error');
+      toast.error("Failed to import profile", { description: error instanceof Error ? error.message : "Unknown error occurred" });
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -131,22 +245,119 @@ export const AddYouthDialog = ({ onClose, onSuccess }: AddYouthDialogProps) => {
         formData.previousTreatment && `Previous treatment: ${formData.previousTreatment}`
       ].filter(Boolean).join('; ');
       
-      // Create the youth object
+      // Normalize level (support 'orientation' => 0)
+      let normalizedLevel: number = 1;
+      if (typeof level === 'string') {
+        if (level.toLowerCase() === 'orientation' || level === '0') {
+          normalizedLevel = 0;
+        } else {
+          const parsed = parseInt(level, 10);
+          normalizedLevel = Number.isFinite(parsed) ? parsed : 1;
+        }
+      }
+
+      // Create the youth object with detailed fields
       const youthData = {
         firstName,
         lastName,
         dob: dob || null,
-        age,
+        age: age || null,
         idNumber: formData.idNumber,
         admissionDate: admissionDate || null,
-        level: level ? parseInt(level) : 1,
+        level: normalizedLevel,
         pointTotal: 0, // Default to 0
-        referralSource,
-        referralReason,
-        educationInfo,
-        medicalInfo,
-        mentalHealthInfo,
+        referralSource: referralSource || null,
+        referralReason: referralReason || null,
+        educationInfo: educationInfo || null,
+        medicalInfo: medicalInfo || null,
+        mentalHealthInfo: mentalHealthInfo || null,
         legalStatus: formData.courtInvolvement?.join(', ') || null,
+
+        // Additional personal details
+        sex: formData.sex || null,
+        race: formData.race || null,
+        religion: formData.religion || null,
+        placeOfBirth: formData.placeOfBirth || null,
+        socialSecurityNumber: formData.socialSecurityNumber || null,
+        address: formData.address ? (() => {
+          const parts = formData.address.split(',').map(p => p.trim());
+          const stateParts = parts[2]?.split(' ') || [];
+          return {
+            street: parts[0] || null,
+            city: parts[1] || null,
+            state: stateParts[0] || null,
+            zip: stateParts[1] || null,
+          };
+        })() : null,
+        physicalDescription: {
+          height: formData.height || null,
+          weight: formData.weight || null,
+          hairColor: formData.hairColor || null,
+          eyeColor: formData.eyeColor || null,
+          tattoosScars: formData.tattoosScars || null,
+        },
+
+        // Legal Guardian as Json object
+        legalGuardian: formData.legalGuardian ? {
+          name: formData.legalGuardian,
+          relationship: formData.guardianRelationship || null,
+          contact: formData.guardianContact || null,
+          phone: formData.guardianPhone || null,
+          email: formData.guardianEmail || null
+        } : null,
+
+        // Probation Officer as Json object
+        probationOfficer: formData.probationOfficer ? {
+          name: formData.probationOfficer,
+          contact: formData.probationContact || null,
+          phone: formData.probationPhone || null
+        } : null,
+        placementAuthority: formData.placementAuthority?.[0] || null,
+        estimatedStay: formData.estimatedStay || null,
+
+        // Education details
+        currentSchool: formData.currentSchool || null,
+        grade: formData.grade || null,
+        hasIEP: formData.hasIEP || false,
+        academicStrengths: formData.academicStrengths || null,
+        academicChallenges: formData.academicChallenges || null,
+        educationGoals: formData.educationGoals || null,
+        schoolContact: formData.schoolContact || null,
+        schoolPhone: formData.schoolPhone || null,
+
+        // Medical details
+        physician: formData.physician || null,
+        physicianPhone: formData.physicianPhone || null,
+        insuranceProvider: formData.insuranceProvider || null,
+        policyNumber: formData.policyNumber || null,
+        allergies: formData.allergies || null,
+        medicalConditions: formData.medicalConditions || null,
+        medicalRestrictions: formData.medicalRestrictions || null,
+
+        // Mental health details
+        currentDiagnoses: formData.currentDiagnoses || formData.diagnoses || null,
+        diagnoses: formData.currentDiagnoses || formData.diagnoses || null,
+        traumaHistory: formData.traumaHistory || null,
+        previousTreatment: formData.previousTreatment || null,
+        currentCounseling: formData.currentCounseling || null,
+        therapistName: formData.therapistName || null,
+        therapistContact: formData.therapistContact || null,
+        sessionFrequency: formData.sessionFrequency || null,
+        sessionTime: formData.sessionTime || null,
+        selfHarmHistory: formData.selfHarmHistory || null,
+        lastIncidentDate: formData.lastIncidentDate || null,
+        hasSafetyPlan: formData.hasSafetyPlan || false,
+
+        // Background details
+        priorPlacements: formData.priorPlacements || null,
+        numPriorPlacements: formData.numPriorPlacements || null,
+        lengthRecentPlacement: formData.lengthRecentPlacement || null,
+        courtInvolvement: formData.courtInvolvement || null,
+
+        // Behavior tracking
+        onSubsystem: !!formData.onSubsystem,
+        pointsInCurrentLevel: formData.pointsInCurrentLevel !== undefined ? Number(formData.pointsInCurrentLevel) : 0,
+        dailyPointsForPrivileges: formData.dailyPointsForPrivileges !== undefined ? Number(formData.dailyPointsForPrivileges) : 0,
       };
       
       // Save to Supabase
@@ -171,6 +382,7 @@ export const AddYouthDialog = ({ onClose, onSuccess }: AddYouthDialogProps) => {
 
   // Tab navigation
   const tabs = [
+    { id: "import", label: "Import" },
     { id: "personal", label: "Personal" },
     { id: "background", label: "Background" },
     { id: "education", label: "Education" },
@@ -203,11 +415,88 @@ export const AddYouthDialog = ({ onClose, onSuccess }: AddYouthDialogProps) => {
 
         <form onSubmit={handleSubmit} className="space-y-4 py-2">
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="grid grid-cols-5 mb-4">
+            <TabsList className="grid grid-cols-6 mb-4">
               {tabs.map(tab => (
                 <TabsTrigger key={tab.id} value={tab.id}>{tab.label}</TabsTrigger>
               ))}
             </TabsList>
+            
+            <TabsContent value="import">
+              <div className="space-y-4">
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <div className="flex items-start gap-3">
+                    <Upload className="w-5 h-5 text-blue-600 mt-0.5" />
+                    <div>
+                      <h3 className="font-semibold text-blue-900 mb-1">AI-Powered Profile Import</h3>
+                      <p className="text-sm text-blue-700">
+                        Paste any youth profile text below and the system will extract and populate the fields.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="import-text">Profile Text</Label>
+                  <Textarea
+                    id="import-text"
+                    value={importText}
+                    onChange={(e) => setImportText(e.target.value)}
+                    placeholder="Paste youth profile information here..."
+                    rows={12}
+                    className="font-mono text-sm"
+                  />
+                  <p className="text-xs text-gray-500">
+                    You can review and edit imported data before saving.
+                  </p>
+                </div>
+
+                {importStatus === 'success' && (
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex items-center gap-2">
+                    <CheckCircle className="w-5 h-5 text-green-600" />
+                    <p className="text-sm text-green-800">Profile data imported successfully! Review the other tabs to verify.</p>
+                  </div>
+                )}
+
+                {importStatus === 'error' && (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-center gap-2">
+                    <AlertCircle className="w-5 h-5 text-red-600" />
+                    <p className="text-sm text-red-800">Failed to import profile. Please check the text format and try again.</p>
+                  </div>
+                )}
+
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    onClick={handleImportProfile}
+                    disabled={isImporting || !importText.trim()}
+                    className="bg-blue-600 hover:bg-blue-700"
+                  >
+                    {isImporting ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Importing...
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="w-4 h-4 mr-2" />
+                        Import Profile Data
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setImportText("");
+                      setImportStatus('idle');
+                    }}
+                    disabled={isImporting}
+                  >
+                    Clear
+                  </Button>
+                </div>
+              </div>
+            </TabsContent>
             
             <TabsContent value="personal">
               <PersonalInfoTab 

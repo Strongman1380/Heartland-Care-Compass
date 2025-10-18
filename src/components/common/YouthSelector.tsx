@@ -1,8 +1,8 @@
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { PlusCircle, User } from "lucide-react";
+import { PlusCircle, User, ChevronRight } from "lucide-react";
 import { AddYouthDialog } from "@/components/youth/AddYouthDialog";
 import { useYouth } from "@/hooks/useSupabase";
 import { type Youth } from "@/integrations/supabase/services";
@@ -16,13 +16,22 @@ interface YouthSelectorProps {
 export const YouthSelector = ({ onSelectYouth, selectedYouthId }: YouthSelectorProps) => {
   const [isAddYouthDialogOpen, setIsAddYouthDialogOpen] = useState(false);
   const { toast } = useToast();
-  
+
   // Use Supabase hook for youth operations
   const { youths, loading, error, loadYouths } = useYouth();
 
   useEffect(() => {
     loadYouths();
   }, []);
+
+  // Sort youth alphabetically by last name, then first name
+  const sortedYouths = useMemo(() => {
+    return [...youths].sort((a, b) => {
+      const lastNameCompare = a.lastName.localeCompare(b.lastName);
+      if (lastNameCompare !== 0) return lastNameCompare;
+      return a.firstName.localeCompare(b.firstName);
+    });
+  }, [youths]);
 
   // Handle youth selection
   const handleYouthSelect = (youthId: string) => {
@@ -78,29 +87,62 @@ export const YouthSelector = ({ onSelectYouth, selectedYouthId }: YouthSelectorP
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-          {youths.map((youth) => (
-            <Card 
-              key={youth.id} 
-              className={`cursor-pointer transition-all hover:shadow-md ${
-                selectedYouthId === youth.id 
-                  ? 'ring-2 ring-blue-500 bg-blue-50' 
-                  : 'hover:bg-gray-50'
-              }`}
-              onClick={() => handleYouthSelect(youth.id)}
-            >
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">
-                  {youth.firstName} {youth.lastName}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <p className="text-xs text-gray-500">Level {youth.level}</p>
-                <p className="text-xs text-gray-500">{youth.pointTotal || 0} points</p>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+        <Card>
+          <CardContent className="p-0">
+            <div className="divide-y divide-gray-200">
+              {sortedYouths.map((youth) => (
+                <div
+                  key={youth.id}
+                  className={`flex items-center justify-between px-4 py-3 cursor-pointer transition-colors hover:bg-gray-50 ${
+                    selectedYouthId === youth.id
+                      ? 'bg-blue-50 border-l-4 border-blue-500'
+                      : ''
+                  }`}
+                  onClick={() => handleYouthSelect(youth.id)}
+                >
+                  <div className="flex items-center gap-4 flex-1">
+                    <div className="flex-shrink-0">
+                      <div className="h-10 w-10 rounded-full bg-gradient-to-br from-red-500 to-yellow-500 flex items-center justify-center text-white font-semibold">
+                        {youth.firstName.charAt(0)}{youth.lastName.charAt(0)}
+                      </div>
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="text-base font-semibold text-gray-900">
+                        {youth.lastName}, {youth.firstName}
+                      </h4>
+                      <div className="flex items-center gap-2 mt-2 flex-wrap">
+                        {/* Age Badge */}
+                        {youth.age && (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800 border border-gray-300">
+                            Age: {youth.age}
+                          </span>
+                        )}
+
+                        {/* Level Badge */}
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 border border-blue-300">
+                          Level {youth.level}
+                        </span>
+
+                        {/* Points Badge */}
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 border border-green-300">
+                          {youth.pointTotal || 0} pts
+                        </span>
+
+                        {/* Grade Badge */}
+                        {youth.currentGrade && (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800 border border-purple-300">
+                            Grade {youth.currentGrade}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <ChevronRight className="h-5 w-5 text-gray-400 flex-shrink-0" />
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       )}
       
       {isAddYouthDialogOpen && (

@@ -8,7 +8,8 @@ import { FormattedText } from "@/components/ui/formatted-text";
 import { ReportHeader } from "@/components/reports/ReportHeader";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Calendar, FileText, Save, FileDown, RotateCcw, Sparkles } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Calendar, FileText, Save, FileDown, RotateCcw, Sparkles, CheckCircle2, Circle } from "lucide-react";
 import { format, differenceInDays, differenceInWeeks, differenceInMonths } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { exportElementToPDF } from "@/utils/export";
@@ -92,6 +93,7 @@ interface MonthlyReportData {
 
 export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => {
   const [selectedMonth, setSelectedMonth] = useState<string>(format(new Date(), "yyyy-MM"));
+  const [activeTab, setActiveTab] = useState<string>("youth-info");
   const [reportData, setReportData] = useState<MonthlyReportData>({
     fullLegalName: "",
     preferredName: "",
@@ -119,9 +121,32 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
 
   const { toast } = useToast();
   const printRef = useRef<HTMLDivElement>(null);
-  
+
   // AI enhancement state
   const [isEnhancing, setIsEnhancing] = useState<string | null>(null);
+  const [isAutoPopulating, setIsAutoPopulating] = useState(false);
+
+  // Helper function to check if a section is complete
+  const isSectionComplete = (section: string): boolean => {
+    switch (section) {
+      case "youth-info":
+        return !!(reportData.fullLegalName && reportData.dateOfBirth && reportData.currentLevel);
+      case "program-participation":
+        return reportData.programParticipationSummary.length > 50;
+      case "academic-progress":
+        return reportData.academicProgressSummary.length > 50;
+      case "behavioral":
+        return reportData.behavioralSummary.length > 50;
+      case "social-emotional":
+        return reportData.socialEmotionalSummary.length > 50;
+      case "treatment":
+        return reportData.treatmentProgressSummary.length > 50;
+      case "future-goals":
+        return reportData.futureGoals.length > 20;
+      default:
+        return false;
+    }
+  };
 
   // Auto-populate form with youth data
   const autoPopulateForm = async () => {
@@ -968,15 +993,211 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
   const getEnhancementPrompt = (fieldName: keyof MonthlyReportData, currentValue: string): string => {
     const prompts: Record<string, string> = {
       programParticipationSummary: `Take these brief notes about ${youth.firstName}'s program participation, daily points, incentives, strengths, struggles, and trends, and expand them into a comprehensive, professional summary. Include details about their engagement, behavioral patterns, and progress over time:\n\n"${currentValue}"\n\nExpand this into 3-4 well-written paragraphs with clinical language appropriate for a monthly progress report.`,
-      
+
       academicProgressSummary: `Take these brief notes about ${youth.firstName}'s academic progress and expand them into a comprehensive summary covering their school performance, achievements, challenges, and educational goals:\n\n"${currentValue}"\n\nExpand this into 2-3 well-written paragraphs with professional educational language.`,
-      
+
       socialEmotionalSummary: `Take these brief notes about ${youth.firstName}'s social and emotional development and expand them into a comprehensive summary covering their social progress, emotional regulation, peer relationships, and interactions with adults:\n\n"${currentValue}"\n\nExpand this into 2-3 well-written paragraphs with clinical language appropriate for social-emotional assessment.`,
-      
+
       treatmentProgressSummary: `Take these brief notes about ${youth.firstName}'s treatment progress and expand them into a comprehensive summary covering their treatment goals, progress toward those goals, therapy participation, and clinical observations:\n\n"${currentValue}"\n\nExpand this into 2-3 well-written paragraphs with clinical therapeutic language.`,
     };
 
     return prompts[fieldName] || `Enhance and expand the following text for ${youth.firstName}'s monthly progress report:\n\n"${currentValue}"\n\nExpand this into clear, professional paragraphs.`;
+  };
+
+  // AI-powered auto-populate ALL sections intelligently
+  const handleAIPopulateAll = async () => {
+    if (!youth?.id) {
+      toast({
+        title: "Error",
+        description: "No youth selected",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const hasData = reportData.programParticipationSummary ||
+                    reportData.academicProgressSummary ||
+                    reportData.socialEmotionalSummary ||
+                    reportData.treatmentProgressSummary;
+
+    if (hasData) {
+      const confirmed = confirm(
+        'Some sections already have content. AI will generate comprehensive summaries for ALL sections based on case notes and documentation. Continue?'
+      );
+      if (!confirmed) return;
+    }
+
+    setIsAutoPopulating(true);
+
+    try {
+      toast({
+        title: "AI Processing",
+        description: "Analyzing case notes, behavior data, and documentation to generate comprehensive summaries...",
+      });
+
+      // Calculate date range for the selected month
+      const monthStart = new Date(selectedMonth + "-01");
+      const monthEnd = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0);
+
+      // Fetch all data for the selected month
+      const [behaviorPoints, progressNotes, dailyRatings, schoolScores] = await Promise.all([
+        fetchBehaviorPointsAPI(youth.id).catch(() => fetchBehaviorPoints(youth.id)),
+        fetchProgressNotesAPI(youth.id).catch(() => fetchProgressNotes(youth.id)),
+        fetchDailyRatingsAPI(youth.id).catch(() => fetchDailyRatings(youth.id)),
+        getScoresByYouth(youth.id).catch((error) => {
+          console.warn('Failed to load school scores:', error);
+          return [];
+        })
+      ]);
+
+      // Filter data for the selected month
+      const monthBehaviorPoints = behaviorPoints.filter(point => {
+        if (!point.date) return false;
+        const pointDate = new Date(point.date);
+        return pointDate >= monthStart && pointDate <= monthEnd;
+      });
+
+      const monthProgressNotes = progressNotes.filter(note => {
+        if (!note.date) return false;
+        const noteDate = new Date(note.date);
+        return noteDate >= monthStart && noteDate <= monthEnd;
+      });
+
+      const monthDailyRatings = dailyRatings.filter(rating => {
+        if (!rating.date) return false;
+        const ratingDate = new Date(rating.date);
+        return ratingDate >= monthStart && ratingDate <= monthEnd;
+      });
+
+      const monthSchoolScores = (schoolScores as SchoolDailyScore[]).filter(score => {
+        if (!score?.date) return false;
+        const scoreDate = new Date(score.date);
+        return scoreDate >= monthStart && scoreDate <= monthEnd;
+      });
+
+      // First, run basic auto-populate to get demographic data
+      await autoPopulateForm();
+
+      // Prepare case notes summary for AI
+      const caseNotesText = monthProgressNotes.map(note => {
+        const content = extractCaseNoteContent(note);
+        const date = note.date ? format(new Date(note.date), 'MMM d, yyyy') : 'No date';
+        return `[${date}] ${content}`;
+      }).join('\n\n');
+
+      // Calculate statistics for context
+      const totalPoints = monthBehaviorPoints.reduce((sum, point) => sum + (point.totalPoints || 0), 0);
+      const avgPoints = monthBehaviorPoints.length > 0 ? Math.round(totalPoints / monthBehaviorPoints.length) : 0;
+
+      const avgPeerInteraction = monthDailyRatings.length > 0
+        ? (monthDailyRatings.reduce((sum, r) => sum + (r.peerInteraction || 0), 0) / monthDailyRatings.length).toFixed(1)
+        : '0';
+      const avgAdultInteraction = monthDailyRatings.length > 0
+        ? (monthDailyRatings.reduce((sum, r) => sum + (r.adultInteraction || 0), 0) / monthDailyRatings.length).toFixed(1)
+        : '0';
+      const avgInvestmentLevel = monthDailyRatings.length > 0
+        ? (monthDailyRatings.reduce((sum, r) => sum + (r.investmentLevel || 0), 0) / monthDailyRatings.length).toFixed(1)
+        : '0';
+      const avgAuthorityRating = monthDailyRatings.length > 0
+        ? (monthDailyRatings.reduce((sum, r) => sum + (r.dealAuthority || 0), 0) / monthDailyRatings.length).toFixed(1)
+        : '0';
+
+      const schoolAvg = monthSchoolScores.length > 0
+        ? (monthSchoolScores.reduce((sum, score) => sum + Number(score.score ?? 0), 0) / monthSchoolScores.length).toFixed(1)
+        : 'N/A';
+
+      // Use AI to generate each section based on case notes
+      const aiPrompts = {
+        programParticipationSummary: `You are a clinical professional writing a monthly progress report. Based on the following case notes and data for ${youth.firstName} ${youth.lastName}, write a comprehensive 3-4 paragraph summary about their program participation, daily points, strengths, struggles, and behavioral trends.
+
+Data Summary:
+- Total Points: ${totalPoints} over ${monthBehaviorPoints.length} days (avg: ${avgPoints}/day)
+- Peer Interaction: ${avgPeerInteraction}/5
+- Adult Interaction: ${avgAdultInteraction}/5
+- Investment Level: ${avgInvestmentLevel}/5
+- Authority/Compliance: ${avgAuthorityRating}/5
+
+Case Notes:
+${caseNotesText || 'No case notes available for this period.'}
+
+Write a professional, clinical summary suitable for a monthly progress report.`,
+
+        academicProgressSummary: `You are a clinical professional writing a monthly progress report. Based on the following case notes and data for ${youth.firstName} ${youth.lastName}, write a comprehensive 2-3 paragraph summary about their academic progress, school performance, achievements, and challenges.
+
+Academic Data:
+- School: ${youth.currentSchool || youth.lastSchoolAttended || 'Not specified'}
+- Grade: ${youth.currentGrade || 'Not specified'}
+- Average School Score: ${schoolAvg}/4 (${monthSchoolScores.length} entries)
+- Academic Strengths: ${youth.academicStrengths || 'Not documented'}
+- Academic Challenges: ${youth.academicChallenges || 'Not documented'}
+
+Case Notes:
+${caseNotesText || 'No case notes available for this period.'}
+
+Write a professional, educational summary suitable for a monthly progress report.`,
+
+        socialEmotionalSummary: `You are a clinical professional writing a monthly progress report. Based on the following case notes and data for ${youth.firstName} ${youth.lastName}, write a comprehensive 2-3 paragraph summary about their social and emotional development, peer relationships, emotional regulation, and interactions with adults.
+
+Social-Emotional Data:
+- Peer Interaction Rating: ${avgPeerInteraction}/5
+- Adult Interaction Rating: ${avgAdultInteraction}/5
+- Emotional Regulation (Authority): ${avgAuthorityRating}/5
+
+Case Notes:
+${caseNotesText || 'No case notes available for this period.'}
+
+Write a professional, clinical summary suitable for a monthly progress report focusing on social-emotional development.`,
+
+        treatmentProgressSummary: `You are a clinical professional writing a monthly progress report. Based on the following case notes and data for ${youth.firstName} ${youth.lastName}, write a comprehensive 2-3 paragraph summary about their treatment progress, therapy participation, treatment goals, and clinical observations.
+
+Treatment Information:
+- Current Diagnoses: ${youth.currentDiagnoses || youth.diagnoses || 'Not documented'}
+- Current Counseling: ${youth.currentCounseling?.join(', ') || 'Not specified'}
+- Therapist: ${youth.therapistName || 'Not specified'}
+
+Case Notes:
+${caseNotesText || 'No case notes available for this period.'}
+
+Write a professional, clinical summary suitable for a monthly progress report focusing on treatment progress and therapeutic engagement.`
+      };
+
+      // Generate AI summaries for each section
+      const updates: Partial<MonthlyReportData> = {};
+
+      for (const [field, prompt] of Object.entries(aiPrompts)) {
+        try {
+          const response = await aiService.queryData(prompt, {
+            youth,
+            month: format(monthStart, 'MMMM yyyy'),
+            caseNotes: caseNotesText
+          });
+
+          if (response.success && response.data?.answer) {
+            updates[field as keyof MonthlyReportData] = response.data.answer as any;
+          }
+        } catch (error) {
+          console.error(`Error generating ${field}:`, error);
+        }
+      }
+
+      // Update the report with AI-generated summaries
+      setReportData(prev => ({ ...prev, ...updates }));
+
+      toast({
+        title: "Success",
+        description: "All sections have been populated with AI-generated summaries from case notes and documentation. Review and edit as needed.",
+      });
+
+    } catch (error: any) {
+      console.error('AI auto-populate error:', error);
+      toast({
+        title: "Auto-Populate Failed",
+        description: error.message || "Failed to auto-populate report. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsAutoPopulating(false);
+    }
   };
 
   const handleSave = () => {
@@ -1079,6 +1300,16 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
             </span>
             <div className="flex flex-wrap gap-2">
               <Button
+                variant="default"
+                size="sm"
+                onClick={handleAIPopulateAll}
+                disabled={isAutoPopulating}
+                className="bg-purple-600 hover:bg-purple-700"
+              >
+                <Sparkles className="h-4 w-4 mr-2" />
+                {isAutoPopulating ? 'Populating...' : 'AI Populate All'}
+              </Button>
+              <Button
                 variant="outline"
                 size="sm"
                 onClick={handleSave}
@@ -1136,10 +1367,79 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
             </div>
           </div>
 
-          {/* Youth Profile Information */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold border-b pb-2">Youth Profile Information</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Tabbed Form Interface */}
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            <TabsList className="grid w-full grid-cols-7 mb-6">
+              <TabsTrigger value="youth-info" className="flex items-center gap-1">
+                {isSectionComplete("youth-info") ? (
+                  <CheckCircle2 className="h-3 w-3 text-green-600" />
+                ) : (
+                  <Circle className="h-3 w-3" />
+                )}
+                <span className="hidden sm:inline">Youth Info</span>
+                <span className="sm:hidden">Info</span>
+              </TabsTrigger>
+              <TabsTrigger value="program-participation" className="flex items-center gap-1">
+                {isSectionComplete("program-participation") ? (
+                  <CheckCircle2 className="h-3 w-3 text-green-600" />
+                ) : (
+                  <Circle className="h-3 w-3" />
+                )}
+                <span className="hidden sm:inline">Program</span>
+                <span className="sm:hidden">Prog</span>
+              </TabsTrigger>
+              <TabsTrigger value="academic-progress" className="flex items-center gap-1">
+                {isSectionComplete("academic-progress") ? (
+                  <CheckCircle2 className="h-3 w-3 text-green-600" />
+                ) : (
+                  <Circle className="h-3 w-3" />
+                )}
+                <span className="hidden sm:inline">Academic</span>
+                <span className="sm:hidden">Acad</span>
+              </TabsTrigger>
+              <TabsTrigger value="behavioral" className="flex items-center gap-1">
+                {isSectionComplete("behavioral") ? (
+                  <CheckCircle2 className="h-3 w-3 text-green-600" />
+                ) : (
+                  <Circle className="h-3 w-3" />
+                )}
+                <span className="hidden sm:inline">Behavioral</span>
+                <span className="sm:hidden">Behv</span>
+              </TabsTrigger>
+              <TabsTrigger value="social-emotional" className="flex items-center gap-1">
+                {isSectionComplete("social-emotional") ? (
+                  <CheckCircle2 className="h-3 w-3 text-green-600" />
+                ) : (
+                  <Circle className="h-3 w-3" />
+                )}
+                <span className="hidden sm:inline">Social</span>
+                <span className="sm:hidden">Socl</span>
+              </TabsTrigger>
+              <TabsTrigger value="treatment" className="flex items-center gap-1">
+                {isSectionComplete("treatment") ? (
+                  <CheckCircle2 className="h-3 w-3 text-green-600" />
+                ) : (
+                  <Circle className="h-3 w-3" />
+                )}
+                <span className="hidden sm:inline">Treatment</span>
+                <span className="sm:hidden">Trtmt</span>
+              </TabsTrigger>
+              <TabsTrigger value="future-goals" className="flex items-center gap-1">
+                {isSectionComplete("future-goals") ? (
+                  <CheckCircle2 className="h-3 w-3 text-green-600" />
+                ) : (
+                  <Circle className="h-3 w-3" />
+                )}
+                <span className="hidden sm:inline">Goals</span>
+                <span className="sm:hidden">Goal</span>
+              </TabsTrigger>
+            </TabsList>
+
+            {/* Tab 1: Youth Profile Information */}
+            <TabsContent value="youth-info" className="space-y-4">
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold border-b pb-2">Youth Profile Information</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Full Legal Name</Label>
                 <Input
@@ -1239,153 +1539,167 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
                 className="min-h-[80px]"
               />
             </div>
-            <div className="space-y-2">
-              <Label>Current Diagnoses</Label>
-              <Textarea
-                value={reportData.currentDiagnoses}
-                onChange={(e) => handleFieldChange('currentDiagnoses', e.target.value)}
-                placeholder="Current diagnoses and treatment needs"
-                className="min-h-[80px]"
-              />
-            </div>
-          </div>
-
-          {/* Program Participation & Daily Points */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold border-b pb-2">Program Participation & Daily Points</h3>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label>Summary</Label>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => enhanceTextField('programParticipationSummary')}
-                  disabled={isEnhancing === 'programParticipationSummary'}
-                  className="gap-2"
-                >
-                  <Sparkles className="h-4 w-4" />
-                  {isEnhancing === 'programParticipationSummary' ? 'Enhancing...' : 'Enhance with AI'}
-                </Button>
+                <div className="space-y-2">
+                  <Label>Current Diagnoses</Label>
+                  <Textarea
+                    value={reportData.currentDiagnoses}
+                    onChange={(e) => handleFieldChange('currentDiagnoses', e.target.value)}
+                    placeholder="Current diagnoses and treatment needs"
+                    className="min-h-[80px]"
+                  />
+                </div>
               </div>
-              <Textarea
-                value={reportData.programParticipationSummary}
-                onChange={(e) => handleFieldChange('programParticipationSummary', e.target.value)}
-                placeholder="Overall summary of program participation, daily points, incentives earned, strengths, struggles, and trends over time..."
-                className="min-h-[150px]"
-              />
-            </div>
-          </div>
+            </TabsContent>
 
-          {/* Academic Progress */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold border-b pb-2">Academic Progress</h3>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label>Summary</Label>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => enhanceTextField('academicProgressSummary')}
-                  disabled={isEnhancing === 'academicProgressSummary'}
-                  className="gap-2"
-                >
-                  <Sparkles className="h-4 w-4" />
-                  {isEnhancing === 'academicProgressSummary' ? 'Enhancing...' : 'Enhance with AI'}
-                </Button>
+            {/* Tab 2: Program Participation & Daily Points */}
+            <TabsContent value="program-participation" className="space-y-4">
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold border-b pb-2">Program Participation & Daily Points</h3>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label>Summary</Label>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => enhanceTextField('programParticipationSummary')}
+                      disabled={isEnhancing === 'programParticipationSummary'}
+                      className="gap-2"
+                    >
+                      <Sparkles className="h-4 w-4" />
+                      {isEnhancing === 'programParticipationSummary' ? 'Enhancing...' : 'Enhance with AI'}
+                    </Button>
+                  </div>
+                  <Textarea
+                    value={reportData.programParticipationSummary}
+                    onChange={(e) => handleFieldChange('programParticipationSummary', e.target.value)}
+                    placeholder="Overall summary of program participation, daily points, incentives earned, strengths, struggles, and trends over time..."
+                    className="min-h-[150px]"
+                  />
+                </div>
               </div>
-              <Textarea
-                value={reportData.academicProgressSummary}
-                onChange={(e) => handleFieldChange('academicProgressSummary', e.target.value)}
-                placeholder="Overall summary of academic progress, school performance, achievements, challenges, and educational goals..."
-                className="min-h-[150px]"
-              />
-            </div>
-          </div>
+            </TabsContent>
 
-          {/* Behavioral Summary */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold border-b pb-2">Behavioral Summary</h3>
-            <div className="space-y-2">
-              <Label>Behavioral Summary</Label>
-              <Textarea
-                value={reportData.behavioralSummary}
-                onChange={(e) => handleFieldChange('behavioralSummary', e.target.value)}
-                placeholder="Summary of behavioral progress and incidents"
-                className="min-h-[120px]"
-              />
-            </div>
-          </div>
-
-          {/* Social/Emotional Development */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold border-b pb-2">Social/Emotional Development</h3>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label>Summary</Label>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => enhanceTextField('socialEmotionalSummary')}
-                  disabled={isEnhancing === 'socialEmotionalSummary'}
-                  className="gap-2"
-                >
-                  <Sparkles className="h-4 w-4" />
-                  {isEnhancing === 'socialEmotionalSummary' ? 'Enhancing...' : 'Enhance with AI'}
-                </Button>
+            {/* Tab 3: Academic Progress */}
+            <TabsContent value="academic-progress" className="space-y-4">
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold border-b pb-2">Academic Progress</h3>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label>Summary</Label>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => enhanceTextField('academicProgressSummary')}
+                      disabled={isEnhancing === 'academicProgressSummary'}
+                      className="gap-2"
+                    >
+                      <Sparkles className="h-4 w-4" />
+                      {isEnhancing === 'academicProgressSummary' ? 'Enhancing...' : 'Enhance with AI'}
+                    </Button>
+                  </div>
+                  <Textarea
+                    value={reportData.academicProgressSummary}
+                    onChange={(e) => handleFieldChange('academicProgressSummary', e.target.value)}
+                    placeholder="Overall summary of academic progress, school performance, achievements, challenges, and educational goals..."
+                    className="min-h-[150px]"
+                  />
+                </div>
               </div>
-              <Textarea
-                value={reportData.socialEmotionalSummary}
-                onChange={(e) => handleFieldChange('socialEmotionalSummary', e.target.value)}
-                placeholder="Overall summary of social progress, emotional regulation, peer relationships, and interactions with adults..."
-                className="min-h-[150px]"
-              />
-            </div>
-          </div>
+            </TabsContent>
 
-          {/* Treatment Progress */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold border-b pb-2">Treatment Progress</h3>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label>Summary</Label>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => enhanceTextField('treatmentProgressSummary')}
-                  disabled={isEnhancing === 'treatmentProgressSummary'}
-                  className="gap-2"
-                >
-                  <Sparkles className="h-4 w-4" />
-                  {isEnhancing === 'treatmentProgressSummary' ? 'Enhancing...' : 'Enhance with AI'}
-                </Button>
+            {/* Tab 4: Behavioral Summary */}
+            <TabsContent value="behavioral" className="space-y-4">
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold border-b pb-2">Behavioral Summary</h3>
+                <div className="space-y-2">
+                  <Label>Behavioral Summary</Label>
+                  <Textarea
+                    value={reportData.behavioralSummary}
+                    onChange={(e) => handleFieldChange('behavioralSummary', e.target.value)}
+                    placeholder="Summary of behavioral progress and incidents"
+                    className="min-h-[120px]"
+                  />
+                </div>
               </div>
-              <Textarea
-                value={reportData.treatmentProgressSummary}
-                onChange={(e) => handleFieldChange('treatmentProgressSummary', e.target.value)}
-                placeholder="Overall summary of treatment goals, progress toward goals, therapy participation, and clinical observations..."
-                className="min-h-[150px]"
-              />
-            </div>
-          </div>
+            </TabsContent>
 
-          {/* Future Goals */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold border-b pb-2">Future Goals</h3>
-            <div className="space-y-2">
-              <Label>Future Goals</Label>
-              <Textarea
-                value={reportData.futureGoals}
-                onChange={(e) => handleFieldChange('futureGoals', e.target.value)}
-                placeholder="Future goals and objectives"
-                className="min-h-[80px]"
-              />
-            </div>
-          </div>
-          
+            {/* Tab 5: Social/Emotional Development */}
+            <TabsContent value="social-emotional" className="space-y-4">
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold border-b pb-2">Social/Emotional Development</h3>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label>Summary</Label>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => enhanceTextField('socialEmotionalSummary')}
+                      disabled={isEnhancing === 'socialEmotionalSummary'}
+                      className="gap-2"
+                    >
+                      <Sparkles className="h-4 w-4" />
+                      {isEnhancing === 'socialEmotionalSummary' ? 'Enhancing...' : 'Enhance with AI'}
+                    </Button>
+                  </div>
+                  <Textarea
+                    value={reportData.socialEmotionalSummary}
+                    onChange={(e) => handleFieldChange('socialEmotionalSummary', e.target.value)}
+                    placeholder="Overall summary of social progress, emotional regulation, peer relationships, and interactions with adults..."
+                    className="min-h-[150px]"
+                  />
+                </div>
+              </div>
+            </TabsContent>
+
+            {/* Tab 6: Treatment Progress */}
+            <TabsContent value="treatment" className="space-y-4">
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold border-b pb-2">Treatment Progress</h3>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label>Summary</Label>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => enhanceTextField('treatmentProgressSummary')}
+                      disabled={isEnhancing === 'treatmentProgressSummary'}
+                      className="gap-2"
+                    >
+                      <Sparkles className="h-4 w-4" />
+                      {isEnhancing === 'treatmentProgressSummary' ? 'Enhancing...' : 'Enhance with AI'}
+                    </Button>
+                  </div>
+                  <Textarea
+                    value={reportData.treatmentProgressSummary}
+                    onChange={(e) => handleFieldChange('treatmentProgressSummary', e.target.value)}
+                    placeholder="Overall summary of treatment goals, progress toward goals, therapy participation, and clinical observations..."
+                    className="min-h-[150px]"
+                  />
+                </div>
+              </div>
+            </TabsContent>
+
+            {/* Tab 7: Future Goals */}
+            <TabsContent value="future-goals" className="space-y-4">
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold border-b pb-2">Future Goals</h3>
+                <div className="space-y-2">
+                  <Label>Future Goals</Label>
+                  <Textarea
+                    value={reportData.futureGoals}
+                    onChange={(e) => handleFieldChange('futureGoals', e.target.value)}
+                    placeholder="Future goals and objectives"
+                    className="min-h-[80px]"
+                  />
+                </div>
+              </div>
+            </TabsContent>
+          </Tabs>
+
         </CardContent>
       </Card>
 

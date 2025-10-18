@@ -45,29 +45,50 @@ export const EditYouthDialog = ({ youth, open, onClose, onSuccess }: EditYouthDi
     handleCheckboxChange,
     handleArrayItemChange,
     addArrayItem,
+    clearDraft,
   } = useYouthForm();
 
   // Populate form data when youth changes
   useEffect(() => {
     if (youth && open) {
+      // Ensure any previous draft does not overwrite the loaded profile
+      try { clearDraft(); } catch {}
       const populatedData: YouthFormData = {
         // Personal Information
         firstName: youth.firstName || "",
         lastName: youth.lastName || "",
-        dob: youth.dob ? format(youth.dob, 'yyyy-MM-dd') : "",
+        // Use stored ISO/date string directly; avoid formatting invalid Date
+        dob: youth.dob ? (typeof youth.dob === 'string' ? youth.dob.slice(0, 10) : '') : "",
         age: youth.age?.toString() || "",
         idNumber: youth.idNumber || "",
-        admissionDate: youth.admissionDate ? format(youth.admissionDate, 'yyyy-MM-dd') : "",
+        // Use stored ISO/date string directly; avoid formatting invalid Date
+        admissionDate: youth.admissionDate ? (typeof youth.admissionDate === 'string' ? youth.admissionDate.slice(0, 10) : '') : "",
         currentLevel: youth.level || 1,
         level: youth.level?.toString() || "1",
-        legalGuardian: youth.legalGuardian || "",
-        guardianRelationship: youth.guardianRelationship || "",
-        guardianContact: youth.guardianContact || "",
-        guardianPhone: youth.guardianPhone || "",
-        guardianEmail: youth.guardianEmail || "",
-        probationOfficer: youth.probationOfficer || "",
-        probationContact: youth.probationContact || "",
-        probationPhone: youth.probationPhone || "",
+        legalGuardian: typeof youth.legalGuardian === 'object' && youth.legalGuardian?.name
+          ? youth.legalGuardian.name
+          : (typeof youth.legalGuardian === 'string' ? youth.legalGuardian : ""),
+        guardianRelationship: typeof youth.legalGuardian === 'object' && youth.legalGuardian?.relationship
+          ? youth.legalGuardian.relationship
+          : "",
+        guardianContact: typeof youth.legalGuardian === 'object' && youth.legalGuardian?.contact
+          ? youth.legalGuardian.contact
+          : "",
+        guardianPhone: typeof youth.legalGuardian === 'object' && youth.legalGuardian?.phone
+          ? youth.legalGuardian.phone
+          : "",
+        guardianEmail: typeof youth.legalGuardian === 'object' && youth.legalGuardian?.email
+          ? youth.legalGuardian.email
+          : "",
+        probationOfficer: typeof youth.probationOfficer === 'object' && youth.probationOfficer?.name
+          ? youth.probationOfficer.name
+          : (typeof youth.probationOfficer === 'string' ? youth.probationOfficer : ""),
+        probationContact: typeof youth.probationOfficer === 'object' && youth.probationOfficer?.contact
+          ? youth.probationOfficer.contact
+          : "",
+        probationPhone: typeof youth.probationOfficer === 'object' && youth.probationOfficer?.phone
+          ? youth.probationOfficer.phone
+          : "",
         placementAuthority: youth.placementAuthority ? [youth.placementAuthority] : [],
         estimatedStay: youth.estimatedStay || "",
         referralSource: youth.referralSource || "",
@@ -320,6 +341,19 @@ export const EditYouthDialog = ({ youth, open, onClose, onSuccess }: EditYouthDi
         formData.previousTreatment && `Previous treatment: ${formData.previousTreatment}`
       ].filter(Boolean).join('; ');
       
+      // Normalize level to a valid number (avoid NaN)
+      let normalizedLevel: number;
+      if (typeof level === 'string') {
+        if (level.toLowerCase() === 'orientation') {
+          normalizedLevel = 0;
+        } else {
+          const parsed = parseInt(level, 10);
+          normalizedLevel = Number.isFinite(parsed) ? parsed : (typeof youth.level === 'number' ? youth.level : 1);
+        }
+      } else {
+        normalizedLevel = typeof level === 'number' ? level : (typeof youth.level === 'number' ? youth.level : 1);
+      }
+
       // Create the update data object - ensuring all dates are strings for Supabase
       const updateData = {
         firstName,
@@ -327,7 +361,7 @@ export const EditYouthDialog = ({ youth, open, onClose, onSuccess }: EditYouthDi
         dob: dob || null,
         age: age || null,
         admissionDate: admissionDate || null,
-        level: level ? parseInt(level) : 1,
+        level: normalizedLevel,
         referralSource: referralSource || null,
         referralReason: referralReason || null,
         educationInfo: educationInfo || null,
@@ -359,15 +393,21 @@ export const EditYouthDialog = ({ youth, open, onClose, onSuccess }: EditYouthDi
           tattoosScars: formData.tattoosScars || null,
         },
         
-        // Store detailed fields for future use
-        legalGuardian: formData.legalGuardian || null,
-        guardianRelationship: formData.guardianRelationship || null,
-        guardianContact: formData.guardianContact || null,
-        guardianPhone: formData.guardianPhone || null,
-        guardianEmail: formData.guardianEmail || null,
-        probationOfficer: formData.probationOfficer || null,
-        probationContact: formData.probationContact || null,
-        probationPhone: formData.probationPhone || null,
+        // Legal Guardian as Json object
+        legalGuardian: formData.legalGuardian ? {
+          name: formData.legalGuardian,
+          relationship: formData.guardianRelationship || null,
+          contact: formData.guardianContact || null,
+          phone: formData.guardianPhone || null,
+          email: formData.guardianEmail || null
+        } : null,
+
+        // Probation Officer as Json object
+        probationOfficer: formData.probationOfficer ? {
+          name: formData.probationOfficer,
+          contact: formData.probationContact || null,
+          phone: formData.probationPhone || null
+        } : null,
         placementAuthority: formData.placementAuthority?.[0] || null,
         estimatedStay: formData.estimatedStay || null,
         
@@ -411,9 +451,9 @@ export const EditYouthDialog = ({ youth, open, onClose, onSuccess }: EditYouthDi
         courtInvolvement: formData.courtInvolvement || null,
         
         // Behavior tracking
-        onSubsystem: formData.onSubsystem || false,
-        pointsInCurrentLevel: formData.pointsInCurrentLevel || 0,
-        dailyPointsForPrivileges: formData.dailyPointsForPrivileges || 0,
+        onSubsystem: !!formData.onSubsystem,
+        pointsInCurrentLevel: formData.pointsInCurrentLevel !== undefined ? Number(formData.pointsInCurrentLevel) : 0,
+        dailyPointsForPrivileges: formData.dailyPointsForPrivileges !== undefined ? Number(formData.dailyPointsForPrivileges) : 0,
         
         // HYRNA Risk Assessment
         hyrnaRiskLevel: formData.hyrnaRiskLevel === '' ? null : formData.hyrnaRiskLevel,

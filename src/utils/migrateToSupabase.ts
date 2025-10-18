@@ -1,8 +1,8 @@
+import { STORAGE_KEYS, getItem } from '@/utils/local-storage-utils'
+import type { Youth as LocalYouth, BehaviorPoints as LocalBehaviorPoints, CaseNote as LocalCaseNote } from '@/types/app-types'
 import { youthService, behaviorPointsService, caseNotesService } from '@/integrations/supabase/services'
-import { fetchAllYouths, fetchBehaviorPoints, fetchCaseNotes } from '@/utils/local-storage-utils'
-import { format } from 'date-fns'
 
-export interface MigrationResult {
+export type MigrationResult = {
   success: boolean
   message: string
   details: {
@@ -13,271 +13,219 @@ export interface MigrationResult {
   }
 }
 
-export const migrateLocalStorageToSupabase = async (): Promise<MigrationResult> => {
-  const result: MigrationResult = {
-    success: false,
-    message: '',
-    details: {
-      youthMigrated: 0,
-      behaviorPointsMigrated: 0,
-      caseNotesMigrated: 0,
-      errors: []
-    }
-  }
+export function checkLocalStorageData() {
+  const youths = (getItem<LocalYouth[]>(STORAGE_KEYS.YOUTHS) || [])
+  const points = (getItem<LocalBehaviorPoints[]>(STORAGE_KEYS.POINTS) || [])
+  const caseNotes = (getItem<LocalCaseNote[]>(STORAGE_KEYS.CASE_NOTES) || [])
 
-  try {
-    console.log('Starting migration from local storage to Supabase...')
-
-    // Step 1: Migrate Youth profiles
-    console.log('Migrating youth profiles...')
-    const localYouths = fetchAllYouths()
-    
-    for (const youth of localYouths) {
-      try {
-        // Convert local youth data to Supabase format
-        const supabaseYouth = {
-          firstName: youth.firstName,
-          lastName: youth.lastName,
-          dob: youth.dob ? format(new Date(youth.dob), 'yyyy-MM-dd') : null,
-          age: youth.age || null,
-          sex: youth.sex || null,
-          socialSecurityNumber: youth.socialSecurityNumber || null,
-          placeOfBirth: youth.placeOfBirth || null,
-          race: youth.race || null,
-          address: youth.address || null,
-          physicalDescription: youth.physicalDescription || null,
-          admissionDate: youth.admissionDate ? format(new Date(youth.admissionDate), 'yyyy-MM-dd') : null,
-          admissionTime: youth.admissionTime || null,
-          rcsIn: youth.rcsIn || null,
-          dischargeDate: youth.dischargeDate ? format(new Date(youth.dischargeDate), 'yyyy-MM-dd') : null,
-          dischargeTime: youth.dischargeTime || null,
-          rcsOut: youth.rcsOut || null,
-          mother: youth.mother || null,
-          father: youth.father || null,
-          legalGuardian: youth.legalGuardian || null,
-          nextOfKin: youth.nextOfKin || null,
-          placingAgencyCounty: youth.placingAgencyCounty || null,
-          probationOfficer: youth.probationOfficer || null,
-          caseworker: youth.caseworker || null,
-          guardianAdLitem: youth.guardianAdLitem || null,
-          attorney: youth.attorney || null,
-          judge: youth.judge || null,
-          allergies: youth.allergies || null,
-          currentMedications: youth.currentMedications || null,
-          significantHealthConditions: youth.significantHealthConditions || null,
-          religion: youth.religion || null,
-          lastSchoolAttended: youth.lastSchoolAttended || null,
-          hasIEP: youth.hasIEP || false,
-          currentGrade: youth.currentGrade || null,
-          getAlongWithOthers: youth.getAlongWithOthers || null,
-          strengthsTalents: youth.strengthsTalents || null,
-          interests: youth.interests || null,
-          behaviorProblems: youth.behaviorProblems || null,
-          dislikesAboutSelf: youth.dislikesAboutSelf || null,
-          angerTriggers: youth.angerTriggers || null,
-          historyPhysicallyHurting: youth.historyPhysicallyHurting || false,
-          historyVandalism: youth.historyVandalism || false,
-          gangInvolvement: youth.gangInvolvement || false,
-          familyViolentCrimes: youth.familyViolentCrimes || false,
-          tobaccoPast6To12Months: youth.tobaccoPast6To12Months || false,
-          alcoholPast6To12Months: youth.alcoholPast6To12Months || false,
-          drugsVapingMarijuanaPast6To12Months: youth.drugsVapingMarijuanaPast6To12Months || false,
-          drugTestingDates: youth.drugTestingDates || null,
-          communityResources: youth.communityResources || null,
-          treatmentFocus: youth.treatmentFocus || null,
-          dischargePlan: youth.dischargePlan || null,
-          emergencyShelterCare: youth.emergencyShelterCare ? {
-            ...youth.emergencyShelterCare,
-            placementDate: youth.emergencyShelterCare.placementDate ? format(new Date(youth.emergencyShelterCare.placementDate), 'yyyy-MM-dd') : null,
-            orientationDate: youth.emergencyShelterCare.orientationDate ? format(new Date(youth.emergencyShelterCare.orientationDate), 'yyyy-MM-dd') : null
-          } : null,
-          profilePhoto: youth.profilePhoto || null,
-          level: youth.level || 1,
-          pointTotal: youth.pointTotal || 0,
-          referralSource: youth.referralSource || null,
-          referralReason: youth.referralReason || null,
-          educationInfo: youth.educationInfo || null,
-          medicalInfo: youth.medicalInfo || null,
-          mentalHealthInfo: youth.mentalHealthInfo || null,
-          legalStatus: youth.legalStatus || null,
-          peerInteraction: youth.peerInteraction || null,
-          adultInteraction: youth.adultInteraction || null,
-          investmentLevel: youth.investmentLevel || null,
-          dealAuthority: youth.dealAuthority || null,
-          hyrnaRiskLevel: youth.hyrnaRiskLevel || null,
-          hyrnaScore: youth.hyrnaScore || null,
-          hyrnaAssessmentDate: youth.hyrnaAssessmentDate ? format(new Date(youth.hyrnaAssessmentDate), 'yyyy-MM-dd') : null,
-          idNumber: youth.idNumber || null,
-          guardianRelationship: youth.guardianRelationship || null,
-          guardianContact: youth.guardianContact || null,
-          guardianPhone: youth.guardianPhone || null,
-          guardianEmail: youth.guardianEmail || null,
-          probationContact: youth.probationContact || null,
-          probationPhone: youth.probationPhone || null,
-          placementAuthority: youth.placementAuthority || null,
-          estimatedStay: youth.estimatedStay || null,
-          priorPlacements: youth.priorPlacements || null,
-          numPriorPlacements: youth.numPriorPlacements || null,
-          lengthRecentPlacement: youth.lengthRecentPlacement || null,
-          courtInvolvement: youth.courtInvolvement || null,
-          currentSchool: youth.currentSchool || null,
-          grade: youth.grade || null,
-          academicStrengths: youth.academicStrengths || null,
-          academicChallenges: youth.academicChallenges || null,
-          educationGoals: youth.educationGoals || null,
-          schoolContact: youth.schoolContact || null,
-          schoolPhone: youth.schoolPhone || null,
-          physician: youth.physician || null,
-          physicianPhone: youth.physicianPhone || null,
-          insuranceProvider: youth.insuranceProvider || null,
-          policyNumber: youth.policyNumber || null,
-          medicalConditions: youth.medicalConditions || null,
-          medicalRestrictions: youth.medicalRestrictions || null,
-          currentDiagnoses: youth.currentDiagnoses || null,
-          diagnoses: youth.diagnoses || null,
-          traumaHistory: youth.traumaHistory || null,
-          previousTreatment: youth.previousTreatment || null,
-          currentCounseling: youth.currentCounseling || null,
-          therapistName: youth.therapistName || null,
-          therapistContact: youth.therapistContact || null,
-          sessionFrequency: youth.sessionFrequency || null,
-          sessionTime: youth.sessionTime || null,
-          selfHarmHistory: youth.selfHarmHistory || null,
-          lastIncidentDate: youth.lastIncidentDate ? format(new Date(youth.lastIncidentDate), 'yyyy-MM-dd') : null,
-          hasSafetyPlan: youth.hasSafetyPlan || false,
-          onSubsystem: youth.onSubsystem || false,
-          pointsInCurrentLevel: youth.pointsInCurrentLevel || null,
-          dailyPointsForPrivileges: youth.dailyPointsForPrivileges || null
-        }
-
-        const createdYouth = await youthService.create(supabaseYouth)
-        result.details.youthMigrated++
-        console.log(`Migrated youth: ${youth.firstName} ${youth.lastName}`)
-
-        // Step 2: Migrate behavior points for this youth
-        try {
-          const behaviorPoints = fetchBehaviorPoints(youth.id)
-          for (const points of behaviorPoints) {
-            const supabasePoints = {
-              youth_id: createdYouth.id,
-              date: format(new Date(points.date), 'yyyy-MM-dd'),
-              morningPoints: points.morningPoints || 0,
-              afternoonPoints: points.afternoonPoints || 0,
-              eveningPoints: points.eveningPoints || 0,
-              totalPoints: points.totalPoints || 0,
-              comments: points.comments || null
-            }
-            await behaviorPointsService.upsert(supabasePoints)
-            result.details.behaviorPointsMigrated++
-          }
-        } catch (error) {
-          console.warn(`Failed to migrate behavior points for ${youth.firstName} ${youth.lastName}:`, error)
-          result.details.errors.push(`Behavior points migration failed for ${youth.firstName} ${youth.lastName}`)
-        }
-
-        // Step 3: Migrate case notes for this youth
-        try {
-          const caseNotes = fetchCaseNotes(youth.id)
-          for (const note of caseNotes) {
-            const supabaseNote = {
-              youth_id: createdYouth.id,
-              date: format(new Date(note.date), 'yyyy-MM-dd'),
-              summary: note.summary || null,
-              note: note.note || null,
-              staff: note.staff || null
-            }
-            await caseNotesService.create(supabaseNote)
-            result.details.caseNotesMigrated++
-          }
-        } catch (error) {
-          console.warn(`Failed to migrate case notes for ${youth.firstName} ${youth.lastName}:`, error)
-          result.details.errors.push(`Case notes migration failed for ${youth.firstName} ${youth.lastName}`)
-        }
-
-      } catch (error) {
-        console.error(`Failed to migrate youth ${youth.firstName} ${youth.lastName}:`, error)
-        result.details.errors.push(`Youth migration failed for ${youth.firstName} ${youth.lastName}: ${error}`)
-      }
-    }
-
-    result.success = true
-    result.message = `Migration completed successfully! Migrated ${result.details.youthMigrated} youth profiles, ${result.details.behaviorPointsMigrated} behavior point records, and ${result.details.caseNotesMigrated} case notes.`
-    
-    if (result.details.errors.length > 0) {
-      result.message += ` ${result.details.errors.length} errors occurred during migration.`
-    }
-
-    console.log('Migration completed:', result)
-    return result
-
-  } catch (error) {
-    result.success = false
-    result.message = `Migration failed: ${error}`
-    result.details.errors.push(`General migration error: ${error}`)
-    console.error('Migration failed:', error)
-    return result
+  return {
+    hasData: youths.length > 0 || points.length > 0 || caseNotes.length > 0,
+    youthCount: youths.length,
+    behaviorPointsCount: points.length,
+    caseNotesCount: caseNotes.length,
   }
 }
 
-export const checkLocalStorageData = () => {
+// Map local Youth shape to Supabase youth insert/update payload
+function mapYouth(local: LocalYouth) {
+  // Normalize date fields to ISO strings
+  const toIso = (d?: Date | null) => (d ? new Date(d).toISOString().slice(0, 10) : null)
+
+  return {
+    id: local.id, // preserve ID so related records continue to match
+    firstName: local.firstName,
+    lastName: local.lastName,
+    dob: toIso(local.dob) as string | null,
+    age: local.age ?? null,
+    admissionDate: toIso(local.admissionDate) as string | null,
+    level: typeof local.level === 'number' ? local.level : 1,
+    referralSource: local.referralSource ?? null,
+    referralReason: local.referralReason ?? null,
+
+    // Detailed personal/contact
+    sex: (local.sex as any) ?? null,
+    race: local.race ?? null,
+    religion: local.religion ?? null,
+    placeOfBirth: local.placeOfBirth ?? null,
+    socialSecurityNumber: local.socialSecurityNumber ?? null,
+    address: local.address ? {
+      street: local.address.street ?? null,
+      city: local.address.city ?? null,
+      state: local.address.state ?? null,
+      zip: local.address.zip ?? null,
+    } : null,
+    physicalDescription: local.physicalDescription ? {
+      height: local.physicalDescription.height ?? null,
+      weight: local.physicalDescription.weight ?? null,
+      hairColor: local.physicalDescription.hairColor ?? null,
+      eyeColor: local.physicalDescription.eyeColor ?? null,
+      tattoosScars: local.physicalDescription.tattoosScars ?? null,
+    } : null,
+
+    // Guardianship and contacts
+    legalGuardian: local.legalGuardian ? {
+      name: local.legalGuardian.name ?? null,
+      phone: local.legalGuardian.phone ?? null,
+      contact: local.legalGuardian.contact ?? null,
+      relationship: local.legalGuardian.relationship ?? null,
+    } : null,
+    guardianRelationship: local.guardianRelationship ?? null,
+    guardianContact: local.guardianContact ?? null,
+    guardianPhone: local.guardianPhone ?? null,
+    guardianEmail: local.guardianEmail ?? null,
+    probationOfficer: local.probationOfficer ? {
+      name: local.probationOfficer.name ?? null,
+      phone: local.probationOfficer.phone ?? null,
+      email: local.probationOfficer.email ?? null,
+      contact: local.probationOfficer.contact ?? null,
+    } : null,
+    probationContact: local.probationContact ?? null,
+    probationPhone: local.probationPhone ?? null,
+    placementAuthority: local.placementAuthority ?? null,
+    estimatedStay: local.estimatedStay ?? null,
+
+    // Education
+    currentSchool: local.currentSchool ?? null,
+    grade: local.grade ?? null,
+    hasIEP: local.hasIEP ?? null,
+    academicStrengths: local.academicStrengths ?? null,
+    academicChallenges: local.academicChallenges ?? null,
+    educationGoals: local.educationGoals ?? null,
+    schoolContact: local.schoolContact ?? null,
+    schoolPhone: local.schoolPhone ?? null,
+
+    // Medical
+    physician: local.physician ?? null,
+    physicianPhone: local.physicianPhone ?? null,
+    insuranceProvider: local.insuranceProvider ?? null,
+    policyNumber: local.policyNumber ?? null,
+    medicalConditions: local.medicalConditions ?? null,
+    medicalRestrictions: local.medicalRestrictions ?? null,
+    allergies: local.allergies ?? null,
+
+    // Mental health
+    currentDiagnoses: local.currentDiagnoses ?? null,
+    diagnoses: local.diagnoses ?? null,
+    traumaHistory: local.traumaHistory ?? null,
+    previousTreatment: local.previousTreatment ?? null,
+    currentCounseling: local.currentCounseling ?? null,
+    therapistName: local.therapistName ?? null,
+    therapistContact: local.therapistContact ?? null,
+    sessionFrequency: local.sessionFrequency ?? null,
+    sessionTime: local.sessionTime ?? null,
+    selfHarmHistory: local.selfHarmHistory ?? null,
+    lastIncidentDate: local.lastIncidentDate ?? null,
+    hasSafetyPlan: local.hasSafetyPlan ?? null,
+
+    // Behavior tracking
+    onSubsystem: local.onSubsystem ?? null,
+    pointsInCurrentLevel: local.pointsInCurrentLevel ?? null,
+    dailyPointsForPrivileges: local.dailyPointsForPrivileges ?? null,
+
+    // HYRNA
+    hyrnaRiskLevel: local.hyrnaRiskLevel ?? null,
+    hyrnaScore: local.hyrnaScore ?? null,
+    hyrnaAssessmentDate: local.hyrnaAssessmentDate ? new Date(local.hyrnaAssessmentDate).toISOString().slice(0,10) : null,
+  } as const
+}
+
+export async function migrateLocalStorageToSupabase(): Promise<MigrationResult> {
+  const errors: string[] = []
+  let youthMigrated = 0
+  let behaviorPointsMigrated = 0
+  let caseNotesMigrated = 0
+
+  const youths = (getItem<LocalYouth[]>(STORAGE_KEYS.YOUTHS) || [])
+  const points = (getItem<LocalBehaviorPoints[]>(STORAGE_KEYS.POINTS) || [])
+  const caseNotes = (getItem<LocalCaseNote[]>(STORAGE_KEYS.CASE_NOTES) || [])
+
   try {
-    const youths = fetchAllYouths()
-    
-    // Check if this is just automatically seeded mock data
-    const isMockSeeded = localStorage.getItem('heartland_mock_seeded') === 'true'
-    const hasRealData = youths.length > 0 && !isMockSeeded
-    
-    // If only mock data exists, don't count it as real data to migrate
-    if (isMockSeeded && youths.length > 0) {
-      // Check if there's any data that wasn't part of the initial seeding
-      // This is a basic check - in a real scenario you might track creation timestamps
-      const realYouths = youths.filter(youth => {
-        // Check if this youth has recent data or non-default values that suggest real use
-        return youth.updatedAt && new Date(youth.updatedAt) > new Date(Date.now() - 24 * 60 * 60 * 1000) // Updated in last 24 hours
-      })
-      
-      if (realYouths.length === 0) {
-        return {
-          hasData: false,
-          youthCount: 0,
-          behaviorPointsCount: 0,
-          caseNotesCount: 0
+    // Migrate youth
+    for (const y of youths) {
+      try {
+        // Check if exists first
+        const existing = await youthService.getById(y.id)
+        const payload = mapYouth(y) as any
+        if (existing) {
+          await youthService.update(y.id, payload)
+        } else {
+          await youthService.create(payload)
+        }
+        youthMigrated++
+      } catch (e: any) {
+        errors.push(`Youth ${y.firstName} ${y.lastName}: ${e?.message || e}`)
+      }
+    }
+
+    // Migrate behavior points
+    for (const p of points) {
+      try {
+        await behaviorPointsService.upsert({
+          id: p.id,
+          youth_id: p.youth_id,
+          date: p.date ? new Date(p.date).toISOString().slice(0,10) : null,
+          morningPoints: Number(p.morningPoints ?? 0),
+          afternoonPoints: Number(p.afternoonPoints ?? 0),
+          eveningPoints: Number(p.eveningPoints ?? 0),
+          totalPoints: Number(p.totalPoints ?? 0),
+          comments: p.comments ?? null,
+        } as any)
+        behaviorPointsMigrated++
+      } catch (e: any) {
+        errors.push(`Behavior points ${p.id}: ${e?.message || e}`)
+      }
+    }
+
+    // Migrate case notes
+    for (const n of caseNotes) {
+      try {
+        await caseNotesService.create({
+          id: n.id,
+          youth_id: n.youth_id,
+          date: n.date ? new Date(n.date).toISOString().slice(0,10) : null,
+          summary: n.summary ?? null,
+          note: n.note ?? null,
+          staff: n.staff ?? null,
+        } as any)
+        caseNotesMigrated++
+      } catch (e: any) {
+        // If duplicate id, try update
+        try {
+          await caseNotesService.update(n.id, {
+            date: n.date ? new Date(n.date).toISOString().slice(0,10) : null,
+            summary: n.summary ?? null,
+            note: n.note ?? null,
+            staff: n.staff ?? null,
+          } as any)
+          caseNotesMigrated++
+        } catch (e2: any) {
+          errors.push(`Case note ${n.id}: ${e2?.message || e2}`)
         }
       }
     }
 
-    let totalBehaviorPoints = 0
-    let totalCaseNotes = 0
-
-    youths.forEach(youth => {
-      try {
-        const behaviorPoints = fetchBehaviorPoints(youth.id)
-        totalBehaviorPoints += behaviorPoints.length
-      } catch (error) {
-        console.warn(`Could not fetch behavior points for ${youth.firstName} ${youth.lastName}`)
-      }
-
-      try {
-        const caseNotes = fetchCaseNotes(youth.id)
-        totalCaseNotes += caseNotes.length
-      } catch (error) {
-        console.warn(`Could not fetch case notes for ${youth.firstName} ${youth.lastName}`)
-      }
-    })
-
+    const success = errors.length === 0
     return {
-      hasData: hasRealData,
-      youthCount: youths.length,
-      behaviorPointsCount: totalBehaviorPoints,
-      caseNotesCount: totalCaseNotes
+      success,
+      message: success ? 'Migration completed successfully' : 'Migration completed with some errors',
+      details: {
+        youthMigrated,
+        behaviorPointsMigrated,
+        caseNotesMigrated,
+        errors,
+      }
     }
-  } catch (error) {
-    console.error('Error checking local storage data:', error)
+  } catch (e: any) {
     return {
-      hasData: false,
-      youthCount: 0,
-      behaviorPointsCount: 0,
-      caseNotesCount: 0
+      success: false,
+      message: e?.message || 'Migration failed',
+      details: {
+        youthMigrated,
+        behaviorPointsMigrated,
+        caseNotesMigrated,
+        errors: [...errors, e?.message || String(e)],
+      }
     }
   }
 }
+

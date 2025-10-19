@@ -10,7 +10,7 @@ import { toast } from "sonner";
 
 interface BackgroundProfileTabProps {
   youth: Youth;
-  onYouthUpdated?: () => void;
+  onYouthUpdated?: (updated?: Youth) => void;
 }
 
 interface EditableFieldProps {
@@ -162,10 +162,10 @@ export const BackgroundProfileTab = ({ youth, onYouthUpdated }: BackgroundProfil
 
   const handleFieldUpdate = async (field: string, value: string) => {
     const updateData: any = { [field]: value || null };
-    await updateYouth(youth.id, updateData);
+    const updated = await updateYouth(youth.id, updateData);
 
     if (onYouthUpdated) {
-      onYouthUpdated();
+      onYouthUpdated(updated);
     }
   };
 

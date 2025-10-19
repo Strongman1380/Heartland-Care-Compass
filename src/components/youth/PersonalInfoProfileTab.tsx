@@ -11,7 +11,7 @@ import { toast } from "sonner";
 
 interface PersonalInfoProfileTabProps {
   youth: Youth;
-  onYouthUpdated?: () => void;
+  onYouthUpdated?: (updated?: Youth) => void;
 }
 
 interface EditableFieldProps {
@@ -155,10 +155,10 @@ export const PersonalInfoProfileTab = ({ youth, onYouthUpdated }: PersonalInfoPr
       updateData[field] = parseInt(value) || 1;
     }
 
-    await updateYouth(youth.id, updateData);
+    const updated = await updateYouth(youth.id, updateData);
 
     if (onYouthUpdated) {
-      onYouthUpdated();
+      onYouthUpdated(updated);
     }
   };
 

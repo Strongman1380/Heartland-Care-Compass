@@ -19,7 +19,7 @@ import { EditYouthDialog } from "./EditYouthDialog";
 interface YouthProfileProps {
   youth: Youth;
   onBack?: () => void;
-  onYouthUpdated?: () => void;
+  onYouthUpdated?: (updated?: Youth) => void;
   onRatingsUpdated?: () => void;
 }
 

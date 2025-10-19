@@ -11,7 +11,7 @@ import { toast } from "sonner";
 
 interface EducationProfileTabProps {
   youth: Youth;
-  onYouthUpdated?: () => void;
+  onYouthUpdated?: (updated?: Youth) => void;
 }
 
 interface EditableFieldProps {
@@ -219,11 +219,15 @@ export const EducationProfileTab = ({ youth, onYouthUpdated }: EducationProfileT
   const { updateYouth } = useYouth();
 
   const handleFieldUpdate = async (field: string, value: string | boolean) => {
-    const updateData: any = { [field]: value };
-    await updateYouth(youth.id, updateData);
+    let updateData: any = { [field]: value };
+    // Keep grade fields in sync across legacy/new columns
+    if (field === 'grade') {
+      updateData = { grade: value, currentGrade: value };
+    }
+    const updated = await updateYouth(youth.id, updateData);
 
     if (onYouthUpdated) {
-      onYouthUpdated();
+      onYouthUpdated(updated);
     }
   };
 
@@ -251,7 +255,7 @@ export const EducationProfileTab = ({ youth, onYouthUpdated }: EducationProfileT
           />
           <EditableField
             label="Grade"
-            value={youth.grade}
+            value={youth.grade || youth.currentGrade}
             onSave={(value) => handleFieldUpdate('grade', value)}
           />
           <EditableField

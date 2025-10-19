@@ -26,9 +26,11 @@ const Profiles = () => {
     setSelectedYouth(null);
   };
 
-  const handleYouthUpdated = () => {
+  const handleYouthUpdated = (updated?: Youth) => {
+    // Keep the user on the profile and update immediately
+    if (updated) setSelectedYouth(updated);
+    // Refresh the list so table stays in sync
     loadYouths();
-    setSelectedYouth(null);
   };
 
   return (

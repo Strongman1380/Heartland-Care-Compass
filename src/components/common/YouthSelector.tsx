@@ -128,10 +128,10 @@ export const YouthSelector = ({ onSelectYouth, selectedYouthId }: YouthSelectorP
                           {youth.pointTotal || 0} pts
                         </span>
 
-                        {/* Grade Badge */}
-                        {youth.currentGrade && (
+                        {/* Grade Badge (supports currentGrade or grade) */}
+                        {(youth.currentGrade || (youth as any).grade) && (
                           <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800 border border-purple-300">
-                            Grade {youth.currentGrade}
+                            Grade {youth.currentGrade || (youth as any).grade}
                           </span>
                         )}
                       </div>

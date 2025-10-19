@@ -134,7 +134,10 @@ const Index = () => {
             activeTab={activeTab}
             onTabChange={setActiveTab}
             onBackToHome={handleBackToHome}
-            onYouthUpdated={loadYouths}
+            onYouthUpdated={(updated?) => {
+              if (updated) setSelectedYouth(updated);
+              loadYouths();
+            }}
           />
         ) : (
           <div className="text-center py-12 bg-white rounded-lg shadow-lg">

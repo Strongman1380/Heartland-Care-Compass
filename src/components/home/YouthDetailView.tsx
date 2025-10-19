@@ -49,7 +49,7 @@ interface YouthDetailViewProps {
   activeTab: string;
   onTabChange: (tab: string) => void;
   onBackToHome: () => void;
-  onYouthUpdated: () => void;
+  onYouthUpdated: (updated?: Youth) => void;
 }
 
 export const YouthDetailView = ({

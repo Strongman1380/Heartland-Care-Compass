@@ -134,6 +134,19 @@ export const AddYouthDialog = ({ onClose, onSuccess }: AddYouthDialogProps) => {
         ...(parsedData.probationOfficer && { probationOfficer: parsedData.probationOfficer }),
         ...(parsedData.probationContact && { probationContact: parsedData.probationContact }),
         ...(parsedData.probationPhone && { probationPhone: parsedData.probationPhone }),
+        ...(parsedData.motherName && { motherName: parsedData.motherName }),
+        ...(parsedData.motherPhone && { motherPhone: parsedData.motherPhone }),
+        ...(parsedData.fatherName && { fatherName: parsedData.fatherName }),
+        ...(parsedData.fatherPhone && { fatherPhone: parsedData.fatherPhone }),
+        ...(parsedData.nextOfKinName && { nextOfKinName: parsedData.nextOfKinName }),
+        ...(parsedData.nextOfKinRelationship && { nextOfKinRelationship: parsedData.nextOfKinRelationship }),
+        ...(parsedData.nextOfKinPhone && { nextOfKinPhone: parsedData.nextOfKinPhone }),
+        ...(parsedData.placingAgencyCounty && { placingAgencyCounty: parsedData.placingAgencyCounty }),
+        ...(parsedData.caseworkerName && { caseworkerName: parsedData.caseworkerName }),
+        ...(parsedData.caseworkerPhone && { caseworkerPhone: parsedData.caseworkerPhone }),
+        ...(parsedData.guardianAdLitemName && { guardianAdLitemName: parsedData.guardianAdLitemName }),
+        ...(parsedData.attorney && { attorney: parsedData.attorney }),
+        ...(parsedData.judge && { judge: parsedData.judge }),
         ...(parsedData.placementAuthority && { placementAuthority: parsedData.placementAuthority }),
         ...(parsedData.estimatedStay && { estimatedStay: parsedData.estimatedStay }),
         ...(parsedData.referralSource && { referralSource: parsedData.referralSource }),
@@ -289,13 +302,13 @@ export const AddYouthDialog = ({ onClose, onSuccess }: AddYouthDialogProps) => {
             zip: stateParts[1] || null,
           };
         })() : null,
-        physicalDescription: {
+        physicalDescription: (formData.height || formData.weight || formData.hairColor || formData.eyeColor || formData.tattoosScars) ? {
           height: formData.height || null,
           weight: formData.weight || null,
           hairColor: formData.hairColor || null,
           eyeColor: formData.eyeColor || null,
           tattoosScars: formData.tattoosScars || null,
-        },
+        } : null,
 
         // Legal Guardian as Json object
         legalGuardian: formData.legalGuardian ? {
@@ -312,12 +325,49 @@ export const AddYouthDialog = ({ onClose, onSuccess }: AddYouthDialogProps) => {
           contact: formData.probationContact || null,
           phone: formData.probationPhone || null
         } : null,
+
+        // Mother as Json object
+        mother: formData.motherName ? {
+          name: formData.motherName,
+          phone: formData.motherPhone || null
+        } : null,
+
+        // Father as Json object
+        father: formData.fatherName ? {
+          name: formData.fatherName,
+          phone: formData.fatherPhone || null
+        } : null,
+
+        // Next of Kin as Json object
+        nextOfKin: formData.nextOfKinName ? {
+          name: formData.nextOfKinName,
+          relationship: formData.nextOfKinRelationship || null,
+          phone: formData.nextOfKinPhone || null
+        } : null,
+
+        // Caseworker as Json object
+        caseworker: formData.caseworkerName ? {
+          name: formData.caseworkerName,
+          phone: formData.caseworkerPhone || null
+        } : null,
+
+        // Guardian ad Litem as Json object
+        guardianAdLitem: formData.guardianAdLitemName ? {
+          name: formData.guardianAdLitemName
+        } : null,
+
+        // Legal Information
+        placingAgencyCounty: formData.placingAgencyCounty || null,
+        attorney: formData.attorney || null,
+        judge: formData.judge || null,
         placementAuthority: formData.placementAuthority?.[0] || null,
         estimatedStay: formData.estimatedStay || null,
 
         // Education details
         currentSchool: formData.currentSchool || null,
+        // Keep both columns in sync for consistency across views
         grade: formData.grade || null,
+        currentGrade: formData.grade || null,
         hasIEP: formData.hasIEP || false,
         academicStrengths: formData.academicStrengths || null,
         academicChallenges: formData.academicChallenges || null,
@@ -337,22 +387,22 @@ export const AddYouthDialog = ({ onClose, onSuccess }: AddYouthDialogProps) => {
         // Mental health details
         currentDiagnoses: formData.currentDiagnoses || formData.diagnoses || null,
         diagnoses: formData.currentDiagnoses || formData.diagnoses || null,
-        traumaHistory: formData.traumaHistory || null,
+        traumaHistory: formData.traumaHistory && formData.traumaHistory.length > 0 ? formData.traumaHistory : null,
         previousTreatment: formData.previousTreatment || null,
-        currentCounseling: formData.currentCounseling || null,
+        currentCounseling: formData.currentCounseling && formData.currentCounseling.length > 0 ? formData.currentCounseling : null,
         therapistName: formData.therapistName || null,
         therapistContact: formData.therapistContact || null,
         sessionFrequency: formData.sessionFrequency || null,
         sessionTime: formData.sessionTime || null,
-        selfHarmHistory: formData.selfHarmHistory || null,
-        lastIncidentDate: formData.lastIncidentDate || null,
+        selfHarmHistory: formData.selfHarmHistory && formData.selfHarmHistory.length > 0 ? formData.selfHarmHistory : null,
+        lastIncidentDate: formData.lastIncidentDate && formData.lastIncidentDate !== 'Not applicable' && formData.lastIncidentDate !== 'N/A' ? formData.lastIncidentDate : null,
         hasSafetyPlan: formData.hasSafetyPlan || false,
 
         // Background details
-        priorPlacements: formData.priorPlacements || null,
+        priorPlacements: formData.priorPlacements && formData.priorPlacements.length > 0 ? formData.priorPlacements : null,
         numPriorPlacements: formData.numPriorPlacements || null,
         lengthRecentPlacement: formData.lengthRecentPlacement || null,
-        courtInvolvement: formData.courtInvolvement || null,
+        courtInvolvement: formData.courtInvolvement && formData.courtInvolvement.length > 0 ? formData.courtInvolvement : null,
 
         // Behavior tracking
         onSubsystem: !!formData.onSubsystem,

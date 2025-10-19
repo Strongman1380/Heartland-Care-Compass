@@ -74,8 +74,10 @@ export const youthService = {
         message: error.message,
         details: error.details,
         hint: error.hint,
-        code: error.code
+        code: error.code,
+        fullError: error
       })
+      console.error('Failed update payload:', JSON.stringify(updates, null, 2))
       throw error
     }
     

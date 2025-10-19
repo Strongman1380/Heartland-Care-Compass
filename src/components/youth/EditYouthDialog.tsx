@@ -106,7 +106,42 @@ export const EditYouthDialog = ({ youth, open, onClose, onSuccess }: EditYouthDi
         hairColor: youth.physicalDescription?.hairColor || "",
         eyeColor: youth.physicalDescription?.eyeColor || "",
         tattoosScars: youth.physicalDescription?.tattoosScars || "",
-        
+
+        // Family & Legal Contact Information
+        motherName: typeof youth.mother === 'object' && youth.mother?.name
+          ? youth.mother.name
+          : "",
+        motherPhone: typeof youth.mother === 'object' && youth.mother?.phone
+          ? youth.mother.phone
+          : "",
+        fatherName: typeof youth.father === 'object' && youth.father?.name
+          ? youth.father.name
+          : "",
+        fatherPhone: typeof youth.father === 'object' && youth.father?.phone
+          ? youth.father.phone
+          : "",
+        nextOfKinName: typeof youth.nextOfKin === 'object' && youth.nextOfKin?.name
+          ? youth.nextOfKin.name
+          : "",
+        nextOfKinRelationship: typeof youth.nextOfKin === 'object' && youth.nextOfKin?.relationship
+          ? youth.nextOfKin.relationship
+          : "",
+        nextOfKinPhone: typeof youth.nextOfKin === 'object' && youth.nextOfKin?.phone
+          ? youth.nextOfKin.phone
+          : "",
+        placingAgencyCounty: youth.placingAgencyCounty || "",
+        caseworkerName: typeof youth.caseworker === 'object' && youth.caseworker?.name
+          ? youth.caseworker.name
+          : "",
+        caseworkerPhone: typeof youth.caseworker === 'object' && youth.caseworker?.phone
+          ? youth.caseworker.phone
+          : "",
+        guardianAdLitemName: typeof youth.guardianAdLitem === 'object' && youth.guardianAdLitem?.name
+          ? youth.guardianAdLitem.name
+          : "",
+        attorney: youth.attorney || "",
+        judge: youth.judge || "",
+
         // Background Information
         referralReason: youth.referralReason || "",
         priorPlacements: youth.priorPlacements || [],
@@ -116,7 +151,7 @@ export const EditYouthDialog = ({ youth, open, onClose, onSuccess }: EditYouthDi
         
         // Education Information - parse from educationInfo string if available
         currentSchool: youth.currentSchool || "",
-        grade: youth.grade || "",
+        grade: youth.grade || (youth as any).currentGrade || "",
         hasIEP: youth.hasIEP || false,
         academicStrengths: youth.academicStrengths || "",
         academicChallenges: youth.academicChallenges || "",
@@ -385,13 +420,13 @@ export const EditYouthDialog = ({ youth, open, onClose, onSuccess }: EditYouthDi
             zip: stateParts[1] || null,
           };
         })() : null,
-        physicalDescription: {
+        physicalDescription: (formData.height || formData.weight || formData.hairColor || formData.eyeColor || formData.tattoosScars) ? {
           height: formData.height || null,
           weight: formData.weight || null,
           hairColor: formData.hairColor || null,
           eyeColor: formData.eyeColor || null,
           tattoosScars: formData.tattoosScars || null,
-        },
+        } : null,
         
         // Legal Guardian as Json object
         legalGuardian: formData.legalGuardian ? {
@@ -408,12 +443,49 @@ export const EditYouthDialog = ({ youth, open, onClose, onSuccess }: EditYouthDi
           contact: formData.probationContact || null,
           phone: formData.probationPhone || null
         } : null,
+
+        // Mother as Json object
+        mother: formData.motherName ? {
+          name: formData.motherName,
+          phone: formData.motherPhone || null
+        } : null,
+
+        // Father as Json object
+        father: formData.fatherName ? {
+          name: formData.fatherName,
+          phone: formData.fatherPhone || null
+        } : null,
+
+        // Next of Kin as Json object
+        nextOfKin: formData.nextOfKinName ? {
+          name: formData.nextOfKinName,
+          relationship: formData.nextOfKinRelationship || null,
+          phone: formData.nextOfKinPhone || null
+        } : null,
+
+        // Caseworker as Json object
+        caseworker: formData.caseworkerName ? {
+          name: formData.caseworkerName,
+          phone: formData.caseworkerPhone || null
+        } : null,
+
+        // Guardian ad Litem as Json object
+        guardianAdLitem: formData.guardianAdLitemName ? {
+          name: formData.guardianAdLitemName
+        } : null,
+
+        // Legal Information
+        placingAgencyCounty: formData.placingAgencyCounty || null,
+        attorney: formData.attorney || null,
+        judge: formData.judge || null,
         placementAuthority: formData.placementAuthority?.[0] || null,
         estimatedStay: formData.estimatedStay || null,
         
         // Education details
         currentSchool: formData.currentSchool || null,
+        // Keep both columns in sync
         grade: formData.grade || null,
+        currentGrade: formData.grade || null,
         hasIEP: formData.hasIEP || false,
         academicStrengths: formData.academicStrengths || null,
         academicChallenges: formData.academicChallenges || null,
@@ -433,22 +505,22 @@ export const EditYouthDialog = ({ youth, open, onClose, onSuccess }: EditYouthDi
         // Mental health details
         currentDiagnoses: formData.currentDiagnoses || formData.diagnoses || null,
         diagnoses: formData.currentDiagnoses || formData.diagnoses || null,
-        traumaHistory: formData.traumaHistory || null,
+        traumaHistory: formData.traumaHistory && formData.traumaHistory.length > 0 ? formData.traumaHistory : null,
         previousTreatment: formData.previousTreatment || null,
-        currentCounseling: formData.currentCounseling || null,
+        currentCounseling: formData.currentCounseling && formData.currentCounseling.length > 0 ? formData.currentCounseling : null,
         therapistName: formData.therapistName || null,
         therapistContact: formData.therapistContact || null,
         sessionFrequency: formData.sessionFrequency || null,
         sessionTime: formData.sessionTime || null,
-        selfHarmHistory: formData.selfHarmHistory || null,
-        lastIncidentDate: formData.lastIncidentDate || null,
+        selfHarmHistory: formData.selfHarmHistory && formData.selfHarmHistory.length > 0 ? formData.selfHarmHistory : null,
+        lastIncidentDate: formData.lastIncidentDate && formData.lastIncidentDate !== 'Not applicable' && formData.lastIncidentDate !== 'N/A' ? formData.lastIncidentDate : null,
         hasSafetyPlan: formData.hasSafetyPlan || false,
-        
+
         // Background details
-        priorPlacements: formData.priorPlacements || null,
+        priorPlacements: formData.priorPlacements && formData.priorPlacements.length > 0 ? formData.priorPlacements : null,
         numPriorPlacements: formData.numPriorPlacements || null,
         lengthRecentPlacement: formData.lengthRecentPlacement || null,
-        courtInvolvement: formData.courtInvolvement || null,
+        courtInvolvement: formData.courtInvolvement && formData.courtInvolvement.length > 0 ? formData.courtInvolvement : null,
         
         // Behavior tracking
         onSubsystem: !!formData.onSubsystem,
@@ -462,8 +534,8 @@ export const EditYouthDialog = ({ youth, open, onClose, onSuccess }: EditYouthDi
         
         // Preserve Real Colors assessment data
         realColorsResult: youth.realColorsResult,
-        
-        updatedAt: new Date().toISOString()
+
+        // updatedAt is handled automatically by Supabase trigger
       };
       
       // Validate required fields
@@ -471,6 +543,9 @@ export const EditYouthDialog = ({ youth, open, onClose, onSuccess }: EditYouthDi
         toast.error("First name and last name are required");
         return;
       }
+
+      // Log the update data for debugging
+      console.log('Update Data being sent:', JSON.stringify(updateData, null, 2));
 
       // Update youth in Supabase
       await updateYouth(youth.id, updateData);

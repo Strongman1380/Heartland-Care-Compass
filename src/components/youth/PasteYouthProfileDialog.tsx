@@ -159,7 +159,10 @@ function parseYouthFromText(raw: string): Partial<Youth> & { firstName: string; 
       case 'has iep':
       case 'iep': data.hasIEP = parseBool(value); break;
       case 'current grade':
-      case 'grade': data.currentGrade = value || null; break;
+      case 'grade':
+        data.currentGrade = value || null;
+        (data as any).grade = value || null;
+        break;
       case 'current school':
       case 'school': data.currentSchool = value || null; break;
       case 'academic strengths': data.academicStrengths = value || null; break;

@@ -36,7 +36,22 @@ export interface YouthFormData {
   hairColor: string;
   eyeColor: string;
   tattoosScars: string;
-  
+
+  // Family & Legal Contact Information
+  motherName: string;
+  motherPhone: string;
+  fatherName: string;
+  fatherPhone: string;
+  nextOfKinName: string;
+  nextOfKinRelationship: string;
+  nextOfKinPhone: string;
+  placingAgencyCounty: string;
+  caseworkerName: string;
+  caseworkerPhone: string;
+  guardianAdLitemName: string;
+  attorney: string;
+  judge: string;
+
   // Background Information
   referralReason: string;
   priorPlacements: string[];
@@ -123,7 +138,22 @@ export const useYouthForm = () => {
     hairColor: "",
     eyeColor: "",
     tattoosScars: "",
-    
+
+    // Family & Legal Contact Information
+    motherName: "",
+    motherPhone: "",
+    fatherName: "",
+    fatherPhone: "",
+    nextOfKinName: "",
+    nextOfKinRelationship: "",
+    nextOfKinPhone: "",
+    placingAgencyCounty: "",
+    caseworkerName: "",
+    caseworkerPhone: "",
+    guardianAdLitemName: "",
+    attorney: "",
+    judge: "",
+
     // Background Information
     referralReason: "",
     priorPlacements: [],
@@ -307,6 +337,21 @@ export const useYouthForm = () => {
       eyeColor: "",
       tattoosScars: "",
 
+      // Family & Legal Contact Information
+      motherName: "",
+      motherPhone: "",
+      fatherName: "",
+      fatherPhone: "",
+      nextOfKinName: "",
+      nextOfKinRelationship: "",
+      nextOfKinPhone: "",
+      placingAgencyCounty: "",
+      caseworkerName: "",
+      caseworkerPhone: "",
+      guardianAdLitemName: "",
+      attorney: "",
+      judge: "",
+
       // Background Information
       referralReason: "",
       priorPlacements: [],
@@ -320,46 +365,32 @@ export const useYouthForm = () => {
       hasIEP: false,
       academicStrengths: "",
       academicChallenges: "",
-      behavioralConcerns: "",
+      educationGoals: "",
+      schoolContact: "",
+      schoolPhone: "",
 
       // Medical Information
-      primaryPhysician: "",
+      physician: "",
+      physicianPhone: "",
+      insuranceProvider: "",
+      policyNumber: "",
       allergies: "",
-      medications: "",
-      chronicConditions: "",
-      lastPhysicalExam: "",
+      medicalConditions: "",
+      medicalRestrictions: "",
 
       // Mental Health Information
-      previousCounseling: false,
-      currentTherapist: "",
-      psychiatrist: "",
-      mentalHealthDiagnosis: "",
-      riskFactors: "",
-      copingStrategies: "",
-      triggerWarnings: "",
-      selfHarmHistory: false,
-      suicidalIdeation: false,
-
-      // Substance Use
-      substanceUse: false,
-      substanceDetails: "",
-      treatmentHistory: "",
-
-      // Family Information
-      familyStructure: "",
-      contactInfo: "",
-      emergencyContact: "",
-      familyDynamics: "",
-
-      // Behavioral Information
-      strengths: "",
-      interests: "",
-      goals: "",
-      concerns: "",
-
-      // Risk Assessment
-      riskLevel: "",
-      safetyPlan: "",
+      currentDiagnoses: "",
+      diagnoses: "",
+      traumaHistory: [],
+      previousTreatment: "",
+      currentCounseling: [],
+      therapistName: "",
+      therapistContact: "",
+      sessionFrequency: "",
+      sessionTime: "",
+      selfHarmHistory: [],
+      lastIncidentDate: "",
+      hasSafetyPlan: false,
 
       // New fields for behavior tracking
       onSubsystem: false,

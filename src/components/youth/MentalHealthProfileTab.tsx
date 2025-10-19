@@ -12,7 +12,7 @@ import { toast } from "sonner";
 
 interface MentalHealthProfileTabProps {
   youth: Youth;
-  onYouthUpdated?: () => void;
+  onYouthUpdated?: (updated?: Youth) => void;
 }
 
 interface EditableFieldProps {
@@ -209,10 +209,10 @@ export const MentalHealthProfileTab = ({ youth, onYouthUpdated }: MentalHealthPr
       updateData[field] = value ? parseInt(value) : null;
     }
 
-    await updateYouth(youth.id, updateData);
+    const updated = await updateYouth(youth.id, updateData);
 
     if (onYouthUpdated) {
-      onYouthUpdated();
+      onYouthUpdated(updated);
     }
   };
 

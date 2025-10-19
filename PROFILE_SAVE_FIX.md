@@ -89,6 +89,23 @@ probationPhone: typeof youth.probationOfficer === 'object' && youth.probationOff
 
 Applied the same Json object formatting to AddYouthDialog.tsx to ensure new youth profiles are created with the correct data structure.
 
+### Fix 4: ✅ Added Missing Family/Legal Contact Fields
+
+**Files Modified:**
+- [src/hooks/useYouthForm.ts](src/hooks/useYouthForm.ts) - Added 13 new fields
+- [src/components/youth/EditYouthDialog.tsx](src/components/youth/EditYouthDialog.tsx) - Save/load logic
+- [src/components/youth/AddYouthDialog.tsx](src/components/youth/AddYouthDialog.tsx) - Save logic
+
+**New Fields Added:**
+- motherName, motherPhone (saved as `mother` Json)
+- fatherName, fatherPhone (saved as `father` Json)
+- nextOfKinName, nextOfKinRelationship, nextOfKinPhone (saved as `nextOfKin` Json)
+- caseworkerName, caseworkerPhone (saved as `caseworker` Json)
+- guardianAdLitemName (saved as `guardianAdLitem` Json)
+- placingAgencyCounty, attorney, judge (saved as strings)
+
+These fields now correctly save as Json objects matching the Supabase schema. See [SCHEMA_FIXES_COMPLETE.md](SCHEMA_FIXES_COMPLETE.md) for full details.
+
 ## Testing
 
 To verify the fixes work:

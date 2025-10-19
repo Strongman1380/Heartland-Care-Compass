@@ -126,10 +126,10 @@ export const YouthSelectionView = ({
                             {youth.pointTotal || 0} pts
                           </span>
 
-                          {/* Grade Badge */}
-                          {youth.currentGrade && (
+                          {/* Grade Badge (show from currentGrade or grade) */}
+                          {(youth.currentGrade || youth.grade) && (
                             <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-purple-100 text-purple-800 border border-purple-300">
-                              Grade {youth.currentGrade}
+                              Grade {youth.currentGrade || youth.grade}
                             </span>
                           )}
 
@@ -147,10 +147,10 @@ export const YouthSelectionView = ({
                             </span>
                           )}
 
-                          {/* School Badge */}
-                          {youth.currentSchool && (
+                          {/* School Badge (current or last attended) */}
+                          {(youth.currentSchool || youth.lastSchoolAttended) && (
                             <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-orange-100 text-orange-800 border border-orange-300">
-                              {youth.currentSchool}
+                              {youth.currentSchool || youth.lastSchoolAttended}
                             </span>
                           )}
 

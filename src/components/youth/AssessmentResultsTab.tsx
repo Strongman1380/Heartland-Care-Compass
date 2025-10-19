@@ -11,7 +11,7 @@ import { toast } from "sonner";
 
 interface AssessmentResultsTabProps {
   youth: Youth;
-  onYouthUpdated?: () => void;
+  onYouthUpdated?: (updated?: Youth) => void;
 }
 
 // Color styling function for Real Colors display

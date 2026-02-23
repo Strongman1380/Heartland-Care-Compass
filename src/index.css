@@ -1,0 +1,405 @@
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+
+    --primary: 0 45% 35%; /* Heartland burgundy */
+    --primary-foreground: 45 100% 85%; /* Light gold */
+
+    --secondary: 45 100% 60%; /* Heartland gold */
+    --secondary-foreground: 0 45% 20%; /* Dark burgundy */
+
+    --muted: 45 20% 95%;
+    --muted-foreground: 0 10% 40%;
+
+    --accent: 45 100% 60%; /* Heartland gold */
+    --accent-foreground: 0 45% 20%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 45 30% 85%;
+    --input: 45 30% 85%;
+    --ring: 0 45% 35%;
+
+    --radius: 0.625rem;
+
+    --sidebar-background: 45 50% 97%;
+    --sidebar-foreground: 0 45% 25%;
+    --sidebar-primary: 0 45% 35%;
+    --sidebar-primary-foreground: 45 100% 85%;
+    --sidebar-accent: 45 80% 90%;
+    --sidebar-accent-foreground: 0 45% 25%;
+    --sidebar-border: 45 30% 80%;
+    --sidebar-ring: 0 45% 35%;
+  }
+
+  .dark {
+    --background: 0 45% 8%;
+    --foreground: 45 100% 95%;
+
+    --card: 0 45% 8%;
+    --card-foreground: 45 100% 95%;
+
+    --popover: 0 45% 8%;
+    --popover-foreground: 45 100% 95%;
+
+    --primary: 45 100% 70%;
+    --primary-foreground: 0 45% 15%;
+
+    --secondary: 0 45% 20%;
+    --secondary-foreground: 45 100% 85%;
+
+    --muted: 0 30% 15%;
+    --muted-foreground: 45 20% 65%;
+
+    --accent: 45 100% 70%;
+    --accent-foreground: 0 45% 15%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 0 30% 20%;
+    --input: 0 30% 20%;
+    --ring: 45 100% 70%;
+    --sidebar-background: 0 45% 12%;
+    --sidebar-foreground: 45 100% 90%;
+    --sidebar-primary: 45 100% 70%;
+    --sidebar-primary-foreground: 0 45% 15%;
+    --sidebar-accent: 0 40% 18%;
+    --sidebar-accent-foreground: 45 100% 85%;
+    --sidebar-border: 0 30% 18%;
+    --sidebar-ring: 45 100% 70%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background: linear-gradient(
+      180deg,
+      hsl(var(--background)) 0%,
+      hsl(var(--muted) / 0.45) 45%,
+      hsl(var(--background)) 100%
+    );
+    min-height: 100vh;
+    padding-top: env(safe-area-inset-top);
+    padding-right: env(safe-area-inset-right);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+@layer components {
+  .ui-surface {
+    @apply rounded-lg border border-border/70 bg-card shadow-sm;
+  }
+}
+
+@layer utilities {
+  .touch-target {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
+/* Custom Heartland branding styles - Modernized */
+.heartland-gradient {
+  background: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--secondary)) 70%, hsl(var(--secondary)) 100%);
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.1), 0 4px 6px -1px rgba(0,0,0,0.1);
+}
+
+.heartland-header {
+  background: linear-gradient(115deg, hsl(var(--primary)) 0%, hsl(0 45% 25%) 40%, hsl(var(--secondary)) 80%, hsl(var(--primary)) 100%);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid hsl(var(--border) / 0.2);
+}
+
+/* Print styles for behavior cards and reports */
+@media print {
+  /* Hide navigation, headers, and controls when printing */
+  .print\:hidden {
+    display: none !important;
+  }
+  
+  /* Ensure print content is visible */
+  body {
+    background: white;
+  }
+  
+  /* Hide everything except print-only content */
+  body * {
+    visibility: hidden;
+  }
+  
+  .print-only, .print-only *,
+  .print-section, .print-section * {
+    visibility: visible;
+  }
+
+  .print-only, .print-section {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    display: block !important;
+  }
+  
+  .print-report {
+    padding: 20px;
+    font-family: Arial, sans-serif;
+    font-size: 12px;
+    line-height: 1.4;
+    color: black;
+  }
+  
+  .print-report h1 {
+    font-size: 24px;
+    margin-bottom: 10px;
+  }
+  
+  .print-report h2 {
+    font-size: 18px;
+    margin-bottom: 8px;
+  }
+  
+  .print-report h3 {
+    font-size: 14px;
+    margin-bottom: 6px;
+  }
+  
+  .print-report table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 15px;
+  }
+  
+  .print-report th,
+  .print-report td {
+    border: 1px solid #000;
+    padding: 8px;
+    text-align: left;
+  }
+  
+  .print-report th {
+    background-color: #f0f0f0;
+    font-weight: bold;
+  }
+  
+  /* Page break controls */
+  .print-report .page-break {
+    page-break-before: always;
+  }
+  
+  .print-report .no-break {
+    page-break-inside: avoid;
+  }
+  
+  /* School Print Reports specific styles */
+  @page {
+    margin: 0.5in;
+    size: letter;
+  }
+  
+  /* Make sure the print area is visible */
+  .print\:block {
+    display: block !important;
+    visibility: visible !important;
+  }
+  
+  .print\:block * {
+    visibility: visible !important;
+  }
+  
+  /* Remove shadows and backgrounds for print */
+  .print\:shadow-none {
+    box-shadow: none !important;
+  }
+  
+  /* Ensure tables print correctly */
+  table {
+    page-break-inside: auto;
+  }
+  
+  tr {
+    page-break-inside: avoid;
+    page-break-after: auto;
+  }
+  
+  thead {
+    display: table-header-group;
+  }
+  
+  tfoot {
+    display: table-footer-group;
+  }
+}
+
+/* Enforce Heartland brand palette across legacy utility color classes */
+[class*="text-blue-"],
+[class*="text-indigo-"],
+[class*="text-sky-"],
+[class*="text-cyan-"],
+[class*="text-teal-"],
+[class*="text-green-"],
+[class*="text-emerald-"],
+[class*="text-lime-"],
+[class*="text-purple-"],
+[class*="text-violet-"],
+[class*="text-fuchsia-"],
+[class*="text-pink-"],
+[class*="text-rose-"] {
+  color: hsl(var(--primary)) !important;
+}
+
+[class*="bg-blue-"],
+[class*="bg-indigo-"],
+[class*="bg-sky-"],
+[class*="bg-cyan-"],
+[class*="bg-teal-"],
+[class*="bg-green-"],
+[class*="bg-emerald-"],
+[class*="bg-lime-"],
+[class*="bg-purple-"],
+[class*="bg-violet-"],
+[class*="bg-fuchsia-"],
+[class*="bg-pink-"],
+[class*="bg-rose-"] {
+  background-color: hsl(var(--muted)) !important;
+}
+
+[class*="border-blue-"],
+[class*="border-indigo-"],
+[class*="border-sky-"],
+[class*="border-cyan-"],
+[class*="border-teal-"],
+[class*="border-green-"],
+[class*="border-emerald-"],
+[class*="border-lime-"],
+[class*="border-purple-"],
+[class*="border-violet-"],
+[class*="border-fuchsia-"],
+[class*="border-pink-"],
+[class*="border-rose-"] {
+  border-color: hsl(var(--border)) !important;
+}
+
+[class*="fill-blue-"],
+[class*="fill-indigo-"],
+[class*="fill-sky-"],
+[class*="fill-cyan-"],
+[class*="fill-teal-"],
+[class*="fill-green-"],
+[class*="fill-emerald-"],
+[class*="fill-lime-"],
+[class*="fill-purple-"],
+[class*="fill-violet-"],
+[class*="fill-fuchsia-"],
+[class*="fill-pink-"],
+[class*="fill-rose-"] {
+  fill: hsl(var(--primary)) !important;
+}
+
+[class*="stroke-blue-"],
+[class*="stroke-indigo-"],
+[class*="stroke-sky-"],
+[class*="stroke-cyan-"],
+[class*="stroke-teal-"],
+[class*="stroke-green-"],
+[class*="stroke-emerald-"],
+[class*="stroke-lime-"],
+[class*="stroke-purple-"],
+[class*="stroke-violet-"],
+[class*="stroke-fuchsia-"],
+[class*="stroke-pink-"],
+[class*="stroke-rose-"] {
+  stroke: hsl(var(--primary)) !important;
+}
+
+[class*="ring-blue-"],
+[class*="ring-indigo-"],
+[class*="ring-sky-"],
+[class*="ring-cyan-"],
+[class*="ring-teal-"],
+[class*="ring-green-"],
+[class*="ring-emerald-"],
+[class*="ring-lime-"],
+[class*="ring-purple-"],
+[class*="ring-violet-"],
+[class*="ring-fuchsia-"],
+[class*="ring-pink-"],
+[class*="ring-rose-"] {
+  --tw-ring-color: hsl(var(--ring)) !important;
+}
+
+[class*="from-blue-"],
+[class*="from-indigo-"],
+[class*="from-sky-"],
+[class*="from-cyan-"],
+[class*="from-teal-"],
+[class*="from-green-"],
+[class*="from-emerald-"],
+[class*="from-lime-"],
+[class*="from-purple-"],
+[class*="from-violet-"],
+[class*="from-fuchsia-"],
+[class*="from-pink-"],
+[class*="from-rose-"] {
+  --tw-gradient-from: hsl(var(--primary) / 0.16) var(--tw-gradient-from-position) !important;
+  --tw-gradient-to: hsl(var(--primary) / 0) var(--tw-gradient-to-position) !important;
+}
+
+[class*="via-blue-"],
+[class*="via-indigo-"],
+[class*="via-sky-"],
+[class*="via-cyan-"],
+[class*="via-teal-"],
+[class*="via-green-"],
+[class*="via-emerald-"],
+[class*="via-lime-"],
+[class*="via-purple-"],
+[class*="via-violet-"],
+[class*="via-fuchsia-"],
+[class*="via-pink-"],
+[class*="via-rose-"] {
+  --tw-gradient-via: hsl(var(--secondary) / 0.2) var(--tw-gradient-via-position) !important;
+  --tw-gradient-to: hsl(var(--secondary) / 0) var(--tw-gradient-to-position) !important;
+}
+
+[class*="to-blue-"],
+[class*="to-indigo-"],
+[class*="to-sky-"],
+[class*="to-cyan-"],
+[class*="to-teal-"],
+[class*="to-green-"],
+[class*="to-emerald-"],
+[class*="to-lime-"],
+[class*="to-purple-"],
+[class*="to-violet-"],
+[class*="to-fuchsia-"],
+[class*="to-pink-"],
+[class*="to-rose-"] {
+  --tw-gradient-to: hsl(var(--secondary) / 0.25) var(--tw-gradient-to-position) !important;
+}

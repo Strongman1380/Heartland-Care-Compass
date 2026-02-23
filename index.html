@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="HYC" />
+    <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png" />
+    <link rel="manifest" href="./manifest.json" />
+    <meta name="theme-color" content="#823131" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; frame-src 'self' https://vercel.live https://*.vercel.live https://*.firebaseapp.com https://*.google.com https://accounts.google.com; child-src 'self' https://vercel.live https://*.vercel.live https://*.firebaseapp.com https://*.google.com https://accounts.google.com; font-src 'self' https://r2cdn.perplexity.ai https://fonts.gstatic.com data:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://apis.google.com https://www.gstatic.com https://www.googletagmanager.com https://vercel.live; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob:; connect-src 'self' https://vercel.live https://*.vercel.live https://api.supabase.co https://*.supabase.co https://*.onrender.com https://*.railway.app https://*.fly.dev https://*.vercel.app https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://apis.google.com https://www.googleapis.com https://*.googleapis.com https://firebaseinstallations.googleapis.com https://www.google-analytics.com wss://*">
+    <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="./favicon-16.png" />
+    <title>Heartland Youth Compass</title>
+    <meta name="description" content="Track and manage youth profiles, daily points, and progress notes for Heartland Boys Home" />
+    <meta name="author" content="Heartland Boys Home" />
+
+    <meta property="og:title" content="Heartland Youth Compass" />
+    <meta property="og:description" content="Track and manage youth profiles, daily points, and progress notes for Heartland Boys Home" />
+    <meta property="og:type" content="website" />
+  <meta property="og:image" content="assets/heartland-logo.png" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@heartland_boys_home" />
+  <meta name="twitter:image" content="assets/heartland-logo.png" />
+  </head>
+
+  <body>
+    <div id="root"></div>
+  <script type="module" src="/src/main.tsx"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function() {
+        navigator.serviceWorker.register('/sw.js');
+      });
+    }
+  </script>
+  </body>
+</html>

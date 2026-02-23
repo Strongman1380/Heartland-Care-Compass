@@ -1,0 +1,22 @@
+[
+  {
+    "fileName": "main-overview.mdc",
+    "description": "Complete system overview documenting the youth residential care management system architecture, key components, and integration points between behavioral, academic, and clinical subsystems"
+  },
+  {
+    "fileName": "behavioral-scoring-algorithms.mdc",
+    "description": "Detailed documentation of the behavioral scoring system including point calculations, level progression rules, risk assessment algorithms, and the AI-enhanced behavioral analysis system"
+  },
+  {
+    "fileName": "data-models-relationships.mdc",
+    "description": "Comprehensive documentation of youth profile data models, behavioral tracking schemas, academic progress structures, and relationships between different data entities in the system"
+  },
+  {
+    "fileName": "report-generation-system.mdc",
+    "description": "Technical specification of the AI-enhanced report generation system including DPN reports, court reports, progress evaluations, and clinical documentation algorithms"
+  },
+  {
+    "fileName": "assessment-scoring-flows.mdc",
+    "description": "Detailed documentation of assessment workflows including Real Colors personality assessment, risk level calculations, comprehensive placement assessment, and quick ISP assessment systems"
+  }
+]

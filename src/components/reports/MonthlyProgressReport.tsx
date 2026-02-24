@@ -13,7 +13,7 @@ import { format, differenceInDays } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { exportElementToPDF } from "@/utils/export";
 import { buildReportFilename } from "@/utils/reportFilenames";
-import { fetchProgressNotes } from "@/utils/local-storage-utils";
+import { fetchProgressNotes, fetchBehaviorPoints } from "@/utils/local-storage-utils";
 import { findProfessional } from "@/utils/professionalUtils";
 import { getProgressNotesByYouth } from "@/lib/api";
 import * as aiService from "@/services/aiService";
@@ -268,36 +268,43 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
     return guardians.length > 0 ? guardians.join('; ') : "No guardian information available";
   };
 
+  // --- Narrative summary helpers (no raw case note snippets) ---
+
+  const summarizeNoteThemes = (notes: any[], keywords: string[]): { positiveThemes: string[]; concernThemes: string[]; noteCount: number } => {
+    const positiveThemes = new Set<string>();
+    const concernThemes = new Set<string>();
+    const positiveWords = ['positive', 'cooperat', 'respectful', 'improved', 'progress', 'engaged', 'compliant', 'appropriate', 'strength', 'successful', 'calm', 'participated'];
+    const concernWords = ['incident', 'concern', 'refus', 'defian', 'aggress', 'inappropriate', 'crisis', 'restrict', 'violat', 'profanity', 'disrupt', 'noncomplian'];
+
+    const relevant = notes.filter(note => {
+      const content = extractCaseNoteContent(note).toLowerCase();
+      return keywords.some(kw => content.includes(kw));
+    });
+
+    for (const note of (relevant.length > 0 ? relevant : notes)) {
+      const content = extractCaseNoteContent(note).toLowerCase();
+      for (const w of positiveWords) { if (content.includes(w)) positiveThemes.add(w); }
+      for (const w of concernWords) { if (content.includes(w)) concernThemes.add(w); }
+    }
+    return { positiveThemes: [...positiveThemes], concernThemes: [...concernThemes], noteCount: relevant.length || notes.length };
+  };
+
   // Generate Assistance summary from case notes
   const generateAssistanceSummary = (progressNotes: any[]): string => {
     if (progressNotes.length === 0) return "";
-    const assistanceNotes = progressNotes.filter(note => {
-      const content = extractCaseNoteContent(note).toLowerCase();
-      return content.includes('assist') || content.includes('help') || content.includes('support') ||
-        content.includes('resource') || content.includes('service') || content.includes('referral') ||
-        content.includes('advocacy') || content.includes('coordination') || content.includes('transport') ||
-        content.includes('appointment');
-    });
-    const highlights = collectCaseNoteHighlights(assistanceNotes.length > 0 ? assistanceNotes : progressNotes, 5);
-    if (highlights.length > 0) {
-      return `During this reporting period, the following assistance was documented: ${highlights.join(' ')}`;
+    const { noteCount } = summarizeNoteThemes(progressNotes, ['assist', 'help', 'support', 'resource', 'service', 'referral', 'advocacy', 'coordination', 'transport', 'appointment']);
+    if (noteCount > 0) {
+      return `During this reporting period, ${youth.firstName} received ongoing program support and coordination of services. Staff documented ${noteCount} relevant entries covering assistance provided, resource coordination, and service engagement.`;
     }
-    return `${progressNotes.length} reports were documented during this period. Review reports for details on assistance provided.`;
+    return `${progressNotes.length} reports were documented during this period. Staff continued to provide ongoing program support and service coordination.`;
   };
 
   // Generate Incredible Opportunity summary from case notes
   const generateIncredibleOpportunitySummary = (progressNotes: any[]): string => {
     if (progressNotes.length === 0) return "";
-    const opportunityNotes = progressNotes.filter(note => {
-      const content = extractCaseNoteContent(note).toLowerCase();
-      return content.includes('opportunity') || content.includes('volunteer') || content.includes('community') ||
-        content.includes('field trip') || content.includes('event') || content.includes('activity') ||
-        content.includes('outing') || content.includes('experience') || content.includes('excursion') ||
-        content.includes('recreation') || content.includes('incredible');
-    });
-    const highlights = collectCaseNoteHighlights(opportunityNotes.length > 0 ? opportunityNotes : [], 5);
-    if (highlights.length > 0) {
-      return `${youth.firstName} participated in the following opportunities: ${highlights.join(' ')}`;
+    const { noteCount } = summarizeNoteThemes(progressNotes, ['opportunity', 'volunteer', 'community', 'field trip', 'event', 'activity', 'outing', 'experience', 'excursion', 'recreation', 'incredible']);
+    if (noteCount > 0) {
+      return `${youth.firstName} participated in community and program activities during this reporting period. Staff documented ${noteCount} entries related to recreational and enrichment opportunities.`;
     }
     return "";
   };
@@ -305,60 +312,82 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
   // Generate Social summary from case notes
   const generateSocialSummary = (progressNotes: any[]): string => {
     if (progressNotes.length === 0) return "";
-    const socialNotes = progressNotes.filter(note => {
-      const content = extractCaseNoteContent(note).toLowerCase();
-      return content.includes('peer') || content.includes('social') || content.includes('friend') ||
-        content.includes('relationship') || content.includes('interaction') || content.includes('conflict') ||
-        content.includes('group') || content.includes('staff') || content.includes('communicate') ||
-        content.includes('cooperat');
-    });
-    const highlights = collectCaseNoteHighlights(socialNotes.length > 0 ? socialNotes : progressNotes, 5);
-    if (highlights.length > 0) {
-      return `${youth.firstName}'s social interactions during this period include: ${highlights.join(' ')}`;
+    const { positiveThemes, concernThemes } = summarizeNoteThemes(progressNotes, ['peer', 'social', 'friend', 'relationship', 'interaction', 'conflict', 'group', 'staff', 'communicate', 'cooperat']);
+
+    let summary = `${youth.firstName}'s social development during this reporting period reflects `;
+    if (positiveThemes.length > 0 && concernThemes.length === 0) {
+      summary += `positive engagement with peers and staff. Documentation notes appropriate interactions, cooperation, and respectful communication.`;
+    } else if (concernThemes.length > 0 && positiveThemes.length === 0) {
+      summary += `areas that continue to need support. Staff observations note challenges with peer interactions and communication skills that remain a focus of intervention.`;
+    } else if (positiveThemes.length > 0 && concernThemes.length > 0) {
+      summary += `a mix of strengths and areas for growth. While ${youth.firstName} demonstrates moments of appropriate peer engagement and cooperation, there have also been instances requiring staff redirection in social situations.`;
+    } else {
+      summary += `ongoing adjustment to program expectations. Staff continue to monitor and support ${youth.firstName}'s social development.`;
     }
-    return `${progressNotes.length} reports documented during this period. Review reports for details on social development.`;
+    return summary;
   };
 
-  // Generate Academic summary - always starts with school placement, adds case note details
+  // Generate Academic summary
   const generateAcademicSummary = (youth: Youth, progressNotes: any[]): string => {
     const grade = youth.currentGrade ? ` ${youth.firstName} is currently enrolled in grade ${youth.currentGrade}.` : "";
     let summary = `${youth.firstName} is currently placed at the Heartland Boys Home Independent School, which is managed by Berniklau Education Solutions.${grade}`;
 
-    const academicNotes = progressNotes.filter(note => {
-      const content = extractCaseNoteContent(note).toLowerCase();
-      return content.includes('school') || content.includes('academic') || content.includes('class') ||
-        content.includes('grade') || content.includes('homework') || content.includes('education') ||
-        content.includes('teacher') || content.includes('assignment') || content.includes('test') ||
-        content.includes('study') || content.includes('credit') || content.includes('learning');
-    });
+    const { positiveThemes, concernThemes } = summarizeNoteThemes(progressNotes, ['school', 'academic', 'class', 'grade', 'homework', 'education', 'teacher', 'assignment', 'test', 'study', 'credit', 'learning']);
 
-    const highlights = collectCaseNoteHighlights(academicNotes, 3);
-    if (highlights.length > 0) {
-      summary += ` Academic documentation from this period includes: ${highlights.join(' ')}`;
+    if (positiveThemes.length > 0 && concernThemes.length === 0) {
+      summary += ` During this reporting period, ${youth.firstName} demonstrated consistent academic engagement and compliance with school expectations.`;
+    } else if (concernThemes.length > 0 && positiveThemes.length > 0) {
+      summary += ` Academic performance during this period showed both strengths in areas such as compliance and peer interactions, alongside concerns that may need attention to ensure continued progress.`;
+    } else if (concernThemes.length > 0) {
+      summary += ` Academic documentation for this period indicates areas needing improvement. Staff recommend continued focus on academic engagement and completion of assignments.`;
+    } else {
+      summary += ` Academic progress during this period is documented in staff reports. Continued monitoring of school performance is recommended.`;
     }
 
     return summary;
   };
 
-  // Generate Behavioral summary from case notes
+  // Generate Behavioral summary — includes points/level data
   const generateBehavioralSummary = (progressNotes: any[]): string => {
     if (progressNotes.length === 0) return "";
 
-    const behavioralNotes = progressNotes.filter(note => {
-      const content = extractCaseNoteContent(note).toLowerCase();
-      return content.includes('behavior') || content.includes('incident') || content.includes('aggress') ||
-        content.includes('compli') || content.includes('rule') || content.includes('consequence') ||
-        content.includes('redirect') || content.includes('de-escal') || content.includes('challenging') ||
-        content.includes('inappropriate') || content.includes('crisis') || content.includes('conduct') ||
-        content.includes('progress') || content.includes('positive') || content.includes('discipline') ||
-        content.includes('cooperation') || content.includes('respectful');
+    // Pull behavior points data for this youth
+    const allPoints = fetchBehaviorPoints(youth.id);
+    const monthStart = new Date(selectedMonth + "-01");
+    const monthEnd = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0);
+    const monthPoints = allPoints.filter(p => {
+      if (!p.date) return false;
+      const d = new Date(p.date);
+      return d >= monthStart && d <= monthEnd;
     });
 
-    const highlights = collectCaseNoteHighlights(behavioralNotes.length > 0 ? behavioralNotes : progressNotes, 5);
-    if (highlights.length > 0) {
-      return `${youth.firstName}'s behavioral documentation during this reporting period includes: ${highlights.join(' ')}`;
+    const totalPoints = monthPoints.reduce((sum, p) => sum + (p.totalPoints || 0), 0);
+    const daysTracked = monthPoints.length;
+    const avgPoints = daysTracked > 0 ? (totalPoints / daysTracked).toFixed(1) : "0";
+
+    let summary = `During this reporting period, ${youth.firstName} is at Level ${youth.level} with ${youth.pointTotal?.toLocaleString() || 0} cumulative points. `;
+
+    if (daysTracked > 0) {
+      summary += `${daysTracked} days were tracked this month with ${totalPoints.toLocaleString()} total points earned (average: ${avgPoints} points/day). `;
     }
-    return `${progressNotes.length} reports were documented during this period. Review reports for details on behavioral progress.`;
+
+    const { positiveThemes, concernThemes } = summarizeNoteThemes(progressNotes, [
+      'behavior', 'incident', 'aggress', 'compli', 'rule', 'consequence',
+      'redirect', 'de-escal', 'challenging', 'inappropriate', 'crisis',
+      'conduct', 'progress', 'positive', 'discipline', 'cooperation', 'respectful'
+    ]);
+
+    if (positiveThemes.length > 0 && concernThemes.length === 0) {
+      summary += `${youth.firstName} has demonstrated consistent positive behavior, including cooperation with staff, compliance with program expectations, and respectful interactions. Continued positive engagement is encouraged.`;
+    } else if (concernThemes.length > 0 && positiveThemes.length === 0) {
+      summary += `Staff have documented behavioral concerns during this period, including instances requiring redirection and intervention. Areas for improvement include following program rules consistently, responding to staff direction, and maintaining appropriate conduct. Continued behavioral support and skill-building interventions are recommended.`;
+    } else if (positiveThemes.length > 0 && concernThemes.length > 0) {
+      summary += `${youth.firstName} has shown both strengths and areas for improvement this period. Positive behaviors include moments of cooperation and respectful interactions, while some incidents required staff redirection. Continued focus on building consistency in meeting program expectations is recommended.`;
+    } else {
+      summary += `Staff continue to monitor ${youth.firstName}'s behavioral progress and provide structured support within the program.`;
+    }
+
+    return summary;
   };
 
   const generateFutureGoals = (_youth: Youth, _progressNotes: any[]): string => {
@@ -422,96 +451,35 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
     return rawNote;
   };
 
-  const formatCaseNoteHighlight = (note: any): string => {
-    const parsed = parseCaseNoteJson(note);
-    const content = extractCaseNoteContent(note);
-    if (!content) return "";
-
-    let noteDate = "";
-    if (note?.date) {
-      const parsedDate = new Date(note.date);
-      if (!Number.isNaN(parsedDate.getTime())) {
-        noteDate = format(parsedDate, "MMM d");
-      }
-    }
-
-    const staff = note?.staff ? ` (${note.staff})` : "";
-    let snippet = content;
-
-    if (parsed?.noteType === 'school' && parsed?.sections) {
-      const { overview, behavior, academics, interventions, followUp } = parsed.sections;
-      const labeled: string[] = [];
-      if (typeof overview === 'string' && overview.trim()) {
-        labeled.push(overview.trim());
-      }
-      if (typeof behavior === 'string' && behavior.trim()) {
-        labeled.push(`Behavior: ${behavior.trim()}`);
-      }
-      if (typeof academics === 'string' && academics.trim()) {
-        labeled.push(`Academics: ${academics.trim()}`);
-      }
-      if (typeof interventions === 'string' && interventions.trim()) {
-        labeled.push(`Supports: ${interventions.trim()}`);
-      }
-      if (typeof followUp === 'string' && followUp.trim()) {
-        labeled.push(`Follow-up: ${followUp.trim()}`);
-      }
-      if (labeled.length > 0) {
-        snippet = labeled.join(' | ');
-      }
-    }
-
-    if (snippet.length > 180) {
-      snippet = `${snippet.slice(0, 177)}...`;
-    }
-    return `${noteDate ? `${noteDate}: ` : ""}${snippet}${staff}`;
-  };
-
-  const collectCaseNoteHighlights = (notes: any[], limit = 3): string[] => {
-    if (!notes || notes.length === 0) return [];
-    const sorted = [...notes].sort((a, b) => {
-      const dateA = a.date ? new Date(a.date).getTime() : 0;
-      const dateB = b.date ? new Date(b.date).getTime() : 0;
-      return dateA - dateB;
-    });
-    return sorted
-      .slice(-limit)
-      .map(formatCaseNoteHighlight)
-      .filter(Boolean);
-  };
-
-  // Treatment progress summary based on case notes
+  // Treatment progress summary — narrative format
   const generateTreatmentProgressSummary = (youth: Youth, progressNotes: any[]): string => {
     let summary = "";
 
     // Therapy participation from youth profile
     if (youth.currentCounseling && youth.currentCounseling.length > 0) {
-      summary += `${youth.firstName} is participating in: ${youth.currentCounseling.join(', ')}. `;
+      summary += `${youth.firstName} is currently participating in ${youth.currentCounseling.join(', ')} services. `;
       if (youth.therapistName) {
-        summary += `Therapist: ${youth.therapistName}. `;
+        summary += `Sessions are facilitated by ${youth.therapistName}. `;
       }
     }
 
-    if (progressNotes.length > 0) {
-      const treatmentNotes = progressNotes.filter(note => {
-        const content = extractCaseNoteContent(note).toLowerCase();
-        return content.includes('therapy') || content.includes('session') ||
-          content.includes('coping') || content.includes('intervention') ||
-          content.includes('goal') || content.includes('treatment') ||
-          content.includes('counsel');
-      });
-
-      const highlights = collectCaseNoteHighlights(treatmentNotes.length > 0 ? treatmentNotes : progressNotes, 5);
-      if (highlights.length > 0) {
-        summary += `Reports from this period document: ${highlights.join(' ')}`;
-      } else {
-        summary += `${progressNotes.length} reports were documented during this period.`;
-      }
+    if (youth.currentDiagnoses || youth.diagnoses) {
+      summary += `Current diagnoses include ${youth.currentDiagnoses || youth.diagnoses}. `;
     }
 
-    if (!summary) {
-      summary = `${youth.firstName} continues to participate in treatment programming.`;
+    const { positiveThemes, concernThemes } = summarizeNoteThemes(progressNotes, [
+      'therapy', 'session', 'coping', 'intervention', 'goal', 'treatment', 'counsel'
+    ]);
+
+    if (positiveThemes.length > 0) {
+      summary += `Treatment engagement during this period has been positive, with ${youth.firstName} demonstrating participation in therapeutic interventions and skill-building activities. `;
+    } else if (concernThemes.length > 0) {
+      summary += `Treatment engagement remains an area of focus. Staff recommend continued encouragement of participation in therapeutic programming and skill-building activities. `;
+    } else {
+      summary += `${youth.firstName} continues to participate in treatment programming as part of the residential care plan. `;
     }
+
+    summary += `Continued monitoring of progress and adjustment of treatment goals as needed is recommended.`;
 
     return summary;
   };
@@ -668,19 +636,21 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
   };
 
   const getEnhancementPrompt = (fieldName: keyof MonthlyReportData, currentValue: string): string => {
+    const baseRules = `Do NOT include raw case note excerpts, dates with brackets like "Feb 22: [General Log]...", or staff attribution from notes. Write a cohesive narrative summary instead. Do not use markdown formatting.`;
+
     const prompts: Record<string, string> = {
-      assistanceSummary: `Take this program report for ${youth.firstName} and expand it into a professional summary covering support services, resources, referrals, and advocacy efforts. Do not include any mention of points, scores, or levels:\n\n"${currentValue}"\n\nExpand this into 2-3 well-written paragraphs with clinical language. Do not use markdown formatting.`,
+      assistanceSummary: `Take this program report for ${youth.firstName} and expand it into a professional narrative summary covering support services, resources, referrals, and advocacy efforts. ${baseRules}\n\n"${currentValue}"\n\nExpand this into 2-3 well-written paragraphs with clinical language.`,
 
-      academicSummary: `Take this academic report for ${youth.firstName} and expand it into a professional summary. Note that ${youth.firstName} attends the Heartland Boys Home Independent School, managed by Berniklau Education Solutions. Do not include any mention of points, scores, or levels:\n\n"${currentValue}"\n\nExpand this into 2-3 well-written paragraphs. Do not use markdown formatting.`,
+      academicSummary: `Take this academic report for ${youth.firstName} and expand it into a professional narrative summary. Note that ${youth.firstName} attends the Heartland Boys Home Independent School, managed by Berniklau Education Solutions. Emphasize what the youth is doing well and areas needing improvement. ${baseRules}\n\n"${currentValue}"\n\nExpand this into 2-3 well-written paragraphs.`,
 
-      behavioralSummary: `Take this behavioral report for ${youth.firstName} and expand it into a professional summary covering incidents, compliance, response to redirection, and overall behavioral progress. Do not include any mention of points, scores, or levels:\n\n"${currentValue}"\n\nExpand this into 2-3 well-written paragraphs with clinical language. Do not use markdown formatting.`,
+      behavioralSummary: `Take this behavioral report for ${youth.firstName} and expand it into a professional narrative summary covering behavioral patterns, compliance, response to redirection, and overall progress. Include discussion of their current level and points progress. Emphasize either improvements they can make or what they are doing well. ${baseRules}\n\n"${currentValue}"\n\nExpand this into 2-3 well-written paragraphs with clinical language.`,
 
-      socialSummary: `Take this social development report for ${youth.firstName} and expand it into a comprehensive summary covering peer interactions, relationships with staff, communication skills, and social growth. Do not include any mention of points, scores, or levels:\n\n"${currentValue}"\n\nExpand this into 2-3 well-written paragraphs with clinical language. Do not use markdown formatting.`,
+      socialSummary: `Take this social development report for ${youth.firstName} and expand it into a comprehensive narrative summary covering peer interactions, relationships with staff, communication skills, and social growth. ${baseRules}\n\n"${currentValue}"\n\nExpand this into 2-3 well-written paragraphs with clinical language.`,
 
-      treatmentProgressSummary: `Take this treatment progress report for ${youth.firstName} and expand it into a comprehensive summary covering therapy participation, clinical observations, and progress. Do not include any mention of points, scores, or levels:\n\n"${currentValue}"\n\nExpand this into 2-3 well-written paragraphs with clinical language. Do not use markdown formatting.`,
+      treatmentProgressSummary: `Take this treatment progress report for ${youth.firstName} and expand it into a comprehensive narrative summary covering therapy participation, clinical observations, and progress. ${baseRules}\n\n"${currentValue}"\n\nExpand this into 2-3 well-written paragraphs with clinical language.`,
     };
 
-    return prompts[fieldName] || `Enhance and expand the following text for ${youth.firstName}'s monthly progress report. Do not include any mention of points, scores, or levels. Do not use markdown formatting:\n\n"${currentValue}"\n\nExpand this into clear, professional paragraphs.`;
+    return prompts[fieldName] || `Enhance and expand the following text for ${youth.firstName}'s monthly progress report into a cohesive narrative. ${baseRules}\n\n"${currentValue}"\n\nExpand this into clear, professional paragraphs.`;
   };
 
   // AI-powered auto-populate ALL sections intelligently
@@ -768,7 +738,26 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
 
       const caseNotesText = periodReportsText; // kept for context object below
 
-      const baseInstruction = `You are a clinical professional writing a monthly progress report for ${youth.firstName} ${youth.lastName} at Heartland Boys Home. The reporting period is ${reportMonthLabel}. Write a professional 2-3 paragraph summary. Do not mention points, scores, levels, or ratings. Do not use markdown formatting (no **, no #). Just write plain professional text.
+      // Get behavior points for the reporting period
+      const allBehaviorPoints = fetchBehaviorPoints(youth.id);
+      const periodPoints = allBehaviorPoints.filter(p => {
+        if (!p.date) return false;
+        const d = new Date(p.date);
+        return d >= monthStart && d <= monthEnd;
+      });
+      const totalPts = periodPoints.reduce((sum, p) => sum + (p.totalPoints || 0), 0);
+      const daysTracked = periodPoints.length;
+      const avgPts = daysTracked > 0 ? (totalPts / daysTracked).toFixed(1) : "0";
+
+      const baseInstruction = `You are a clinical professional writing a monthly progress report for ${youth.firstName} ${youth.lastName} at Heartland Boys Home. The reporting period is ${reportMonthLabel}. Write a professional 2-3 paragraph narrative summary.
+
+CRITICAL RULES:
+- Do NOT include raw case note excerpts, dates, or staff names from the notes (e.g. "Feb 22: [General Log] ...")
+- Do NOT copy/paste snippets from the source notes
+- Instead, SYNTHESIZE the information into a cohesive narrative
+- Write in third person professional clinical language
+- Do not use markdown formatting (no **, no #). Just write plain professional text.
+- Emphasize what the youth is doing well and specific areas for improvement
 
 REPORTING PERIOD REPORTS (${reportMonthLabel}):
 ${periodReportsText}
@@ -776,15 +765,21 @@ ${historicalText ? `\nHISTORICAL CONTEXT (prior reports for reference on overall
 
       // Use AI to generate each section based on case notes
       const aiPrompts = {
-        assistanceSummary: `${baseInstruction}\n\nUsing the reporting period reports above, focus on: program participation, assistance provided, support services, resources, referrals, advocacy, appointments, and coordination efforts. Reference historical reports only to describe progress over time.`,
+        assistanceSummary: `${baseInstruction}\n\nSynthesize the reporting period reports into a narrative about: program participation, assistance provided, support services, resources, referrals, advocacy, and coordination efforts. Do not list individual note entries.`,
 
-        academicSummary: `${baseInstruction}\n\nUsing the reporting period reports above, focus on: academic performance, school attendance, grades, educational progress, and classroom behavior. Note: ${youth.firstName} attends the Heartland Boys Home Independent School, managed by Berniklau Education Solutions. Reference historical reports only to describe progress over time.`,
+        academicSummary: `${baseInstruction}\n\nSynthesize the reporting period reports into a narrative about: academic performance, school attendance, educational progress, and classroom behavior. Note: ${youth.firstName} attends the Heartland Boys Home Independent School, managed by Berniklau Education Solutions. Emphasize what the youth is doing well academically and specific areas that need improvement.`,
 
-        behavioralSummary: `${baseInstruction}\n\nUsing the reporting period reports above, focus on: behavioral patterns, incidents, compliance with rules, response to redirection, disciplinary actions, and overall behavioral progress or challenges. Reference historical reports only to describe progress over time.`,
+        behavioralSummary: `${baseInstruction}\n\nSynthesize the reporting period reports into a narrative about behavioral progress. Include the following data points naturally in the narrative:
+- Current Level: ${youth.level}
+- Cumulative Points: ${youth.pointTotal?.toLocaleString() || 0}
+- Days tracked this month: ${daysTracked}
+- Points earned this month: ${totalPts.toLocaleString()}
+- Average points per day: ${avgPts}
+Discuss behavioral patterns, compliance, response to redirection, and emphasize either improvements the youth can make or what they are doing well.`,
 
-        socialSummary: `${baseInstruction}\n\nUsing the reporting period reports above, focus on: social development, peer interactions, relationships with staff, communication skills, conflict resolution, cooperation, and group dynamics. Reference historical reports only to describe progress over time.`,
+        socialSummary: `${baseInstruction}\n\nSynthesize the reporting period reports into a narrative about: social development, peer interactions, relationships with staff, communication skills, and group dynamics. Emphasize strengths and areas for growth.`,
 
-        treatmentProgressSummary: `${baseInstruction}\n\nUsing the reporting period reports above, focus on: treatment progress, therapy participation, clinical observations, coping skills, and therapeutic interventions. Reference historical reports only to describe progress over time.\n\nAdditional context:\n- Current Diagnoses: ${youth.currentDiagnoses || youth.diagnoses || 'Not documented'}\n- Current Counseling: ${youth.currentCounseling?.join(', ') || 'Not specified'}\n- Therapist: ${youth.therapistName || 'Not specified'}`,
+        treatmentProgressSummary: `${baseInstruction}\n\nSynthesize the reporting period reports into a narrative about: treatment progress, therapy participation, clinical observations, and therapeutic interventions. Emphasize engagement and recommend next steps.\n\nAdditional context:\n- Current Diagnoses: ${youth.currentDiagnoses || youth.diagnoses || 'Not documented'}\n- Current Counseling: ${youth.currentCounseling?.join(', ') || 'Not specified'}\n- Therapist: ${youth.therapistName || 'Not specified'}`,
       };
 
       // Generate AI summaries for each section
@@ -795,7 +790,7 @@ ${historicalText ? `\nHISTORICAL CONTEXT (prior reports for reference on overall
           const response = await aiService.queryData(prompt, {
             youth,
             reportMonth: reportMonthLabel,
-            totalNotesProvided: notesForAI.length,
+            totalNotesProvided: periodReports.length,
             caseNotes: caseNotesText
           });
 

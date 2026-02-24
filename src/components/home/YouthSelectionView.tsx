@@ -1,11 +1,12 @@
 
-import { useMemo } from "react";
+import { useState, useMemo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Youth } from "@/integrations/firebase/services";
 import { WelcomeSection } from "./WelcomeSection";
 import { EmptyYouthState } from "./EmptyYouthState";
-import { Edit, LogOut, ChevronRight } from "lucide-react";
+import { Edit, LogOut, ChevronRight, StickyNote } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { QuickNoteDialog } from "@/components/notes/QuickNoteDialog";
 
 interface YouthSelectionViewProps {
   youths: Youth[];
@@ -26,6 +27,8 @@ export const YouthSelectionView = ({
   formatPoints,
   formatDate
 }: YouthSelectionViewProps) => {
+  const [quickNoteYouth, setQuickNoteYouth] = useState<Youth | null>(null);
+
   // Sort youth alphabetically by last name, then first name
   const sortedYouths = useMemo(() => {
     return [...youths].sort((a, b) => {
@@ -150,6 +153,18 @@ export const YouthSelectionView = ({
                         <Button
                           variant="ghost"
                           size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setQuickNoteYouth(youth);
+                          }}
+                          className="hover:bg-red-50"
+                          title="Quick Note"
+                        >
+                          <StickyNote className="h-4 w-4 text-gray-400 hover:text-red-600" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           onClick={(e) => onEditYouth(youth, e)}
                           className="hidden sm:inline-flex hover:bg-secondary/20"
                         >
@@ -174,6 +189,15 @@ export const YouthSelectionView = ({
           </Card>
         )}
       </div>
+
+      {quickNoteYouth && (
+        <QuickNoteDialog
+          open={!!quickNoteYouth}
+          onOpenChange={(open) => { if (!open) setQuickNoteYouth(null); }}
+          youthId={quickNoteYouth.id}
+          youthName={`${quickNoteYouth.firstName} ${quickNoteYouth.lastName}`}
+        />
+      )}
     </>
   );
 };

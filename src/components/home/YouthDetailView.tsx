@@ -46,22 +46,22 @@ export const YouthDetailView = ({
       </div>
 
       <Tabs value={activeTab} onValueChange={onTabChange} className="space-y-6">
-        <TabsList className="bg-white p-1 shadow-lg rounded-lg overflow-x-auto flex w-full justify-start md:justify-center border-2 border-yellow-300">
-          <TabsTrigger value="profile" className="flex items-center gap-2 data-[state=active]:bg-yellow-400 data-[state=active]:text-red-900">
-            <User size={16} />
-            <span>Profile</span>
+        <TabsList className="bg-white p-1 shadow-lg rounded-lg overflow-x-auto flex w-full justify-around sm:justify-center border-2 border-yellow-300">
+          <TabsTrigger value="profile" className="flex items-center gap-1.5 sm:gap-2 min-h-[44px] px-2 sm:px-3.5 data-[state=active]:bg-yellow-400 data-[state=active]:text-red-900">
+            <User size={18} className="sm:w-4 sm:h-4" />
+            <span className="hidden sm:inline">Profile</span>
           </TabsTrigger>
-          <TabsTrigger value="behavior" className="flex items-center gap-2 data-[state=active]:bg-yellow-400 data-[state=active]:text-red-900">
-            <CheckSquare size={16} />
-            <span>Level Tracking</span>
+          <TabsTrigger value="behavior" className="flex items-center gap-1.5 sm:gap-2 min-h-[44px] px-2 sm:px-3.5 data-[state=active]:bg-yellow-400 data-[state=active]:text-red-900">
+            <CheckSquare size={18} className="sm:w-4 sm:h-4" />
+            <span className="hidden sm:inline">Level Tracking</span>
           </TabsTrigger>
-          <TabsTrigger value="notes" className="flex items-center gap-2 data-[state=active]:bg-yellow-400 data-[state=active]:text-red-900">
-            <FileText size={16} />
-            <span>Case Notes</span>
+          <TabsTrigger value="notes" className="flex items-center gap-1.5 sm:gap-2 min-h-[44px] px-2 sm:px-3.5 data-[state=active]:bg-yellow-400 data-[state=active]:text-red-900">
+            <FileText size={18} className="sm:w-4 sm:h-4" />
+            <span className="hidden sm:inline">Case Notes</span>
           </TabsTrigger>
-          <TabsTrigger value="reports" className="flex items-center gap-2 data-[state=active]:bg-yellow-400 data-[state=active]:text-red-900">
-            <BarChart3 size={16} />
-            <span>Reports</span>
+          <TabsTrigger value="reports" className="flex items-center gap-1.5 sm:gap-2 min-h-[44px] px-2 sm:px-3.5 data-[state=active]:bg-yellow-400 data-[state=active]:text-red-900">
+            <BarChart3 size={18} className="sm:w-4 sm:h-4" />
+            <span className="hidden sm:inline">Reports</span>
           </TabsTrigger>
         </TabsList>
 

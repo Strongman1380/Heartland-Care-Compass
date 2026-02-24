@@ -1,92 +1,66 @@
 ---
-description: Analysis of data models, schema design, and database relationships for a youth behavioral tracking and academic progress system
+description: Documents core data models and their relationships for youth residential program management system
 ---
 
 
 # data-models-relationships
 
-Core Data Models:
+## Core Data Models
 
-1. Youth Profile Schema
-- Hierarchical structure for youth records
-```typescript
-interface YouthProfile {
-  personalInfo: {
-    id: string          // Format: HBH-YYYY-NNN
-    legalStatus: string // Active|Discharged|OnLeave
-    guardianRelations: GuardianRelation[]
-    medicalInfo: EncryptedMedicalData
-  }
-  behavioralTracking: {
-    dailyScores: DomainScore[]  // P.A.I.D scoring domains
-    riskLevel: RiskAssessment
-    realColors: PersonalityProfile
-    incidents: IncidentReport[]
-  }
-  academicProgress: {
-    credits: SubjectCredits[]
-    weeklyScores: WeeklyScore[] // Thu-Wed periods
-    behaviorPoints: PointRecord[]
-  }
-}
-```
+### Youth Profile Model
+- Unique ID format: HBH-YYYY-NNN 
+- Personal demographics and legal status
+- Treatment goals with behavioral categories
+- Point/level system progression data
+- Medical, trauma, and safety plan records
+- Professional relationships and placements
 
-2. Behavioral Assessment Models
-```typescript
-interface DomainScore {
-  peerInteraction: number    // 0-4 scale
-  adultInteraction: number   // 0-4 scale  
-  investmentLevel: number    // 0-4 scale
-  dealWithAuthority: number  // 0-4 scale
-  timestamp: Date
-  shift: ShiftType
-}
+### Behavioral Assessment Model
+- 4 core domains: Peer/Adult Interaction, Investment, Authority
+- 0-4 scoring scale with calculated averages
+- Historical trends and patterns storage
+- Domain-specific assessment criteria
+- Generated behavioral narratives
 
-interface RiskAssessment {
-  overallScore: number
-  domains: {
-    aggression: number
-    substanceUse: number 
-    flightRisk: number
-    selfHarm: number
-  }
-  recommendedLevel: number
-}
-```
+### Academic Progress Model
+- Credit-based tracking (0.25, 0.5, 1.0 increments)
+- Thursday-Wednesday week calculations
+- Performance thresholds (0.0-4.0 scale)
+- Subject-specific grade tracking
+- Behavioral incident integration
 
-3. Academic Progress Schema
-```typescript
-interface AcademicRecord {
-  studentId: string
-  weeklyAverages: {
-    startDate: Date         // Always Thursday
-    endDate: Date          // Always Wednesday
-    scores: SubjectScore[]
-    behaviorPoints: number
-  }[]
-  credits: {
-    subject: string
-    earned: number
-    required: number
-    completionDate?: Date
-  }[]
-}
-```
+### Case Notes Model
+- Structured sections: Summary, Strengths/Challenges, Interventions, Plan
+- Version control ("formatVersion": "v2")
+- AI-enhanced categorization
+- Clinical keyword tagging system
+- Treatment goal linkages
 
-Key Relationships:
-1. Youth Profile -> Guardian Relations (1:N)
-2. Youth Profile -> Daily Scores (1:N)
-3. Youth Profile -> Academic Records (1:1)
-4. Youth Profile -> Incident Reports (1:N)
-5. Academic Records -> Weekly Scores (1:N)
-6. Behavioral Scores -> Shift Records (N:1)
+## Key Relationships
 
-Data Integrity Rules:
-1. All youth records require active guardian relation
-2. Academic weeks strictly follow Thu-Wed schedule
-3. Daily scores require entries from all shifts
-4. Risk assessments trigger level review
-5. Incident reports link to behavioral scores
+### Youth-to-Professional
+- Hierarchical professional relationships
+- Role-based documentation access
+- Multi-professional coordination tracking
+- Guardian relationship documentation
+
+### Behavioral-to-Academic
+- Integrated point calculations
+- Level progression dependencies
+- Incident impact tracking
+- Performance correlation metrics
+
+### Assessment-to-Treatment
+- Risk level determination (HYRNA scoring)
+- Treatment goal mapping
+- Progress indicator relationships
+- Service plan integration
+
+### Notes-to-Progress
+- Goal achievement documentation
+- Behavioral trend documentation
+- Academic progress correlation
+- Treatment effectiveness tracking
 
 $END$
 

@@ -1,5 +1,5 @@
 ---
-description: Documents assessment scoring workflows and algorithms for youth treatment facility management system
+description: Defines rules for assessment scoring, risk evaluation, and placement workflows in a youth treatment facility
 ---
 
 
@@ -7,60 +7,66 @@ description: Documents assessment scoring workflows and algorithms for youth tre
 
 Core Assessment Systems:
 
-1. Risk Level Assessment
-Path: src/components/assessment/RiskAssessment.tsx
-- 8-domain behavioral scoring model (0-4 scale per question)
-- Weighted domain calculations for overall risk level
-- Automated placement recommendations based on risk thresholds
-- Intervention targeting system using risk factor patterns
-Importance Score: 90
-
-2. Real Colors Personality Assessment
-Path: src/components/assessment/RealColorsAssessment.tsx
-- Dual-color personality profile mapping
-- Treatment approach recommendations based on color combinations
-- Color-specific intervention strategies
-- Integration with overall treatment planning
+## 1. Risk Assessment System
 Importance Score: 85
+Location: src/components/assessment/RiskAssessment.tsx
 
-3. Comprehensive Placement Assessment
-Path: src/components/youth/AssessmentResultsTab.tsx
-- 7-category placement evaluation system
-- Treatment level determination algorithms
-- Contraindication detection for placement decisions
-- Safety protocol assignment logic
-Importance Score: 85
+- 8-domain youth risk evaluation framework
+- Risk level calculation using weighted domain scores:
+  * 0-25%: Low Risk
+  * 26-50%: Moderate Risk
+  * 51-75%: High Risk
+  * 76-100%: Very High Risk
+- Auto-generates recommended placement levels (1-4)
+- Domain-specific question weighting for risk profiling
 
-4. Daily Progress Notes (DPN) Scoring
-Path: src/components/youth/ConsolidatedScoringTab.tsx
-- 4-domain behavioral rating system:
-  * Peer Interaction (0-4)
-  * Adult Interaction (0-4)
-  * Investment Level (0-4)
-  * Deal with Authority (0-4)
-- Period-based scoring aggregation (daily/weekly/monthly)
-- Multi-shift rating conflict resolution
-Importance Score: 95
-
-5. Quick ISP Assessment
-Path: src/components/assessment/QuickISPAssessment.tsx
-- Treatment goal prioritization algorithms
-- Behavioral intervention mapping
-- Early warning detection system
-- Staff approach recommendations
+## 2. Real Colors Personality Assessment
 Importance Score: 75
+Location: src/components/assessment/RealColorsAssessment.tsx
 
-Key Integration Points:
-- Risk scores influence placement decisions
-- Personality assessments guide intervention strategies
-- Daily scoring feeds into progress evaluation
-- Combined metrics determine treatment level adjustments
+- Four-color personality model (Gold, Blue, Green, Orange)
+- Trait mapping and scoring for each color profile
+- Staff approach recommendations based on color compatibility
+- Primary/secondary color determination with weighted scoring
 
-Domain-Specific Rules:
-- Treatment level thresholds based on risk scores
-- Color profile impact on intervention selection
-- Behavioral score minimums for level progression
-- Required assessment completion sequences
+## 3. Comprehensive Placement Assessment
+Importance Score: 80
+Location: src/components/assessment/ComprehensivePlacementAssessment.tsx
+
+- 7-area placement evaluation system
+- Domain scoring (0-4) with specialized interpretations
+- Treatment level determination based on composite scores
+- Safety protocol generation from risk factors
+
+## 4. Quick ISP Assessment
+Importance Score: 70
+Location: src/components/assessment/QuickISPAssessment.tsx
+
+- Rapid service planning with 5 treatment goal types
+- Real-time risk evaluation
+- Support plan generation from behavioral indicators
+- Progress tracking matrix with measurement criteria
+
+## 5. Behavioral Rating System
+Importance Score: 85
+Location: src/components/youth/ConsolidatedScoringTab.tsx
+
+- 0-4 scale scoring across domains:
+  * Peer Interaction
+  * Adult Interaction
+  * Investment Level
+  * Deal with Authority
+- Real-time average calculations
+- Historical trend tracking
+- AI-enhanced behavioral assessment comments
+
+## Integration Points
+
+- Assessment results feed into placement recommendations
+- Risk scores influence treatment level assignments
+- Color profiles guide staff interaction approaches
+- Behavioral ratings impact level progression
+- Assessment scores determine service plan requirements
 
 $END$
 

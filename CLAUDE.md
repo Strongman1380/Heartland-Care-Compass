@@ -13,48 +13,44 @@
 - Explain your OBSERVATIONS clearly, then provide REASONING to identify the exact issue. Add console logs when needed to gather more information.
 
 
-A youth treatment facility management system with specialized behavioral health, academic tracking and clinical reporting capabilities.
+YOUTH RESIDENTIAL MANAGEMENT SYSTEM
 
-Core Business Domains:
+Core Behavioral Assessment Engine:
+- 10-level progression system with point-based advancement
+- 4-domain behavioral scoring (Peer/Adult/Investment/Authority) on 0-4 scale
+- AI-enhanced behavioral pattern analysis and risk assessment
+- Treatment goal tracking with 5-point progress scale
 
-1. Youth Profile & Assessment (85/100)
-- Comprehensive youth data model with legal, medical and behavioral tracking
-- Multi-tiered assessment system combining:
-  * Real Colors personality profiling
-  * HYRNA risk evaluation 
-  * Behavioral scoring across peer/adult interaction, investment and authority domains
-- Level progression system (0-10) with privilege management
-- Guardian relationship tracking with legal status validation
+Clinical Documentation System:
+- Structured case notes with auto-classification
+- Version-controlled note management ("formatVersion": "v2")
+- AI-assisted clinical narrative generation
+- Treatment effectiveness analysis with pattern recognition
 
-2. Daily Progress & Behavioral Tracking (90/100)
-- Behavioral scoring system (0-4 scale) across four domains
-- Period-based score aggregation (daily/weekly/monthly)
-- Multi-shift rating system with conflict detection
-- Incident tracking with severity classification and clinical documentation
-- Treatment goal monitoring with progress indicators
+Academic Performance Tracking:
+- Thursday-to-Wednesday weekly schedule
+- Custom scoring thresholds:
+  * Exceeding: 3.5-4.0
+  * Meeting: 3.0-3.4
+  * Needs Improvement: 2.0-2.9
+  * Unsatisfactory: <2.0
+- Credit accumulation with behavioral integration
+- School incident classification system
 
-3. Academic Performance System (85/100)
-- Custom academic scoring (0-4 scale) with specific thresholds
-- Credit tracking and grade point calculations
-- Thursday-to-Wednesday week calculation 
-- School incident reporting with severity classification
-- Progress evaluation across multiple timeframes
+Incident Management Framework:
+- Trauma-informed reporting workflow
+- Authority notification chains
+- Medical documentation requirements
+- Evidence tracking system
+- Follow-up action management
 
-4. Clinical Reporting & Analysis (95/100)
-- AI-assisted clinical documentation generation
-- Treatment recommendation engine using historical data
-- Risk pattern detection in behavioral analysis
-- Custom report types for court documentation, progress notes
-- Domain-specific prompt engineering for clinical context
+Key Integration Points:
+1. src/utils/levelSystem.ts: Core behavioral progression engine
+2. src/services/aiService.ts: Treatment analysis and risk assessment
+3. src/components/notes/EnhancedCaseNotes.tsx: Clinical documentation
+4. src/components/assessment/RiskAssessment.tsx: Multi-domain risk evaluation
 
-5. Security & Compliance (80/100)
-- Field-specific encryption for sensitive youth data
-- HIPAA-compliant data handling
-- Audit trail for youth care requirements
-- Custom ID generation system (HBH-YYYY-NNN format)
-- Data anonymization for external reporting
-
-The system implements specialized workflows for youth behavioral management, academic monitoring and clinical documentation within a residential treatment context. Core functionality centers on comprehensive assessment tracking, behavioral analysis and treatment progress monitoring with strong emphasis on clinical accuracy and compliance requirements.
+The system emphasizes behavioral health tracking, academic integration, and compliance with youth care facility requirements, using AI augmentation for decision support and pattern recognition.
 
 $END$
 

@@ -1,56 +1,63 @@
 ---
-description: Specifications for AI-enhanced report generation system including DPN reports, court reports, progress evaluations, and clinical documentation
+description: AI-powered report generation system for generating clinical documentation, DPN reports, court reports and progress evaluations
 ---
 
 
 # report-generation-system
 
-The report generation system implements specialized documentation workflows for youth treatment facilities:
+## Core Report Generation Components
 
-1. Daily Progress Notes (DPN) Generator
-Path: src/components/reports/DpnReport.tsx
-- Automated behavioral scoring synthesis across 4 domains:
-  * Peer Interaction (0-4 scale)
-  * Adult Interaction (0-4 scale) 
-  * Investment Level (0-4 scale)
-  * Authority Handling (0-4 scale)
-- Period-specific aggregation (daily/weekly/monthly)
-- AI-assisted narrative generation with clinical context
-- Automated performance trend detection
-Importance Score: 90
+### Clinical Documentation Engine
+- AI-enhanced case note system for behavioral assessments and clinical documentation
+- Structured format with sections: summary, strengths/challenges, interventions/response, plan/next steps
+- Auto-classification system with version tracking ("formatVersion": "v2")
+- PDF export with clinical documentation formatting
+- Auto-detection of note types (session, general, shift) with confidence scoring
+- Automated tagging system for clinical keywords
 
-2. Clinical Documentation System
-Path: src/components/notes/CaseNotes.tsx
-- Structured clinical assessment format:
-  * Treatment goals tracking
-  * Intervention effectiveness
-  * Behavioral patterns
-  * Risk assessment updates
-- Multi-stage review workflow
-- Version control with clinical audit trail
-Importance Score: 85
+### DPN Report Generator
+- Daily Progress Note (DPN) generation with period-based calculations
+- Automatic averaging of behavioral metrics across timeframes  
+- AI-assisted narrative generation for clinical assessments
+- Behavioral incident tracking and classification (None/Minor/Major/Critical)
+- Treatment goal progress tracking on 5-point scale
 
-3. Progress Evaluation Engine
-Path: src/components/reports/ProgressEvaluationReport.tsx
-- Custom report generation combining:
-  * Academic performance metrics
-  * Behavioral scoring trends
-  * Treatment milestone tracking
-  * Family engagement metrics
-- AI-enhanced progress analysis
-- Discharge planning recommendations
-Importance Score: 85
+### Monthly Progress Reports
+- Comprehensive progress tracking specific to residential treatment
+- Family engagement metrics and quality assessment
+- Level system progression tracking with recommendations
+- Treatment goal progress with evidence-based scoring
 
-4. AI Report Enhancement
-Path: src/services/aiService.ts
-- Domain-specific prompt engineering for clinical documentation
-- Treatment-focused natural language generation
-- Behavioral pattern recognition
-- Risk factor identification
-- Treatment recommendation generation
+### Service Plan Report System
+- Clinical service plan generation with structured assessments
+- Treatment objective tracking with progress indicators 
+- AI-enhanced narrative generation for clinical context
+- Permanency planning documentation workflow
+
+## AI Enhancement Components
+
+### Clinical Analysis Engine
 Importance Score: 95
+- Treatment effectiveness analysis models
+- Risk assessment prediction
+- Behavioral pattern recognition
+- Progress comparison algorithms
 
-The system emphasizes clinical accuracy and compliance while automating documentation workflows specific to youth treatment facilities. Core logic focuses on behavioral analysis, treatment progress tracking, and AI-assisted clinical documentation.
+### KPI Case Note Analysis
+Importance Score: 90
+- Domain-specific sentiment analysis for behavioral notes
+- Analysis across 4 domains: peer, adult, investment, authority
+- Pattern detection in behavioral documentation
+- Insight generation for youth progress tracking
+
+### Clinical Documentation AI
+Importance Score: 85
+- Note classification using machine learning
+- Content categorization with confidence scoring
+- Keyword and theme extraction
+- Treatment relevance assessment
+
+The system implements a comprehensive report generation framework focused on clinical documentation requirements, behavioral health tracking, and residential treatment program management, with sophisticated AI augmentation for decision support and content generation.
 
 $END$
 

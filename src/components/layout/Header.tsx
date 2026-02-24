@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { PlusCircle, BarChart3, LogOut, Menu, X, LogIn, Users, Calendar, Gavel, FileBarChart, AlertTriangle } from "lucide-react";
+import { PlusCircle, BarChart3, LogOut, LogIn, Calendar, Gavel } from "lucide-react";
 import { AddYouthDialog } from "@/components/youth/AddYouthDialog";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
@@ -14,7 +14,6 @@ interface HeaderProps {
 
 export const Header = () => {
   const [isAddYouthDialogOpen, setIsAddYouthDialogOpen] = useState(false);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { toast } = useToast();
   const location = useLocation();
   const navigate = useNavigate();
@@ -33,10 +32,6 @@ export const Header = () => {
 
   const handleAddYouthDialogClose = () => {
     setIsAddYouthDialogOpen(false);
-  };
-
-  const toggleMobileMenu = () => {
-    setIsMobileMenuOpen(!isMobileMenuOpen);
   };
 
   const handleSignOut = async () => {
@@ -160,129 +155,40 @@ export const Header = () => {
               </Button>
             </div>
 
-            {/* Mobile Menu Button */}
-            <Button
-              variant="ghost"
-              size="sm"
-              className="lg:hidden min-w-[44px] min-h-[44px]"
-              onClick={toggleMobileMenu}
-              aria-expanded={isMobileMenuOpen}
-              aria-controls="mobile-menu"
-            >
-              {isMobileMenuOpen ? (
-                <X className="h-5 w-5" />
-              ) : (
-                <Menu className="h-5 w-5" />
+            {/* Mobile Actions */}
+            <div className="flex items-center gap-1 lg:hidden">
+              {user && (
+                <Button
+                  onClick={() => setIsAddYouthDialogOpen(true)}
+                  size="sm"
+                  className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white min-w-[44px] min-h-[44px] px-2"
+                >
+                  <PlusCircle className="h-4 w-4" />
+                </Button>
               )}
-              <span className="sr-only">Toggle navigation menu</span>
-            </Button>
+              {!user ? (
+                <Button
+                  onClick={() => navigate('/auth')}
+                  variant="ghost"
+                  size="sm"
+                  className="min-w-[44px] min-h-[44px]"
+                >
+                  <LogIn className="h-4 w-4" />
+                </Button>
+              ) : (
+                <Button
+                  onClick={handleSignOut}
+                  variant="ghost"
+                  size="sm"
+                  className="min-w-[44px] min-h-[44px]"
+                >
+                  <LogOut className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Mobile Navigation */}
-        {isMobileMenuOpen && (
-          <div className="lg:hidden border-t bg-white/95 backdrop-blur">
-            <div className="container mx-auto px-4 py-4">
-              <nav className="space-y-2">
-                {navigationItems.map((item) => {
-                  const Icon = item.icon;
-                  const isActive = isActiveRoute(item.path);
-                  
-                  return (
-                    <Link
-                      key={item.path}
-                      to={item.path}
-                      onClick={() => setIsMobileMenuOpen(false)}
-                      className={`
-                        flex items-center space-x-3 px-3 py-3 rounded-lg text-sm font-medium transition-colors
-                        ${isActive 
-                          ? 'bg-red-50 text-red-700'
-                          : 'text-gray-600 hover:bg-gray-50'
-                        }
-                      `}
-                    >
-                      <Icon className="h-5 w-5" />
-                      <span>{item.label}</span>
-                      {isActive && (
-                        <div className="w-2 h-2 rounded-full ml-auto bg-red-600" />
-                      )}
-                    </Link>
-                  );
-                })}
-              </nav>
-
-              {/* Mobile Actions */}
-              <div className="mt-6 pt-4 border-t space-y-3">
-                {/* Auth Status */}
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600">Connection Status</span>
-                  {user ? (
-                    <Badge variant="outline" className="text-green-700 border-green-200 bg-green-50">
-                      <div className="w-2 h-2 bg-green-500 rounded-full mr-1.5"></div>
-                      Signed In
-                    </Badge>
-                  ) : (
-                    <Badge variant="outline" className="text-gray-600 border-gray-200">
-                      <div className="w-2 h-2 bg-gray-400 rounded-full mr-1.5"></div>
-                      Signed Out
-                    </Badge>
-                  )}
-                </div>
-
-                {/* Mobile Action Buttons */}
-                <div className="grid grid-cols-1 gap-2">
-                  {!user ? (
-                    <Button
-                      onClick={() => {
-                        setIsMobileMenuOpen(false);
-                        navigate('/auth');
-                      }}
-                      variant="outline"
-                      className="justify-start"
-                    >
-                      <LogIn className="h-4 w-4 mr-2" />
-                      Sign In
-                    </Button>
-                  ) : (
-                    <Button
-                      onClick={() => {
-                        handleSignOut();
-                        setIsMobileMenuOpen(false);
-                      }}
-                      variant="outline"
-                      className="justify-start"
-                    >
-                      <LogOut className="h-4 w-4 mr-2" />
-                      Sign Out
-                    </Button>
-                  )}
-
-                  <Link to="/assessment-kpi">
-                    <Button
-                      onClick={() => setIsMobileMenuOpen(false)}
-                      variant="outline"
-                      className="justify-start w-full"
-                    >
-                      <BarChart3 className="h-4 w-4 mr-2" />
-                      KPI Dashboard
-                    </Button>
-                  </Link>
-
-                  <Button 
-                    onClick={() => {
-                      setIsAddYouthDialogOpen(true);
-                      setIsMobileMenuOpen(false);
-                    }}
-                    className="justify-start bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
-                  >
-                    <PlusCircle className="h-4 w-4 mr-2" />
-                    Add New Youth
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
       </header>
       
       {isAddYouthDialogOpen && (

@@ -62,7 +62,7 @@ export const CourtReportPage = () => {
     return (
       <div className="min-h-screen bg-gray-50">
         <Header />
-        <div className="container mx-auto px-4 py-8">
+        <div className="container mx-auto px-4 py-6 pb-24 lg:pb-8">
           <div className="text-center">Loading...</div>
         </div>
       </div>
@@ -72,7 +72,7 @@ export const CourtReportPage = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
-      <div className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-4 py-6 pb-24 lg:pb-8">
         <div className="space-y-6">
           {/* Youth Selection */}
           <Card>

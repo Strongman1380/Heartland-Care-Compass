@@ -100,7 +100,7 @@ export const YouthSelectionView = ({
                     <div className="flex items-center gap-4 flex-1">
                       {/* Avatar */}
                       <div className="flex-shrink-0">
-                        <div className="h-12 w-12 rounded-full bg-gradient-to-br from-red-500 to-yellow-500 flex items-center justify-center text-white font-semibold text-lg">
+                        <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-full bg-gradient-to-br from-red-500 to-yellow-500 flex items-center justify-center text-white font-semibold text-base sm:text-lg">
                           {youth.firstName.charAt(0)}{youth.lastName.charAt(0)}
                         </div>
                       </div>
@@ -128,16 +128,16 @@ export const YouthSelectionView = ({
                             </span>
                           )}
 
-                          {/* Admission Date Badge */}
+                          {/* Admission Date Badge - hidden on mobile */}
                           {youth.admissionDate && (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-yellow-100 text-yellow-800 border border-yellow-300">
+                            <span className="hidden sm:inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-yellow-100 text-yellow-800 border border-yellow-300">
                               Admitted: {formatDate(youth.admissionDate)}
                             </span>
                           )}
 
-                          {/* Length of Stay Badge */}
+                          {/* Length of Stay Badge - hidden on mobile */}
                           {youth.admissionDate && (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-secondary/20 text-primary border border-secondary/40">
+                            <span className="hidden sm:inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-secondary/20 text-primary border border-secondary/40">
                               Stay: {calculateLengthOfStay(youth.admissionDate)}
                             </span>
                           )}
@@ -151,7 +151,7 @@ export const YouthSelectionView = ({
                           variant="ghost"
                           size="sm"
                           onClick={(e) => onEditYouth(youth, e)}
-                          className="hover:bg-secondary/20"
+                          className="hidden sm:inline-flex hover:bg-secondary/20"
                         >
                           <Edit className="h-4 w-4 text-primary" />
                         </Button>
@@ -159,12 +159,12 @@ export const YouthSelectionView = ({
                           variant="ghost"
                           size="sm"
                           onClick={(e) => onDischargeYouth(youth, e)}
-                          className="hover:bg-secondary/20"
+                          className="hidden sm:inline-flex hover:bg-secondary/20"
                           title="Discharge Youth"
                         >
                           <LogOut className="h-4 w-4 text-primary" />
                         </Button>
-                        <ChevronRight className="h-5 w-5 text-muted-foreground ml-2" />
+                        <ChevronRight className="h-5 w-5 text-muted-foreground" />
                       </div>
                     </div>
                   </div>

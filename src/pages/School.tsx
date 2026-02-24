@@ -9,7 +9,7 @@ const School: React.FC = () => {
     <SidebarProvider defaultOpen={true}>
       <Header />
       <SidebarInset>
-        <div className="flex flex-1 flex-col gap-4 p-4">
+        <div className="flex flex-1 flex-col gap-4 p-4 pb-24 lg:pb-4">
           <Outlet />
         </div>
       </SidebarInset>

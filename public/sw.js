@@ -1,15 +1,15 @@
-const CACHE_NAME = 'hyc-v1';
+const CACHE_NAME = 'hyc-v3';
 const PRECACHE_URLS = ['/', '/index.html'];
 
 self.addEventListener('install', (event) => {
-  event.waitFor(
+  event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_URLS))
   );
   self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitFor(
+  event.waitUntil(
     caches.keys().then((keys) =>
       Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
     )

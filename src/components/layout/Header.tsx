@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { PlusCircle, BarChart3, LogOut, LogIn, Calendar, Gavel } from "lucide-react";
+import { PlusCircle, BarChart3, LogOut, LogIn, Calendar, Gavel, BookOpen } from "lucide-react";
 import { AddYouthDialog } from "@/components/youth/AddYouthDialog";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
@@ -21,7 +21,8 @@ export const Header = () => {
 
   // Navigation items configuration
   const navigationItems = [
-    { path: '/monthly-progress', label: 'Monthly Progress Report', icon: Calendar },
+    { path: '/progress-notes', label: 'Case Notes', icon: BookOpen },
+    { path: '/monthly-progress', label: 'Monthly Progress', icon: Calendar },
     { path: '/court-report', label: 'Court Report', icon: Gavel },
   ];
 

@@ -7,13 +7,13 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/co
 const primaryTabs = [
   { path: "/", label: "Home", icon: Home },
   { path: "/daily-points", label: "Points", icon: Star },
-  { path: "/reports", label: "Reports", icon: FileText },
+  { path: "/progress-notes", label: "Notes", icon: BookOpen },
   { path: "/alerts", label: "Alerts", icon: Bell },
 ];
 
 const secondaryRoutes = [
   { path: "/dashboard", label: "Dashboard", icon: BarChart3 },
-  { path: "/progress-notes", label: "Case Notes", icon: BookOpen },
+  { path: "/reports", label: "Reports", icon: FileText },
   { path: "/monthly-progress", label: "Monthly Progress", icon: Calendar },
   { path: "/court-report", label: "Court Report", icon: Gavel },
   { path: "/school/scores", label: "School", icon: GraduationCap },

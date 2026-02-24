@@ -27,6 +27,7 @@ import SchoolScores from "./pages/SchoolScores";
 import AcademicProgressDashboard from "./pages/AcademicProgressDashboard";
 import SchoolIncidentReports from "./pages/SchoolIncidentReports";
 import SchoolPrintReports from "./pages/SchoolPrintReports";
+import IncidentReports from "./pages/IncidentReports";
 
 const queryClient = new QueryClient();
 
@@ -66,6 +67,7 @@ const App = () => {
             <Route path="print-reports" element={<SchoolPrintReports />} />
           </Route>
 
+          <Route path="/incident-reports" element={<ProtectedRoute><IncidentReports /></ProtectedRoute>} />
           <Route path="/migrate-data" element={<ProtectedRoute><DataMigrationPage /></ProtectedRoute>} />
           <Route path="*" element={<NotFound />} />
         </Routes>

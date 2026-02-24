@@ -1,7 +1,7 @@
 
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Home, Star, FileText, Bell, MoreHorizontal, BarChart3, BookOpen, Calendar, Gavel, GraduationCap, TrendingUp, Database, ClipboardList } from "lucide-react";
+import { Home, Star, FileText, Bell, MoreHorizontal, BarChart3, BookOpen, Calendar, Gavel, GraduationCap, TrendingUp, Database, ClipboardList, ShieldAlert } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 
 const primaryTabs = [
@@ -17,6 +17,7 @@ const secondaryRoutes = [
   { path: "/monthly-progress", label: "Monthly Progress", icon: Calendar },
   { path: "/court-report", label: "Court Report", icon: Gavel },
   { path: "/school/scores", label: "School", icon: GraduationCap },
+  { path: "/incident-reports", label: "Incident Reports", icon: ShieldAlert },
   { path: "/behavior-analysis", label: "Behavior Analysis", icon: TrendingUp },
   { path: "/assessment-kpi", label: "KPI Dashboard", icon: ClipboardList },
   { path: "/migrate-data", label: "Data Migration", icon: Database },

@@ -3,12 +3,28 @@ import { useState } from "react";
 import { Header } from "@/components/layout/Header";
 import { ProgressNotes } from "@/components/notes/ProgressNotes";
 import { YouthSelector } from "@/components/common/YouthSelector";
+import { GroupNotePanel } from "@/components/notes/GroupNotePanel";
+import { Button } from "@/components/ui/button";
+import { Users } from "lucide-react";
+
+type PageMode = "select" | "individual" | "group";
 
 const ProgressNotesPage = () => {
   const [selectedYouthId, setSelectedYouthId] = useState<string | undefined>(undefined);
+  const [mode, setMode] = useState<PageMode>("select");
 
   const handleYouthSelect = (youthId: string) => {
     setSelectedYouthId(youthId);
+    setMode("individual");
+  };
+
+  const handleGroupNote = () => {
+    setMode("group");
+  };
+
+  const handleBack = () => {
+    setSelectedYouthId(undefined);
+    setMode("select");
   };
 
   return (
@@ -21,14 +37,28 @@ const ProgressNotesPage = () => {
           </h1>
           <p className="text-red-700 text-base sm:text-lg">Document and track youth progress and observations</p>
         </div>
-        
-        {!selectedYouthId ? (
-          <YouthSelector 
-            onSelectYouth={handleYouthSelect}
-            selectedYouthId={selectedYouthId}
-          />
-        ) : (
+
+        {mode === "select" && (
+          <>
+            <div className="flex justify-end mb-4">
+              <Button onClick={handleGroupNote} variant="outline">
+                <Users size={16} className="mr-2" />
+                Group Note
+              </Button>
+            </div>
+            <YouthSelector
+              onSelectYouth={handleYouthSelect}
+              selectedYouthId={selectedYouthId}
+            />
+          </>
+        )}
+
+        {mode === "individual" && selectedYouthId && (
           <ProgressNotes youthId={selectedYouthId} youth={null} />
+        )}
+
+        {mode === "group" && (
+          <GroupNotePanel onBack={handleBack} />
         )}
       </main>
     </div>

@@ -2,8 +2,9 @@
 import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { PlusCircle, User, ChevronRight } from "lucide-react";
+import { PlusCircle, User, ChevronRight, StickyNote } from "lucide-react";
 import { AddYouthDialog } from "@/components/youth/AddYouthDialog";
+import { QuickNoteDialog } from "@/components/notes/QuickNoteDialog";
 import { useYouth } from "@/hooks/useSupabase";
 import { type Youth } from "@/integrations/firebase/services";
 import { useToast } from "@/hooks/use-toast";
@@ -15,6 +16,7 @@ interface YouthSelectorProps {
 
 export const YouthSelector = ({ onSelectYouth, selectedYouthId }: YouthSelectorProps) => {
   const [isAddYouthDialogOpen, setIsAddYouthDialogOpen] = useState(false);
+  const [quickNoteYouth, setQuickNoteYouth] = useState<Youth | null>(null);
   const { toast } = useToast();
 
   // Use Supabase hook for youth operations
@@ -137,6 +139,17 @@ export const YouthSelector = ({ onSelectYouth, selectedYouthId }: YouthSelectorP
                       </div>
                     </div>
                   </div>
+                  <button
+                    type="button"
+                    title="Quick note"
+                    className="p-2 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors flex-shrink-0"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setQuickNoteYouth(youth);
+                    }}
+                  >
+                    <StickyNote className="h-5 w-5" />
+                  </button>
                   <ChevronRight className="h-5 w-5 text-gray-400 flex-shrink-0" />
                 </div>
               ))}
@@ -147,6 +160,15 @@ export const YouthSelector = ({ onSelectYouth, selectedYouthId }: YouthSelectorP
       
       {isAddYouthDialogOpen && (
         <AddYouthDialog onClose={handleAddYouthDialogClose} />
+      )}
+
+      {quickNoteYouth && (
+        <QuickNoteDialog
+          open={!!quickNoteYouth}
+          onOpenChange={(open) => { if (!open) setQuickNoteYouth(null); }}
+          youthId={quickNoteYouth.id}
+          youthName={`${quickNoteYouth.firstName} ${quickNoteYouth.lastName}`}
+        />
       )}
     </div>
   );

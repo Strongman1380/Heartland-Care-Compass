@@ -63,6 +63,7 @@ interface ParsedEntry {
   parsed: ParsedReferral;
   referralName: string;
   referralSource: string;
+  caseWorker: string;
 }
 
 const SECTION_CONFIG = [
@@ -109,7 +110,7 @@ const SECTION_CONFIG = [
     label: "Legal & Court",
     icon: Scale,
     color: "slate",
-    keywords: ["court", "judge", "attorney", "probation", "caseworker", "offense", "charge", "legal"],
+    keywords: ["court", "judge", "attorney", "probation", "caseworker", "case worker", "offense", "charge", "legal", "probation officer", "parole officer", "po "],
   },
   {
     key: "behavioral" as const,
@@ -291,6 +292,47 @@ const inferReferralSource = (parsed: ParsedReferral): string => {
   return "";
 };
 
+const inferCaseWorker = (parsed: ParsedReferral): string => {
+  const sections = [parsed.legal, parsed.placement, parsed.other];
+  for (const section of sections) {
+    for (const [k, v] of Object.entries(section)) {
+      const lk = k.toLowerCase();
+      if (
+        lk.includes("case worker") || lk.includes("caseworker") ||
+        lk.includes("probation officer") || lk.includes("parole officer") ||
+        lk === "po" || lk.includes("p.o.") || lk.includes("worker name") ||
+        lk.includes("assigned worker") || lk.includes("dcf worker")
+      ) {
+        if (v.trim()) return v.trim();
+      }
+    }
+  }
+  return "";
+};
+
+const STATUS_LABELS: Record<string, string> = {
+  pending_interview: "Pending Interview",
+  interview_scheduled: "Interview Scheduled",
+  interviewed_yes: "Interviewed - Yes",
+  interviewed_no: "Interviewed - No",
+  denied: "Denied",
+  // legacy values
+  new: "New",
+  reviewed: "Reviewed",
+  actioned: "Actioned",
+};
+
+const STATUS_COLORS: Record<string, string> = {
+  pending_interview: "bg-yellow-100 text-yellow-800 border-yellow-300",
+  interview_scheduled: "bg-blue-100 text-blue-800 border-blue-300",
+  interviewed_yes: "bg-green-100 text-green-800 border-green-300",
+  interviewed_no: "bg-orange-100 text-orange-800 border-orange-300",
+  denied: "bg-red-100 text-red-800 border-red-300",
+  new: "bg-gray-100 text-gray-800 border-gray-300",
+  reviewed: "bg-purple-100 text-purple-800 border-purple-300",
+  actioned: "bg-teal-100 text-teal-800 border-teal-300",
+};
+
 const colorMap: Record<string, string> = {
   blue: "bg-blue-50 border-blue-200 text-blue-800",
   amber: "bg-amber-50 border-amber-200 text-amber-800",
@@ -353,7 +395,7 @@ export const ReferralTab = () => {
   const [referralSource, setReferralSource] = useState("");
   const [staffName, setStaffName] = useState("");
   const [date, setDate] = useState(format(new Date(), "yyyy-MM-dd"));
-  const [status, setStatus] = useState("new");
+  const [status, setStatus] = useState("pending_interview");
   const [priority, setPriority] = useState("routine");
 
   const [isSaving, setIsSaving] = useState(false);
@@ -372,8 +414,10 @@ export const ReferralTab = () => {
   const [editingInterviewId, setEditingInterviewId] = useState<string | null>(null);
   const [interviewReport, setInterviewReport] = useState("");
   const [directorSummary, setDirectorSummary] = useState("");
-  const [editStatus, setEditStatus] = useState("reviewed");
+  const [editStatus, setEditStatus] = useState("interview_scheduled");
   const [savingInterview, setSavingInterview] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null);
 
   const parseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -417,6 +461,7 @@ export const ReferralTab = () => {
           parsed: parsedBlock,
           referralName: inferReferralName(parsedBlock),
           referralSource: inferReferralSource(parsedBlock),
+          caseWorker: inferCaseWorker(parsedBlock),
         };
       });
 
@@ -499,7 +544,7 @@ export const ReferralTab = () => {
         setReferralSource("");
         setReferralName("");
         setStaffName("");
-        setStatus("new");
+        setStatus("pending_interview");
         setPriority("routine");
         return;
       }
@@ -604,6 +649,33 @@ export const ReferralTab = () => {
     }
   };
 
+  const handleDelete = async (id: string) => {
+    try {
+      setDeletingId(id);
+      await referralNotesService.delete(id);
+      toast.success("Referral deleted");
+      setHistory((prev) => prev.filter((h) => h.id !== id));
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "Failed to delete referral";
+      toast.error(msg);
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleQuickStatusUpdate = async (id: string, newStatus: string) => {
+    try {
+      setUpdatingStatusId(id);
+      await referralNotesService.update(id, { status: newStatus });
+      setHistory((prev) => prev.map((h) => h.id === id ? { ...h, status: newStatus } : h));
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "Failed to update status";
+      toast.error(msg);
+    } finally {
+      setUpdatingStatusId(null);
+    }
+  };
+
   const totalFields = parsed
     ? Object.values(parsed).reduce((sum, section) => sum + Object.keys(section).length, 0)
     : 0;
@@ -621,11 +693,12 @@ export const ReferralTab = () => {
     const active = history.filter((h) => !h.archived);
     const total = active.length;
     const archivedCount = history.filter((h) => h.archived).length;
-    const newCount = active.filter((h) => h.status === "new").length;
-    const highUrgent = active.filter((h) => h.priority === "high" || h.priority === "urgent").length;
-    const interviewed = active.filter((h) => h.interviewReport.trim().length > 0).length;
-    const directorReady = active.filter((h) => h.directorSummary.trim().length > 0).length;
-    return { total, archivedCount, newCount, highUrgent, interviewed, directorReady };
+    const pendingCount = active.filter((h) => h.status === "pending_interview" || h.status === "new").length;
+    const scheduledCount = active.filter((h) => h.status === "interview_scheduled").length;
+    const interviewedYes = active.filter((h) => h.status === "interviewed_yes").length;
+    const interviewedNo = active.filter((h) => h.status === "interviewed_no").length;
+    const deniedCount = active.filter((h) => h.status === "denied").length;
+    return { total, archivedCount, pendingCount, scheduledCount, interviewedYes, interviewedNo, deniedCount };
   }, [history]);
 
   return (
@@ -643,12 +716,13 @@ export const ReferralTab = () => {
           <CardDescription>Operational intake and interview progress</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
-            <div className="rounded-md border p-3"><p className="text-xs text-muted-foreground">Total Referrals</p><p className="text-xl font-semibold">{kpis.total}</p></div>
-            <div className="rounded-md border p-3"><p className="text-xs text-muted-foreground">New</p><p className="text-xl font-semibold">{kpis.newCount}</p></div>
-            <div className="rounded-md border p-3"><p className="text-xs text-muted-foreground">High/Urgent</p><p className="text-xl font-semibold">{kpis.highUrgent}</p></div>
-            <div className="rounded-md border p-3"><p className="text-xs text-muted-foreground">Interview Completed</p><p className="text-xl font-semibold">{kpis.interviewed}</p></div>
-            <div className="rounded-md border p-3"><p className="text-xs text-muted-foreground">Director Summary Ready</p><p className="text-xl font-semibold">{kpis.directorReady}</p></div>
+          <div className="grid grid-cols-2 md:grid-cols-7 gap-3">
+            <div className="rounded-md border p-3"><p className="text-xs text-muted-foreground">Total</p><p className="text-xl font-semibold">{kpis.total}</p></div>
+            <div className="rounded-md border border-yellow-200 bg-yellow-50 p-3"><p className="text-xs text-yellow-700">Pending Interview</p><p className="text-xl font-semibold text-yellow-800">{kpis.pendingCount}</p></div>
+            <div className="rounded-md border border-blue-200 bg-blue-50 p-3"><p className="text-xs text-blue-700">Scheduled</p><p className="text-xl font-semibold text-blue-800">{kpis.scheduledCount}</p></div>
+            <div className="rounded-md border border-green-200 bg-green-50 p-3"><p className="text-xs text-green-700">Interviewed - Yes</p><p className="text-xl font-semibold text-green-800">{kpis.interviewedYes}</p></div>
+            <div className="rounded-md border border-orange-200 bg-orange-50 p-3"><p className="text-xs text-orange-700">Interviewed - No</p><p className="text-xl font-semibold text-orange-800">{kpis.interviewedNo}</p></div>
+            <div className="rounded-md border border-red-200 bg-red-50 p-3"><p className="text-xs text-red-700">Denied</p><p className="text-xl font-semibold text-red-800">{kpis.deniedCount}</p></div>
             <div className="rounded-md border p-3"><p className="text-xs text-muted-foreground">Archived</p><p className="text-xl font-semibold">{kpis.archivedCount}</p></div>
           </div>
         </CardContent>
@@ -724,9 +798,11 @@ export const ReferralTab = () => {
                     <Select value={status} onValueChange={setStatus}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="new">New</SelectItem>
-                        <SelectItem value="reviewed">Reviewed</SelectItem>
-                        <SelectItem value="actioned">Actioned</SelectItem>
+                        <SelectItem value="pending_interview">Pending Interview</SelectItem>
+                        <SelectItem value="interview_scheduled">Interview Scheduled</SelectItem>
+                        <SelectItem value="interviewed_yes">Interviewed - Yes</SelectItem>
+                        <SelectItem value="interviewed_no">Interviewed - No</SelectItem>
+                        <SelectItem value="denied">Denied</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -768,9 +844,11 @@ export const ReferralTab = () => {
                     <Select value={status} onValueChange={setStatus}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="new">New</SelectItem>
-                        <SelectItem value="reviewed">Reviewed</SelectItem>
-                        <SelectItem value="actioned">Actioned</SelectItem>
+                        <SelectItem value="pending_interview">Pending Interview</SelectItem>
+                        <SelectItem value="interview_scheduled">Interview Scheduled</SelectItem>
+                        <SelectItem value="interviewed_yes">Interviewed - Yes</SelectItem>
+                        <SelectItem value="interviewed_no">Interviewed - No</SelectItem>
+                        <SelectItem value="denied">Denied</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -807,23 +885,36 @@ export const ReferralTab = () => {
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">Bulk Referral Preview</CardTitle>
-                <CardDescription>{parsedEntries.length} referral entries detected</CardDescription>
+                <CardDescription>{parsedEntries.length} referral entries detected — each will be saved as an individual card</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-2">
+                <div className="space-y-3">
                   {parsedEntries.map((entry, idx) => {
                     const fieldCount = Object.values(entry.parsed).reduce((sum, section) => sum + Object.keys(section).length, 0);
+                    const dob = entry.parsed.demographics["Date of Birth"] || entry.parsed.demographics["DOB"] || entry.parsed.demographics["dob"] || "";
+                    const age = entry.parsed.demographics["Age"] || entry.parsed.demographics["age"] || "";
+                    const gender = entry.parsed.demographics["Sex"] || entry.parsed.demographics["Gender"] || "";
                     return (
-                      <div key={idx} className="rounded-md border p-3">
-                        <div className="flex items-center justify-between">
-                          <p className="text-sm font-medium">
-                            {entry.referralName || `Referral ${idx + 1}`}
-                          </p>
-                          <Badge variant="outline">{fieldCount} fields</Badge>
+                      <div key={idx} className="rounded-md border p-3 bg-gray-50">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1">
+                            <p className="text-sm font-semibold text-gray-900">
+                              {idx + 1}. {entry.referralName || `Referral ${idx + 1}`}
+                            </p>
+                            <div className="mt-1 flex flex-wrap gap-2">
+                              {age && <span className="text-xs text-gray-600">Age: {age}</span>}
+                              {gender && <span className="text-xs text-gray-600">• {gender}</span>}
+                              {dob && <span className="text-xs text-gray-600">• DOB: {dob}</span>}
+                            </div>
+                            {entry.referralSource && (
+                              <p className="text-xs text-gray-500 mt-1">Source: {entry.referralSource}</p>
+                            )}
+                            {entry.caseWorker && (
+                              <p className="text-xs text-blue-700 mt-0.5 font-medium">PO / Case Worker: {entry.caseWorker}</p>
+                            )}
+                          </div>
+                          <Badge variant="outline" className="shrink-0">{fieldCount} fields</Badge>
                         </div>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Source: {entry.referralSource || referralSource || "Not detected"}
-                        </p>
                       </div>
                     );
                   })}
@@ -892,9 +983,11 @@ export const ReferralTab = () => {
                   <SelectTrigger><SelectValue placeholder="Filter status" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Statuses</SelectItem>
-                    <SelectItem value="new">New</SelectItem>
-                    <SelectItem value="reviewed">Reviewed</SelectItem>
-                    <SelectItem value="actioned">Actioned</SelectItem>
+                    <SelectItem value="pending_interview">Pending Interview</SelectItem>
+                    <SelectItem value="interview_scheduled">Interview Scheduled</SelectItem>
+                    <SelectItem value="interviewed_yes">Interviewed - Yes</SelectItem>
+                    <SelectItem value="interviewed_no">Interviewed - No</SelectItem>
+                    <SelectItem value="denied">Denied</SelectItem>
                   </SelectContent>
                 </Select>
                 <Select value={archiveView} onValueChange={setArchiveView}>
@@ -924,15 +1017,38 @@ export const ReferralTab = () => {
                         <span className="text-xs text-muted-foreground">{formattedDate}</span>
                         <div className="flex items-center gap-1 flex-wrap">
                           <Badge variant="outline">{item.fieldCount} fields</Badge>
-                          <Badge variant="secondary">{item.status}</Badge>
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${STATUS_COLORS[item.status] || STATUS_COLORS.new}`}>
+                            {STATUS_LABELS[item.status] || item.status}
+                          </span>
                           <Badge variant="secondary">{item.priority}</Badge>
                           {item.archived && <Badge variant="outline">archived</Badge>}
                         </div>
                       </div>
-                      <p className="text-sm font-medium text-foreground">{item.referralName}</p>
+                      <p className="text-sm font-semibold text-foreground">{item.referralName}</p>
                       {item.referralSource && <p className="text-xs text-muted-foreground">Source: {item.referralSource}</p>}
-                      <p className="text-sm text-foreground line-clamp-2 mt-1">{item.summary}</p>
                       <p className="text-xs text-muted-foreground mt-1">Staff: {item.staff || "Unknown"} | Sections: {item.sectionCount}</p>
+
+                      {/* Quick status update */}
+                      <div className="mt-2 flex items-center gap-2 flex-wrap">
+                        <span className="text-xs text-gray-500 shrink-0">Status:</span>
+                        <Select
+                          value={item.status || "pending_interview"}
+                          onValueChange={(val) => handleQuickStatusUpdate(item.id, val)}
+                          disabled={updatingStatusId === item.id}
+                        >
+                          <SelectTrigger className="h-7 text-xs w-[160px]">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="pending_interview">Pending Interview</SelectItem>
+                            <SelectItem value="interview_scheduled">Interview Scheduled</SelectItem>
+                            <SelectItem value="interviewed_yes">Interviewed - Yes</SelectItem>
+                            <SelectItem value="interviewed_no">Interviewed - No</SelectItem>
+                            <SelectItem value="denied">Denied</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
                       <div className="mt-2 flex flex-wrap gap-2">
                         <Button
                           size="sm"
@@ -943,13 +1059,12 @@ export const ReferralTab = () => {
                           View Details
                           {isExpanded ? <ChevronUp className="h-3.5 w-3.5 ml-1" /> : <ChevronDown className="h-3.5 w-3.5 ml-1" />}
                         </Button>
-                        <Button size="sm" variant="outline" onClick={() => openInterviewEditor(item)}>Add/Edit Interview Report</Button>
+                        <Button size="sm" variant="outline" onClick={() => openInterviewEditor(item)}>Interview Report</Button>
                         {!item.archived && (
                           <Button
                             size="sm"
                             variant="outline"
                             onClick={() => setArchived(item.id, true)}
-                            disabled={item.interviewReport.trim().length > 0}
                           >
                             Archive
                           </Button>
@@ -963,12 +1078,20 @@ export const ReferralTab = () => {
                             Restore
                           </Button>
                         )}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+                          onClick={() => {
+                            if (confirm(`Delete referral for "${item.referralName}"? This cannot be undone.`)) {
+                              handleDelete(item.id);
+                            }
+                          }}
+                          disabled={deletingId === item.id}
+                        >
+                          {deletingId === item.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Delete"}
+                        </Button>
                       </div>
-                      {!item.archived && item.interviewReport.trim().length > 0 && (
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Interviewed referrals stay active. Clear interview report first if you need to archive.
-                        </p>
-                      )}
 
                       {isExpanded && (
                         <div className="mt-3 pt-3 border-t space-y-3">
@@ -1086,9 +1209,11 @@ export const ReferralTab = () => {
                         <Select value={editStatus} onValueChange={setEditStatus}>
                           <SelectTrigger><SelectValue /></SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="new">New</SelectItem>
-                            <SelectItem value="reviewed">Reviewed</SelectItem>
-                            <SelectItem value="actioned">Actioned</SelectItem>
+                            <SelectItem value="pending_interview">Pending Interview</SelectItem>
+                            <SelectItem value="interview_scheduled">Interview Scheduled</SelectItem>
+                            <SelectItem value="interviewed_yes">Interviewed - Yes</SelectItem>
+                            <SelectItem value="interviewed_no">Interviewed - No</SelectItem>
+                            <SelectItem value="denied">Denied</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>

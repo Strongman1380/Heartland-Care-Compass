@@ -7,6 +7,7 @@ import {
   ClipboardPaste, ShieldAlert, Home, Star, Bell, FileText,
   GraduationCap, TrendingUp, Database, ClipboardList, Clock,
   Menu, ChevronDown, LayoutDashboard,
+  Building2,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -72,6 +73,7 @@ const navGroups: NavGroup[] = [
     items: [
       { path: "/dashboard", label: "Dashboard", icon: BarChart3 },
       { path: "/assessment-kpi", label: "KPI Dashboard", icon: ClipboardList },
+      { path: "/admin/facility", label: "Facility Ops", icon: Building2 },
       { path: "/migrate-data", label: "Data Migration", icon: Database },
     ],
   },

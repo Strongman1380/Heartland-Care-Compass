@@ -26,6 +26,11 @@ import { MentalHealthProfileTab } from "./MentalHealthProfileTab";
 import { SuccessPlan } from "@/components/planning/SuccessPlan";
 import { EditYouthDialog } from "./EditYouthDialog";
 import { DischargeDialog } from "./DischargeDialog";
+import { MonthlyShiftAverage } from "./MonthlyShiftAverage";
+import { RecentIncidentsAlert } from "./RecentIncidentsAlert";
+import { TopSuccessPlanGoals } from "./TopSuccessPlanGoals";
+import { UpcomingImportantDates } from "./UpcomingImportantDates";
+import { ContactsQuickReference } from "./ContactsQuickReference";
 
 interface YouthProfileProps {
   youth: Youth;
@@ -134,6 +139,7 @@ export const YouthProfile = ({ youth, onBack, onYouthUpdated }: YouthProfileProp
                   <span className="font-semibold">Admitted:</span> {formatDate(youth.admissionDate)}
                 </div>
               </div>
+              <MonthlyShiftAverage youthId={youth.id} />
             </div>
             <div className="flex gap-2">
               <Button
@@ -177,8 +183,9 @@ export const YouthProfile = ({ youth, onBack, onYouthUpdated }: YouthProfileProp
         </CardHeader>
 
         <CardContent className="p-6">
-          <Tabs defaultValue="personal" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-6">
+          <Tabs defaultValue="overview" className="space-y-6">
+            <TabsList className="grid w-full grid-cols-7">
+              <TabsTrigger value="overview">Overview</TabsTrigger>
               <TabsTrigger value="personal">Personal</TabsTrigger>
               <TabsTrigger value="background">Background</TabsTrigger>
               <TabsTrigger value="education">Education</TabsTrigger>
@@ -186,6 +193,15 @@ export const YouthProfile = ({ youth, onBack, onYouthUpdated }: YouthProfileProp
               <TabsTrigger value="mental-health">Mental Health</TabsTrigger>
               <TabsTrigger value="service-plan">Service Plan</TabsTrigger>
             </TabsList>
+
+            <TabsContent value="overview" className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <RecentIncidentsAlert youthId={youth.id} />
+                <TopSuccessPlanGoals youth={youth} />
+                <UpcomingImportantDates youth={youth} />
+                <ContactsQuickReference youth={youth} />
+              </div>
+            </TabsContent>
 
             <TabsContent value="personal">
               <PersonalInfoProfileTab youth={youth} onYouthUpdated={onYouthUpdated} />

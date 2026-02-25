@@ -64,6 +64,18 @@ export const MentalHealthTab = ({ formData, handleChange, handleCheckboxChange, 
           rows={2}
         />
       </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="treatmentGoals">Treatment Goals</Label>
+        <Textarea 
+          id="treatmentGoals" 
+          name="treatmentGoals" 
+          value={formData.treatmentGoals} 
+          onChange={handleChange} 
+          rows={3}
+          placeholder="Enter treatment goals, separated by commas or newlines"
+        />
+      </div>
       
       <div className="space-y-2">
         <Label>Current Counseling</Label>

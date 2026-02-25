@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, TrendingUp, TrendingDown, Users, History, Shield, Ban, X } from "lucide-react";
+import { AlertCircle, TrendingUp, TrendingDown, Users, History, Shield, Ban, X, CreditCard, RotateCcw } from "lucide-react";
 import { useYouth } from "@/hooks/useSupabase";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -41,6 +41,11 @@ interface SubsystemHistoryEntry {
 
 export const BehaviorCard = ({ youthId, youth, onYouthUpdated }: BehaviorCardProps) => {
   const { updateYouth } = useYouth();
+
+  // Point management state
+  const [correctedTotal, setCorrectedTotal] = useState("");
+  const [cardPoints, setCardPoints] = useState("");
+  const [isUpdatingPoints, setIsUpdatingPoints] = useState(false);
 
   // Restriction and subsystem state
   const [showRestrictionDialog, setShowRestrictionDialog] = useState(false);
@@ -117,6 +122,47 @@ export const BehaviorCard = ({ youthId, youth, onYouthUpdated }: BehaviorCardPro
         const errorMessage = error instanceof Error ? error.message : "Failed to update level";
         toast.error(errorMessage);
       }
+    }
+  };
+
+  // Point management
+  const handleSetCorrectedTotal = async () => {
+    const val = parseInt(correctedTotal, 10);
+    if (isNaN(val) || val < 0) {
+      toast.error("Enter a valid non-negative number");
+      return;
+    }
+    try {
+      setIsUpdatingPoints(true);
+      await updateYouth(youthId, { pointTotal: val });
+      toast.success(`Point total set to ${val.toLocaleString()}`);
+      setCorrectedTotal("");
+      onYouthUpdated?.();
+    } catch (error) {
+      toast.error("Failed to update point total");
+    } finally {
+      setIsUpdatingPoints(false);
+    }
+  };
+
+  const handleAddCardPoints = async () => {
+    const val = parseInt(cardPoints, 10);
+    if (isNaN(val) || val <= 0) {
+      toast.error("Enter a positive number of points");
+      return;
+    }
+    const currentTotal = youth.pointTotal ?? 0;
+    const newTotal = currentTotal + val;
+    try {
+      setIsUpdatingPoints(true);
+      await updateYouth(youthId, { pointTotal: newTotal });
+      toast.success(`Added ${val.toLocaleString()} points — new total: ${newTotal.toLocaleString()}`);
+      setCardPoints("");
+      onYouthUpdated?.();
+    } catch (error) {
+      toast.error("Failed to add card points");
+    } finally {
+      setIsUpdatingPoints(false);
     }
   };
 
@@ -234,6 +280,76 @@ export const BehaviorCard = ({ youthId, youth, onYouthUpdated }: BehaviorCardPro
                 Demote
               </Button>
             </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Point Management Card */}
+      <Card>
+        <CardHeader className="bg-green-50">
+          <CardTitle>Point Management</CardTitle>
+          <CardDescription>
+            Current total: <span className="font-bold text-green-800">{(youth.pointTotal ?? 0).toLocaleString()} pts</span>
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="pt-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+            {/* Add card points */}
+            <div className="space-y-2">
+              <Label className="flex items-center gap-1.5">
+                <CreditCard size={14} />
+                Add Card Points
+              </Label>
+              <p className="text-xs text-gray-500">Enter the points from a physical card to add to the grand total.</p>
+              <div className="flex gap-2">
+                <Input
+                  type="number"
+                  min="1"
+                  placeholder="e.g. 350"
+                  value={cardPoints}
+                  onChange={(e) => setCardPoints(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleAddCardPoints()}
+                  className="flex-1"
+                />
+                <Button
+                  onClick={handleAddCardPoints}
+                  disabled={isUpdatingPoints || !cardPoints}
+                  className="bg-green-700 hover:bg-green-600 text-white"
+                >
+                  Add
+                </Button>
+              </div>
+            </div>
+
+            {/* Set corrected total */}
+            <div className="space-y-2">
+              <Label className="flex items-center gap-1.5">
+                <RotateCcw size={14} />
+                Set Corrected Total
+              </Label>
+              <p className="text-xs text-gray-500">Overwrite the current total with an exact corrected number.</p>
+              <div className="flex gap-2">
+                <Input
+                  type="number"
+                  min="0"
+                  placeholder="e.g. 2400"
+                  value={correctedTotal}
+                  onChange={(e) => setCorrectedTotal(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleSetCorrectedTotal()}
+                  className="flex-1"
+                />
+                <Button
+                  onClick={handleSetCorrectedTotal}
+                  disabled={isUpdatingPoints || !correctedTotal}
+                  variant="outline"
+                  className="border-gray-400 hover:border-red-700 hover:text-red-700"
+                >
+                  Set
+                </Button>
+              </div>
+            </div>
+
           </div>
         </CardContent>
       </Card>

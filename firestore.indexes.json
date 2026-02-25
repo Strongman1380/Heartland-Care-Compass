@@ -5,14 +5,15 @@
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "youth_id", "order": "ASCENDING" },
-        { "fieldPath": "date", "order": "DESCENDING" }
+        { "fieldPath": "date", "order": "ASCENDING" }
       ]
     },
     {
       "collectionGroup": "school_daily_scores",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "date", "order": "ASCENDING" }
+        { "fieldPath": "youth_id", "order": "ASCENDING" },
+        { "fieldPath": "date", "order": "DESCENDING" }
       ]
     },
     {
@@ -21,27 +22,6 @@
       "fields": [
         { "fieldPath": "date", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "behavior_points",
-      "queryScope": "COLLECTION_GROUP",
-      "fields": [
-        { "fieldPath": "date", "order": "DESCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "case_notes",
-      "queryScope": "COLLECTION_GROUP",
-      "fields": [
-        { "fieldPath": "date", "order": "DESCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "daily_ratings",
-      "queryScope": "COLLECTION_GROUP",
-      "fields": [
-        { "fieldPath": "id", "order": "ASCENDING" }
       ]
     },
     {

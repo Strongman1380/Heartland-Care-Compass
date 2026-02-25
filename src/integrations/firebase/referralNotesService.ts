@@ -27,17 +27,27 @@ export type ReferralNoteRow = {
   director_summary?: string | null;
   archived?: boolean;
   archived_at?: string | null;
+  archive_reason?: string | null;
+  archive_reason_detail?: string | null;
   created_at: string;
   updated_at: string;
 };
 
 const COLLECTION = "referral_notes";
 
+const mapReferralDoc = (
+  snap: { id: string; data: () => Record<string, unknown> | undefined }
+): ReferralNoteRow => {
+  const data = (snap.data() || {}) as Record<string, unknown>;
+  // Always trust Firestore document id over any stored `id` field in data.
+  return { ...data, id: snap.id } as ReferralNoteRow;
+};
+
 export const referralNotesService = {
   async list(): Promise<ReferralNoteRow[]> {
     const q = query(collection(db, COLLECTION), orderBy("created_at", "desc"));
     const snapshot = await getDocs(q);
-    return snapshot.docs.map((d) => ({ id: d.id, ...d.data() } as ReferralNoteRow));
+    return snapshot.docs.map((d) => mapReferralDoc(d));
   },
 
   async save(row: Partial<ReferralNoteRow> & { referral_name: string }): Promise<ReferralNoteRow> {
@@ -51,9 +61,8 @@ export const referralNotesService = {
     };
     await setDoc(doc(db, COLLECTION, id), data, { merge: true });
     const snap = await getDoc(doc(db, COLLECTION, id));
-    const snapData = snap.data();
-    if (!snapData) throw new Error(`Failed to read referral note after save: ${id}`);
-    return { id: snap.id, ...snapData } as ReferralNoteRow;
+    if (!snap.exists()) throw new Error(`Failed to read referral note after save: ${id}`);
+    return mapReferralDoc(snap);
   },
 
   async update(id: string, updates: Partial<ReferralNoteRow>): Promise<ReferralNoteRow> {
@@ -63,9 +72,8 @@ export const referralNotesService = {
     const payload: Record<string, unknown> = { ...allowed, updated_at: new Date().toISOString() };
     await updateDoc(ref, payload);
     const snap = await getDoc(ref);
-    const snapData = snap.data();
-    if (!snapData) throw new Error(`Referral note not found after update: ${id}`);
-    return { id: snap.id, ...snapData } as ReferralNoteRow;
+    if (!snap.exists()) throw new Error(`Referral note not found after update: ${id}`);
+    return mapReferralDoc(snap);
   },
 
   async delete(id: string): Promise<void> {

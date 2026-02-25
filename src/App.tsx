@@ -29,6 +29,7 @@ import SchoolPrintReports from "./pages/SchoolPrintReports";
 import IncidentReports from "./pages/IncidentReports";
 import Referrals from "./pages/Referrals";
 import ShiftScores from "./pages/ShiftScores";
+import AdminFacility from "./pages/AdminFacility";
 
 const queryClient = new QueryClient();
 
@@ -59,6 +60,7 @@ const App = () => {
           <Route path="/daily-points" element={<ProtectedRoute><DailyPoints /></ProtectedRoute>} />
           <Route path="/behavior-analysis" element={<ProtectedRoute><BehaviorAnalysisPage /></ProtectedRoute>} />
           <Route path="/assessment-kpi" element={<ProtectedRoute><AssessmentKPIDashboard /></ProtectedRoute>} />
+          <Route path="/admin/facility" element={<ProtectedRoute><AdminFacility /></ProtectedRoute>} />
           <Route path="/referrals" element={<ProtectedRoute><Referrals /></ProtectedRoute>} />
 
           <Route path="/school" element={<ProtectedRoute><School /></ProtectedRoute>}>

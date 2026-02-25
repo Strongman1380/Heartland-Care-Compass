@@ -87,7 +87,7 @@ export const useYouth = () => {
       
       // Provide more detailed error information
       if (err && typeof err === 'object' && 'message' in err) {
-        const supabaseError = err as any
+        const supabaseError = err as { message?: string; details?: string; hint?: string; code?: string }
         console.error('Detailed error info:', {
           message: supabaseError.message,
           details: supabaseError.details,
@@ -424,7 +424,7 @@ export const useDailyRatings = (youthId?: string) => {
   const saveDailyRating = useCallback(async (ratingData: DailyRatingsInsert & { time_of_day?: 'morning' | 'day' | 'evening' }) => {
     try {
       setLoading(true)
-      const saved = await dailyRatingsService.upsert(ratingData as any)
+      const saved = await dailyRatingsService.upsert(ratingData)
       setDailyRatings(prev => {
         // Add new rating to the list (allowing multiple entries per day)
         return [saved, ...prev]

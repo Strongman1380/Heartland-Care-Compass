@@ -18,11 +18,16 @@ export async function exportElementToPDF(element: HTMLElement, filename: string)
         useCORS: true,
         allowTaint: true,
         backgroundColor: '#ffffff',
-        logging: false
+        logging: false,
+        windowWidth: element.scrollWidth,
+        windowHeight: element.scrollHeight
       },
       jsPDF: { unit: 'pt', format: 'letter', orientation: 'portrait' },
       pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
     } as any;
+
+    // Wait a tiny bit for any pending renders
+    await new Promise(resolve => setTimeout(resolve, 100));
 
     await (html2pdf() as any).set(opt).from(element).save();
   } catch (error: any) {
@@ -71,7 +76,9 @@ export async function exportHTMLToPDF(content: string | HTMLElement, filename: s
         useCORS: true,
         allowTaint: true,
         backgroundColor: '#ffffff',
-        logging: false
+        logging: false,
+        windowWidth: typeof content === 'string' ? 816 : (content as HTMLElement).scrollWidth, // 816px is roughly 8.5 inches at 96dpi
+        windowHeight: typeof content === 'string' ? undefined : (content as HTMLElement).scrollHeight
       },
       jsPDF: { unit: 'pt', format: 'letter', orientation: 'portrait' },
       pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
@@ -88,8 +95,13 @@ export async function exportHTMLToPDF(content: string | HTMLElement, filename: s
       tempContainer.style.zIndex = '-9999';
       tempContainer.style.pointerEvents = 'none';
       tempContainer.style.overflow = 'visible';
+      tempContainer.style.opacity = '1'; // Ensure it's fully opaque for html2canvas
+      tempContainer.style.backgroundColor = '#ffffff'; // Ensure white background
       tempContainer.innerHTML = content;
       document.body.appendChild(tempContainer);
+
+      // Wait a tiny bit for the DOM to fully render the new element before capturing
+      await new Promise(resolve => setTimeout(resolve, 100));
 
       try {
         await (html2pdf() as any).set(opt).from(tempContainer).save();

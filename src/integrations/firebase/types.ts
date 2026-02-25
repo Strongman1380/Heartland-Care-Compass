@@ -120,6 +120,7 @@ export interface Youth {
   tobaccoPast6To12Months: boolean | null
   traumaHistory: string[] | null
   treatmentFocus: Json | null
+  treatmentGoals: string | null
   updatedAt: string | null
   restrictionLevel: number | null
   restrictionPointsRequired: number | null

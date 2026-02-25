@@ -1,6 +1,6 @@
 
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -13,13 +13,15 @@ const Auth = () => {
   const [error, setError] = useState('');
   const { user, signInWithGoogle } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const { toast } = useToast();
+  const redirectTo = (location.state as { from?: string } | null)?.from || '/';
 
   useEffect(() => {
     if (user) {
-      navigate('/', { replace: true });
+      navigate(redirectTo, { replace: true });
     }
-  }, [navigate, user]);
+  }, [navigate, user, redirectTo]);
 
   const handleGoogleSignIn = async () => {
     setLoading(true);
@@ -37,7 +39,7 @@ const Auth = () => {
         title: 'Success',
         description: 'Signed in with Google!',
       });
-      navigate('/');
+      navigate(redirectTo);
     }
     setLoading(false);
   };

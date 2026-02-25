@@ -2,7 +2,9 @@
 import { useState, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { ArrowLeft } from "lucide-react";
+import { format } from "date-fns";
 import { type Youth } from "@/types/app-types";
 import { fetchYouth } from "@/utils/local-storage-utils";
 
@@ -92,6 +94,30 @@ export const YouthDashboard = ({ youthId }: YouthDashboardProps) => {
             <div>
               <h2 className="text-2xl font-bold text-primary">{youth.firstName} {youth.lastName}</h2>
               <p className="text-muted-foreground">Age: {youth.age} • Level {youth.level} • Points: {youth.pointTotal || 0}</p>
+              {(youth.subsystemActive || (youth.restrictionLevel != null && youth.restrictionLevel > 0) || youth.lastIncidentDate || youth.estimatedStay) && (
+                <div className="flex flex-wrap items-center gap-2 mt-2">
+                  {youth.subsystemActive && (
+                    <Badge variant="destructive">
+                      Subsystem Active{youth.subsystemReason ? ` — ${youth.subsystemReason}` : ""}
+                    </Badge>
+                  )}
+                  {youth.restrictionLevel != null && youth.restrictionLevel > 0 && (
+                    <Badge className="bg-orange-100 text-orange-800 border border-orange-300 hover:bg-orange-100">
+                      Restriction Lvl {youth.restrictionLevel}{youth.restrictionReason ? ` — ${youth.restrictionReason}` : ""}
+                    </Badge>
+                  )}
+                  {youth.lastIncidentDate && (
+                    <span className="text-xs text-muted-foreground">
+                      Last incident: {format(new Date(youth.lastIncidentDate), "MMM d, yyyy")}
+                    </span>
+                  )}
+                  {youth.estimatedStay && (
+                    <span className="text-xs text-muted-foreground">
+                      Est. stay: {youth.estimatedStay}
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
             
             <div className="mt-3 md:mt-0 flex items-center space-x-2">

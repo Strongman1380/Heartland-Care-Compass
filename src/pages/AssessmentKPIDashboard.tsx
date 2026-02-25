@@ -1,8 +1,10 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { format } from 'date-fns';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
 import {
   ResponsiveContainer,
   LineChart,
@@ -27,10 +29,15 @@ import {
   TrendingUp,
   ArrowLeft,
   Shield,
+  RefreshCcw,
+  FileDown,
 } from 'lucide-react';
 import { Header } from '@/components/layout/Header';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
+import { exportHTMLToDocx, exportHTMLToPDF } from '@/utils/export';
+import { toast } from 'sonner';
+import { kpiReportsService, type KpiReportRow } from '@/integrations/firebase/kpiReportsService';
 import {
   youthService,
   behaviorPointsService,
@@ -137,33 +144,67 @@ const AssessmentKPIDashboard = () => {
   const [allDailyRatings, setAllDailyRatings] = useState<DailyRatings[]>([]);
   const [timeframe, setTimeframe] = useState<Timeframe>('month');
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<string>('');
+  const [reportTitle, setReportTitle] = useState('Program KPI Report');
+  const [reportHtml, setReportHtml] = useState('');
+  const [reportGeneratedAt, setReportGeneratedAt] = useState('');
+  const [reportPreparedBy, setReportPreparedBy] = useState('');
+  const [kpiReports, setKpiReports] = useState<KpiReportRow[]>([]);
+  const [historyView, setHistoryView] = useState<'active' | 'archived' | 'all'>('active');
+  const [isSavingReport, setIsSavingReport] = useState(false);
 
-  useEffect(() => {
-    const fetchAllData = async () => {
+  const fetchAllData = useCallback(
+    async (showLoading: boolean) => {
       try {
-        setIsLoading(true);
-        const [youthData, pointsData, notesData] = await Promise.all([
+        if (showLoading) setIsLoading(true);
+        else setIsRefreshing(true);
+
+        const [youthData, pointsData, notesData, reportData] = await Promise.all([
           youthService.getAll(),
           behaviorPointsService.getAll(),
           caseNotesService.getAll(),
+          kpiReportsService.list(),
         ]);
 
         setYouths(youthData);
         setAllBehaviorPoints(pointsData);
         setAllCaseNotes(notesData);
 
-        const ratingsPromises = youthData.map((youth) => dailyRatingsService.getByYouthId(youth.id).catch(() => []));
+        const ratingsPromises = youthData.map((youth) =>
+          dailyRatingsService.getByYouthId(youth.id).catch(() => [])
+        );
         const ratings = (await Promise.all(ratingsPromises)).flat();
         setAllDailyRatings(ratings);
+        setKpiReports(reportData);
+        setLastUpdated(new Date().toISOString());
       } catch (error) {
         console.error('Error loading KPI data:', error);
       } finally {
-        setIsLoading(false);
+        if (showLoading) setIsLoading(false);
+        else setIsRefreshing(false);
       }
-    };
+    },
+    []
+  );
 
-    fetchAllData();
-  }, []);
+  useEffect(() => {
+    fetchAllData(true);
+
+    const interval = setInterval(() => {
+      fetchAllData(false);
+    }, 60000);
+
+    const onVisible = () => {
+      if (!document.hidden) fetchAllData(false);
+    };
+    document.addEventListener('visibilitychange', onVisible);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [fetchAllData]);
 
   const analytics = useMemo(() => {
     const startDate = getTimeframeStart(timeframe);
@@ -314,6 +355,31 @@ const AssessmentKPIDashboard = () => {
       ? Number((riskScores.reduce((sum, score) => sum + score, 0) / riskScores.length).toFixed(2))
       : 0;
 
+    const notesPerYouth = youths.length ? Number((filteredNotes.length / youths.length).toFixed(2)) : 0;
+    const ratingsPerYouth = youths.length ? Number((filteredRatings.length / youths.length).toFixed(2)) : 0;
+    const pointsPerYouth = youths.length ? Number((filteredPoints.length / youths.length).toFixed(2)) : 0;
+    const missingRiskData = Math.max(0, youths.length - youthWithRiskData);
+    const highRiskPercent = youths.length ? Math.round((highRiskYouth / youths.length) * 100) : 0;
+    const domainComposite = Number(
+      (
+        (avgDomain.peer + avgDomain.adult + avgDomain.investment + avgDomain.authority) / 4
+      ).toFixed(2)
+    );
+
+    const documentationByYouth = youths
+      .map((youth) => {
+        const id = youth.id || '';
+        const fullName = `${youth.firstName || ''} ${youth.lastName || ''}`.trim() || id || 'Unknown';
+        const notesCount = filteredNotes.filter((n) => n.youth_id === id).length;
+        const ratingsCount = filteredRatings.filter((n) => n.youth_id === id).length;
+        const pointsCount = filteredPoints.filter((n) => n.youth_id === id).length;
+        const total = notesCount + ratingsCount + pointsCount;
+        return { name: fullName, notesCount, ratingsCount, pointsCount, total };
+      })
+      .filter((row) => row.total > 0)
+      .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name))
+      .slice(0, 5);
+
     return {
       metrics: {
         activeYouth: youths.length,
@@ -326,8 +392,14 @@ const AssessmentKPIDashboard = () => {
         avgRiskScore,
         youthWithRiskData,
         highRiskYouth,
+        highRiskPercent,
+        missingRiskData,
         admissionsInWindow,
         avgDomain,
+        domainComposite,
+        notesPerYouth,
+        ratingsPerYouth,
+        pointsPerYouth,
       },
       riskDistribution,
       levelDistribution,
@@ -335,8 +407,171 @@ const AssessmentKPIDashboard = () => {
       documentationTrend,
       pointsTrend,
       domainTrend,
+      documentationByYouth,
     };
   }, [youths, allCaseNotes, allBehaviorPoints, allDailyRatings, timeframe]);
+
+  const generateKpiReport = () => {
+    const generatedAt = new Date();
+    const html = `
+      <div style="font-family: Arial, sans-serif; color: #111827; line-height: 1.45;">
+        <h1 style="margin: 0 0 8px 0;">${reportTitle || 'Program KPI Report'}</h1>
+        <p style="margin: 0 0 12px 0;">Generated: ${format(generatedAt, 'MMMM d, yyyy h:mm a')}</p>
+        <p style="margin: 0 0 18px 0;">Timeframe: ${timeframe}</p>
+        <h2 style="margin: 16px 0 8px 0;">Core KPIs</h2>
+        <ul>
+          <li>Active Youth: ${analytics.metrics.activeYouth}</li>
+          <li>Documentation Coverage: ${analytics.metrics.coveragePercent}%</li>
+          <li>Case Notes: ${analytics.metrics.notesCount}</li>
+          <li>Daily Ratings: ${analytics.metrics.ratingsCount}</li>
+          <li>Behavior Point Entries: ${analytics.metrics.pointsCount}</li>
+          <li>Average Points Per Entry: ${analytics.metrics.avgPoints}</li>
+          <li>High-Risk Youth: ${analytics.metrics.highRiskYouth} (${analytics.metrics.highRiskPercent}%)</li>
+          <li>Average HYRNA Score: ${analytics.metrics.avgRiskScore || '--'}</li>
+        </ul>
+        <h2 style="margin: 16px 0 8px 0;">Data Quality and Coverage</h2>
+        <ul>
+          <li>Youth Missing HYRNA Data: ${analytics.metrics.missingRiskData}</li>
+          <li>Notes per Youth: ${analytics.metrics.notesPerYouth}</li>
+          <li>Ratings per Youth: ${analytics.metrics.ratingsPerYouth}</li>
+          <li>Points Entries per Youth: ${analytics.metrics.pointsPerYouth}</li>
+          <li>Domain Composite Average: ${analytics.metrics.domainComposite}</li>
+        </ul>
+        <h2 style="margin: 16px 0 8px 0;">Top Documentation Volume by Youth</h2>
+        ${
+          analytics.documentationByYouth.length === 0
+            ? '<p>No documentation activity in selected timeframe.</p>'
+            : `<ol>${analytics.documentationByYouth
+                .map((row) => `<li>${row.name}: total ${row.total} (notes ${row.notesCount}, ratings ${row.ratingsCount}, points ${row.pointsCount})</li>`)
+                .join('')}</ol>`
+        }
+      </div>
+    `;
+    setReportHtml(html);
+    setReportGeneratedAt(generatedAt.toISOString());
+    toast.success('KPI report generated');
+  };
+
+  const saveKpiReportSnapshot = async () => {
+    if (!reportHtml) {
+      toast.error('Generate a KPI report first');
+      return;
+    }
+
+    try {
+      setIsSavingReport(true);
+      await kpiReportsService.save({
+        title: reportTitle.trim() || 'Program KPI Report',
+        timeframe,
+        generated_at: reportGeneratedAt || new Date().toISOString(),
+        generated_by: reportPreparedBy.trim() || null,
+        report_html: reportHtml,
+        metrics_snapshot: {
+          activeYouth: analytics.metrics.activeYouth,
+          documentedYouth: analytics.metrics.documentedYouth,
+          coveragePercent: analytics.metrics.coveragePercent,
+          notesCount: analytics.metrics.notesCount,
+          ratingsCount: analytics.metrics.ratingsCount,
+          pointsCount: analytics.metrics.pointsCount,
+          avgPoints: analytics.metrics.avgPoints,
+          avgRiskScore: analytics.metrics.avgRiskScore,
+          highRiskYouth: analytics.metrics.highRiskYouth,
+          highRiskPercent: analytics.metrics.highRiskPercent,
+          missingRiskData: analytics.metrics.missingRiskData,
+          domainComposite: analytics.metrics.domainComposite,
+        },
+        archived: false,
+        archived_at: null,
+      });
+      toast.success('KPI report snapshot saved');
+      await fetchAllData(false);
+    } catch (error) {
+      console.error(error);
+      toast.error('Failed to save KPI report snapshot');
+    } finally {
+      setIsSavingReport(false);
+    }
+  };
+
+  const exportKpiReportPdf = async () => {
+    if (!reportHtml) return;
+    try {
+      await exportHTMLToPDF(reportHtml, `Program-KPI-Report-${format(new Date(), 'yyyy-MM-dd')}.pdf`);
+      toast.success('KPI report PDF exported');
+    } catch (error) {
+      console.error(error);
+      toast.error('Failed to export KPI report PDF');
+    }
+  };
+
+  const exportKpiReportDocx = async () => {
+    if (!reportHtml) return;
+    try {
+      await exportHTMLToDocx(reportHtml, `Program-KPI-Report-${format(new Date(), 'yyyy-MM-dd')}.docx`);
+      toast.success('KPI report DOCX exported');
+    } catch (error) {
+      console.error(error);
+      toast.error('Failed to export KPI report DOCX');
+    }
+  };
+
+  const exportHistoryReportPdf = async (report: KpiReportRow) => {
+    try {
+      const d = parseDate(report.generated_at) || new Date();
+      const filename = `Program-KPI-Report-${format(d, 'yyyy-MM-dd')}-${report.id.slice(0, 6)}.pdf`;
+      await exportHTMLToPDF(report.report_html, filename);
+      toast.success('KPI report PDF exported');
+    } catch (error) {
+      console.error(error);
+      toast.error('Failed to export KPI report PDF');
+    }
+  };
+
+  const exportHistoryReportDocx = async (report: KpiReportRow) => {
+    try {
+      const d = parseDate(report.generated_at) || new Date();
+      const filename = `Program-KPI-Report-${format(d, 'yyyy-MM-dd')}-${report.id.slice(0, 6)}.docx`;
+      await exportHTMLToDocx(report.report_html, filename);
+      toast.success('KPI report DOCX exported');
+    } catch (error) {
+      console.error(error);
+      toast.error('Failed to export KPI report DOCX');
+    }
+  };
+
+  const setReportArchived = async (id: string, archived: boolean) => {
+    try {
+      const archivedAt = archived ? new Date().toISOString() : null;
+      await kpiReportsService.update(id, {
+        archived,
+        archived_at: archivedAt,
+      });
+      setKpiReports((prev) =>
+        prev.map((row) => (row.id === id ? { ...row, archived, archived_at: archivedAt } : row))
+      );
+      toast.success(archived ? 'KPI report archived' : 'KPI report restored');
+    } catch (error) {
+      console.error(error);
+      toast.error('Failed to update KPI report');
+    }
+  };
+
+  const deleteKpiReport = async (id: string) => {
+    try {
+      await kpiReportsService.delete(id);
+      setKpiReports((prev) => prev.filter((row) => row.id !== id));
+      toast.success('KPI report deleted');
+    } catch (error) {
+      console.error(error);
+      toast.error('Failed to delete KPI report');
+    }
+  };
+
+  const filteredReportHistory = useMemo(() => {
+    if (historyView === 'all') return kpiReports;
+    if (historyView === 'archived') return kpiReports.filter((x) => x.archived);
+    return kpiReports.filter((x) => !x.archived);
+  }, [kpiReports, historyView]);
 
   if (isLoading) {
     return (
@@ -364,19 +599,36 @@ const AssessmentKPIDashboard = () => {
             <div>
               <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-foreground">Program KPI Dashboard</h1>
               <p className="text-muted-foreground text-sm mt-1">Built from live youth, notes, ratings, points, HYRNA, level, and Real Colors data.</p>
+              {lastUpdated && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Last updated: {format(parseDate(lastUpdated) || new Date(), 'MMM d, yyyy h:mm a')}
+                </p>
+              )}
             </div>
           </div>
-          <Select value={timeframe} onValueChange={(value) => setTimeframe(value as Timeframe)}>
-            <SelectTrigger className="w-full sm:w-44">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="week">Past Week</SelectItem>
-              <SelectItem value="month">Past Month</SelectItem>
-              <SelectItem value="quarter">Past Quarter</SelectItem>
-              <SelectItem value="year">Past Year</SelectItem>
-            </SelectContent>
-          </Select>
+          <div className="flex gap-2 w-full sm:w-auto">
+            <Select value={timeframe} onValueChange={(value) => setTimeframe(value as Timeframe)}>
+              <SelectTrigger className="w-full sm:w-44">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="week">Past Week</SelectItem>
+                <SelectItem value="month">Past Month</SelectItem>
+                <SelectItem value="quarter">Past Quarter</SelectItem>
+                <SelectItem value="year">Past Year</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => fetchAllData(false)}
+              disabled={isRefreshing}
+              className="whitespace-nowrap"
+            >
+              <RefreshCcw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+          </div>
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
@@ -460,6 +712,133 @@ const AssessmentKPIDashboard = () => {
           </Card>
         </div>
 
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-sm">Missing HYRNA Data</CardTitle></CardHeader>
+            <CardContent><div className="text-2xl font-bold">{analytics.metrics.missingRiskData}</div></CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-sm">High Risk %</CardTitle></CardHeader>
+            <CardContent><div className="text-2xl font-bold">{analytics.metrics.highRiskPercent}%</div></CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-sm">Notes per Youth</CardTitle></CardHeader>
+            <CardContent><div className="text-2xl font-bold">{analytics.metrics.notesPerYouth}</div></CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-sm">Ratings per Youth</CardTitle></CardHeader>
+            <CardContent><div className="text-2xl font-bold">{analytics.metrics.ratingsPerYouth}</div></CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-sm">Domain Composite</CardTitle></CardHeader>
+            <CardContent><div className="text-2xl font-bold">{analytics.metrics.domainComposite}</div></CardContent>
+          </Card>
+        </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">KPI Reporting</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div>
+                <p className="text-sm font-medium mb-1">Report Title</p>
+                <Input value={reportTitle} onChange={(e) => setReportTitle(e.target.value)} />
+              </div>
+              <div>
+                <p className="text-sm font-medium mb-1">Prepared By</p>
+                <Input value={reportPreparedBy} onChange={(e) => setReportPreparedBy(e.target.value)} placeholder="Your name" />
+              </div>
+              <div className="flex items-end gap-2 flex-wrap">
+                <Button onClick={generateKpiReport} className="w-full md:w-auto">Generate KPI Report</Button>
+                <Button variant="secondary" onClick={saveKpiReportSnapshot} disabled={!reportHtml || isSavingReport}>
+                  {isSavingReport ? 'Saving...' : 'Save Snapshot'}
+                </Button>
+                <Button variant="outline" onClick={exportKpiReportPdf} disabled={!reportHtml}>
+                  <FileDown className="h-4 w-4 mr-2" /> PDF
+                </Button>
+                <Button variant="outline" onClick={exportKpiReportDocx} disabled={!reportHtml}>
+                  <FileDown className="h-4 w-4 mr-2" /> DOCX
+                </Button>
+              </div>
+            </div>
+            {reportGeneratedAt && (
+              <p className="text-xs text-muted-foreground">
+                Report generated at {format(parseDate(reportGeneratedAt) || new Date(), 'MMM d, yyyy h:mm a')}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">KPI Report History</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="w-44">
+              <p className="text-sm font-medium mb-1">History View</p>
+              <Select value={historyView} onValueChange={(v) => setHistoryView(v as 'active' | 'archived' | 'all')}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="archived">Archived</SelectItem>
+                  <SelectItem value="all">All</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {filteredReportHistory.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No saved KPI reports in this view.</p>
+            ) : (
+              <div className="space-y-2">
+                {filteredReportHistory.slice(0, 50).map((report) => (
+                  <div key={report.id} className="rounded-md border p-3 bg-card">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-semibold text-sm">{report.title}</p>
+                        <p className="text-xs text-muted-foreground">
+                          Generated: {format(parseDate(report.generated_at) || new Date(), 'MMM d, yyyy h:mm a')}
+                          {' | '}Timeframe: {report.timeframe}
+                          {report.generated_by ? ` | Staff: ${report.generated_by}` : ''}
+                        </p>
+                        <div className="mt-1 flex gap-2 flex-wrap">
+                          {report.archived && <Badge variant="outline">Archived</Badge>}
+                          {report.metrics_snapshot && (
+                            <Badge variant="secondary">
+                              Coverage: {(report.metrics_snapshot.coveragePercent as number) ?? '-'}% | High Risk: {(report.metrics_snapshot.highRiskYouth as number) ?? '-'}
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-1 justify-end">
+                        <Button size="sm" variant="outline" onClick={() => exportHistoryReportPdf(report)}>PDF</Button>
+                        <Button size="sm" variant="outline" onClick={() => exportHistoryReportDocx(report)}>DOCX</Button>
+                        {!report.archived ? (
+                          <Button size="sm" variant="outline" onClick={() => setReportArchived(report.id, true)}>Archive</Button>
+                        ) : (
+                          <Button size="sm" variant="outline" onClick={() => setReportArchived(report.id, false)}>Restore</Button>
+                        )}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+                          onClick={() => {
+                            if (confirm(`Delete report "${report.title}"? This cannot be undone.`)) {
+                              deleteKpiReport(report.id);
+                            }
+                          }}
+                        >
+                          Delete
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
         <Tabs defaultValue="documentation" className="space-y-6">
           <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="documentation">Documentation</TabsTrigger>
@@ -486,6 +865,31 @@ const AssessmentKPIDashboard = () => {
                     <Bar dataKey="points" name="Behavior Points" fill={HEARTLAND_CHART_COLORS.neutral} />
                   </BarChart>
                 </ResponsiveContainer>
+              </CardContent>
+            </Card>
+
+            <Card className="mt-6">
+              <CardHeader>
+                <CardTitle>Top Documentation Activity by Youth</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {analytics.documentationByYouth.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No activity in selected timeframe.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {analytics.documentationByYouth.map((row) => (
+                      <div key={row.name} className="rounded-md border p-3 flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-semibold">{row.name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            Notes {row.notesCount} | Ratings {row.ratingsCount} | Points {row.pointsCount}
+                          </p>
+                        </div>
+                        <Badge variant="secondary">Total {row.total}</Badge>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>

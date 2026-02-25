@@ -635,7 +635,7 @@ const ShiftScores: React.FC = () => {
                                 <tr>
                                   <th className="text-left px-2 py-1.5 w-20">Domain</th>
                                   {weeklyDates.map(wd => (
-                                    <th key={wd} className="text-center px-1 py-1.5 min-w-[60px]">
+                                    <th key={wd} className="text-center px-1 py-1.5 min-w-[70px]">
                                       <div className="text-xs">{format(new Date(wd + 'T00:00:00'), 'M/d')}</div>
                                     </th>
                                   ))}
@@ -654,7 +654,7 @@ const ShiftScores: React.FC = () => {
                                             type="number" min={0} max={4} step={0.1}
                                             value={val !== undefined && !isNaN(val) ? val : ''}
                                             onChange={e => handleWeeklyChange(y.id, wd, d.key, e.target.value)}
-                                            className="text-center w-14 h-7 text-xs"
+                                            className="text-center w-16 h-7 text-xs px-1"
                                           />
                                         </td>
                                       )
@@ -753,7 +753,7 @@ const ShiftScores: React.FC = () => {
                             <tr>
                               <th className="text-left px-2 py-1.5 w-20">Domain</th>
                               {dailyDates.map((iso, idx) => (
-                                <th key={iso} className={`text-center px-1 py-1.5 min-w-[54px] ${toISO(today) === iso ? 'bg-yellow-50' : ''}`}>
+                                <th key={iso} className={`text-center px-1 py-1.5 min-w-[70px] ${toISO(today) === iso ? 'bg-yellow-50' : ''}`}>
                                   <div className="font-semibold">{WEEKDAYS[idx]}</div>
                                   <div className="text-xs text-gray-500">{format(new Date(iso + 'T00:00:00'), 'M/d')}</div>
                                 </th>
@@ -773,7 +773,7 @@ const ShiftScores: React.FC = () => {
                                         type="number" min={0} max={4} step={0.1}
                                         value={val !== undefined && !isNaN(val) ? val : ''}
                                         onChange={e => handleDailyChange(y.id, iso, activeShift, d.key, e.target.value)}
-                                        className="text-center w-14 h-7 text-xs"
+                                        className="text-center w-16 h-7 text-xs px-1"
                                       />
                                     </td>
                                   )
@@ -1039,7 +1039,7 @@ const ManualWeeklyDomainEntry: React.FC<{ youths: any[]; toast: any }> = ({ yout
                     type="number" min={0} max={4} step={0.1} placeholder="0-4"
                     value={entries[y.id]?.[d.key] ?? ''}
                     onChange={e => updateEntry(y.id, d.key, e.target.value)}
-                    className="w-16 h-7 text-center text-xs"
+                    className="w-16 h-7 text-center text-xs px-1"
                   />
                 </div>
               ))}

@@ -641,7 +641,7 @@ const SchoolScores: React.FC = () => {
                               step={0.1}
                               value={grid?.[y.id]?.[iso] ?? ''}
                               onChange={e => handleChange(y.id, iso, weekdays[idx].idx, e.target.value)}
-                              className="text-center w-14 sm:w-auto h-8 sm:h-9 text-xs sm:text-sm"
+                              className="text-center w-16 sm:w-auto h-8 sm:h-9 text-xs sm:text-sm px-1"
                             />
                           </td>
                         ))}

@@ -153,15 +153,15 @@ export const fetchProgressNotes = (youthId: string): ProgressNote[] => {
       try {
         const remote = await notesService.listForYouth(youthId)
         if (remote && remote.length) {
-          const merged = remote.map(r => ({
+          const merged: ProgressNote[] = remote.map(r => ({
             id: r.id,
             youth_id: r.youth_id,
-            date: r.created_at,
+            date: new Date(r.created_at),
             note: r.text,
             staff: r.author_id || '',
             category: r.category || 'Progress Note',
             createdAt: new Date(r.created_at)
-          })) as any as ProgressNote[]
+          }))
           const local = getItem<ProgressNote[]>(STORAGE_KEYS.NOTES) || [];
           const map = new Map<string, ProgressNote>()
           for (const n of local) map.set(n.id || `${n.youth_id}|${String(n.date)}`, n)
@@ -264,7 +264,7 @@ export const saveProgressNote = async (
       text: typeof newNote.note === 'string' ? newNote.note : JSON.stringify(newNote.note),
       category: newNote.category || 'Progress Note',
       created_at: newNote.date ? new Date(newNote.date).toISOString() : new Date().toISOString()
-    } as any);
+    });
   } catch (error) {
     console.error('Failed to save progress note to Supabase:', error);
     // Still save to localStorage as fallback

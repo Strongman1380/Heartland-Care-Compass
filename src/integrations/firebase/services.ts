@@ -66,7 +66,7 @@ export const youthService = {
     console.log('Attempting to update youth:', { id, updates })
     const ref = doc(db, 'youth', id)
     const updatedData = { ...updates, updatedAt: new Date().toISOString() }
-    await updateDoc(ref, updatedData as any)
+    await updateDoc(ref, updatedData as Record<string, unknown>)
     const updated = await getDoc(ref)
     if (!updated.exists()) throw new Error('Youth not found after update')
     console.log('Youth updated successfully')
@@ -111,7 +111,7 @@ export const youthService = {
       dischargeNotes: data.dischargeNotes || null,
       dischargedBy: data.dischargedBy || null,
       updatedAt: new Date().toISOString(),
-    } as any)
+    } as Record<string, unknown>)
     console.log('Youth discharged successfully')
   },
 
@@ -129,9 +129,12 @@ export const youthService = {
 // Behavior Points Services
 export const behaviorPointsService = {
   async getAll(): Promise<BehaviorPoints[]> {
-    const q = query(collectionGroup(db, 'behavior_points'), orderBy('date', 'desc'))
+    // Avoid hard dependency on a collection-group composite index; sort client-side.
+    const q = query(collectionGroup(db, 'behavior_points'))
     const snapshot = await getDocs(q)
-    return snapshot.docs.map(d => docToData<BehaviorPoints>(d))
+    return snapshot.docs
+      .map(d => docToData<BehaviorPoints>(d))
+      .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))
   },
 
   async getByYouthId(youthId: string, limit?: number): Promise<BehaviorPoints[]> {
@@ -221,7 +224,7 @@ export const caseNotesService = {
     const snapshot = await getDocs(q)
     if (snapshot.empty) throw new Error('Case note not found')
     const docRef = snapshot.docs[0].ref
-    await updateDoc(docRef, updates as any)
+    await updateDoc(docRef, updates as Record<string, unknown>)
     const updated = await getDoc(docRef)
     return docToData<CaseNotes>(updated)
   },
@@ -267,7 +270,7 @@ export const dailyRatingsService = {
   },
 
   async upsert(dailyRating: DailyRatingsInsert & { time_of_day?: 'morning' | 'day' | 'evening' }): Promise<DailyRatings> {
-    const { time_of_day, ...payload } = dailyRating as any
+    const { time_of_day, ...payload } = dailyRating
     const youthId = payload.youth_id
     const now = new Date().toISOString()
 

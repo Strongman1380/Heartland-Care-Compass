@@ -64,10 +64,11 @@ export const schoolScoresService = {
   async forYouth(youth_id: string): Promise<SchoolScoreRow[]> {
     const q = query(
       collection(db, 'school_daily_scores'),
-      where('youth_id', '==', youth_id),
-      orderBy('date', 'desc')
+      where('youth_id', '==', youth_id)
     )
     const snapshot = await getDocs(q)
-    return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as SchoolScoreRow))
+    return snapshot.docs
+      .map(d => ({ id: d.id, ...d.data() } as SchoolScoreRow))
+      .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))
   }
 }

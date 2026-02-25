@@ -111,6 +111,11 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
   const [isAutoPopulating, setIsAutoPopulating] = useState(false);
   const [shouldAutoPopulate, setShouldAutoPopulate] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [aiUnavailableNotified, setAiUnavailableNotified] = useState(false);
+
+  useEffect(() => {
+    setAiUnavailableNotified(false);
+  }, [youth?.id, selectedMonth]);
 
   // Helper function to check if a section is complete
   const isSectionComplete = (section: string): boolean => {
@@ -606,6 +611,16 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
     setIsEnhancing(fieldName);
 
     try {
+      const aiStatus = await aiService.checkAIStatus();
+      if (!aiStatus.available || !aiStatus.configured) {
+        toast({
+          title: "AI Unavailable",
+          description: "AI service is not configured right now. You can still edit this section manually.",
+          variant: "destructive"
+        });
+        return;
+      }
+
       const prompt = getEnhancementPrompt(fieldName, currentValue);
       const response = await aiService.queryData(prompt, {
         youth,
@@ -680,6 +695,21 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
     setIsAutoPopulating(true);
 
     try {
+      const aiStatus = await aiService.checkAIStatus();
+      if (!aiStatus.available || !aiStatus.configured) {
+        // Fall back to non-AI demographic/local summary population to avoid repeated /api/ai/query failures.
+        await autoPopulateForm();
+        if (!aiUnavailableNotified) {
+          toast({
+            title: "AI Unavailable",
+            description: "AI summaries are currently unavailable. Base report fields were populated from existing data.",
+            variant: "destructive"
+          });
+          setAiUnavailableNotified(true);
+        }
+        return;
+      }
+
       toast({
         title: "AI Processing",
         description: "Analyzing reports to generate comprehensive summaries...",

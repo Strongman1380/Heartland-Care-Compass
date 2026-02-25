@@ -54,6 +54,8 @@ interface ReferralHistoryItem {
   directorSummary: string;
   archived: boolean;
   archivedAt: string;
+  archiveReason: string;
+  archiveReasonDetail: string;
   parsedData: ParsedReferral | null;
   rawText: string;
 }
@@ -165,7 +167,107 @@ const detectSectionHeader = (line: string): keyof ParsedReferral | null => {
 
 const sectionHasContent = (section: Record<string, string>): boolean => Object.keys(section).length > 0;
 
+const LINE_MARKER_RE = /^Line\s+(\d+):\s*$/i;
+
+const PROBATION_ENTRY_RE =
+  /^(?<name>.+?)\s*-\s*(?<decision>Yes|Maybe|No\+?-?|No\+o|No)\s*-\s*(?<age>\d{1,2})\s*-\s*(?<rest>.+)$/i;
+
+const PROBATION_ENTRY_ALT_RE =
+  /^(?<name>.+?)\s*-\s*(?<age>\d{1,2})\s*-\s*(?<decision>Yes|Maybe|No\+?-?|No\+o|No)\s*-\s*(?<rest>.+)$/i;
+
+const normalizeDecision = (value: string): string => {
+  const v = value.trim().toLowerCase();
+  if (v === "yes") return "Yes";
+  if (v === "maybe") return "Maybe";
+  if (v.startsWith("no")) return "No";
+  return value.trim();
+};
+
+const parseProbationEntryHeader = (
+  line: string
+): { name: string; decision: string; age: string; rest: string } | null => {
+  const match = line.match(PROBATION_ENTRY_RE) || line.match(PROBATION_ENTRY_ALT_RE);
+  if (!match?.groups) return null;
+  if (!/\bPO\b/i.test(line)) return null;
+
+  const name = (match.groups.name || "").trim();
+  const decision = normalizeDecision((match.groups.decision || "").trim());
+  const age = (match.groups.age || "").trim();
+  const rest = (match.groups.rest || "").trim();
+  if (!name || !decision || !age || !rest) return null;
+  return { name, decision, age, rest };
+};
+
+const extractLabeledSegment = (text: string, labels: string[]): string => {
+  const escaped = labels.map((l) => l.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const labelExpr = escaped.join("|");
+  const re = new RegExp(`(?:^|,|;)\\s*(?:${labelExpr})\\s*\\(([^)]*)\\)`, "i");
+  const match = text.match(re);
+  return (match?.[1] || "").trim();
+};
+
+const parseProbationStyleBlock = (raw: string): ParsedReferral | null => {
+  const lines = raw
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+  if (lines.length === 0) return null;
+
+  let sourceLineNumber = "";
+  const lineMarker = lines.find((l) => LINE_MARKER_RE.test(l));
+  if (lineMarker) {
+    sourceLineNumber = (lineMarker.match(LINE_MARKER_RE)?.[1] || "").trim();
+  }
+
+  const firstDataLine = lines.find((l) => !LINE_MARKER_RE.test(l));
+  if (!firstDataLine) return null;
+  const header = parseProbationEntryHeader(firstDataLine);
+  if (!header) return null;
+
+  const parsed: ParsedReferral = {
+    demographics: {},
+    family: {},
+    education: {},
+    medical: {},
+    mentalHealth: {},
+    legal: {},
+    behavioral: {},
+    placement: {},
+    other: {},
+  };
+
+  const poMatch = header.rest.match(/^(.*?)(?:\s*-\s*)?PO\s+([^()]+?)\s*(\([^)]+\)(?:\s*Ext\.?\s*[\dA-Za-z]+)?)?\s*$/i);
+  const narrative = (poMatch?.[1] || header.rest).trim();
+  const poName = (poMatch?.[2] || "").trim();
+  const poPhone = (poMatch?.[3] || "").replace(/^\s+|\s+$/g, "");
+
+  parsed.demographics["Name"] = header.name;
+  parsed.demographics["Age"] = header.age;
+  parsed.placement["Referral Recommendation"] = header.decision;
+  if (poName) parsed.legal["Probation Officer"] = poName;
+  if (poPhone) parsed.legal["Probation Officer Contact"] = poPhone;
+
+  const currentOffense = extractLabeledSegment(narrative, ["current offense", "current offenses", "current charge", "current charges"]);
+  const priorOffense = extractLabeledSegment(narrative, ["prior offense", "prior offenses", "previous offense", "previous offenses"]);
+  const school = extractLabeledSegment(narrative, ["school"]);
+  const substance = extractLabeledSegment(narrative, ["substance use"]);
+
+  if (currentOffense) parsed.legal["Current Offense"] = currentOffense;
+  if (priorOffense) parsed.legal["Prior Offense"] = priorOffense;
+  if (school) parsed.education["School"] = school;
+  if (substance) parsed.behavioral["Substance Use"] = substance;
+
+  if (sourceLineNumber) parsed.other["Source Line"] = sourceLineNumber;
+  parsed.other["Referral Narrative"] = narrative;
+  parsed.other["Raw Entry"] = firstDataLine;
+
+  return parsed;
+};
+
 const parseReferralText = (raw: string): ParsedReferral => {
+  const probationParsed = parseProbationStyleBlock(raw);
+  if (probationParsed) return probationParsed;
+
   const result: ParsedReferral = {
     demographics: {},
     family: {},
@@ -227,6 +329,45 @@ const splitReferralEntries = (raw: string): string[] => {
   if (!normalized) return [];
 
   const lines = normalized.split("\n");
+  const probationBlocks: string[] = [];
+  let pendingLineMarker = "";
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const trimmed = lines[i].trim();
+    if (!trimmed) continue;
+
+    if (LINE_MARKER_RE.test(trimmed)) {
+      pendingLineMarker = trimmed;
+      continue;
+    }
+
+    if (!parseProbationEntryHeader(trimmed)) continue;
+
+    const chunkLines: string[] = [];
+    if (pendingLineMarker) chunkLines.push(pendingLineMarker);
+    chunkLines.push(trimmed);
+    pendingLineMarker = "";
+
+    let j = i + 1;
+    while (j < lines.length) {
+      const next = lines[j].trim();
+      if (!next) {
+        j += 1;
+        continue;
+      }
+      if (LINE_MARKER_RE.test(next) || parseProbationEntryHeader(next)) break;
+      if (/^Feb\s+\d{1,2},\s+\d{4}$/i.test(next)) break;
+      if (/^\d+\s+fields$/i.test(next) || /^Source:\s*/i.test(next) || /^Status:\s*/i.test(next)) break;
+      chunkLines.push(next);
+      j += 1;
+    }
+
+    probationBlocks.push(chunkLines.join("\n").trim());
+    i = j - 1;
+  }
+
+  if (probationBlocks.length > 1) return probationBlocks;
+
   const firstNameStarts: number[] = [];
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i].trim().toLowerCase();
@@ -310,6 +451,16 @@ const inferCaseWorker = (parsed: ParsedReferral): string => {
   return "";
 };
 
+const inferGlobalReferralSource = (raw: string): string => {
+  const m = raw.match(/(?:^|\n)\s*Source:\s*([^\n|]+)/i);
+  return (m?.[1] || "").trim();
+};
+
+const inferGlobalStaffName = (raw: string): string => {
+  const m = raw.match(/(?:^|\n)\s*Staff:\s*([^\n|]+)/i);
+  return (m?.[1] || "").trim();
+};
+
 const STATUS_LABELS: Record<string, string> = {
   pending_interview: "Pending Interview",
   interview_scheduled: "Interview Scheduled",
@@ -333,6 +484,14 @@ const STATUS_COLORS: Record<string, string> = {
   actioned: "bg-teal-100 text-teal-800 border-teal-300",
 };
 
+const ARCHIVE_REASON_OPTIONS = [
+  "Did not interview",
+  "Referral not accepted due to:",
+  "Accepted into program pending PO approval",
+  "Duplicate referral",
+  "Other",
+];
+
 const colorMap: Record<string, string> = {
   blue: "bg-blue-50 border-blue-200 text-blue-800",
   amber: "bg-amber-50 border-amber-200 text-amber-800",
@@ -355,6 +514,95 @@ const badgeColorMap: Record<string, string> = {
   red: "bg-red-100 text-red-700",
 };
 
+const normalizeEntityValue = (value: string): string => {
+  return value
+    .replace(/\s+/g, " ")
+    .replace(/^[,;.\s]+|[,;.\s]+$/g, "")
+    .trim();
+};
+
+const titleCase = (value: string): string =>
+  value
+    .toLowerCase()
+    .split(" ")
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+
+const extractFromParsedData = (
+  parsed: ParsedReferral | null,
+  keyMatcher: (key: string) => boolean
+): string[] => {
+  if (!parsed) return [];
+  const results: string[] = [];
+  for (const section of Object.values(parsed)) {
+    if (!section || typeof section !== "object") continue;
+    for (const [key, value] of Object.entries(section)) {
+      if (!value || typeof value !== "string") continue;
+      if (!keyMatcher(key.toLowerCase())) continue;
+      const normalized = normalizeEntityValue(value);
+      if (normalized) results.push(normalized);
+    }
+  }
+  return results;
+};
+
+const extractCounties = (item: ReferralHistoryItem): string[] => {
+  const fromFields = extractFromParsedData(item.parsedData, (key) => key.includes("county"));
+  const fromSource = (item.referralSource.match(/([A-Za-z][A-Za-z\s'-]+?)\s+County/gi) || [])
+    .map((m) => normalizeEntityValue(m.replace(/\s+County$/i, "")))
+    .map((m) => `${titleCase(m)} County`);
+  return [...fromFields, ...fromSource]
+    .map((x) => (x.toLowerCase().includes("county") ? titleCase(x) : `${titleCase(x)} County`))
+    .filter(Boolean);
+};
+
+const extractCities = (item: ReferralHistoryItem): string[] => {
+  return extractFromParsedData(item.parsedData, (key) => key.includes("city"))
+    .map((x) => titleCase(x))
+    .filter(Boolean);
+};
+
+const extractStates = (item: ReferralHistoryItem): string[] => {
+  const fromFields = extractFromParsedData(
+    item.parsedData,
+    (key) => key.includes("state") || key.includes("province")
+  ).map((x) => titleCase(x));
+  const fromSource = (item.referralSource.match(/\b([A-Z]{2})\b/g) || []).map((x) => x.toUpperCase());
+  return [...fromFields, ...fromSource].filter(Boolean);
+};
+
+const extractProbationOfficer = (item: ReferralHistoryItem): string[] => {
+  const fromFields = extractFromParsedData(
+    item.parsedData,
+    (key) =>
+      key.includes("probation officer") ||
+      key === "po" ||
+      key.includes("parole officer") ||
+      key.includes("case worker") ||
+      key.includes("caseworker")
+  )
+    .map((v) => v.replace(/\(\d{3}\)\s*\d{3}-\d{4}.*$/g, "").trim())
+    .map(normalizeEntityValue)
+    .filter(Boolean);
+
+  const fromRaw = (item.rawText.match(/(?:^|\s)-\s*PO\s+([^-(\n]+?)(?:\s*\(|\s*-|$)/i)?.[1] || "").trim();
+  const rawResults = fromRaw ? [titleCase(normalizeEntityValue(fromRaw))] : [];
+  return [...fromFields.map((x) => titleCase(x)), ...rawResults].filter(Boolean);
+};
+
+const tallyTop = (values: string[], limit = 6): { name: string; count: number }[] => {
+  const map = new Map<string, number>();
+  values
+    .map((value) => normalizeEntityValue(value))
+    .filter(Boolean)
+    .forEach((value) => map.set(value, (map.get(value) || 0) + 1));
+  return Array.from(map.entries())
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
+    .slice(0, limit);
+};
+
 const toHistoryItem = (row: ReferralNoteRow): ReferralHistoryItem => {
   const referralData = row.parsed_data || null;
   const sectionCount = referralData
@@ -368,7 +616,7 @@ const toHistoryItem = (row: ReferralNoteRow): ReferralHistoryItem => {
     : 0;
 
   return {
-    id: row.id,
+    id: String(row.id || "").trim(),
     createdAt: row.created_at,
     referralName: row.referral_name || "Unspecified referral",
     referralSource: row.referral_source || "",
@@ -382,6 +630,8 @@ const toHistoryItem = (row: ReferralNoteRow): ReferralHistoryItem => {
     directorSummary: row.director_summary || "",
     archived: Boolean(row.archived),
     archivedAt: row.archived_at || "",
+    archiveReason: row.archive_reason || "",
+    archiveReasonDetail: row.archive_reason_detail || "",
     parsedData: referralData as ParsedReferral | null,
     rawText: row.raw_text || "",
   };
@@ -418,6 +668,10 @@ export const ReferralTab = () => {
   const [savingInterview, setSavingInterview] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null);
+  const [archiveTargetId, setArchiveTargetId] = useState<string | null>(null);
+  const [archiveReason, setArchiveReason] = useState(ARCHIVE_REASON_OPTIONS[0]);
+  const [archiveReasonDetail, setArchiveReasonDetail] = useState("");
+  const [archivingId, setArchivingId] = useState<string | null>(null);
 
   const parseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -454,6 +708,8 @@ export const ReferralTab = () => {
     parseTimerRef.current = setTimeout(() => {
       parseTimerRef.current = null;
       const blocks = splitReferralEntries(rawText);
+      const globalSource = inferGlobalReferralSource(rawText);
+      const globalStaff = inferGlobalStaffName(rawText);
       const entries = blocks.map((rawBlock) => {
         const parsedBlock = parseReferralText(rawBlock);
         return {
@@ -465,15 +721,27 @@ export const ReferralTab = () => {
         };
       });
 
+      if (globalSource && !referralSource.trim()) {
+        setReferralSource(globalSource);
+      }
+      if (globalStaff && !staffName.trim()) {
+        setStaffName(globalStaff);
+      }
+
       if (entries.length > 1) {
         setParsed(null);
         setParsedEntries(entries);
+        if (!referralSource.trim()) {
+          const firstDetectedSource = entries.find((e) => e.referralSource.trim())?.referralSource || "";
+          if (firstDetectedSource) setReferralSource(firstDetectedSource);
+        }
       } else {
         const single = entries[0];
         setParsedEntries([]);
         setParsed(single.parsed);
         if (single.referralName && !referralName.trim()) setReferralName(single.referralName);
         if (single.referralSource && !referralSource.trim()) setReferralSource(single.referralSource);
+        if (!single.referralSource && globalSource && !referralSource.trim()) setReferralSource(globalSource);
       }
       setIsParsing(false);
 
@@ -607,6 +875,10 @@ export const ReferralTab = () => {
   };
 
   const openInterviewEditor = (item: ReferralHistoryItem) => {
+    if (!item.id) {
+      toast.error("This referral is missing an ID and cannot be edited. Please refresh and try again.");
+      return;
+    }
     setEditingInterviewId(item.id);
     setInterviewReport(item.interviewReport || "");
     setDirectorSummary(item.directorSummary || "");
@@ -635,21 +907,70 @@ export const ReferralTab = () => {
     }
   };
 
-  const setArchived = async (id: string, archived: boolean) => {
+  const setArchived = async (
+    id: string,
+    archived: boolean,
+    reason?: string | null,
+    reasonDetail?: string | null
+  ) => {
+    if (!id) {
+      toast.error("This referral is missing an ID and cannot be archived.");
+      return;
+    }
     try {
+      if (archived) setArchivingId(id);
       await referralNotesService.update(id, {
         archived,
         archived_at: archived ? new Date().toISOString() : null,
+        archive_reason: archived ? (reason || null) : null,
+        archive_reason_detail: archived ? (reasonDetail || null) : null,
       });
       toast.success(archived ? "Referral archived" : "Referral restored");
       await loadReferralHistory();
     } catch (error) {
       const msg = error instanceof Error ? error.message : "Failed to update archive status";
       toast.error(msg);
+    } finally {
+      if (archived) setArchivingId(null);
     }
   };
 
+  const openArchiveReasonPrompt = (id: string) => {
+    setArchiveTargetId(id);
+    setArchiveReason(ARCHIVE_REASON_OPTIONS[0]);
+    setArchiveReasonDetail("");
+  };
+
+  const submitArchiveWithReason = async () => {
+    if (!archiveTargetId) return;
+    if (!archiveReason.trim()) {
+      toast.error("Please select an archive reason");
+      return;
+    }
+    if (
+      archiveReason === "Referral not accepted due to:" &&
+      !archiveReasonDetail.trim()
+    ) {
+      toast.error("Please enter why the referral was not accepted");
+      return;
+    }
+
+    await setArchived(
+      archiveTargetId,
+      true,
+      archiveReason,
+      archiveReasonDetail.trim() || null
+    );
+    setArchiveTargetId(null);
+    setArchiveReason(ARCHIVE_REASON_OPTIONS[0]);
+    setArchiveReasonDetail("");
+  };
+
   const handleDelete = async (id: string) => {
+    if (!id) {
+      toast.error("This referral is missing an ID and cannot be deleted.");
+      return;
+    }
     try {
       setDeletingId(id);
       await referralNotesService.delete(id);
@@ -698,7 +1019,31 @@ export const ReferralTab = () => {
     const interviewedYes = active.filter((h) => h.status === "interviewed_yes").length;
     const interviewedNo = active.filter((h) => h.status === "interviewed_no").length;
     const deniedCount = active.filter((h) => h.status === "denied").length;
-    return { total, archivedCount, pendingCount, scheduledCount, interviewedYes, interviewedNo, deniedCount };
+    const sourceTop = tallyTop(active.map((h) => h.referralSource).filter(Boolean));
+    const countyTop = tallyTop(active.flatMap(extractCounties));
+    const cityTop = tallyTop(active.flatMap(extractCities));
+    const stateTop = tallyTop(active.flatMap(extractStates));
+    const poTop = tallyTop(active.flatMap(extractProbationOfficer));
+
+    return {
+      total,
+      archivedCount,
+      pendingCount,
+      scheduledCount,
+      interviewedYes,
+      interviewedNo,
+      deniedCount,
+      sourceTop,
+      countyTop,
+      cityTop,
+      stateTop,
+      poTop,
+      uniqueSources: new Set(active.map((h) => h.referralSource).filter(Boolean)).size,
+      uniqueCounties: new Set(active.flatMap(extractCounties)).size,
+      uniqueCities: new Set(active.flatMap(extractCities)).size,
+      uniqueStates: new Set(active.flatMap(extractStates)).size,
+      uniquePOs: new Set(active.flatMap(extractProbationOfficer)).size,
+    };
   }, [history]);
 
   return (
@@ -728,6 +1073,65 @@ export const ReferralTab = () => {
         </CardContent>
       </Card>
 
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Referral Source and PO KPI</CardTitle>
+          <CardDescription>Track intake origin by source, county, city, state, and probation officer volume</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            <div className="rounded-md border p-3"><p className="text-xs text-muted-foreground">Unique Sources</p><p className="text-xl font-semibold">{kpis.uniqueSources}</p></div>
+            <div className="rounded-md border p-3"><p className="text-xs text-muted-foreground">Unique Counties</p><p className="text-xl font-semibold">{kpis.uniqueCounties}</p></div>
+            <div className="rounded-md border p-3"><p className="text-xs text-muted-foreground">Unique Cities</p><p className="text-xl font-semibold">{kpis.uniqueCities}</p></div>
+            <div className="rounded-md border p-3"><p className="text-xs text-muted-foreground">Unique States</p><p className="text-xl font-semibold">{kpis.uniqueStates}</p></div>
+            <div className="rounded-md border p-3"><p className="text-xs text-muted-foreground">Unique POs</p><p className="text-xl font-semibold">{kpis.uniquePOs}</p></div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3">
+            <div className="rounded-md border p-3">
+              <p className="text-xs font-medium text-muted-foreground mb-2">Top Sources</p>
+              <div className="space-y-1">
+                {kpis.sourceTop.length === 0 ? <p className="text-xs text-muted-foreground">No source data yet</p> : kpis.sourceTop.map((x) => (
+                  <div key={x.name} className="text-xs flex justify-between gap-2"><span className="truncate">{x.name}</span><span className="font-semibold">{x.count}</span></div>
+                ))}
+              </div>
+            </div>
+            <div className="rounded-md border p-3">
+              <p className="text-xs font-medium text-muted-foreground mb-2">Top Counties</p>
+              <div className="space-y-1">
+                {kpis.countyTop.length === 0 ? <p className="text-xs text-muted-foreground">No county data yet</p> : kpis.countyTop.map((x) => (
+                  <div key={x.name} className="text-xs flex justify-between gap-2"><span className="truncate">{x.name}</span><span className="font-semibold">{x.count}</span></div>
+                ))}
+              </div>
+            </div>
+            <div className="rounded-md border p-3">
+              <p className="text-xs font-medium text-muted-foreground mb-2">Top Cities</p>
+              <div className="space-y-1">
+                {kpis.cityTop.length === 0 ? <p className="text-xs text-muted-foreground">No city data yet</p> : kpis.cityTop.map((x) => (
+                  <div key={x.name} className="text-xs flex justify-between gap-2"><span className="truncate">{x.name}</span><span className="font-semibold">{x.count}</span></div>
+                ))}
+              </div>
+            </div>
+            <div className="rounded-md border p-3">
+              <p className="text-xs font-medium text-muted-foreground mb-2">Top States</p>
+              <div className="space-y-1">
+                {kpis.stateTop.length === 0 ? <p className="text-xs text-muted-foreground">No state data yet</p> : kpis.stateTop.map((x) => (
+                  <div key={x.name} className="text-xs flex justify-between gap-2"><span className="truncate">{x.name}</span><span className="font-semibold">{x.count}</span></div>
+                ))}
+              </div>
+            </div>
+            <div className="rounded-md border p-3">
+              <p className="text-xs font-medium text-muted-foreground mb-2">Top POs</p>
+              <div className="space-y-1">
+                {kpis.poTop.length === 0 ? <p className="text-xs text-muted-foreground">No PO data yet</p> : kpis.poTop.map((x) => (
+                  <div key={x.name} className="text-xs flex justify-between gap-2"><span className="truncate">{x.name}</span><span className="font-semibold">{x.count}</span></div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="space-y-4">
           <Card>
@@ -749,7 +1153,46 @@ export const ReferralTab = () => {
                 </div>
                 <div>
                   <Label htmlFor="referral-source">Referral Source</Label>
-                  <Input id="referral-source" value={referralSource} onChange={(e) => setReferralSource(e.target.value)} placeholder="Agency / County / Court" />
+                  <Input id="referral-source" value={referralSource} onChange={(e) => setReferralSource(e.target.value)} placeholder="Agency / County / Court (auto-detected if present)" />
+                </div>
+              </div>
+              <div className="rounded-md border border-slate-200 bg-slate-50 p-3 space-y-3">
+                <p className="text-xs font-medium text-slate-700">Intake Metadata (applies to all parsed notes)</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label htmlFor="global-referral-date">Date</Label>
+                    <Input id="global-referral-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+                  </div>
+                  <div>
+                    <Label htmlFor="global-referral-staff">Staff Name</Label>
+                    <Input id="global-referral-staff" value={staffName} onChange={(e) => setStaffName(e.target.value)} placeholder="Your name (saved on every parsed note)" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label>Status</Label>
+                    <Select value={status} onValueChange={setStatus}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="pending_interview">Pending Interview</SelectItem>
+                        <SelectItem value="interview_scheduled">Interview Scheduled</SelectItem>
+                        <SelectItem value="interviewed_yes">Interviewed - Yes</SelectItem>
+                        <SelectItem value="interviewed_no">Interviewed - No</SelectItem>
+                        <SelectItem value="denied">Denied</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Priority</Label>
+                    <Select value={priority} onValueChange={setPriority}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="urgent">Urgent</SelectItem>
+                        <SelectItem value="high">High</SelectItem>
+                        <SelectItem value="routine">Routine</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
               </div>
               {parsedEntries.length > 1 && (
@@ -782,42 +1225,9 @@ export const ReferralTab = () => {
             <Card>
               <CardHeader><CardTitle className="text-base">Save Referral Note</CardTitle></CardHeader>
               <CardContent className="space-y-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label htmlFor="referral-date">Date</Label>
-                    <Input id="referral-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-                  </div>
-                  <div>
-                    <Label htmlFor="referral-staff">Staff Name</Label>
-                    <Input id="referral-staff" value={staffName} onChange={(e) => setStaffName(e.target.value)} placeholder="Your name" />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label>Status</Label>
-                    <Select value={status} onValueChange={setStatus}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="pending_interview">Pending Interview</SelectItem>
-                        <SelectItem value="interview_scheduled">Interview Scheduled</SelectItem>
-                        <SelectItem value="interviewed_yes">Interviewed - Yes</SelectItem>
-                        <SelectItem value="interviewed_no">Interviewed - No</SelectItem>
-                        <SelectItem value="denied">Denied</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>Priority</Label>
-                    <Select value={priority} onValueChange={setPriority}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="urgent">Urgent</SelectItem>
-                        <SelectItem value="high">High</SelectItem>
-                        <SelectItem value="routine">Routine</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
+                <p className="text-xs text-muted-foreground">
+                  Saving with global metadata above: Date, Staff Name, Status, and Priority.
+                </p>
                 <Button onClick={handleSave} disabled={isSaving} className="w-full">
                   {isSaving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving...</> : <><Save className="h-4 w-4 mr-2" />Save Referral Note</>}
                 </Button>
@@ -828,42 +1238,9 @@ export const ReferralTab = () => {
             <Card>
               <CardHeader><CardTitle className="text-base">Save Referral Notes</CardTitle></CardHeader>
               <CardContent className="space-y-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label htmlFor="bulk-referral-date">Date</Label>
-                    <Input id="bulk-referral-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-                  </div>
-                  <div>
-                    <Label htmlFor="bulk-referral-staff">Staff Name</Label>
-                    <Input id="bulk-referral-staff" value={staffName} onChange={(e) => setStaffName(e.target.value)} placeholder="Your name" />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label>Status</Label>
-                    <Select value={status} onValueChange={setStatus}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="pending_interview">Pending Interview</SelectItem>
-                        <SelectItem value="interview_scheduled">Interview Scheduled</SelectItem>
-                        <SelectItem value="interviewed_yes">Interviewed - Yes</SelectItem>
-                        <SelectItem value="interviewed_no">Interviewed - No</SelectItem>
-                        <SelectItem value="denied">Denied</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>Priority</Label>
-                    <Select value={priority} onValueChange={setPriority}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="urgent">Urgent</SelectItem>
-                        <SelectItem value="high">High</SelectItem>
-                        <SelectItem value="routine">Routine</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
+                <p className="text-xs text-muted-foreground">
+                  Staff name and metadata from the top section will be applied to all {parsedEntries.length} parsed notes.
+                </p>
                 <Button onClick={handleSave} disabled={isSaving} className="w-full">
                   {isSaving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving...</> : <><Save className="h-4 w-4 mr-2" />Save {parsedEntries.length} Referral Notes</>}
                 </Button>
@@ -1027,6 +1404,12 @@ export const ReferralTab = () => {
                       <p className="text-sm font-semibold text-foreground">{item.referralName}</p>
                       {item.referralSource && <p className="text-xs text-muted-foreground">Source: {item.referralSource}</p>}
                       <p className="text-xs text-muted-foreground mt-1">Staff: {item.staff || "Unknown"} | Sections: {item.sectionCount}</p>
+                      {item.archived && item.archiveReason && (
+                        <p className="text-xs text-amber-700 mt-1">
+                          Archive reason: {item.archiveReason}
+                          {item.archiveReasonDetail ? ` ${item.archiveReasonDetail}` : ""}
+                        </p>
+                      )}
 
                       {/* Quick status update */}
                       <div className="mt-2 flex items-center gap-2 flex-wrap">
@@ -1064,9 +1447,10 @@ export const ReferralTab = () => {
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => setArchived(item.id, true)}
+                            onClick={() => openArchiveReasonPrompt(item.id)}
+                            disabled={archivingId === item.id}
                           >
-                            Archive
+                            {archivingId === item.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Archive"}
                           </Button>
                         )}
                         {item.archived && (
@@ -1160,6 +1544,15 @@ export const ReferralTab = () => {
                               <div className="whitespace-pre-wrap text-sm text-purple-900">{item.directorSummary}</div>
                             </div>
                           )}
+                          {item.archived && (item.archiveReason || item.archiveReasonDetail) && (
+                            <div className="rounded-md border border-amber-200 bg-amber-50 p-3">
+                              <span className="text-sm font-semibold text-amber-800 mb-2 block">Archive Reason</span>
+                              <div className="text-sm text-amber-900 whitespace-pre-wrap">
+                                {item.archiveReason || "Reason not specified"}
+                                {item.archiveReasonDetail ? `\n${item.archiveReasonDetail}` : ""}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -1223,6 +1616,62 @@ export const ReferralTab = () => {
                         </Button>
                         <Button variant="outline" onClick={() => setEditingInterviewId(null)}>Cancel</Button>
                       </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {archiveTargetId && (
+                <Card className="mt-4 border-amber-200">
+                  <CardHeader>
+                    <CardTitle className="text-sm">Archive Referral Reason</CardTitle>
+                    <CardDescription>
+                      Select why this referral is being archived. This will be saved with the referral.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div>
+                      <Label>Archive Reason</Label>
+                      <Select value={archiveReason} onValueChange={setArchiveReason}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {ARCHIVE_REASON_OPTIONS.map((option) => (
+                            <SelectItem key={option} value={option}>{option}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label>Reason Details</Label>
+                      <Textarea
+                        value={archiveReasonDetail}
+                        onChange={(e) => setArchiveReasonDetail(e.target.value)}
+                        rows={3}
+                        placeholder={
+                          archiveReason === "Referral not accepted due to:"
+                            ? "Required: add the specific reason not accepted"
+                            : "Optional details"
+                        }
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <Button onClick={submitArchiveWithReason} disabled={archivingId === archiveTargetId}>
+                        {archivingId === archiveTargetId ? (
+                          <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Archiving...</>
+                        ) : (
+                          "Archive Referral"
+                        )}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setArchiveTargetId(null);
+                          setArchiveReason(ARCHIVE_REASON_OPTIONS[0]);
+                          setArchiveReasonDetail("");
+                        }}
+                      >
+                        Cancel
+                      </Button>
                     </div>
                   </CardContent>
                 </Card>

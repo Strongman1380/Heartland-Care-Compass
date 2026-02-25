@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -17,12 +17,13 @@ import { fetchProgressNotes, saveProgressNote } from "@/utils/local-storage-util
 import { notesService } from '@/integrations/firebase/notesService'
 import { caseNotesService } from '@/integrations/firebase/services'
 import { ProgressNote } from "@/types/app-types";
+import { type Youth } from "@/integrations/firebase/services";
 import aiService from "@/services/aiService";
 import { buildReportFilename } from "@/utils/reportFilenames";
 
 interface ProgressNotesProps {
   youthId: string;
-  youth: any;
+  youth: Youth;
 }
 
 type ProgressNoteSections = {
@@ -54,7 +55,8 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
     planNextSteps: "",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [autoSaveTimer, setAutoSaveTimer] = useState<NodeJS.Timeout | null>(null);
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fetchAbortRef = useRef<string | null>(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isAutoSaving, setIsAutoSaving] = useState(false);
 
@@ -67,6 +69,9 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
   }, [notes, searchTerm]);
 
   const fetchNotes = async () => {
+    const requestId = youthId;
+    fetchAbortRef.current = requestId;
+
     try {
       setIsLoading(true);
 
@@ -84,6 +89,9 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
           return [];
         }),
       ]);
+
+      // Discard results if youthId changed while we were fetching
+      if (fetchAbortRef.current !== requestId) return;
 
       // Convert remote notes (notes collection) to ProgressNote format
       const convertedRemote: ProgressNote[] = remoteNotes.map(r => ({
@@ -122,10 +130,13 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
       setNotes(allNotes);
       setFilteredNotes(allNotes);
     } catch (error) {
+      if (fetchAbortRef.current !== requestId) return;
       console.error("Failed to load case notes:", error);
       toast.error("Failed to load case notes");
     } finally {
-      setIsLoading(false);
+      if (fetchAbortRef.current === requestId) {
+        setIsLoading(false);
+      }
     }
   };
 
@@ -167,17 +178,13 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
 
   // Auto-save functionality
   const triggerAutoSave = () => {
-    // Clear existing timer
-    if (autoSaveTimer) {
-      clearTimeout(autoSaveTimer);
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
     }
-    
-    // Set new timer for 2 seconds after user stops typing
-    const timer = setTimeout(() => {
+    autoSaveTimerRef.current = setTimeout(() => {
+      autoSaveTimerRef.current = null;
       autoSave();
     }, 2000);
-    
-    setAutoSaveTimer(timer);
   };
 
   const autoSave = async () => {
@@ -243,11 +250,11 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
   // Cleanup timer on unmount
   useEffect(() => {
     return () => {
-      if (autoSaveTimer) {
-        clearTimeout(autoSaveTimer);
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
       }
     };
-  }, [autoSaveTimer]);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

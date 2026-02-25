@@ -62,6 +62,34 @@ const normalizeWeekly = (r: WeeklyEvalRow): NormalizedWeeklyEval => {
   }
 }
 
+const toWeekStartISO = (isoDate: string): string => {
+  const d = new Date(`${isoDate}T00:00:00`)
+  if (isNaN(d.getTime())) return isoDate
+  const day = d.getDay()
+  const diff = day === 0 ? -6 : 1 - day
+  d.setDate(d.getDate() + diff)
+  return d.toISOString().split('T')[0]
+}
+
+const dedupeWeekly = (rows: WeeklyEvalRow[]): WeeklyEvalRow[] => {
+  const byYouthWeek = new Map<string, WeeklyEvalRow>()
+  for (const row of rows) {
+    const weekStart = toWeekStartISO(row.week_date)
+    const key = `${row.youth_id}_${weekStart}`
+    const current = byYouthWeek.get(key)
+    if (!current) {
+      byYouthWeek.set(key, { ...row, week_date: weekStart })
+      continue
+    }
+    const currentUpdated = current.updated_at || ''
+    const nextUpdated = row.updated_at || ''
+    if (nextUpdated >= currentUpdated) {
+      byYouthWeek.set(key, { ...row, week_date: weekStart })
+    }
+  }
+  return Array.from(byYouthWeek.values())
+}
+
 const normalizeDaily = (r: DailyShiftRow): NormalizedDailyShift => {
   const peer = fromStorage(r.peer)
   const adult = fromStorage(r.adult)
@@ -99,17 +127,17 @@ export const upsertWeeklyEval = async (
 
 export const getWeeklyEvalsForRange = async (startISO: string, endISO: string): Promise<NormalizedWeeklyEval[]> => {
   const results = await weeklyEvalService.range(startISO, endISO)
-  return results.map(normalizeWeekly)
+  return dedupeWeekly(results).map(normalizeWeekly)
 }
 
 export const getWeeklyEvalsForYouth = async (youthId: string): Promise<NormalizedWeeklyEval[]> => {
   const results = await weeklyEvalService.forYouth(youthId)
-  return results.map(normalizeWeekly)
+  return dedupeWeekly(results).map(normalizeWeekly)
 }
 
 export const getWeeklyEvalsForYouthInRange = async (youthId: string, startISO: string, endISO: string): Promise<NormalizedWeeklyEval[]> => {
   const results = await weeklyEvalService.forYouthInRange(youthId, startISO, endISO)
-  return results.map(normalizeWeekly)
+  return dedupeWeekly(results).map(normalizeWeekly)
 }
 
 // ── Daily Shift CRUD ──

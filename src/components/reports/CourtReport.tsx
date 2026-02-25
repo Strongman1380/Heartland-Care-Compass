@@ -17,6 +17,7 @@ import { findProfessional } from '@/utils/professionalUtils'
 import { useAuth } from '@/contexts/AuthContext'
 import { getBehaviorPointsByYouth, getProgressNotesByYouth, getDailyRatingsByYouth } from "@/lib/api";
 import { getScoresByYouth, type SchoolDailyScore } from "@/utils/schoolScores";
+import { getWeeklyEvalsForYouthInRange, getDailyShiftsForYouthInRange } from "@/utils/shiftScores";
 import * as aiService from "@/services/aiService";
 
 interface CourtReportProps {
@@ -251,7 +252,7 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
     reportDate: format(new Date(), 'yyyy-MM-dd'),
     reportingOfficer: '',
 
-    currentPlacement: 'Heartland Boys Home - Residential Treatment',
+    currentPlacement: 'Heartland Boys Home - Group Home',
 
     treatmentProgressSummary: '',
     behavioralAssessmentSummary: '',
@@ -268,6 +269,7 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
   const [isSaving, setIsSaving] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [shouldAutoPopulate, setShouldAutoPopulate] = useState(false);
   const autoSaveTimerRef = useRef<number | null>(null);
   const pendingYouthIdRef = useRef<string | null>(null);
   const pendingReportTypeRef = useRef<string>('court_report');
@@ -457,7 +459,7 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
       result.dateOfBirth = youth.dob ? format(new Date(youth.dob), 'MM/dd/yyyy') : '';
 
       // Construct comprehensive placement info
-      const placementParts = ['Heartland Boys Home - Residential Treatment'];
+      const placementParts = ['Heartland Boys Home - Group Home'];
       if (youth.admissionDate) {
         const lengthOfStay = calculateLengthOfStay(youth.admissionDate);
         placementParts.push(`Length of Stay: ${lengthOfStay}`);
@@ -677,14 +679,8 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
         }
       }
 
-      // No saved data, populate with base data from youth profile
-      if (!loaded) {
-        const baseData = getBaseDataIfEmpty(reportData);
-        setReportData(prev => ({ ...prev, ...baseData }));
-      }
-
       // Always sync live youth data (name, DOB, level) so reports reflect current status
-      const placementParts = ['Heartland Boys Home - Residential Treatment'];
+      const placementParts = ['Heartland Boys Home - Group Home'];
       if (youth.admissionDate) {
         const lengthOfStay = calculateLengthOfStay(youth.admissionDate);
         placementParts.push(`Length of Stay: ${lengthOfStay}`);
@@ -698,6 +694,13 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
         dateOfBirth: youth.dob ? format(new Date(youth.dob), 'MM/dd/yyyy') : '',
         currentPlacement: placementParts.join('\n'),
       }));
+
+      // No saved data — populate with base data and auto-trigger AI population
+      if (!loaded) {
+        const baseData = getBaseDataIfEmpty(reportData);
+        setReportData(prev => ({ ...prev, ...baseData }));
+        setShouldAutoPopulate(true);
+      }
     })();
   }, [youth, user?.uid]);
 
@@ -720,7 +723,7 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
     const prompts: Record<string, string> = {
       treatmentProgressSummary: "You are a clinical professional writing a court report. Expand the following brief notes about treatment goals and progress into a comprehensive 2-3 paragraph summary. Include details about primary treatment goals, progress toward those goals, therapeutic participation, and medication compliance. Use professional clinical language appropriate for court documentation.",
       behavioralAssessmentSummary: "You are a clinical professional writing a court report. Expand the following brief notes about behavioral assessment into a comprehensive 2-3 paragraph summary. Include details about behavioral progress, significant incidents, and behavioral interventions used. Use professional clinical language appropriate for court documentation.",
-      educationalProgressSummary: "You are a clinical professional writing a court report. Expand the following brief notes about educational progress into a comprehensive 2-3 paragraph summary. Include details about school placement, academic progress, educational challenges, and vocational goals. Use professional clinical language appropriate for court documentation.",
+      educationalProgressSummary: "You are a clinical professional writing a court report. Expand the following brief notes about educational progress into a comprehensive 2-3 paragraph summary. Note that the youth attends the Heartland Boys Home Independent School, managed by Berniklau Education Solutions. Focus on behavioral observations from Daily Progress Notes that relate to school — classroom behavior, compliance, engagement, and interactions with teachers. Emphasize what the youth is doing well and areas needing improvement. Do not fabricate specific grades or test scores. Use professional clinical language appropriate for court documentation.",
       familySocialSummary: "You are a clinical professional writing a court report. Expand the following brief notes about family and social relationships into a comprehensive 2-3 paragraph summary. Include details about family visitation, family therapy, peer relationships, and community contacts. Use professional clinical language appropriate for court documentation.",
       programParticipationSummary: "You are a clinical professional writing a court report. Expand the following brief notes about program participation into a comprehensive 2-3 paragraph summary. Include details about daily structure compliance, program compliance, skills development, and incentives/consequences. Use professional clinical language appropriate for court documentation.",
       futurePlanningSummary: "You are a clinical professional writing a court report. Expand the following brief notes about future planning into a comprehensive 2-3 paragraph summary. Include details about discharge timeline, discharge planning, aftercare recommendations, and transition plan. Use professional clinical language appropriate for court documentation.",
@@ -858,7 +861,7 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
     window.print();
   };
 
-  const handleAutoPopulate = async () => {
+  const handleAutoPopulate = async (skipConfirm = false) => {
     if (!youth) {
       toast({
         title: "Error",
@@ -878,7 +881,7 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
       reportData.futurePlanningSummary
     );
 
-    if (hasExistingData) {
+    if (hasExistingData && !skipConfirm) {
       const confirmed = confirm(
         'Some fields already contain data. AI will generate comprehensive summaries for ALL sections based on case notes and documentation. Continue?'
       );
@@ -893,15 +896,19 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
         description: "Analyzing case notes and data from the last 30 days to generate comprehensive summaries...",
       });
 
-      // Fetch recent behavior points, case notes, daily ratings, and school scores
-      const [behaviorPoints, progressNotes, dailyRatings, schoolScores] = await Promise.all([
+      // Fetch recent behavior points, case notes, daily ratings, school scores, and weekly evals
+      const thirtyDaysAgoISO = subMonths(new Date(), 1).toISOString().split('T')[0];
+      const todayISO = new Date().toISOString().split('T')[0];
+      const [behaviorPoints, progressNotes, dailyRatings, schoolScores, weeklyEvals, dailyShifts] = await Promise.all([
         getBehaviorPointsByYouth(youth.id),
         getProgressNotesByYouth(youth.id),
         getDailyRatingsByYouth(youth.id),
         getScoresByYouth(youth.id).catch((error) => {
           console.warn('Failed to load school scores for court report auto-populate:', error);
           return [];
-        })
+        }),
+        getWeeklyEvalsForYouthInRange(youth.id, thirtyDaysAgoISO, todayISO).catch(() => []),
+        getDailyShiftsForYouthInRange(youth.id, thirtyDaysAgoISO, todayISO).catch(() => [])
       ]);
 
       // Filter to last 30 days
@@ -950,6 +957,15 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
         ? (recentSchoolScores.reduce((sum, score) => sum + Number(score.score ?? 0), 0) / schoolScoreCount).toFixed(1)
         : 'N/A';
 
+      // Calculate weekly eval averages (4-domain behavioral scoring)
+      const allEvalEntries = [...weeklyEvals, ...dailyShifts];
+      const evalCount = allEvalEntries.length;
+      const evalAvgPeer = evalCount > 0 ? (allEvalEntries.reduce((s, e) => s + e.peer, 0) / evalCount).toFixed(1) : 'N/A';
+      const evalAvgAdult = evalCount > 0 ? (allEvalEntries.reduce((s, e) => s + e.adult, 0) / evalCount).toFixed(1) : 'N/A';
+      const evalAvgInvestment = evalCount > 0 ? (allEvalEntries.reduce((s, e) => s + e.investment, 0) / evalCount).toFixed(1) : 'N/A';
+      const evalAvgAuthority = evalCount > 0 ? (allEvalEntries.reduce((s, e) => s + e.authority, 0) / evalCount).toFixed(1) : 'N/A';
+      const evalAvgOverall = evalCount > 0 ? (allEvalEntries.reduce((s, e) => s + e.overall, 0) / evalCount).toFixed(1) : 'N/A';
+
       // Calculate length of stay
       const lengthOfStay = youth.admissionDate
         ? calculateLengthOfStay(youth.admissionDate)
@@ -974,35 +990,46 @@ Write a professional, clinical summary suitable for a court report.`,
 
 Behavioral Data:
 - Average Daily Points: ${avgPoints}/15 over ${recentBehavior.length} days
-- Peer Interaction: ${avgPeer}/5
-- Adult Interaction: ${avgAdult}/5
-- Authority/Compliance: ${avgAuthority}/5
+- Peer Interaction (daily ratings): ${avgPeer}/5
+- Adult Interaction (daily ratings): ${avgAdult}/5
+- Authority/Compliance (daily ratings): ${avgAuthority}/5
 - Current Level: ${youth.level || 'Not specified'}
+
+Weekly Eval / Shift Scores (4-domain behavioral assessment, 0-4 scale, ${evalCount} entries):
+- Peer Interaction: ${evalAvgPeer}/4
+- Adult Interaction: ${evalAvgAdult}/4
+- Investment Level: ${evalAvgInvestment}/4
+- Dealing w/ Authority: ${evalAvgAuthority}/4
+- Overall Average: ${evalAvgOverall}/4
 
 Case Notes:
 ${caseNotesText || 'No case notes available for this period.'}
 
 Write a professional, clinical summary suitable for a court report focusing on behavioral assessment.`,
 
-        educationalProgressSummary: `You are a clinical professional writing a court report. Based on the following case notes and data for ${youth.firstName} ${youth.lastName}, write a comprehensive 2-3 paragraph summary about their academic progress, school performance, achievements, and challenges.
+        educationalProgressSummary: `You are a clinical professional writing a court report. Based on the following case notes and data for ${youth.firstName} ${youth.lastName}, write a comprehensive 2-3 paragraph summary about their educational progress.
 
-Educational Data:
-- School: ${youth.currentSchool || youth.lastSchoolAttended || 'Not specified'}
-- Grade: ${youth.currentGrade || 'Not specified'}
-- Average School Score: ${schoolAverage}/4 (${schoolScoreCount} entries)
-- Academic Strengths: ${youth.academicStrengths || 'Not documented'}
-- Academic Challenges: ${youth.academicChallenges || 'Not documented'}
+Important context: ${youth.firstName} attends the Heartland Boys Home Independent School, which is managed by Berniklau Education Solutions.${youth.currentGrade ? ` ${youth.firstName} is currently enrolled in grade ${youth.currentGrade}.` : ''}
 
-Case Notes:
+Focus your summary on:
+1. The youth's educational placement through Berniklau Education Solutions
+2. Behavioral observations from the Daily Progress Notes (DPNs) that relate to school performance — classroom behavior, compliance with school expectations, engagement, and interactions with teachers and peers during school hours
+3. What the youth is doing well academically and specific areas that need improvement
+
+Do NOT fabricate specific grades, test scores, or credit counts unless they appear in the case notes. Base your observations on behavioral progress noted in the DPNs, since DPNs typically include school-related behaviors.
+
+Case Notes / DPN Observations:
 ${caseNotesText || 'No case notes available for this period.'}
 
-Write a professional, educational summary suitable for a court report.`,
+Write a professional, educational summary suitable for a court report. Do not include raw case note excerpts or staff names.`,
 
         familySocialSummary: `You are a clinical professional writing a court report. Based on the following case notes and data for ${youth.firstName} ${youth.lastName}, write a comprehensive 2-3 paragraph summary about their family relationships, social development, peer relationships, and community involvement.
 
 Social-Emotional Data:
-- Peer Interaction Rating: ${avgPeer}/5
-- Adult Interaction Rating: ${avgAdult}/5
+- Peer Interaction Rating (daily): ${avgPeer}/5
+- Adult Interaction Rating (daily): ${avgAdult}/5
+- Peer Interaction (weekly eval): ${evalAvgPeer}/4
+- Adult Interaction (weekly eval): ${evalAvgAdult}/4
 - Family Members: ${youth.familyMembers?.map((fm: any) => `${fm.firstName} ${fm.lastName} (${fm.relation})`).join(', ') || 'Not documented'}
 
 Case Notes:
@@ -1015,7 +1042,10 @@ Write a professional, clinical summary suitable for a court report focusing on f
 Program Data:
 - Current Level: ${youth.level || 'Not specified'}
 - Average Points: ${avgPoints}/15
-- Investment Level: ${avgInvestment}/5
+- Investment Level (daily): ${avgInvestment}/5
+- Investment Level (weekly eval): ${evalAvgInvestment}/4
+- Overall Eval Average: ${evalAvgOverall}/4
+- School Score Average: ${schoolAverage}
 - Number of Case Notes: ${recentNotes.length}
 
 Case Notes:
@@ -1074,6 +1104,14 @@ Write a professional summary suitable for a court report focusing on future plan
     }
   };
 
+  // Auto-trigger AI population when no saved draft exists
+  useEffect(() => {
+    if (shouldAutoPopulate && youth?.id && !isSaving) {
+      setShouldAutoPopulate(false);
+      handleAutoPopulate(true);
+    }
+  }, [shouldAutoPopulate, youth?.id]);
+
   const handleReset = async () => {
     if (!youth) {
       toast({
@@ -1091,7 +1129,7 @@ Write a professional summary suitable for a court report focusing on future plan
         reportDate: format(new Date(), 'yyyy-MM-dd'),
         reportingOfficer: '',
 
-        currentPlacement: 'Heartland Boys Home - Residential Treatment',
+        currentPlacement: 'Heartland Boys Home - Group Home',
         
         treatmentProgressSummary: '',
         behavioralAssessmentSummary: '',

@@ -15,6 +15,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { fetchProgressNotes, saveProgressNote } from "@/utils/local-storage-utils";
 import { notesService } from '@/integrations/firebase/notesService'
+import { caseNotesService } from '@/integrations/firebase/services'
 import { ProgressNote } from "@/types/app-types";
 import aiService from "@/services/aiService";
 import { buildReportFilename } from "@/utils/reportFilenames";
@@ -65,13 +66,63 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
     filterNotes();
   }, [notes, searchTerm]);
 
-  const fetchNotes = () => {
+  const fetchNotes = async () => {
     try {
       setIsLoading(true);
-      const fetchedNotes = fetchProgressNotes(youthId);
-      setNotes(fetchedNotes);
-      setFilteredNotes(fetchedNotes);
+
+      // Load localStorage notes immediately for fast display
+      const localNotes = fetchProgressNotes(youthId);
+
+      // Fetch from both Firebase sources in parallel
+      const [remoteNotes, remoteCaseNotes] = await Promise.all([
+        notesService.listForYouth(youthId).catch((err) => {
+          console.warn('Failed to fetch from notes collection:', err);
+          return [];
+        }),
+        caseNotesService.getByYouthId(youthId).catch((err) => {
+          console.warn('Failed to fetch from case_notes collection:', err);
+          return [];
+        }),
+      ]);
+
+      // Convert remote notes (notes collection) to ProgressNote format
+      const convertedRemote: ProgressNote[] = remoteNotes.map(r => ({
+        id: r.id,
+        youth_id: r.youth_id,
+        date: new Date(r.created_at),
+        note: r.text,
+        staff: r.author_id || '',
+        category: r.category || 'Progress Note',
+        createdAt: new Date(r.created_at),
+      }));
+
+      // Convert case notes (case_notes subcollection) to ProgressNote format
+      const convertedCaseNotes: ProgressNote[] = remoteCaseNotes.map(cn => ({
+        id: cn.id,
+        youth_id: cn.youth_id,
+        date: cn.date ? new Date(cn.date + 'T00:00:00') : new Date(),
+        note: cn.note || '',
+        staff: cn.staff || '',
+        category: 'Case Note',
+        createdAt: cn.createdAt ? new Date(cn.createdAt) : new Date(),
+      }));
+
+      // Merge all sources, dedup by id
+      const map = new Map<string, ProgressNote>();
+      for (const n of localNotes) map.set(n.id || `local-${n.youth_id}-${String(n.date)}`, n);
+      for (const n of convertedRemote) map.set(n.id, n);
+      for (const n of convertedCaseNotes) map.set(n.id, n);
+
+      const allNotes = Array.from(map.values()).sort((a, b) => {
+        const dateA = a.date ? new Date(a.date).getTime() : 0;
+        const dateB = b.date ? new Date(b.date).getTime() : 0;
+        return dateB - dateA;
+      });
+
+      setNotes(allNotes);
+      setFilteredNotes(allNotes);
     } catch (error) {
+      console.error("Failed to load case notes:", error);
       toast.error("Failed to load case notes");
     } finally {
       setIsLoading(false);
@@ -294,11 +345,16 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
 
     try {
       setIsDeleting(true);
-      // Delete from Supabase for each selected id
       const ids = Array.from(selectedNotes);
       for (const id of ids) {
         if (id) {
-          await notesService.delete(id);
+          // Find the note to determine which collection it belongs to
+          const note = notes.find(n => n.id === id);
+          if (note?.category === 'Case Note') {
+            await caseNotesService.delete(id);
+          } else {
+            await notesService.delete(id);
+          }
         }
       }
       toast.success(`${selectedNotes.size} note(s) deleted successfully`);

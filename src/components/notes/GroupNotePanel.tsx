@@ -13,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, Users, Check } from "lucide-react";
+import { ArrowLeft, Users, ChevronDown, ChevronUp, Check } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { useYouth } from "@/hooks/useSupabase";
@@ -28,10 +28,13 @@ type NoteType = "session" | "general";
 export const GroupNotePanel = ({ onBack }: GroupNotePanelProps) => {
   const { youths, loading, loadYouths } = useYouth();
   const [selectedYouthIds, setSelectedYouthIds] = useState<Set<string>>(new Set());
+  const [expandedYouthIds, setExpandedYouthIds] = useState<Set<string>>(new Set());
+  const [individualNotes, setIndividualNotes] = useState<Record<string, string>>({});
+  
   const [noteType, setNoteType] = useState<NoteType>("session");
   const [date, setDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [staff, setStaff] = useState("");
-  const [noteText, setNoteText] = useState("");
+  const [masterNoteText, setMasterNoteText] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
@@ -58,11 +61,51 @@ export const GroupNotePanel = ({ onBack }: GroupNotePanelProps) => {
     });
   };
 
+  const toggleExpandYouth = (youthId: string) => {
+    setExpandedYouthIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(youthId)) {
+        next.delete(youthId);
+      } else {
+        next.add(youthId);
+      }
+      return next;
+    });
+  };
+
   const toggleAll = (checked: boolean) => {
     if (checked) {
-      setSelectedYouthIds(new Set(sortedYouths.map((y) => y.id)));
+      const allIds = sortedYouths.map((y) => y.id);
+      setSelectedYouthIds(new Set(allIds));
     } else {
       setSelectedYouthIds(new Set());
+    }
+  };
+
+  const updateMasterNote = (text: string) => {
+    setMasterNoteText(text);
+    // Optional: Update all selected youths' notes when master note changes?
+    // User requested "toggle all of them if I want or if I want to do one single one I can"
+    // Valid strategy: Master note is a template. Individual notes override it if set.
+    // Or: Master note writes to all selected keys in individualNotes.
+    
+    setIndividualNotes(prev => {
+      const next = { ...prev };
+      selectedYouthIds.forEach(id => {
+        next[id] = text;
+      });
+      return next;
+    });
+  };
+
+  const updateIndividualNote = (youthId: string, text: string) => {
+    setIndividualNotes(prev => ({
+      ...prev,
+      [youthId]: text
+    }));
+    // If we edit an individual note, we should probably ensure they are selected so it gets saved
+    if (!selectedYouthIds.has(youthId)) {
+      toggleYouth(youthId);
     }
   };
 
@@ -75,36 +118,48 @@ export const GroupNotePanel = ({ onBack }: GroupNotePanelProps) => {
       toast.error("Staff name is required");
       return;
     }
-    if (!noteText.trim()) {
-      toast.error("Please enter a note");
+
+    // Check if at least one selected youth has a note
+    const hasAnyNote = Array.from(selectedYouthIds).some(id => 
+      (individualNotes[id] || masterNoteText).trim().length > 0
+    );
+
+    if (!hasAnyNote) {
+      toast.error("Please enter a note for at least one selected youth");
       return;
     }
 
     try {
       setIsSubmitting(true);
-
-      const structuredNote = {
-        formatVersion: "v2",
-        noteType,
-        sections: {
-          summary: noteText.trim(),
-          strengthsChallenges: "",
-          interventionsResponse: "",
-          planNextSteps: "",
-        },
-      };
-
-      const notePayload = {
-        date: new Date(date),
-        category: noteType === "session" ? "Session Note" : "General Note",
-        note: JSON.stringify(structuredNote),
-        staff: staff.trim(),
-      };
-
       let saved = 0;
       let failed = 0;
 
       for (const youthId of selectedYouthIds) {
+        // Use individual note if present, otherwise fallback to master note
+        const noteContent = individualNotes[youthId] !== undefined 
+          ? individualNotes[youthId] 
+          : masterNoteText;
+
+        if (!noteContent.trim()) continue; // Skip empty notes? Or save empty?
+
+        const structuredNote = {
+          formatVersion: "v2",
+          noteType,
+          sections: {
+            summary: noteContent.trim(),
+            strengthsChallenges: "",
+            interventionsResponse: "",
+            planNextSteps: "",
+          },
+        };
+
+        const notePayload = {
+          date: new Date(date),
+          category: noteType === "session" ? "Session Note" : "General Note",
+          note: JSON.stringify(structuredNote),
+          staff: staff.trim(),
+        };
+
         try {
           await saveProgressNote(youthId, notePayload);
           saved++;
@@ -120,8 +175,10 @@ export const GroupNotePanel = ({ onBack }: GroupNotePanelProps) => {
       }
 
       // Reset form
-      setNoteText("");
+      setMasterNoteText("");
+      setIndividualNotes({});
       setSelectedYouthIds(new Set());
+      setExpandedYouthIds(new Set());
     } catch (error) {
       toast.error("Failed to save group note");
     } finally {
@@ -141,78 +198,16 @@ export const GroupNotePanel = ({ onBack }: GroupNotePanelProps) => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Youth selection */}
-        <Card className="lg:col-span-1">
-          <CardHeader>
-            <CardTitle className="text-base">Select Youth</CardTitle>
-            <CardDescription>
-              {selectedYouthIds.size} of {sortedYouths.length} selected
-            </CardDescription>
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* Settings Panel (Top/Left) */}
+        <Card className="lg:col-span-12">
+           <CardHeader>
+            <CardTitle className="text-base">Note Configuration</CardTitle>
+            <CardDescription>Configure common details for the group note</CardDescription>
           </CardHeader>
           <CardContent>
-            {loading ? (
-              <div className="animate-pulse space-y-2">
-                {[1, 2, 3].map((i) => (
-                  <div key={i} className="h-10 bg-slate-200 rounded" />
-                ))}
-              </div>
-            ) : (
-              <div className="space-y-1">
-                <div className="flex items-center gap-2 pb-2 mb-2 border-b">
-                  <Checkbox
-                    id="group-select-all"
-                    checked={selectedYouthIds.size === sortedYouths.length && sortedYouths.length > 0}
-                    onCheckedChange={toggleAll}
-                  />
-                  <Label htmlFor="group-select-all" className="text-sm font-medium cursor-pointer">
-                    Select All
-                  </Label>
-                </div>
-                <div className="max-h-[400px] overflow-y-auto space-y-1">
-                  {sortedYouths.map((youth) => (
-                    <div
-                      key={youth.id}
-                      className={`flex items-center gap-3 px-2 py-2 rounded-md cursor-pointer transition-colors ${
-                        selectedYouthIds.has(youth.id)
-                          ? "bg-red-50 border border-red-200"
-                          : "hover:bg-gray-50 border border-transparent"
-                      }`}
-                      onClick={() => toggleYouth(youth.id)}
-                    >
-                      <Checkbox
-                        checked={selectedYouthIds.has(youth.id)}
-                        onCheckedChange={() => toggleYouth(youth.id)}
-                      />
-                      <div className="h-8 w-8 rounded-full bg-gradient-to-br from-red-500 to-yellow-500 flex items-center justify-center text-white text-xs font-semibold flex-shrink-0">
-                        {youth.firstName.charAt(0)}{youth.lastName.charAt(0)}
-                      </div>
-                      <span className="text-sm font-medium text-gray-900">
-                        {youth.lastName}, {youth.firstName}
-                      </span>
-                      {selectedYouthIds.has(youth.id) && (
-                        <Check size={14} className="ml-auto text-red-600" />
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Note form */}
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle className="text-base">Note Details</CardTitle>
-            <CardDescription>
-              This note will be created for each selected youth
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div>
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+               <div>
                   <Label htmlFor="group-note-type">Note Type</Label>
                   <Select value={noteType} onValueChange={(v) => setNoteType(v as NoteType)}>
                     <SelectTrigger id="group-note-type">
@@ -244,29 +239,127 @@ export const GroupNotePanel = ({ onBack }: GroupNotePanelProps) => {
                     placeholder="Staff completing the note"
                   />
                 </div>
-              </div>
 
-              <div>
-                <Label htmlFor="group-note-text">Note</Label>
-                <Textarea
-                  id="group-note-text"
-                  value={noteText}
-                  onChange={(e) => setNoteText(e.target.value)}
-                  placeholder="Enter the note content that will be saved for each selected youth..."
-                  rows={8}
-                />
-              </div>
-
-              <Button
-                onClick={handleSubmit}
-                disabled={isSubmitting || selectedYouthIds.size === 0}
-                className="w-full"
-              >
-                {isSubmitting
-                  ? "Saving..."
-                  : `Save Note for ${selectedYouthIds.size} Youth${selectedYouthIds.size !== 1 ? "s" : ""}`}
-              </Button>
+                <div className="flex items-end">
+                   <Button
+                    onClick={handleSubmit}
+                    disabled={isSubmitting || selectedYouthIds.size === 0}
+                    className="w-full"
+                  >
+                    {isSubmitting
+                      ? "Saving..."
+                      : `Save Note for ${selectedYouthIds.size} Youth${selectedYouthIds.size !== 1 ? "s" : ""}`}
+                  </Button>
+                </div>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Master Note Input */}
+        <Card className="lg:col-span-12 bg-slate-50 border-dashed">
+          <CardContent className="pt-6">
+             <Label htmlFor="master-note" className="text-base font-semibold text-slate-700">Master Note (Applies to all selected)</Label>
+             <p className="text-xs text-slate-500 mb-2">Typing here will update the note for all currently selected youth below.</p>
+             <Textarea
+                id="master-note"
+                value={masterNoteText}
+                onChange={(e) => updateMasterNote(e.target.value)}
+                placeholder="Enter a common note for all selected youth..."
+                rows={3}
+                className="bg-white"
+              />
+          </CardContent>
+        </Card>
+
+        {/* Youth selection & Individual Notes */}
+        <Card className="lg:col-span-12">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-base">Youth Notes</CardTitle>
+                <CardDescription>
+                  {selectedYouthIds.size} of {sortedYouths.length} selected
+                </CardDescription>
+              </div>
+              <div className="flex items-center gap-2">
+                 <Checkbox
+                    id="group-select-all"
+                    checked={selectedYouthIds.size === sortedYouths.length && sortedYouths.length > 0}
+                    onCheckedChange={toggleAll}
+                  />
+                  <Label htmlFor="group-select-all" className="text-sm font-medium cursor-pointer">
+                    Select All
+                  </Label>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+              <div className="animate-pulse space-y-2">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="h-10 bg-slate-200 rounded" />
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {sortedYouths.map((youth) => {
+                  const isExpanded = expandedYouthIds.has(youth.id);
+                  const isSelected = selectedYouthIds.has(youth.id);
+                  const currentNote = individualNotes[youth.id] !== undefined ? individualNotes[youth.id] : "";
+
+                  return (
+                    <div
+                      key={youth.id}
+                      className={`border rounded-md transition-all ${
+                        isSelected ? "border-red-200 bg-red-50/30" : "border-slate-200"
+                      }`}
+                    >
+                      {/* Header Row */}
+                      <div 
+                        className="flex items-center gap-3 p-3 cursor-pointer hover:bg-slate-50"
+                        onClick={() => toggleExpandYouth(youth.id)}
+                      >
+                         <div onClick={(e) => e.stopPropagation()}>
+                           <Checkbox
+                            checked={isSelected}
+                            onCheckedChange={() => toggleYouth(youth.id)}
+                          />
+                         </div>
+                        
+                        <div className="h-8 w-8 rounded-full bg-gradient-to-br from-red-500 to-yellow-500 flex items-center justify-center text-white text-xs font-semibold flex-shrink-0">
+                          {youth.firstName.charAt(0)}{youth.lastName.charAt(0)}
+                        </div>
+                        
+                        <div className="flex-1">
+                           <span className="text-sm font-medium text-gray-900 block">
+                            {youth.lastName}, {youth.firstName}
+                          </span>
+                          {currentNote && !isExpanded && (
+                             <p className="text-xs text-slate-500 truncate max-w-[500px]">{currentNote}</p>
+                          )}
+                        </div>
+
+                        {isSelected && <Check size={16} className="text-red-600 mr-2" />}
+                        {isExpanded ? <ChevronUp size={16} className="text-slate-400" /> : <ChevronDown size={16} className="text-slate-400" />}
+                      </div>
+
+                      {/* Expanded Content */}
+                      {isExpanded && (
+                        <div className="p-3 pt-0 border-t border-slate-100 bg-white rounded-b-md">
+                           <Label className="text-xs text-slate-500 mb-1.5 block">Note for {youth.firstName}</Label>
+                           <Textarea 
+                              value={currentNote}
+                              onChange={(e) => updateIndividualNote(youth.id, e.target.value)}
+                              placeholder={`Enter note specifically for ${youth.firstName}...`}
+                              className="min-h-[100px]"
+                           />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

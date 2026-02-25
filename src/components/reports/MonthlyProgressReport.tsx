@@ -15,7 +15,9 @@ import { exportElementToPDF } from "@/utils/export";
 import { buildReportFilename } from "@/utils/reportFilenames";
 import { fetchProgressNotes, fetchBehaviorPoints } from "@/utils/local-storage-utils";
 import { findProfessional } from "@/utils/professionalUtils";
-import { getProgressNotesByYouth } from "@/lib/api";
+import { getProgressNotesByYouth, getDailyRatingsByYouth } from "@/lib/api";
+import { getScoresByYouth, type SchoolDailyScore } from "@/utils/schoolScores";
+import { getWeeklyEvalsForYouthInRange, getDailyShiftsForYouthInRange } from "@/utils/shiftScores";
 import * as aiService from "@/services/aiService";
 
 // API fetch function with fallback to localStorage
@@ -110,6 +112,7 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
   // AI enhancement state
   const [isEnhancing, setIsEnhancing] = useState<string | null>(null);
   const [isAutoPopulating, setIsAutoPopulating] = useState(false);
+  const [shouldAutoPopulate, setShouldAutoPopulate] = useState(false);
 
   // Helper function to check if a section is complete
   const isSectionComplete = (section: string): boolean => {
@@ -501,13 +504,12 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
           console.log('Loaded saved report data from localStorage');
         } catch (error) {
           console.error("Error loading saved data:", error);
-          // Only auto-populate if there's an error loading saved data
           await autoPopulateForm();
         }
       } else {
-        // No saved data exists, auto-populate form with youth profile data
-        console.log('No saved data found, auto-populating form');
-        await autoPopulateForm();
+        // No saved data exists — auto-populate with AI from case notes and documentation
+        console.log('No saved data found, auto-populating with AI from case notes');
+        setShouldAutoPopulate(true);
       }
     };
 
@@ -654,7 +656,7 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
   };
 
   // AI-powered auto-populate ALL sections intelligently
-  const handleAIPopulateAll = async () => {
+  const handleAIPopulateAll = async (skipConfirm = false) => {
     if (!youth?.id) {
       toast({
         title: "Error",
@@ -670,7 +672,7 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
                     reportData.socialSummary ||
                     reportData.treatmentProgressSummary;
 
-    if (hasData) {
+    if (hasData && !skipConfirm) {
       const confirmed = confirm(
         'Some sections already have content. AI will generate comprehensive summaries for ALL sections based on reports and documentation. Continue?'
       );
@@ -749,6 +751,49 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
       const daysTracked = periodPoints.length;
       const avgPts = daysTracked > 0 ? (totalPts / daysTracked).toFixed(1) : "0";
 
+      // Fetch daily ratings, school scores, and weekly eval scores
+      const monthStartISO = format(monthStart, 'yyyy-MM-dd');
+      const monthEndISO = format(monthEnd, 'yyyy-MM-dd');
+      const [dailyRatings, schoolScores, weeklyEvals, dailyShifts] = await Promise.all([
+        getDailyRatingsByYouth(youth.id).catch(() => []),
+        getScoresByYouth(youth.id).catch(() => []),
+        getWeeklyEvalsForYouthInRange(youth.id, monthStartISO, monthEndISO).catch(() => []),
+        getDailyShiftsForYouthInRange(youth.id, monthStartISO, monthEndISO).catch(() => [])
+      ]);
+
+      // Filter daily ratings and school scores to reporting period
+      const periodRatings = dailyRatings.filter(r => {
+        if (!r.date) return false;
+        const d = new Date(r.date);
+        return d >= monthStart && d <= monthEnd;
+      });
+      const periodSchoolScores = (schoolScores as SchoolDailyScore[]).filter(s => {
+        if (!s.date) return false;
+        const d = new Date(s.date);
+        return d >= monthStart && d <= monthEnd;
+      });
+
+      // Calculate daily rating averages
+      const ratingCount = periodRatings.length;
+      const avgPeer = ratingCount > 0 ? (periodRatings.reduce((s, r) => s + (r.peerInteraction ?? 0), 0) / ratingCount).toFixed(1) : 'N/A';
+      const avgAdult = ratingCount > 0 ? (periodRatings.reduce((s, r) => s + (r.adultInteraction ?? 0), 0) / ratingCount).toFixed(1) : 'N/A';
+      const avgInvestment = ratingCount > 0 ? (periodRatings.reduce((s, r) => s + (r.investmentLevel ?? 0), 0) / ratingCount).toFixed(1) : 'N/A';
+      const avgAuthority = ratingCount > 0 ? (periodRatings.reduce((s, r) => s + (r.dealAuthority ?? 0), 0) / ratingCount).toFixed(1) : 'N/A';
+
+      // Calculate school score average
+      const schoolAvg = periodSchoolScores.length > 0
+        ? (periodSchoolScores.reduce((s, sc) => s + Number(sc.score ?? 0), 0) / periodSchoolScores.length).toFixed(1)
+        : 'N/A';
+
+      // Calculate weekly eval / shift score averages (4-domain, 0-4 scale)
+      const allEvalEntries = [...weeklyEvals, ...dailyShifts];
+      const evalCount = allEvalEntries.length;
+      const evalAvgPeer = evalCount > 0 ? (allEvalEntries.reduce((s, e) => s + e.peer, 0) / evalCount).toFixed(1) : 'N/A';
+      const evalAvgAdult = evalCount > 0 ? (allEvalEntries.reduce((s, e) => s + e.adult, 0) / evalCount).toFixed(1) : 'N/A';
+      const evalAvgInvestment = evalCount > 0 ? (allEvalEntries.reduce((s, e) => s + e.investment, 0) / evalCount).toFixed(1) : 'N/A';
+      const evalAvgAuthority = evalCount > 0 ? (allEvalEntries.reduce((s, e) => s + e.authority, 0) / evalCount).toFixed(1) : 'N/A';
+      const evalAvgOverall = evalCount > 0 ? (allEvalEntries.reduce((s, e) => s + e.overall, 0) / evalCount).toFixed(1) : 'N/A';
+
       const baseInstruction = `You are a clinical professional writing a monthly progress report for ${youth.firstName} ${youth.lastName} at Heartland Boys Home. The reporting period is ${reportMonthLabel}. Write a professional 2-3 paragraph narrative summary.
 
 CRITICAL RULES:
@@ -767,7 +812,7 @@ ${historicalText ? `\nHISTORICAL CONTEXT (prior reports for reference on overall
       const aiPrompts = {
         assistanceSummary: `${baseInstruction}\n\nSynthesize the reporting period reports into a narrative about: program participation, assistance provided, support services, resources, referrals, advocacy, and coordination efforts. Do not list individual note entries.`,
 
-        academicSummary: `${baseInstruction}\n\nSynthesize the reporting period reports into a narrative about: academic performance, school attendance, educational progress, and classroom behavior. Note: ${youth.firstName} attends the Heartland Boys Home Independent School, managed by Berniklau Education Solutions. Emphasize what the youth is doing well academically and specific areas that need improvement.`,
+        academicSummary: `${baseInstruction}\n\nSchool Performance Data:\n- School Score Average: ${schoolAvg}/4 (${periodSchoolScores.length} days scored)\n\nSynthesize the reporting period reports into a narrative about: academic performance, school attendance, educational progress, and classroom behavior. Note: ${youth.firstName} attends the Heartland Boys Home Independent School, managed by Berniklau Education Solutions. Emphasize what the youth is doing well academically and specific areas that need improvement.`,
 
         behavioralSummary: `${baseInstruction}\n\nSynthesize the reporting period reports into a narrative about behavioral progress. Include the following data points naturally in the narrative:
 - Current Level: ${youth.level}
@@ -775,9 +820,23 @@ ${historicalText ? `\nHISTORICAL CONTEXT (prior reports for reference on overall
 - Days tracked this month: ${daysTracked}
 - Points earned this month: ${totalPts.toLocaleString()}
 - Average points per day: ${avgPts}
+
+Daily Ratings (0-5 scale, ${ratingCount} entries):
+- Peer Interaction: ${avgPeer}/5
+- Adult Interaction: ${avgAdult}/5
+- Investment Level: ${avgInvestment}/5
+- Dealing w/ Authority: ${avgAuthority}/5
+
+Weekly Eval / Shift Scores (0-4 scale, ${evalCount} entries):
+- Peer Interaction: ${evalAvgPeer}/4
+- Adult Interaction: ${evalAvgAdult}/4
+- Investment Level: ${evalAvgInvestment}/4
+- Dealing w/ Authority: ${evalAvgAuthority}/4
+- Overall Average: ${evalAvgOverall}/4
+
 Discuss behavioral patterns, compliance, response to redirection, and emphasize either improvements the youth can make or what they are doing well.`,
 
-        socialSummary: `${baseInstruction}\n\nSynthesize the reporting period reports into a narrative about: social development, peer interactions, relationships with staff, communication skills, and group dynamics. Emphasize strengths and areas for growth.`,
+        socialSummary: `${baseInstruction}\n\nSocial-Emotional Data:\n- Peer Interaction (daily): ${avgPeer}/5\n- Adult Interaction (daily): ${avgAdult}/5\n- Peer Interaction (weekly eval): ${evalAvgPeer}/4\n- Adult Interaction (weekly eval): ${evalAvgAdult}/4\n\nSynthesize the reporting period reports into a narrative about: social development, peer interactions, relationships with staff, communication skills, and group dynamics. Emphasize strengths and areas for growth.`,
 
         treatmentProgressSummary: `${baseInstruction}\n\nSynthesize the reporting period reports into a narrative about: treatment progress, therapy participation, clinical observations, and therapeutic interventions. Emphasize engagement and recommend next steps.\n\nAdditional context:\n- Current Diagnoses: ${youth.currentDiagnoses || youth.diagnoses || 'Not documented'}\n- Current Counseling: ${youth.currentCounseling?.join(', ') || 'Not specified'}\n- Therapist: ${youth.therapistName || 'Not specified'}`,
       };
@@ -821,6 +880,14 @@ Discuss behavioral patterns, compliance, response to redirection, and emphasize 
       setIsAutoPopulating(false);
     }
   };
+
+  // Auto-trigger AI population when no saved draft exists
+  useEffect(() => {
+    if (shouldAutoPopulate && youth?.id && !isAutoPopulating) {
+      setShouldAutoPopulate(false);
+      handleAIPopulateAll(true);
+    }
+  }, [shouldAutoPopulate, youth?.id]);
 
   const handleSave = () => {
     try {

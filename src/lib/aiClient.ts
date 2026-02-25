@@ -65,7 +65,7 @@ export function generateDPNFieldComments(payload: AISummaryRequest): DPNFieldCom
     peerInteraction: hasPeerPositive && !hasPeerNegative
       ? `${youth.firstName} has demonstrated positive peer interactions during this period. Case notes document him engaging cooperatively with other residents, participating in group activities, and maintaining respectful relationships. ${truncObs ? 'Recent observations: ' + truncObs : ''}`
       : hasPeerNegative
-      ? `Peer interactions remain an area of focus for ${youth.firstName}. Notes document some challenges with peer relationships including conflicts that required staff intervention. The treatment team continues to work with him on respectful communication and conflict de-escalation. ${truncObs ? 'Recent observations: ' + truncObs : ''}`
+      ? `Peer interactions remain an area of focus for ${youth.firstName}. Notes document some challenges with peer relationships including conflicts that required staff intervention. The care team continues to work with him on respectful communication and conflict de-escalation. ${truncObs ? 'Recent observations: ' + truncObs : ''}`
       : `${youth.firstName}'s peer interactions are developing as documented in staff case notes. He is working on maintaining positive relationships and shows moments of cooperation with other residents. ${truncObs ? 'Recent observations: ' + truncObs : ''}`,
 
     adultInteraction: hasAdultPositive && !hasAdultNegative
@@ -75,15 +75,15 @@ export function generateDPNFieldComments(payload: AISummaryRequest): DPNFieldCom
       : `${youth.firstName}'s interactions with staff are progressing as documented in case notes. He is generally responsive to staff guidance and is working on consistent compliance with program expectations. ${truncObs ? 'Recent observations: ' + truncObs : ''}`,
 
     investmentLevel: hasInvestPositive && !hasInvestNegative
-      ? `${youth.firstName} has shown strong investment in his treatment and daily programming. Case notes indicate he actively participates in scheduled activities, completes assigned tasks, and engages in the program. ${truncObs ? 'Recent observations: ' + truncObs : ''}`
+      ? `${youth.firstName} has shown strong investment in his daily programming. Case notes indicate he actively participates in scheduled activities, completes assigned tasks, and engages in the program. ${truncObs ? 'Recent observations: ' + truncObs : ''}`
       : hasInvestNegative
-      ? `Investment level remains an area needing development based on case note documentation. Staff have noted instances where ${youth.firstName} disengaged from activities or did not follow through on expectations. Staff continue to work with him on understanding the value of treatment participation. ${truncObs ? 'Recent observations: ' + truncObs : ''}`
-      : `${youth.firstName} demonstrates developing investment in his treatment goals as documented by staff. He participates in daily programming and is working on maintaining consistent effort in all program areas. ${truncObs ? 'Recent observations: ' + truncObs : ''}`,
+      ? `Investment level remains an area needing development based on case note documentation. Staff have noted instances where ${youth.firstName} disengaged from activities or did not follow through on expectations. Staff continue to work with him on understanding the value of program participation. ${truncObs ? 'Recent observations: ' + truncObs : ''}`
+      : `${youth.firstName} demonstrates developing investment in his program goals as documented by staff. He participates in daily programming and is working on maintaining consistent effort in all program areas. ${truncObs ? 'Recent observations: ' + truncObs : ''}`,
 
     dealWithAuthority: hasAuthPositive && !hasAuthNegative
       ? `Case notes document ${youth.firstName} demonstrating appropriate skills in managing authority and structure. He has followed program expectations, accepted feedback appropriately, and shown maturity in navigating rules and limits. ${truncObs ? 'Recent observations: ' + truncObs : ''}`
       : hasAuthNegative
-      ? `Dealing with authority remains a focus area for ${youth.firstName} based on staff documentation. Case notes indicate some difficulty accepting limits and following through with expectations. The treatment team addresses this through consistent boundaries, natural consequences, and processing. ${truncObs ? 'Recent observations: ' + truncObs : ''}`
+      ? `Dealing with authority remains a focus area for ${youth.firstName} based on staff documentation. Case notes indicate some difficulty accepting limits and following through with expectations. The care team addresses this through consistent boundaries, natural consequences, and processing. ${truncObs ? 'Recent observations: ' + truncObs : ''}`
       : `${youth.firstName} is managing program structure as documented in case notes. He generally works within program expectations and is learning to accept limits and respond appropriately to authority. ${truncObs ? 'Recent observations: ' + truncObs : ''}`,
 
     socialStrengths: youth.strengthsTalents
@@ -92,13 +92,13 @@ export function generateDPNFieldComments(payload: AISummaryRequest): DPNFieldCom
 
     socialDeficiencies: hasPeerNegative || hasAdultNegative
       ? `Areas for continued growth include ${hasPeerNegative ? 'peer conflict resolution and appropriate social boundaries' : ''}${hasPeerNegative && hasAdultNegative ? ', and ' : ''}${hasAdultNegative ? 'respectful communication with authority figures' : ''}. ${youth.firstName} benefits from coaching on emotional regulation, impulse control, and expressing needs appropriately. Staff provide consistent modeling and skill-building opportunities to address these areas.`
-      : `While ${youth.firstName} has made progress in many areas, continued development is needed in generalizing positive social skills across all settings. ${caseNotes.length > 0 && caseNotes[0].sections?.interventionsResponse ? caseNotes[0].sections.interventionsResponse.substring(0, 200) : 'The treatment team continues to work on building his social awareness and self-regulation skills.'}`,
+      : `While ${youth.firstName} has made progress in many areas, continued development is needed in generalizing positive social skills across all settings. ${caseNotes.length > 0 && caseNotes[0].sections?.interventionsResponse ? caseNotes[0].sections.interventionsResponse.substring(0, 200) : 'The care team continues to work on building his social awareness and self-regulation skills.'}`,
 
-    narrative: `Based on ${caseNotes.length} documented case notes during this evaluation period, ${youth.firstName} has been ${hasInvestPositive && hasAdultPositive ? 'making positive progress' : hasInvestNegative || hasAdultNegative ? 'working through some challenges' : 'progressing steadily'} in his treatment.
+    narrative: `Based on ${caseNotes.length} documented case notes during this evaluation period, ${youth.firstName} has been ${hasInvestPositive && hasAdultPositive ? 'making positive progress' : hasInvestNegative || hasAdultNegative ? 'working through some challenges' : 'progressing steadily'} in his programming.
 
 ${caseNotes.length > 0 ? 'Recent Observations: ' + noteTexts.slice(-2).join(' ') : ''}
 
-Next Steps: ${caseNotes.length > 0 && caseNotes[caseNotes.length - 1].sections?.planNextSteps ? caseNotes[caseNotes.length - 1].sections.planNextSteps : `The treatment team will continue to monitor ${youth.firstName}'s progress, provide targeted interventions, and work with him on achieving his treatment goals.`}`
+Next Steps: ${caseNotes.length > 0 && caseNotes[caseNotes.length - 1].sections?.planNextSteps ? caseNotes[caseNotes.length - 1].sections.planNextSteps : `The care team will continue to monitor ${youth.firstName}'s progress, provide targeted interventions, and work with him on achieving his program goals.`}`
   };
 }
 
@@ -144,62 +144,62 @@ const generateMockAISummary = (payload: AISummaryRequest): string => {
     .filter((entry: string) => entry && entry.trim().length > 0);
 
   const caseNotesSummary = caseNotesText.length > 0
-    ? caseNotesText.slice(0, 3).join(' ')
-    : 'Staff continue to document treatment interventions, family contacts, and daily activities.';
+    ? caseNotesText.slice(0, 15).join(' ') // Increased from 3 to 15 to include more context
+    : 'Staff continue to document interventions, family contacts, and daily activities.';
 
-  const daysInTreatment = youth.admissionDate ? Math.floor((new Date().getTime() - new Date(youth.admissionDate).getTime()) / (1000 * 60 * 60 * 24)) : null;
+  const daysInPlacement = youth.admissionDate ? Math.floor((new Date().getTime() - new Date(youth.admissionDate).getTime()) / (1000 * 60 * 60 * 24)) : null;
 
   // Generate text for form fields based on case notes — no report-type preamble, just content
   switch (reportType) {
     case 'court':
-      return `${youth.firstName} ${youth.lastName} has been in residential placement at Heartland Boys Home${daysInTreatment ? ' for ' + daysInTreatment + ' days' : ''}, currently at Level ${youth.level || 'N/A'}. During the reporting period from ${period.startDate} to ${period.endDate}, ${noteCount} case notes were documented by staff.
+      return `${youth.firstName} ${youth.lastName} has been placed at Heartland Boys Home${daysInPlacement ? ' for ' + daysInPlacement + ' days' : ''}, currently at Level ${youth.level || 'N/A'}. During the reporting period from ${period.startDate} to ${period.endDate}, ${noteCount} case notes were documented by staff.
 
-${caseNotesText.length > 0 ? 'Staff observations during this period include: ' + caseNotesSummary : 'Case documentation is ongoing.'}
+${caseNotesText.length > 0 ? 'Comprehensive Staff Observations: ' + caseNotesSummary : 'Case documentation is ongoing.'}
 
-${youth.firstName}'s current diagnoses of ${youth.currentDiagnoses || youth.diagnoses || 'behavioral and emotional challenges'} are being addressed through evidence-based interventions. The treatment team continues to monitor progress and adjust interventions accordingly.
+${youth.firstName}'s current diagnoses of ${youth.currentDiagnoses || youth.diagnoses || 'behavioral and emotional challenges'} are being addressed through evidence-based interventions. The care team continues to monitor progress and adjust interventions accordingly.
 
 Academic performance in ${youth.currentSchool || 'the on-site education program'} shows ${youth.academicStrengths ? 'particular strength in ' + youth.academicStrengths : 'ongoing engagement'}. ${youth.hasIEP ? 'IEP goals are being addressed through specialized instruction and accommodations.' : ''}
 
-Continued residential treatment is recommended to consolidate gains and address remaining treatment objectives. ${youth.firstName} would benefit from ongoing therapeutic support and structured programming to maintain progress and prepare for successful community reintegration.`;
+Continued group home placement is recommended to consolidate gains and address remaining program objectives. ${youth.firstName} would benefit from ongoing support and structured programming to maintain progress and prepare for successful community reintegration.`;
 
     case 'dpnWeekly':
     case 'dpnBiWeekly':
     case 'dpnMonthly': {
       const periodLabel = reportType === 'dpnWeekly' ? 'this week' : reportType === 'dpnBiWeekly' ? 'the past two weeks' : 'this month';
 
-      return `${youth.firstName} has been ${caseNotesText.length > 0 ? 'actively engaged in programming' : 'participating in treatment'} ${periodLabel}. ${noteCount} case notes were documented during this period.
+      return `${youth.firstName} has been ${caseNotesText.length > 0 ? 'actively engaged in programming' : 'participating in programming'} ${periodLabel}. ${noteCount} case notes were documented during this period.
 
 Day-to-Day Observations:
 
-${caseNotesText.length > 0 ? caseNotesText.slice(0, 3).join('\n\n') : 'Staff continue to document daily observations and interventions.'}
+${caseNotesText.length > 0 ? caseNotesText.slice(0, 15).join(' ') : 'Staff continue to document daily observations and interventions.'}
 
 ${youth.strengthsTalents ? 'Strengths We Are Building On: ' + youth.strengthsTalents : ''}
 
-Next Steps: The treatment team will continue to monitor ${youth.firstName}'s progress, provide targeted interventions, and work with him on achieving his treatment goals and preparing for next steps.`;
+Next Steps: The care team will continue to monitor ${youth.firstName}'s progress, provide targeted interventions, and work with him on achieving his program goals and preparing for next steps.`;
     }
 
     case 'progress':
     case 'progressMonthly':
-      return `${youth.firstName} ${youth.lastName} has been in residential treatment${daysInTreatment ? ' for ' + daysInTreatment + ' days' : ''}. Current treatment level: Level ${youth.level || 'N/A'}.
+      return `${youth.firstName} ${youth.lastName} has been at Heartland Boys Home${daysInPlacement ? ' for ' + daysInPlacement + ' days' : ''}. Current level: Level ${youth.level || 'N/A'}.
 
 Staff Observations: During this period, ${noteCount} case notes were documented. ${caseNotesSummary}
 
-Clinical Progress: Treatment addressing ${youth.currentDiagnoses || youth.diagnoses || 'behavioral and emotional challenges'} continues with evidence-based interventions. ${youth.firstName} demonstrates developing insight into triggers and is working on healthier response patterns.
+Progress: Programming addressing ${youth.currentDiagnoses || youth.diagnoses || 'behavioral and emotional challenges'} continues with evidence-based interventions. ${youth.firstName} demonstrates developing insight into triggers and is working on healthier response patterns.
 
 Educational Progress: ${youth.currentSchool || 'On-site education program'} participation shows ${youth.academicStrengths ? 'strength in ' + youth.academicStrengths : 'ongoing engagement'}. ${youth.hasIEP ? 'IEP goals are being addressed through specialized instruction.' : ''}
 
 Discharge Planning: ${youth.dischargePlan?.parents ? 'Plan involves return to parents.' : youth.dischargePlan?.relative ? 'Plan involves placement with relative (' + youth.dischargePlan.relative.name + ').' : 'Continued placement planning is underway.'} Estimated timeline: ${youth.estimatedStay || 'to be determined based on continued progress'}.`;
 
     default:
-      return `${youth.firstName} ${youth.lastName} continues to participate in residential treatment programming during the reporting period. ${noteCount} case notes were documented by staff.
+      return `${youth.firstName} ${youth.lastName} continues to participate in group home programming during the reporting period. ${noteCount} case notes were documented by staff.
 
 ${caseNotesText.length > 0 ? 'Staff observations: ' + caseNotesSummary : 'Case documentation is ongoing.'}
 
-Treatment interventions addressing ${youth.currentDiagnoses || youth.diagnoses || 'identified clinical needs'} continue with evidence-based approaches. ${youth.firstName} is working on developing insight into behavioral patterns and building healthier coping strategies.
+Program interventions addressing ${youth.currentDiagnoses || youth.diagnoses || 'identified clinical needs'} continue with evidence-based approaches. ${youth.firstName} is working on developing insight into behavioral patterns and building healthier coping strategies.
 
 Educational programming continues to address ${youth.hasIEP ? 'IEP goals and specialized learning needs' : 'academic objectives'} with noted strengths in ${youth.academicStrengths || 'various subject areas'}.
 
-Family engagement includes regular contact with ${youth.legalGuardian || 'identified support system'} and participation in discharge planning activities. Treatment team recommends continued residential services to consolidate therapeutic gains.`;
+Family engagement includes regular contact with ${youth.legalGuardian || 'identified support system'} and participation in discharge planning activities. The care team recommends continued group home placement to consolidate progress.`;
   }
 };
 
@@ -328,14 +328,14 @@ export const generateLocalBehavioralInsights = (behaviorData: any[], youth: any)
   } else if (avgPoints >= 12) {
     analysis += 'This shows good progress with opportunities for continued improvement in consistency and engagement.';
   } else {
-    analysis += 'This indicates need for additional behavioral support, intervention strategies, and possibly adjusted treatment goals.';
+    analysis += 'This indicates need for additional behavioral support, intervention strategies, and possibly adjusted program goals.';
   }
 
   // Add trend-specific recommendations
   if (trend === 'improving' && trendStrength > 1) {
     analysis += ' Recent upward trend suggests effective intervention strategies and increased motivation.';
   } else if (trend === 'declining' && trendStrength > 1) {
-    analysis += ' Recent decline warrants immediate review of treatment plan and potential triggers.';
+    analysis += ' Recent decline warrants immediate review of the care plan and potential triggers.';
   }
 
   return analysis;
@@ -386,7 +386,7 @@ export const generateTreatmentRecommendations = (youth: any, progressData: any):
 
   // Behavioral and engagement
   if (youth.investmentLevel < 3) {
-    recommendations.push("Increase motivational interviewing and engagement strategies to improve treatment participation and buy-in.");
+    recommendations.push("Increase motivational interviewing and engagement strategies to improve program participation and buy-in.");
   }
 
   if (youth.peerInteraction < 3) {
@@ -404,7 +404,7 @@ export const generateTreatmentRecommendations = (youth: any, progressData: any):
 
   // Default if no specific recommendations
   if (!recommendations.length) {
-    recommendations.push("Continue current treatment programming with regular progress monitoring and interdisciplinary team review.");
+    recommendations.push("Continue current programming with regular progress monitoring and interdisciplinary team review.");
   }
 
   return recommendations.join(" ");

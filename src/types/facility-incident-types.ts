@@ -3,26 +3,55 @@
  * Used for general facility-level incident reporting with professional print output.
  */
 
+export type SubjectType = 'Resident' | 'Non-Resident' | 'Employee';
+
 export type FacilityIncidentType =
-  | 'Physical Aggression'
-  | 'Verbal Aggression'
-  | 'Property Destruction'
-  | 'Self-Harm / Self-Injurious Behavior'
-  | 'Elopement / Runaway'
-  | 'Substance Use / Possession'
-  | 'Sexual Misconduct'
   | 'Theft'
-  | 'Non-Compliance / Refusal'
-  | 'Medical Emergency'
-  | 'Restraint / Seclusion'
-  | 'Suicide Ideation / Attempt'
-  | 'Bullying / Intimidation'
+  | 'Trespasser'
+  | 'Property Damage'
+  | 'Injury'
+  | 'Fighting'
+  | 'Medication Refusal'
+  | 'Physical Altercation'
+  | 'Fire/Alarm'
+  | 'Runaway'
+  | 'Arrest'
+  | 'Other';
+
+export type NotificationType =
+  | 'Home Director'
+  | 'Business Manager'
+  | 'Supervisor'
+  | 'Case Worker'
+  | 'Physician'
+  | 'Service Coordinator'
+  | 'Psychiatrist'
+  | 'Family'
+  | 'Probation Officer'
+  | 'Sheriff'
+  | 'Other';
+
+export type DocumentationType =
+  | 'Photographs'
+  | 'Physical Inspection'
+  | 'Property Inspection'
+  | 'Statement of Witness'
+  | 'Property Damage Report'
+  | 'Police Report'
+  | 'Missing Person Report'
   | 'Other';
 
 export interface InvolvedYouth {
   name: string;
   age: string;
   role: 'primary' | 'secondary' | 'witness' | 'victim';
+}
+
+export interface Witness {
+  name: string;
+  address: string;
+  cityState: string;
+  phone: string;
 }
 
 export interface PolicyViolation {
@@ -39,11 +68,19 @@ export interface FollowUpItem {
 
 export interface FacilityIncidentReport {
   id: string;
-  // Report header
+  // Subject info
+  subjectType: SubjectType;
+  lastName: string;
+  firstName: string;
+  initial: string;
+  // Keep legacy field for backward compat
   youthName: string;
   // Incident details
+  incidentDescription: string;
   dateOfIncident: string; // ISO date
   timeOfIncident: string; // HH:mm
+  reportDate: string; // ISO date
+  reportTime: string; // HH:mm
   staffCompletingReport: string;
   location: string;
   // Youth involved
@@ -53,12 +90,29 @@ export interface FacilityIncidentReport {
   otherIncidentType?: string;
   // Narrative
   narrativeSummary: string;
+  // Witnesses
+  witnesses: Witness[];
+  // Notifications
+  notifications: NotificationType[];
+  otherNotification?: string;
+  // Supplementary Information
+  supplementaryInfo: string;
+  // Subject address if non-resident
+  subjectAddress: string;
+  subjectPhone: string;
+  // Documentation checklist
+  documentation: DocumentationType[];
+  otherDocumentation?: string;
   // Policy violations
   policyViolations: PolicyViolation[];
   // Staff actions
   staffActions: StaffActionItem[];
   // Follow-up / recommendations
   followUpRecommendations: FollowUpItem[];
+  // Signatures
+  submittedBy: string;
+  reviewedBy: string;
+  signatureDate: string;
   // Metadata
   createdAt: string;
   updatedAt: string;

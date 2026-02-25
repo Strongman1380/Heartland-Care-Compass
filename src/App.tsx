@@ -28,6 +28,8 @@ import AcademicProgressDashboard from "./pages/AcademicProgressDashboard";
 import SchoolIncidentReports from "./pages/SchoolIncidentReports";
 import SchoolPrintReports from "./pages/SchoolPrintReports";
 import IncidentReports from "./pages/IncidentReports";
+import Referrals from "./pages/Referrals";
+import ShiftScores from "./pages/ShiftScores";
 
 const queryClient = new QueryClient();
 
@@ -58,6 +60,7 @@ const App = () => {
           <Route path="/daily-points" element={<ProtectedRoute><DailyPoints /></ProtectedRoute>} />
           <Route path="/behavior-analysis" element={<ProtectedRoute><BehaviorAnalysisPage /></ProtectedRoute>} />
           <Route path="/assessment-kpi" element={<ProtectedRoute><AssessmentKPIDashboard /></ProtectedRoute>} />
+          <Route path="/referrals" element={<ProtectedRoute><Referrals /></ProtectedRoute>} />
 
           <Route path="/school" element={<ProtectedRoute><School /></ProtectedRoute>}>
             <Route index element={<Navigate to="scores" replace />} />
@@ -67,6 +70,7 @@ const App = () => {
             <Route path="print-reports" element={<SchoolPrintReports />} />
           </Route>
 
+          <Route path="/shift-scores" element={<ProtectedRoute><ShiftScores /></ProtectedRoute>} />
           <Route path="/incident-reports" element={<ProtectedRoute><IncidentReports /></ProtectedRoute>} />
           <Route path="/migrate-data" element={<ProtectedRoute><DataMigrationPage /></ProtectedRoute>} />
           <Route path="*" element={<NotFound />} />

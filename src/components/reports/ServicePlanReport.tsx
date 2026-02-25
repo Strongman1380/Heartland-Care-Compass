@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Youth } from "@/types/app-types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,7 +13,9 @@ import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { exportElementToPDF } from "@/utils/export";
 import { buildReportFilename } from "@/utils/reportFilenames";
-import { getProgressNotesByYouth } from "@/lib/api";
+import { getProgressNotesByYouth, getBehaviorPointsByYouth, getDailyRatingsByYouth } from "@/lib/api";
+import { getScoresByYouth, type SchoolDailyScore } from "@/utils/schoolScores";
+import { getWeeklyEvalsForYouthInRange, getDailyShiftsForYouthInRange } from "@/utils/shiftScores";
 import * as aiService from "@/services/aiService";
 
 interface ServicePlanReportProps {
@@ -75,7 +77,7 @@ export const ServicePlanReport = ({ youth }: ServicePlanReportProps) => {
       dateOfBirth: dob,
       dateOfAdmission: admissionDate,
       currentLevel: `Level ${youth.level}`,
-      placementType: "Residential Treatment",
+      placementType: "Group Home",
       referralSource: youth.placingAgencyCounty || "",
       guardianInfo,
       assessmentSummary: "",
@@ -114,7 +116,24 @@ export const ServicePlanReport = ({ youth }: ServicePlanReportProps) => {
     setReportData(prev => ({ ...prev, [field]: value }));
   };
 
-  const autoPopulateForm = async () => {
+  const extractCaseNoteContent = (note: any): string => {
+    if (!note) return "";
+    if (typeof note.summary === 'string' && note.summary.trim().length > 0) return note.summary.trim();
+    const rawNote = typeof note.note === 'string' ? note.note : "";
+    if (!rawNote) return "";
+    try {
+      const parsed = JSON.parse(rawNote);
+      if (parsed?.sections) {
+        return Object.values(parsed.sections)
+          .filter((v) => typeof v === 'string' && (v as string).trim().length > 0)
+          .join(' ');
+      }
+      if (parsed?.content && typeof parsed.content === 'string') return parsed.content;
+    } catch {}
+    return rawNote;
+  };
+
+  const autoPopulateForm = async (skipConfirm = false) => {
     if (!youth?.id) return;
 
     setIsAutoPopulating(true);
@@ -136,18 +155,144 @@ export const ServicePlanReport = ({ youth }: ServicePlanReportProps) => {
         ? format(new Date(youth.dob), "MMMM d, yyyy")
         : "";
 
+      // Always populate demographics
       setReportData(prev => ({
         ...prev,
         fullName: `${youth.firstName} ${youth.lastName}`,
         dateOfBirth: dob,
         dateOfAdmission: admissionDate,
         currentLevel: `Level ${youth.level}`,
-        placementType: "Residential Treatment",
+        placementType: "Group Home",
         referralSource: youth.placingAgencyCounty || "",
         guardianInfo,
       }));
 
-      toast({ title: "Form populated", description: "Youth data loaded into the form" });
+      // Build case notes context for AI
+      const caseNotesText = progressNotes
+        .sort((a: any, b: any) => {
+          const dateA = a.date ? new Date(a.date).getTime() : 0;
+          const dateB = b.date ? new Date(b.date).getTime() : 0;
+          return dateB - dateA;
+        })
+        .slice(0, 50)
+        .map((note: any) => {
+          const content = extractCaseNoteContent(note);
+          const date = note.date ? format(new Date(note.date), 'MMM d, yyyy') : 'No date';
+          return `[${date}] ${content}`;
+        })
+        .join('\n\n');
+
+      if (!caseNotesText.trim()) {
+        toast({ title: "Form populated", description: "Youth data loaded. No case notes available for AI summaries." });
+        return;
+      }
+
+      toast({ title: "AI Processing", description: "Generating service plan sections from case notes and documentation..." });
+
+      // Fetch additional data: behavior points, daily ratings, school scores, weekly evals
+      const todayISO = format(new Date(), 'yyyy-MM-dd');
+      const admissionISO = youth.admissionDate ? format(new Date(youth.admissionDate), 'yyyy-MM-dd') : todayISO;
+      const [behaviorPoints, dailyRatings, schoolScores, weeklyEvals, dailyShifts] = await Promise.all([
+        getBehaviorPointsByYouth(youth.id).catch(() => []),
+        getDailyRatingsByYouth(youth.id).catch(() => []),
+        getScoresByYouth(youth.id).catch(() => []),
+        getWeeklyEvalsForYouthInRange(youth.id, admissionISO, todayISO).catch(() => []),
+        getDailyShiftsForYouthInRange(youth.id, admissionISO, todayISO).catch(() => [])
+      ]);
+
+      // Calculate behavior point averages
+      const bpCount = behaviorPoints.length;
+      const avgPoints = bpCount > 0 ? (behaviorPoints.reduce((s: number, p: any) => s + (p.totalPoints || 0), 0) / bpCount).toFixed(1) : 'N/A';
+
+      // Calculate daily rating averages
+      const ratingCount = dailyRatings.length;
+      const avgPeer = ratingCount > 0 ? (dailyRatings.reduce((s: number, r: any) => s + (r.peerInteraction ?? 0), 0) / ratingCount).toFixed(1) : 'N/A';
+      const avgAdult = ratingCount > 0 ? (dailyRatings.reduce((s: number, r: any) => s + (r.adultInteraction ?? 0), 0) / ratingCount).toFixed(1) : 'N/A';
+      const avgInvestment = ratingCount > 0 ? (dailyRatings.reduce((s: number, r: any) => s + (r.investmentLevel ?? 0), 0) / ratingCount).toFixed(1) : 'N/A';
+      const avgAuthority = ratingCount > 0 ? (dailyRatings.reduce((s: number, r: any) => s + (r.dealAuthority ?? 0), 0) / ratingCount).toFixed(1) : 'N/A';
+
+      // Calculate school score average
+      const schoolAvg = (schoolScores as SchoolDailyScore[]).length > 0
+        ? ((schoolScores as SchoolDailyScore[]).reduce((s, sc) => s + Number(sc.score ?? 0), 0) / (schoolScores as SchoolDailyScore[]).length).toFixed(1)
+        : 'N/A';
+
+      // Calculate weekly eval / shift score averages
+      const allEvalEntries = [...weeklyEvals, ...dailyShifts];
+      const evalCount = allEvalEntries.length;
+      const evalAvgPeer = evalCount > 0 ? (allEvalEntries.reduce((s, e) => s + e.peer, 0) / evalCount).toFixed(1) : 'N/A';
+      const evalAvgAdult = evalCount > 0 ? (allEvalEntries.reduce((s, e) => s + e.adult, 0) / evalCount).toFixed(1) : 'N/A';
+      const evalAvgInvestment = evalCount > 0 ? (allEvalEntries.reduce((s, e) => s + e.investment, 0) / evalCount).toFixed(1) : 'N/A';
+      const evalAvgAuthority = evalCount > 0 ? (allEvalEntries.reduce((s, e) => s + e.authority, 0) / evalCount).toFixed(1) : 'N/A';
+      const evalAvgOverall = evalCount > 0 ? (allEvalEntries.reduce((s, e) => s + e.overall, 0) / evalCount).toFixed(1) : 'N/A';
+
+      const baseInstruction = `You are a clinical professional writing a service plan for ${youth.firstName} ${youth.lastName} at Heartland Boys Home, a group home.
+
+CRITICAL RULES:
+- Do NOT include raw case note excerpts, dates in brackets, or staff names
+- SYNTHESIZE information into cohesive professional narrative
+- Write in third person professional clinical language
+- Do not use markdown formatting. Write plain professional text.
+
+Youth Information:
+- Current Level: ${youth.level}
+- Current Diagnoses: ${youth.currentDiagnoses || youth.diagnoses || 'Not documented'}
+- Current Counseling: ${youth.currentCounseling?.join(', ') || 'Not specified'}
+- Therapist: ${youth.therapistName || 'Not specified'}
+- Placing Agency: ${youth.placingAgencyCounty || 'Not specified'}
+- Average Daily Points: ${avgPoints}/15 (${bpCount} days tracked)
+
+Daily Ratings (0-5 scale, ${ratingCount} entries):
+- Peer Interaction: ${avgPeer}/5
+- Adult Interaction: ${avgAdult}/5
+- Investment Level: ${avgInvestment}/5
+- Dealing w/ Authority: ${avgAuthority}/5
+
+Weekly Eval / Shift Scores (0-4 scale, ${evalCount} entries):
+- Peer Interaction: ${evalAvgPeer}/4
+- Adult Interaction: ${evalAvgAdult}/4
+- Investment Level: ${evalAvgInvestment}/4
+- Dealing w/ Authority: ${evalAvgAuthority}/4
+- Overall Average: ${evalAvgOverall}/4
+
+School Score Average: ${schoolAvg}/4
+
+Case Notes:
+${caseNotesText}`;
+
+      const aiPrompts: Record<string, string> = {
+        assessmentSummary: `${baseInstruction}\n\nWrite a 2-3 paragraph assessment summary covering: presenting problems, clinical observations, strengths, areas of need, and current functioning level. This should provide context for the treatment plan.`,
+
+        treatmentObjectives: `${baseInstruction}\n\nWrite 2-3 paragraphs outlining treatment objectives based on the youth's documented needs. Include specific, measurable goals across behavioral, social, emotional, and educational domains. Reference treatment goals if documented.`,
+
+        permanencyPlanning: `${baseInstruction}\n\nWrite 2-3 paragraphs about permanency planning: family reunification efforts, family engagement, discharge planning considerations, and the long-term plan for stable placement after residential care.`,
+
+        serviceInterventions: `${baseInstruction}\n\nWrite 2-3 paragraphs describing service interventions currently in place or recommended: individual therapy, group counseling, behavioral modification program, educational supports, life skills training, family therapy, and any specialized interventions.`,
+
+        progressIndicators: `${baseInstruction}\n\nWrite 2-3 paragraphs about progress indicators: what measurable improvements have been observed, behavioral trends, level advancement progress, academic engagement, social skill development, and areas still requiring intervention.`,
+
+        recommendations: `${baseInstruction}\n\nWrite 2-3 paragraphs of clinical recommendations: continued treatment needs, suggested modifications to the service plan, referrals, discharge readiness assessment, and next steps for the treatment team.`,
+      };
+
+      const updates: Partial<ServicePlanData> = {};
+
+      for (const [field, prompt] of Object.entries(aiPrompts)) {
+        try {
+          const response = await aiService.default.queryData(prompt, {
+            youth,
+            caseNotes: caseNotesText,
+          });
+
+          if (response.success && response.data?.answer) {
+            updates[field as keyof ServicePlanData] = response.data.answer as any;
+          }
+        } catch (error) {
+          console.error(`Error generating ${field}:`, error);
+        }
+      }
+
+      setReportData(prev => ({ ...prev, ...updates }));
+
+      toast({ title: "Success", description: "Service plan populated with AI-generated summaries from case notes. Review and edit as needed." });
     } catch (error) {
       console.error("Error auto-populating:", error);
       toast({ title: "Error", description: "Failed to auto-populate form data", variant: "destructive" });
@@ -155,6 +300,13 @@ export const ServicePlanReport = ({ youth }: ServicePlanReportProps) => {
       setIsAutoPopulating(false);
     }
   };
+
+  // Auto-trigger AI population on mount
+  useEffect(() => {
+    if (youth?.id) {
+      autoPopulateForm(true);
+    }
+  }, [youth?.id]);
 
   const enhanceField = async (field: keyof ServicePlanData) => {
     const currentValue = reportData[field];
@@ -165,7 +317,7 @@ export const ServicePlanReport = ({ youth }: ServicePlanReportProps) => {
 
     setIsEnhancing(field);
     try {
-      const prompt = `You are writing a service plan for a youth in residential treatment named ${youth.firstName} ${youth.lastName}. Take the following notes and expand them into a clear, professional paragraph suitable for a formal service plan document. Keep the original facts and meaning, add appropriate clinical detail and structure:\n\n"${currentValue}"\n\nExpand this into 2-4 well-structured sentences in professional clinical tone.`;
+      const prompt = `You are writing a service plan for a youth at a group home named ${youth.firstName} ${youth.lastName}. Take the following notes and expand them into a clear, professional paragraph suitable for a formal service plan document. Keep the original facts and meaning, add appropriate clinical detail and structure:\n\n"${currentValue}"\n\nExpand this into 2-4 well-structured sentences in professional clinical tone.`;
 
       const response = await aiService.default.queryData(prompt, {
         youth,
@@ -304,7 +456,7 @@ export const ServicePlanReport = ({ youth }: ServicePlanReportProps) => {
                 </div>
                 <div>
                   <Label>Placement Type</Label>
-                  <Input value={reportData.placementType} onChange={(e) => handleInputChange("placementType", e.target.value)} placeholder="e.g., Residential Treatment" />
+                  <Input value={reportData.placementType} onChange={(e) => handleInputChange("placementType", e.target.value)} placeholder="e.g., Group Home" />
                 </div>
                 <div>
                   <Label>Referral Source</Label>

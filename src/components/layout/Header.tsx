@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { PlusCircle, BarChart3, LogOut, LogIn, Calendar, Gavel, BookOpen } from "lucide-react";
+import { PlusCircle, BarChart3, LogOut, LogIn, Calendar, Gavel, BookOpen, ClipboardPaste, ShieldAlert } from "lucide-react";
 import { AddYouthDialog } from "@/components/youth/AddYouthDialog";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
@@ -21,9 +21,11 @@ export const Header = () => {
 
   // Navigation items configuration
   const navigationItems = [
-    { path: '/progress-notes', label: 'Case Notes', icon: BookOpen },
-    { path: '/monthly-progress', label: 'Monthly Progress', icon: Calendar },
-    { path: '/court-report', label: 'Court Report', icon: Gavel },
+    { path: '/progress-notes', label: 'Case Notes', shortLabel: 'Case', icon: BookOpen },
+    { path: '/referrals', label: 'Referrals', shortLabel: 'Referrals', icon: ClipboardPaste },
+    { path: '/incident-reports', label: 'Incident Reports', shortLabel: 'Incidents', icon: ShieldAlert },
+    { path: '/monthly-progress', label: 'Monthly Progress', shortLabel: 'Monthly', icon: Calendar },
+    { path: '/court-report', label: 'Court Report', shortLabel: 'Court', icon: Gavel },
   ];
 
   const isActiveRoute = (path: string) => {
@@ -64,8 +66,8 @@ export const Header = () => {
             </Link>
 
             {/* Desktop Navigation */}
-            <nav className="hidden lg:flex items-center justify-center flex-1 mx-6">
-              <div className="flex items-center space-x-3">
+            <nav className="hidden lg:flex items-center justify-center flex-1 mx-3 overflow-x-auto">
+              <div className="flex items-center gap-2 min-w-max">
                 {navigationItems.map((item) => {
                   const Icon = item.icon;
                   const isActive = isActiveRoute(item.path);
@@ -75,7 +77,7 @@ export const Header = () => {
                       key={item.path}
                       to={item.path}
                       className={`
-                        relative flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 group whitespace-nowrap
+                        relative flex items-center space-x-1.5 px-3 py-2 rounded-lg text-xs xl:text-sm font-medium transition-all duration-300 group whitespace-nowrap shrink-0
                         ${isActive
                           ? 'bg-red-50 text-red-700 shadow-sm'
                           : 'text-gray-600 hover:text-red-700 hover:bg-red-50'
@@ -83,8 +85,8 @@ export const Header = () => {
                       `}
                     >
                       <Icon className="h-4 w-4" />
-                      <span className="hidden xl:block">{item.label}</span>
-                      <span className="xl:hidden">{item.label.split(' ')[0]}</span>
+                      <span className="2xl:hidden">{item.shortLabel}</span>
+                      <span className="hidden 2xl:block">{item.label}</span>
                       {isActive && (
                         <div className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-red-600" />
                       )}

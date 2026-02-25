@@ -1,260 +1,353 @@
 import React from 'react'
 import { format } from 'date-fns'
-import type { FacilityIncidentReport } from '@/types/facility-incident-types'
+import type {
+  FacilityIncidentReport,
+  FacilityIncidentType,
+  NotificationType,
+  DocumentationType,
+} from '@/types/facility-incident-types'
+
+const ALL_INCIDENT_TYPES: FacilityIncidentType[] = [
+  'Theft', 'Trespasser', 'Property Damage', 'Injury', 'Fighting',
+  'Medication Refusal', 'Physical Altercation', 'Fire/Alarm', 'Runaway', 'Arrest',
+]
+
+const ALL_NOTIFICATION_TYPES: NotificationType[] = [
+  'Home Director', 'Business Manager', 'Supervisor', 'Case Worker', 'Physician',
+  'Service Coordinator', 'Psychiatrist', 'Family', 'Probation Officer', 'Sheriff',
+]
+
+const LEFT_DOCS: DocumentationType[] = ['Photographs', 'Physical Inspection', 'Property Inspection', 'Statement of Witness']
+const RIGHT_DOCS: DocumentationType[] = ['Property Damage Report', 'Police Report', 'Missing Person Report']
 
 interface Props {
   report: FacilityIncidentReport
 }
 
-/**
- * Professional print-ready incident report layout for Heartland Boys Home.
- * This component renders pure HTML/CSS optimized for PDF export via html2pdf.
- */
 const FacilityIncidentPrintView = React.forwardRef<HTMLDivElement, Props>(
   ({ report }, ref) => {
     const formatDate = (d: string) => {
-      try {
-        return format(new Date(d), 'MMMM d, yyyy')
-      } catch {
-        return d
-      }
+      try { return format(new Date(d), 'MM/dd/yy') } catch { return d }
     }
-
     const formatTime = (t: string) => {
       if (!t) return ''
       try {
         const [h, m] = t.split(':')
         const hour = parseInt(h, 10)
-        const ampm = hour >= 12 ? 'PM' : 'AM'
+        const ampm = hour >= 12 ? 'pm' : 'am'
         const h12 = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour
-        return `${h12}:${m} ${ampm}`
-      } catch {
-        return t
-      }
+        return `${h12}:${m.padStart(2, '0')}${ampm}`
+      } catch { return t }
     }
+
+    const incidentDateTime = [
+      report.incidentDescription,
+      report.dateOfIncident ? formatDate(report.dateOfIncident) : '',
+      report.timeOfIncident ? formatTime(report.timeOfIncident) : '',
+    ].filter(Boolean).join(' ')
+
+    const reportDateTime = [
+      report.reportDate ? formatDate(report.reportDate) : '',
+      report.reportTime ? formatTime(report.reportTime) : '',
+    ].filter(Boolean).join(' ')
+
+    const isCheckedType = (t: FacilityIncidentType) => report.incidentTypes?.includes(t)
+    const isCheckedNotif = (t: NotificationType) => report.notifications?.includes(t)
+    const isCheckedDoc = (t: DocumentationType) => report.documentation?.includes(t)
 
     return (
       <div
         ref={ref}
         style={{
-          fontFamily: "'Times New Roman', 'Georgia', serif",
-          color: '#1a1a1a',
-          lineHeight: 1.5,
+          fontFamily: "'Times New Roman', Georgia, serif",
+          color: '#000',
+          lineHeight: 1.4,
           maxWidth: '8.5in',
           margin: '0 auto',
-          padding: '0.25in',
-          backgroundColor: '#ffffff',
+          padding: '0.4in 0.5in',
+          backgroundColor: '#fff',
+          fontSize: '12px',
         }}
       >
-        {/* Header with logo area and title */}
-        <div style={{ textAlign: 'center', marginBottom: '16px', borderBottom: '3px double #8B0000', paddingBottom: '12px' }}>
-          <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#8B0000', letterSpacing: '2px', textTransform: 'uppercase', marginBottom: '4px' }}>
-            Heartland Boys Home
-          </div>
-          <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#1a1a1a', marginBottom: '2px' }}>
+        {/* Title */}
+        <div style={{ textAlign: 'center', marginBottom: '6px' }}>
+          <div style={{ fontSize: '22px', fontWeight: 'bold', letterSpacing: '1px' }}>
             INCIDENT REPORT
           </div>
-          {report.youthName && (
-            <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#333' }}>
-              {report.youthName.toUpperCase()}
-            </div>
-          )}
         </div>
 
-        {/* Report ID and date bar */}
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          backgroundColor: '#f5f0eb',
-          padding: '6px 12px',
-          fontSize: '10px',
-          marginBottom: '16px',
-          border: '1px solid #d4c5b0',
-        }}>
-          <span><strong>Report ID:</strong> {report.id}</span>
-          <span><strong>Generated:</strong> {format(new Date(), 'MMMM d, yyyy h:mm a')}</span>
+        <div style={{ textAlign: 'center', marginBottom: '16px' }}>
+          <div style={{ fontSize: '14px', fontWeight: 'bold' }}>Heartland Boys Home</div>
+          <div style={{ fontSize: '14px', fontWeight: 'bold' }}>INCIDENT REPORT</div>
         </div>
 
-        {/* Section 1: Incident Details Table */}
+        {/* Subject type row */}
+        <div style={{ display: 'flex', justifyContent: 'center', gap: '40px', marginBottom: '8px', borderBottom: '2px solid #000', paddingBottom: '6px' }}>
+          <span>
+            <strong style={{ textDecoration: report.subjectType === 'Resident' ? 'underline' : 'none', fontWeight: report.subjectType === 'Resident' ? 'bold' : 'normal' }}>
+              Resident
+            </strong>
+          </span>
+          <span>Non-Resident</span>
+          <span>Employee</span>
+        </div>
+
+        {/* Name and incident info row */}
+        <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '2px', fontSize: '11px' }}>
+          <tbody>
+            <tr>
+              <td style={{ width: '80px', padding: '3px 4px', verticalAlign: 'bottom' }}>Last Name</td>
+              <td style={{ padding: '3px 4px', verticalAlign: 'bottom' }}>First</td>
+              <td style={{ width: '50px', padding: '3px 4px', verticalAlign: 'bottom' }}>Initial</td>
+              <td style={{ padding: '3px 4px', verticalAlign: 'bottom' }}></td>
+              <td style={{ padding: '3px 4px', verticalAlign: 'bottom' }}>INCIDENT Date/ Time</td>
+              <td style={{ padding: '3px 4px', verticalAlign: 'bottom' }}>REPORT Date/ Time</td>
+            </tr>
+            <tr>
+              <td style={{ padding: '3px 4px', fontWeight: 'bold', fontSize: '13px', borderBottom: '1px solid #000' }}>
+                {report.lastName || ''}
+              </td>
+              <td style={{ padding: '3px 4px', fontWeight: 'bold', fontSize: '13px', borderBottom: '1px solid #000' }}>
+                {report.firstName || ''}
+              </td>
+              <td style={{ padding: '3px 4px', borderBottom: '1px solid #000' }}>
+                {report.initial || ''}
+              </td>
+              <td style={{ padding: '3px 4px', fontWeight: 'bold', fontSize: '12px', borderBottom: '1px solid #000', textAlign: 'center' }}>
+                {incidentDateTime}
+              </td>
+              <td style={{ padding: '3px 4px', borderBottom: '1px solid #000', textAlign: 'center' }}>
+                {incidentDateTime}
+              </td>
+              <td style={{ padding: '3px 4px', borderBottom: '1px solid #000', textAlign: 'center' }}>
+                {reportDateTime}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        {/* Incident type checkboxes - row 1 */}
+        <div style={{ marginBottom: '2px', fontSize: '11px' }}>
+          <span style={{ marginRight: '4px' }}><strong>Incident:</strong></span>
+          {ALL_INCIDENT_TYPES.slice(0, 5).map(t => (
+            <span key={t} style={{ marginRight: '12px' }}>
+              {isCheckedType(t) ? (
+                <strong style={{ textDecoration: 'underline' }}>{t}</strong>
+              ) : t}
+            </span>
+          ))}
+          <span style={{ marginRight: '4px' }}>Other:</span>
+          <strong style={{ textDecoration: 'underline' }}>
+            {report.incidentTypes?.includes('Other') && report.otherIncidentType
+              ? report.otherIncidentType
+              : ''}
+          </strong>
+        </div>
+
+        {/* Incident type checkboxes - row 2 */}
+        <div style={{ marginBottom: '8px', fontSize: '11px', paddingLeft: '12px', borderBottom: '2px solid #000', paddingBottom: '8px' }}>
+          {ALL_INCIDENT_TYPES.slice(5).map(t => (
+            <span key={t} style={{ marginRight: '16px' }}>
+              {isCheckedType(t) ? (
+                <strong style={{ textDecoration: 'underline' }}>{t}</strong>
+              ) : t}
+            </span>
+          ))}
+        </div>
+
+        {/* Incident narrative section */}
         <div style={{ marginBottom: '16px' }}>
-          <div style={{
-            backgroundColor: '#8B0000',
-            color: '#ffffff',
-            padding: '5px 10px',
-            fontSize: '11px',
-            fontWeight: 'bold',
-            textTransform: 'uppercase',
-            letterSpacing: '1px',
-          }}>
-            Incident Details
+          <div style={{ fontWeight: 'bold', textDecoration: 'underline', marginBottom: '8px', fontSize: '12px' }}>
+            Incident:
           </div>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
-            <tbody>
-              <tr>
-                <td style={cellLabelStyle}>Date of Incident</td>
-                <td style={cellValueStyle}>{report.dateOfIncident ? formatDate(report.dateOfIncident) : '—'}</td>
-                <td style={cellLabelStyle}>Time of Incident</td>
-                <td style={cellValueStyle}>{report.timeOfIncident ? formatTime(report.timeOfIncident) : '—'}</td>
-              </tr>
-              <tr>
-                <td style={cellLabelStyle}>Staff Completing Report</td>
-                <td style={cellValueStyle}>{report.staffCompletingReport || '—'}</td>
-                <td style={cellLabelStyle}>Location</td>
-                <td style={cellValueStyle}>{report.location || '—'}</td>
-              </tr>
-            </tbody>
-          </table>
+          <div style={{
+            fontSize: '11px',
+            lineHeight: 1.6,
+            whiteSpace: 'pre-wrap',
+            minHeight: '120px',
+          }}>
+            {report.narrativeSummary || ''}
+          </div>
         </div>
 
-        {/* Section 2: Youth Involved */}
-        {report.youthInvolved && report.youthInvolved.length > 0 && (
+        {/* Policy Violations (if any) */}
+        {report.policyViolations && report.policyViolations.length > 0 && report.policyViolations.some(p => p.description.trim()) && (
           <div style={{ marginBottom: '16px' }}>
-            <div style={sectionHeaderStyle}>Youth Involved</div>
+            <div style={{ fontWeight: 'bold', textDecoration: 'underline', marginBottom: '6px', fontSize: '12px' }}>
+              Policy Violations:
+            </div>
+            <div style={{ fontSize: '11px', lineHeight: 1.5, paddingLeft: '12px' }}>
+              {report.policyViolations.map((v, i) => (
+                <div key={i}>{i + 1}. {v.description}</div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Staff Actions (if any) */}
+        {report.staffActions && report.staffActions.length > 0 && report.staffActions.some(a => a.description.trim()) && (
+          <div style={{ marginBottom: '16px' }}>
+            <div style={{ fontWeight: 'bold', textDecoration: 'underline', marginBottom: '6px', fontSize: '12px' }}>
+              Staff Action Taken:
+            </div>
+            <div style={{ fontSize: '11px', lineHeight: 1.5, paddingLeft: '12px' }}>
+              {report.staffActions.map((a, i) => (
+                <div key={i}>{i + 1}. {a.description}</div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Follow-Up (if any) */}
+        {report.followUpRecommendations && report.followUpRecommendations.length > 0 && report.followUpRecommendations.some(f => f.description.trim()) && (
+          <div style={{ marginBottom: '16px' }}>
+            <div style={{ fontWeight: 'bold', textDecoration: 'underline', marginBottom: '6px', fontSize: '12px' }}>
+              Follow-Up / Recommendations:
+            </div>
+            <div style={{ fontSize: '11px', lineHeight: 1.5, paddingLeft: '12px' }}>
+              {report.followUpRecommendations.map((f, i) => (
+                <div key={i}>{i + 1}. {f.description}</div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Witnesses */}
+        <div style={{ marginBottom: '16px' }}>
+          <div style={{ fontWeight: 'normal', marginBottom: '8px', fontSize: '12px' }}>
+            Witness:
+          </div>
+          {report.witnesses && report.witnesses.length > 0 && report.witnesses.some(w => w.name.trim()) ? (
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
-              <thead>
-                <tr>
-                  <th style={thStyle}>Name</th>
-                  <th style={{ ...thStyle, width: '80px' }}>Age</th>
-                  <th style={{ ...thStyle, width: '120px' }}>Role</th>
-                </tr>
-              </thead>
               <tbody>
-                {report.youthInvolved.map((y, i) => (
+                {report.witnesses.filter(w => w.name.trim()).map((w, i) => (
                   <tr key={i}>
-                    <td style={tdStyle}>{y.name}</td>
-                    <td style={{ ...tdStyle, textAlign: 'center' }}>{y.age}</td>
-                    <td style={{ ...tdStyle, textAlign: 'center', textTransform: 'capitalize' }}>{y.role}</td>
+                    <td style={{ borderBottom: '1px solid #000', padding: '3px 8px 3px 0', width: '30%', textDecoration: 'underline' }}>
+                      {w.name}
+                    </td>
+                    <td style={{ borderBottom: '1px solid #000', padding: '3px 8px', width: '25%' }}>
+                      {w.address}
+                    </td>
+                    <td style={{ borderBottom: '1px solid #000', padding: '3px 8px', width: '25%' }}>
+                      {w.cityState}
+                    </td>
+                    <td style={{ borderBottom: '1px solid #000', padding: '3px 8px', width: '20%' }}>
+                      {w.phone}
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </div>
-        )}
+          ) : (
+            <div style={{ borderBottom: '1px solid #000', height: '24px', width: '100%' }} />
+          )}
+        </div>
 
-        {/* Section 3: Type of Incident */}
-        {report.incidentTypes && report.incidentTypes.length > 0 && (
-          <div style={{ marginBottom: '16px' }}>
-            <div style={sectionHeaderStyle}>Type of Incident</div>
-            <div style={{
-              border: '1px solid #ccc',
-              padding: '8px 12px',
-              fontSize: '11px',
-            }}>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 16px' }}>
-                {report.incidentTypes.map((type, i) => (
-                  <span key={i} style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                  }}>
-                    <span style={{
-                      display: 'inline-block',
-                      width: '10px',
-                      height: '10px',
-                      border: '1.5px solid #8B0000',
-                      backgroundColor: '#8B0000',
-                      marginRight: '3px',
-                    }} />
-                    {type}
-                    {type === 'Other' && report.otherIncidentType ? `: ${report.otherIncidentType}` : ''}
-                  </span>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
+        {/* Notifications */}
+        <div style={{ marginBottom: '16px', fontSize: '11px' }}>
+          <span>Notifications: </span>
+          {ALL_NOTIFICATION_TYPES.map(t => (
+            <span key={t} style={{ marginRight: '12px' }}>
+              {isCheckedNotif(t) ? (
+                <strong style={{ textDecoration: 'underline' }}>
+                  {t === 'Home Director' ? 'X Home Director' : t}
+                </strong>
+              ) : t}
+            </span>
+          ))}
+          <span>
+            Other:
+            {report.notifications?.includes('Other') && report.otherNotification
+              ? ` ${report.otherNotification}`
+              : ''}
+          </span>
+        </div>
 
-        {/* Section 4: Narrative Summary */}
+        {/* Supplementary Information */}
         <div style={{ marginBottom: '16px' }}>
-          <div style={sectionHeaderStyle}>Narrative Summary</div>
+          <div style={{ fontSize: '12px', marginBottom: '6px' }}>
+            Supplementary Information:
+          </div>
           <div style={{
-            border: '1px solid #ccc',
-            padding: '10px 12px',
             fontSize: '11px',
+            lineHeight: 1.5,
+            minHeight: '40px',
             whiteSpace: 'pre-wrap',
-            minHeight: '60px',
-            lineHeight: 1.6,
           }}>
-            {report.narrativeSummary || '—'}
+            {report.supplementaryInfo || ''}
           </div>
         </div>
 
-        {/* Section 5: Policy Violations */}
-        {report.policyViolations && report.policyViolations.length > 0 && (
-          <div style={{ marginBottom: '16px' }}>
-            <div style={sectionHeaderStyle}>Policy Violations</div>
-            <div style={{ border: '1px solid #ccc', padding: '8px 12px', fontSize: '11px' }}>
-              <ol style={{ margin: 0, paddingLeft: '20px' }}>
-                {report.policyViolations.map((v, i) => (
-                  <li key={i} style={{ marginBottom: '3px' }}>{v.description}</li>
-                ))}
-              </ol>
+        {/* Subject address if non-resident */}
+        <div style={{ marginBottom: '16px', fontSize: '11px' }}>
+          Subject address &amp; phone Number if non-resident
+          {(report.subjectAddress || report.subjectPhone) && (
+            <div style={{ marginTop: '4px' }}>
+              {report.subjectAddress}{report.subjectAddress && report.subjectPhone ? ' — ' : ''}{report.subjectPhone}
+            </div>
+          )}
+        </div>
+
+        {/* Documentation checklist */}
+        <div style={{ marginBottom: '24px', fontSize: '11px' }}>
+          <div style={{ display: 'flex', gap: '40px' }}>
+            {/* Left column */}
+            <div>
+              <div style={{ marginBottom: '4px' }}>Yes &nbsp; No &nbsp; (Place an x)</div>
+              {LEFT_DOCS.map(d => (
+                <div key={d} style={{ marginBottom: '2px' }}>
+                  <span style={{ display: 'inline-block', width: '40px', textAlign: 'center', borderBottom: '1px solid #999' }}>
+                    {isCheckedDoc(d) ? 'X' : ''}
+                  </span>
+                  {' '}{d}
+                </div>
+              ))}
+            </div>
+            {/* Right column */}
+            <div>
+              <div style={{ marginBottom: '4px' }}>Yes &nbsp; No &nbsp; (Place an x)</div>
+              {RIGHT_DOCS.map(d => (
+                <div key={d} style={{ marginBottom: '2px' }}>
+                  <span style={{ display: 'inline-block', width: '40px', textAlign: 'center', borderBottom: '1px solid #999' }}>
+                    {isCheckedDoc(d) ? 'X' : ''}
+                  </span>
+                  {' '}{d}
+                </div>
+              ))}
+              <div style={{ marginBottom: '2px' }}>
+                <span style={{ display: 'inline-block', width: '40px', textAlign: 'center', borderBottom: '1px solid #999' }}>
+                  {isCheckedDoc('Other') ? 'X' : ''}
+                </span>
+                {' '}Other: {report.otherDocumentation || ''}
+              </div>
             </div>
           </div>
-        )}
+        </div>
 
-        {/* Section 6: Staff Action Taken */}
-        {report.staffActions && report.staffActions.length > 0 && (
-          <div style={{ marginBottom: '16px' }}>
-            <div style={sectionHeaderStyle}>Staff Action Taken</div>
-            <div style={{ border: '1px solid #ccc', padding: '8px 12px', fontSize: '11px' }}>
-              <ol style={{ margin: 0, paddingLeft: '20px' }}>
-                {report.staffActions.map((a, i) => (
-                  <li key={i} style={{ marginBottom: '3px' }}>{a.description}</li>
-                ))}
-              </ol>
-            </div>
+        {/* Signature line */}
+        <div style={{ marginTop: '40px', display: 'flex', justifyContent: 'space-between', fontSize: '11px', borderTop: '1px solid #ccc', paddingTop: '16px' }}>
+          <div style={{ flex: '1' }}>
+            Submitted By: <span style={{ display: 'inline-block', width: '200px', borderBottom: '1px solid #000' }}>
+              {report.submittedBy || ''}
+            </span>
           </div>
-        )}
-
-        {/* Section 7: Follow-Up / Recommendations */}
-        {report.followUpRecommendations && report.followUpRecommendations.length > 0 && (
-          <div style={{ marginBottom: '16px' }}>
-            <div style={sectionHeaderStyle}>Follow-Up / Recommendations</div>
-            <div style={{ border: '1px solid #ccc', padding: '8px 12px', fontSize: '11px' }}>
-              <ol style={{ margin: 0, paddingLeft: '20px' }}>
-                {report.followUpRecommendations.map((f, i) => (
-                  <li key={i} style={{ marginBottom: '3px' }}>{f.description}</li>
-                ))}
-              </ol>
-            </div>
+          <div style={{ flex: '1', textAlign: 'center' }}>
+            Reviewed By: <span style={{ display: 'inline-block', width: '200px', borderBottom: '1px solid #000' }}>
+              {report.reviewedBy || ''}
+            </span>
           </div>
-        )}
-
-        {/* Signature Block */}
-        <div style={{ marginTop: '32px', borderTop: '1px solid #ccc', paddingTop: '16px' }}>
-          <div style={sectionHeaderStyle}>Signatures</div>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
-            <tbody>
-              <tr>
-                <td style={{ ...cellLabelStyle, width: '180px' }}>Staff Signature</td>
-                <td style={{ ...cellValueStyle, borderBottom: '1px solid #333', minHeight: '30px', height: '30px' }}>&nbsp;</td>
-                <td style={{ ...cellLabelStyle, width: '80px' }}>Date</td>
-                <td style={{ ...cellValueStyle, borderBottom: '1px solid #333', width: '160px' }}>&nbsp;</td>
-              </tr>
-              <tr><td colSpan={4} style={{ height: '16px' }}>&nbsp;</td></tr>
-              <tr>
-                <td style={{ ...cellLabelStyle, width: '180px' }}>Supervisor Signature</td>
-                <td style={{ ...cellValueStyle, borderBottom: '1px solid #333', minHeight: '30px', height: '30px' }}>&nbsp;</td>
-                <td style={{ ...cellLabelStyle, width: '80px' }}>Date</td>
-                <td style={{ ...cellValueStyle, borderBottom: '1px solid #333', width: '160px' }}>&nbsp;</td>
-              </tr>
-              <tr><td colSpan={4} style={{ height: '16px' }}>&nbsp;</td></tr>
-              <tr>
-                <td style={{ ...cellLabelStyle, width: '180px' }}>Administrator Signature</td>
-                <td style={{ ...cellValueStyle, borderBottom: '1px solid #333', minHeight: '30px', height: '30px' }}>&nbsp;</td>
-                <td style={{ ...cellLabelStyle, width: '80px' }}>Date</td>
-                <td style={{ ...cellValueStyle, borderBottom: '1px solid #333', width: '160px' }}>&nbsp;</td>
-              </tr>
-            </tbody>
-          </table>
+          <div>
+            Date: <span style={{ display: 'inline-block', width: '100px', borderBottom: '1px solid #000' }}>
+              {report.signatureDate ? formatDate(report.signatureDate) : ''}
+            </span>
+          </div>
         </div>
 
         {/* Footer */}
         <div style={{
           marginTop: '24px',
           paddingTop: '8px',
-          borderTop: '2px solid #8B0000',
+          borderTop: '1px solid #999',
           textAlign: 'center',
           fontSize: '9px',
           color: '#666',
@@ -262,7 +355,7 @@ const FacilityIncidentPrintView = React.forwardRef<HTMLDivElement, Props>(
           <div><strong>CONFIDENTIAL</strong> — This document contains sensitive information pertaining to the care and treatment of a minor.</div>
           <div>Unauthorized distribution is prohibited. Retain in accordance with facility record-keeping policy.</div>
           <div style={{ marginTop: '4px', color: '#999' }}>
-            Heartland Boys Home &bull; Incident Report &bull; Page 1 of 1
+            Heartland Boys Home &bull; 914 Road P &bull; Geneva, NE &bull; (402) 759-4334
           </div>
         </div>
       </div>
@@ -271,47 +364,5 @@ const FacilityIncidentPrintView = React.forwardRef<HTMLDivElement, Props>(
 )
 
 FacilityIncidentPrintView.displayName = 'FacilityIncidentPrintView'
-
-// Shared inline styles for the table cells
-const cellLabelStyle: React.CSSProperties = {
-  padding: '6px 10px',
-  fontWeight: 'bold',
-  backgroundColor: '#f9f6f3',
-  border: '1px solid #ccc',
-  width: '180px',
-  verticalAlign: 'top',
-}
-
-const cellValueStyle: React.CSSProperties = {
-  padding: '6px 10px',
-  border: '1px solid #ccc',
-  verticalAlign: 'top',
-}
-
-const sectionHeaderStyle: React.CSSProperties = {
-  backgroundColor: '#8B0000',
-  color: '#ffffff',
-  padding: '5px 10px',
-  fontSize: '11px',
-  fontWeight: 'bold',
-  textTransform: 'uppercase',
-  letterSpacing: '1px',
-}
-
-const thStyle: React.CSSProperties = {
-  padding: '6px 10px',
-  fontWeight: 'bold',
-  backgroundColor: '#f9f6f3',
-  border: '1px solid #ccc',
-  textAlign: 'left',
-  fontSize: '10px',
-  textTransform: 'uppercase',
-}
-
-const tdStyle: React.CSSProperties = {
-  padding: '5px 10px',
-  border: '1px solid #ccc',
-  verticalAlign: 'top',
-}
 
 export default FacilityIncidentPrintView

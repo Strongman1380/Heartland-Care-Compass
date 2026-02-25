@@ -168,11 +168,11 @@ export const generateReportHTML = async (youth: Youth, options: ReportOptions): 
 
   const notesSection = () => {
     if (!options.includeOptions.notes || !data.progressNotes) return '';
-    const items = (data.progressNotes as ProgressNote[]).slice(0, 10).map(n => `
+    const items = (data.progressNotes as ProgressNote[]).slice(0, 50).map(n => `
       <li>${fmt(n.date as any)} - ${esc(n.category || 'General')}: ${esc(n.note || 'No note')}</li>`).join('');
     return `
       <div style="margin:12pt 0;">
-        <h3 style="font-size:12pt; margin:0 0 6pt;">Progress Notes (${(data.progressNotes as any[]).length} entries)</h3>
+        <h3 style="font-size:12pt; margin:0 0 6pt;">Progress Notes (${(data.progressNotes as any[]).length} entries - Showing last 50)</h3>
         <ul style="margin:0 0 0 16pt; font-size:11pt;">${items}</ul>
       </div>`;
   };
@@ -684,7 +684,8 @@ Deal with Authority Average: ${calcAvg('dealAuthority')} / 5
   if (options.includeOptions.notes && data.progressNotes) {
     report += `PROGRESS NOTES (${data.progressNotes.length} entries):
 `;
-    data.progressNotes.slice(0, 10).forEach((note: ProgressNote) => {
+    // Increased limit to 50 notes to provide more context
+    data.progressNotes.slice(0, 50).forEach((note: ProgressNote) => {
       report += `${note.date ? format(new Date(note.date), "M/d/yyyy") : "No date"} - ${note.category || "General"}: ${note.note || "No note"}\n`;
     });
     report += "\n";
@@ -903,7 +904,7 @@ const generateCourtReport = async (
 
   let report = `COURT REPORT
 Heartland Boys Home
-Residential Treatment Program
+Group Home
 
 YOUTH INFORMATION:
 Name: ${youth.firstName} ${youth.lastName}
@@ -938,7 +939,7 @@ Legal Status: ${youth.legalStatus || "Not provided"}
 REPORT PERIOD: ${format(startDate, "M/d/yyyy")} to ${format(endDate, "M/d/yyyy")}
 
 PROGRAM PARTICIPATION:
-${youth.firstName} has been actively participating in the residential treatment program at Heartland Boys Home. The program focuses on behavioral modification, educational advancement, and therapeutic intervention.
+${youth.firstName} has been actively participating in the group home program at Heartland Boys Home. The program focuses on behavioral modification, educational advancement, and therapeutic intervention.
 
 BEHAVIORAL PROGRESS:
 `;
@@ -981,7 +982,7 @@ RECENT PROGRESS NOTES:
 `;
 
   if (reportData.progressNotes && reportData.progressNotes.length > 0) {
-    reportData.progressNotes.slice(0, 5).forEach((note: any) => {
+    reportData.progressNotes.slice(0, 30).forEach((note: any) => {
       report += `${note.date ? format(new Date(note.date), "M/d/yyyy") : "Recent"} - ${note.category || "General"}: ${note.note || "Progress documented"}\n`;
     });
   }
@@ -995,7 +996,7 @@ RECOMMENDATIONS:
 5. Prepare for transition planning as appropriate milestones are achieved
 
 SUMMARY:
-${youth.firstName} continues to make measurable progress within the residential treatment program. The structured environment and therapeutic interventions have contributed to improved behavioral regulation and social functioning. Continued participation in the program is recommended to maintain and build upon current gains.
+${youth.firstName} continues to make measurable progress within the group home program. The structured environment and therapeutic interventions have contributed to improved behavioral regulation and social functioning. Continued participation in the program is recommended to maintain and build upon current gains.
 
 Report Prepared By: Heartland Boys Home Clinical Staff
 Date: ${format(new Date(), "M/d/yyyy")}
@@ -1085,7 +1086,7 @@ SIGNIFICANT INCIDENTS/ACHIEVEMENTS:
 `;
 
   if (reportData.progressNotes && reportData.progressNotes.length > 0) {
-    const recentNotes = reportData.progressNotes.slice(0, 3);
+    const recentNotes = reportData.progressNotes.slice(0, 15);
     recentNotes.forEach((note: any) => {
       report += `• ${note.date ? format(new Date(note.date), "M/d/yyyy") : "Recent"}: ${note.note || "Progress documented in treatment plan"}\n`;
     });

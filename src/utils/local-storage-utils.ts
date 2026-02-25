@@ -196,6 +196,7 @@ export const saveProgressNote = async (
     await notesService.save({
       id: newNote.id,
       youth_id: youthId,
+      author_id: newNote.staff || null,
       text: typeof newNote.note === 'string' ? newNote.note : JSON.stringify(newNote.note),
       category: newNote.category || 'Progress Note'
     } as any);

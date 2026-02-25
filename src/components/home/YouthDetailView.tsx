@@ -5,8 +5,7 @@ import { YouthProfile } from "@/components/youth/YouthProfile";
 import { BehaviorCard } from "@/components/behavior/BehaviorCard";
 import { EnhancedCaseNotes } from "@/components/notes/EnhancedCaseNotes";
 import { ReportsTab } from "@/components/reports/ReportsTab";
-import { ReferralTab } from "@/components/referral/ReferralTab";
-import { User, CheckSquare, FileText, BarChart3, ArrowLeft, ClipboardPaste } from "lucide-react";
+import { User, CheckSquare, FileText, BarChart3, ArrowLeft } from "lucide-react";
 import { Youth } from "@/integrations/firebase/services";
 
 interface YouthDetailViewProps {
@@ -60,10 +59,6 @@ export const YouthDetailView = ({
             <FileText size={18} className="sm:w-4 sm:h-4" />
             <span className="hidden sm:inline">Case Notes</span>
           </TabsTrigger>
-          <TabsTrigger value="referral" className="flex items-center gap-1.5 sm:gap-2 min-h-[44px] px-2 sm:px-3.5 data-[state=active]:bg-yellow-400 data-[state=active]:text-red-900">
-            <ClipboardPaste size={18} className="sm:w-4 sm:h-4" />
-            <span className="hidden sm:inline">Referral</span>
-          </TabsTrigger>
           <TabsTrigger value="reports" className="flex items-center gap-1.5 sm:gap-2 min-h-[44px] px-2 sm:px-3.5 data-[state=active]:bg-yellow-400 data-[state=active]:text-red-900">
             <BarChart3 size={18} className="sm:w-4 sm:h-4" />
             <span className="hidden sm:inline">Reports</span>
@@ -84,10 +79,6 @@ export const YouthDetailView = ({
 
         <TabsContent value="notes">
           <EnhancedCaseNotes youthId={selectedYouth.id} youth={selectedYouth} />
-        </TabsContent>
-
-        <TabsContent value="referral">
-          <ReferralTab youthId={selectedYouth.id} youth={selectedYouth} />
         </TabsContent>
 
         <TabsContent value="reports">

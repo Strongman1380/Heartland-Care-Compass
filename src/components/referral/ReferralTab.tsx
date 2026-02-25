@@ -596,7 +596,7 @@ export const ReferralTab = () => {
       setReferralSource("");
       setReferralName("");
       setStaffName("");
-      setStatus("new");
+      setStatus("pending_interview");
       setPriority("routine");
     } catch (error) {
       const msg = error instanceof Error ? error.message : "Failed to save referral note";

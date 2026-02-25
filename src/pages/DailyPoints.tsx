@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Header } from "@/components/layout/Header";
 import { BehaviorCard } from "@/components/behavior/BehaviorCard";
 import { YouthSelector } from "@/components/common/YouthSelector";
@@ -11,24 +11,32 @@ const DailyPoints = () => {
   const [selectedYouthId, setSelectedYouthId] = useState<string | null>(null);
   const [selectedYouth, setSelectedYouth] = useState<Youth | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  
+  const loadingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Use Supabase hook for youth operations
   const { youths, loadYouths } = useYouth();
 
   useEffect(() => {
     loadYouths();
+    return () => {
+      if (loadingTimerRef.current) clearTimeout(loadingTimerRef.current);
+    };
   }, []);
 
   const handleYouthSelect = (youthId: string) => {
+    if (loadingTimerRef.current) clearTimeout(loadingTimerRef.current);
     setIsLoading(true);
     setSelectedYouthId(youthId);
-    
+
     // Find the selected youth from Supabase data
     const youth = youths.find(y => y.id === youthId);
     setSelectedYouth(youth || null);
-    
+
     // Simulate loading for a smoother UX
-    setTimeout(() => setIsLoading(false), 500);
+    loadingTimerRef.current = setTimeout(() => {
+      loadingTimerRef.current = null;
+      setIsLoading(false);
+    }, 500);
   };
 
   return (

@@ -141,33 +141,41 @@ export const saveBehaviorPoints = (
   return newPoints;
 };
 
+// Track in-flight background syncs to avoid redundant concurrent fetches
+const _syncInFlight = new Set<string>()
+
 // Progress Notes functions
 export const fetchProgressNotes = (youthId: string): ProgressNote[] => {
-  // Hydrate from Supabase in background and merge
-  (async () => {
-    try {
-      const remote = await notesService.listForYouth(youthId)
-      if (remote && remote.length) {
-        const merged = remote.map(r => ({
-          id: r.id,
-          youth_id: r.youth_id,
-          date: r.created_at,
-          note: r.text,
-          staff: r.author_id || '',
-          category: r.category || 'Progress Note',
-          createdAt: new Date(r.created_at)
-        })) as any as ProgressNote[]
-        const local = getItem<ProgressNote[]>(STORAGE_KEYS.NOTES) || [];
-        const map = new Map<string, ProgressNote>()
-        for (const n of local) map.set(n.id || `${n.youth_id}|${String(n.date)}`, n)
-        for (const n of merged) map.set(n.id || `${n.youth_id}|${String(n.date)}`, n)
-        setItem(STORAGE_KEYS.NOTES, Array.from(map.values()))
+  // Hydrate from Supabase in background and merge (once per youth at a time)
+  if (!_syncInFlight.has(youthId)) {
+    _syncInFlight.add(youthId)
+    ;(async () => {
+      try {
+        const remote = await notesService.listForYouth(youthId)
+        if (remote && remote.length) {
+          const merged = remote.map(r => ({
+            id: r.id,
+            youth_id: r.youth_id,
+            date: r.created_at,
+            note: r.text,
+            staff: r.author_id || '',
+            category: r.category || 'Progress Note',
+            createdAt: new Date(r.created_at)
+          })) as any as ProgressNote[]
+          const local = getItem<ProgressNote[]>(STORAGE_KEYS.NOTES) || [];
+          const map = new Map<string, ProgressNote>()
+          for (const n of local) map.set(n.id || `${n.youth_id}|${String(n.date)}`, n)
+          for (const n of merged) map.set(n.id || `${n.youth_id}|${String(n.date)}`, n)
+          setItem(STORAGE_KEYS.NOTES, Array.from(map.values()))
+        }
+      } catch (error) {
+        // Silently fail - we'll use local cache
+        console.warn('Progress notes sync failed, using local cache:', error)
+      } finally {
+        _syncInFlight.delete(youthId)
       }
-    } catch (error) {
-      // Silently fail - we'll use local cache
-      console.warn('Progress notes sync failed, using local cache:', error)
-    }
-  })()
+    })()
+  }
   const allNotes = getItem<ProgressNote[]>(STORAGE_KEYS.NOTES) || [];
   return allNotes
     .filter(note => note.youth_id === youthId)

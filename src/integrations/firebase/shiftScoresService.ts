@@ -70,23 +70,24 @@ export const weeklyEvalService = {
   async forYouth(youth_id: string): Promise<WeeklyEvalRow[]> {
     const q = query(
       collection(db, WEEKLY_COLLECTION),
-      where('youth_id', '==', youth_id),
-      orderBy('week_date', 'desc')
+      where('youth_id', '==', youth_id)
     )
     const snapshot = await getDocs(q)
-    return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as WeeklyEvalRow))
+    return snapshot.docs
+      .map(d => ({ id: d.id, ...d.data() } as WeeklyEvalRow))
+      .sort((a, b) => b.week_date.localeCompare(a.week_date))
   },
 
   async forYouthInRange(youth_id: string, startISO: string, endISO: string): Promise<WeeklyEvalRow[]> {
     const q = query(
       collection(db, WEEKLY_COLLECTION),
-      where('youth_id', '==', youth_id),
-      where('week_date', '>=', startISO),
-      where('week_date', '<=', endISO),
-      orderBy('week_date', 'asc')
+      where('youth_id', '==', youth_id)
     )
     const snapshot = await getDocs(q)
-    return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as WeeklyEvalRow))
+    return snapshot.docs
+      .map(d => ({ id: d.id, ...d.data() } as WeeklyEvalRow))
+      .filter(r => r.week_date >= startISO && r.week_date <= endISO)
+      .sort((a, b) => a.week_date.localeCompare(b.week_date))
   },
 
   async range(startISO: string, endISO: string): Promise<WeeklyEvalRow[]> {
@@ -139,22 +140,23 @@ export const dailyShiftService = {
   async forYouth(youth_id: string): Promise<DailyShiftRow[]> {
     const q = query(
       collection(db, DAILY_COLLECTION),
-      where('youth_id', '==', youth_id),
-      orderBy('date', 'desc')
+      where('youth_id', '==', youth_id)
     )
     const snapshot = await getDocs(q)
-    return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as DailyShiftRow))
+    return snapshot.docs
+      .map(d => ({ id: d.id, ...d.data() } as DailyShiftRow))
+      .sort((a, b) => b.date.localeCompare(a.date))
   },
 
   async forYouthInRange(youth_id: string, startISO: string, endISO: string): Promise<DailyShiftRow[]> {
     const q = query(
       collection(db, DAILY_COLLECTION),
-      where('youth_id', '==', youth_id),
-      where('date', '>=', startISO),
-      where('date', '<=', endISO),
-      orderBy('date', 'asc')
+      where('youth_id', '==', youth_id)
     )
     const snapshot = await getDocs(q)
-    return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as DailyShiftRow))
+    return snapshot.docs
+      .map(d => ({ id: d.id, ...d.data() } as DailyShiftRow))
+      .filter(r => r.date >= startISO && r.date <= endISO)
+      .sort((a, b) => a.date.localeCompare(b.date))
   }
 }

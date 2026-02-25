@@ -43,6 +43,12 @@ const getMonday = (d: Date) => {
   return res
 }
 
+const toWeekStartISO = (isoDate: string): string => {
+  const parsed = new Date(`${isoDate}T00:00:00`)
+  if (isNaN(parsed.getTime())) return isoDate
+  return toISO(getMonday(parsed))
+}
+
 const DOMAINS = [
   { key: 'peer' as const, label: 'Peer', short: 'Peer' },
   { key: 'adult' as const, label: 'Adult', short: 'Adult' },
@@ -101,6 +107,7 @@ const ShiftScores: React.FC = () => {
   // Shared
   const [autoSaveEnabled, setAutoSaveEnabled] = useState(true)
   const [lastSaved, setLastSaved] = useState<Date | null>(null)
+  const [refreshKey, setRefreshKey] = useState(0)
 
   // Averages state
   const [avgMode, setAvgMode] = useState<'weekly' | 'monthly' | 'duration' | 'custom'>('weekly')
@@ -149,8 +156,9 @@ const ShiftScores: React.FC = () => {
           }
         }
         for (const ev of allEvals) {
-          if (grid[ev.youth_id] && grid[ev.youth_id][ev.week_date]) {
-            grid[ev.youth_id][ev.week_date] = {
+          const weekKey = toWeekStartISO(ev.week_date)
+          if (grid[ev.youth_id] && grid[ev.youth_id][weekKey]) {
+            grid[ev.youth_id][weekKey] = {
               peer: ev.peer, adult: ev.adult, investment: ev.investment, authority: ev.authority
             }
           }
@@ -168,7 +176,7 @@ const ShiftScores: React.FC = () => {
       }
     }
     loadWeekly()
-  }, [sortedYouths, weeklyDates.join('|')])
+  }, [sortedYouths, weeklyDates.join('|'), refreshKey])
 
   // ── Load daily shift data ──
   useEffect(() => {
@@ -202,7 +210,7 @@ const ShiftScores: React.FC = () => {
       }
     }
     loadDaily()
-  }, [sortedYouths, dailyDates.join('|')])
+  }, [sortedYouths, dailyDates.join('|'), refreshKey])
 
   // ── Weekly eval handlers ──
   const handleWeeklyChange = (youthId: string, weekDate: string, domain: keyof DomainScores, value: string) => {
@@ -502,13 +510,14 @@ const ShiftScores: React.FC = () => {
             : 'day'
           await upsertDailyShift(matched.id, isoDate, shift, scores, 'uploaded')
         } else {
-          await upsertWeeklyEval(matched.id, isoDate, scores, 'uploaded')
+          await upsertWeeklyEval(matched.id, toWeekStartISO(isoDate), scores, 'uploaded')
         }
         uploaded++
       }
 
       const type = isDailyShift ? 'daily shift score' : 'weekly eval'
       toast({ title: "Upload Complete", description: `Imported ${uploaded} ${type}(s).${skipped ? ` ${skipped} row(s) skipped.` : ''}`, duration: 5000 })
+      setRefreshKey(k => k + 1)
     } catch (error) {
       console.error('Upload error:', error)
       toast({ title: "Upload Failed", description: "Could not parse the file.", variant: "destructive" })

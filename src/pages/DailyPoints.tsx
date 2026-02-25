@@ -13,7 +13,11 @@ const DailyPoints = () => {
   const [isLoading, setIsLoading] = useState(false);
   
   // Use Supabase hook for youth operations
-  const { youths } = useYouth();
+  const { youths, loadYouths } = useYouth();
+
+  useEffect(() => {
+    loadYouths();
+  }, []);
 
   const handleYouthSelect = (youthId: string) => {
     setIsLoading(true);

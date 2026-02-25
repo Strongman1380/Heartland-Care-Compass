@@ -96,7 +96,7 @@ export function generateDPNFieldComments(payload: AISummaryRequest): DPNFieldCom
 
     narrative: `Based on ${caseNotes.length} documented case notes during this evaluation period, ${youth.firstName} has been ${hasInvestPositive && hasAdultPositive ? 'making positive progress' : hasInvestNegative || hasAdultNegative ? 'working through some challenges' : 'progressing steadily'} in his programming.
 
-${caseNotes.length > 0 ? 'Recent Observations: ' + noteTexts.slice(-2).join(' ') : ''}
+${caseNotes.length > 0 ? 'Recent Observations: ' + (() => { const obs = noteTexts.slice(-2).join(' '); return obs.length > 300 ? obs.substring(0, 300) + '...' : obs; })() : ''}
 
 Next Steps: ${caseNotes.length > 0 && caseNotes[caseNotes.length - 1].sections?.planNextSteps ? caseNotes[caseNotes.length - 1].sections.planNextSteps : `The care team will continue to monitor ${youth.firstName}'s progress, provide targeted interventions, and work with him on achieving his program goals.`}`
   };
@@ -143,8 +143,9 @@ const generateMockAISummary = (payload: AISummaryRequest): string => {
     })
     .filter((entry: string) => entry && entry.trim().length > 0);
 
+  const rawSummary = caseNotesText.slice(0, 15).join(' ');
   const caseNotesSummary = caseNotesText.length > 0
-    ? caseNotesText.slice(0, 15).join(' ') // Increased from 3 to 15 to include more context
+    ? (rawSummary.length > 300 ? rawSummary.substring(0, 300) + '...' : rawSummary)
     : 'Staff continue to document interventions, family contacts, and daily activities.';
 
   const daysInPlacement = youth.admissionDate ? Math.floor((new Date().getTime() - new Date(youth.admissionDate).getTime()) / (1000 * 60 * 60 * 24)) : null;
@@ -171,7 +172,7 @@ Continued group home placement is recommended to consolidate gains and address r
 
 Day-to-Day Observations:
 
-${caseNotesText.length > 0 ? caseNotesText.slice(0, 15).join(' ') : 'Staff continue to document daily observations and interventions.'}
+${caseNotesText.length > 0 ? (caseNotesText.slice(0, 15).join(' ').substring(0, 300) + (caseNotesText.slice(0, 15).join(' ').length > 300 ? '...' : '')) : 'Staff continue to document daily observations and interventions.'}
 
 ${youth.strengthsTalents ? 'Strengths We Are Building On: ' + youth.strengthsTalents : ''}
 

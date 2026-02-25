@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -26,9 +26,8 @@ const INCIDENT_TYPES: FacilityIncidentType[] = [
   'Trespasser',
   'Property Damage',
   'Injury',
-  'Fighting',
-  'Medication Refusal',
   'Physical Altercation',
+  'Medication Refusal',
   'Fire/Alarm',
   'Runaway',
   'Arrest',
@@ -91,9 +90,16 @@ export default function FacilityIncidentForm({ incident, onSave, onCancel }: Pro
   )
   const [selectedRosterYouthId, setSelectedRosterYouthId] = useState('')
   const [selectedRosterRole, setSelectedRosterRole] = useState<InvolvedYouth['role']>('secondary')
+  const [rosterDuplicateWarning, setRosterDuplicateWarning] = useState('')
+
+  // Validation errors
+  const [validationErrors, setValidationErrors] = useState<string[]>([])
 
   // Incident types
-  const [incidentTypes, setIncidentTypes] = useState<FacilityIncidentType[]>(incident?.incidentTypes ?? [])
+  const [incidentTypes, setIncidentTypes] = useState<FacilityIncidentType[]>(
+    // Normalize legacy 'Fighting' → 'Physical Altercation' from older reports
+    (incident?.incidentTypes ?? []).map(t => t === 'Fighting' as any ? 'Physical Altercation' as FacilityIncidentType : t)
+  )
   const [otherIncidentType, setOtherIncidentType] = useState(incident?.otherIncidentType ?? '')
 
   // Narrative
@@ -135,15 +141,16 @@ export default function FacilityIncidentForm({ incident, onSave, onCancel }: Pro
   const [reviewedBy, setReviewedBy] = useState(incident?.reviewedBy ?? '')
   const [signatureDate, setSignatureDate] = useState(incident?.signatureDate ?? '')
 
-  const sortedYouths = [...youths].sort((a, b) => {
-    const lastNameCompare = a.lastName.localeCompare(b.lastName)
-    if (lastNameCompare !== 0) return lastNameCompare
-    return a.firstName.localeCompare(b.firstName)
-  })
+  const sortedYouths = useMemo(() =>
+    [...youths].sort((a, b) => {
+      const lastNameCompare = a.lastName.localeCompare(b.lastName)
+      if (lastNameCompare !== 0) return lastNameCompare
+      return a.firstName.localeCompare(b.firstName)
+    }), [youths])
 
   useEffect(() => {
     loadYouths()
-  }, [])
+  }, [loadYouths])
 
   const toggleIncidentType = (type: FacilityIncidentType) => {
     setIncidentTypes(prev =>
@@ -164,7 +171,26 @@ export default function FacilityIncidentForm({ incident, onSave, onCancel }: Pro
   }
 
   const handleSubmit = () => {
-    const youthName = `${lastName}, ${firstName}${initial ? ' ' + initial : ''}`.trim()
+    const errors: string[] = []
+
+    if (!dateOfIncident) errors.push('Incident date is required.')
+    if (!timeOfIncident) errors.push('Incident time is required.')
+    if (incidentTypes.length === 0) errors.push('At least one incident type must be selected.')
+    if (subjectType === 'Resident' && !lastName.trim()) errors.push('Last name is required for residents.')
+    if (subjectType === 'Resident' && !firstName.trim()) errors.push('First name is required for residents.')
+    if (incidentTypes.includes('Other') && !otherIncidentType.trim()) errors.push('Please specify the other incident type.')
+    if (notifications.includes('Other') && !otherNotification.trim()) errors.push('Please specify the other notification recipient.')
+    if (documentation.includes('Other') && !otherDocumentation.trim()) errors.push('Please specify the other documentation type.')
+
+    if (errors.length > 0) {
+      setValidationErrors(errors)
+      return
+    }
+    setValidationErrors([])
+
+    const nameParts = [lastName, [firstName, initial].filter(Boolean).join(' ')].filter(Boolean)
+    const youthName = nameParts.join(', ')
+    const isNonResident = subjectType === 'Non-Resident'
     const data: FacilityIncidentFormData = {
       id: incident?.id,
       subjectType,
@@ -187,8 +213,8 @@ export default function FacilityIncidentForm({ incident, onSave, onCancel }: Pro
       notifications,
       otherNotification: notifications.includes('Other') ? otherNotification : undefined,
       supplementaryInfo,
-      subjectAddress,
-      subjectPhone,
+      subjectAddress: isNonResident ? subjectAddress : '',
+      subjectPhone: isNonResident ? subjectPhone : '',
       documentation,
       otherDocumentation: documentation.includes('Other') ? otherDocumentation : undefined,
       policyViolations: policyViolations.filter(p => p.trim() !== '').map(p => ({ description: p })),
@@ -217,6 +243,8 @@ export default function FacilityIncidentForm({ incident, onSave, onCancel }: Pro
 
     const displayName = `${youth.firstName} ${youth.lastName}`.trim()
     if (youthInvolved.some(y => y.name.toLowerCase() === displayName.toLowerCase())) {
+      setRosterDuplicateWarning(`${displayName} is already listed as involved.`)
+      setTimeout(() => setRosterDuplicateWarning(''), 4000)
       setSelectedRosterYouthId('')
       return
     }
@@ -281,7 +309,7 @@ export default function FacilityIncidentForm({ incident, onSave, onCancel }: Pro
                 >
                   <div className="flex items-center space-x-2">
                     <RadioGroupItem value="Resident" id="resident" />
-                    <Label htmlFor="resident" className="font-bold">Resident</Label>
+                    <Label htmlFor="resident">Resident</Label>
                   </div>
                   <div className="flex items-center space-x-2">
                     <RadioGroupItem value="Non-Resident" id="non-resident" />
@@ -406,7 +434,7 @@ export default function FacilityIncidentForm({ incident, onSave, onCancel }: Pro
                 <div className="grid grid-cols-1 md:grid-cols-[1fr_180px_140px] gap-3 items-end">
                   <div>
                     <Label>Select Youth</Label>
-                    <Select value={selectedRosterYouthId} onValueChange={setSelectedRosterYouthId}>
+                    <Select value={selectedRosterYouthId} onValueChange={(v) => { setSelectedRosterYouthId(v); setRosterDuplicateWarning('') }}>
                       <SelectTrigger>
                         <SelectValue placeholder="Choose youth from active roster" />
                       </SelectTrigger>
@@ -442,6 +470,11 @@ export default function FacilityIncidentForm({ incident, onSave, onCancel }: Pro
                     Add Youth
                   </Button>
                 </div>
+                {rosterDuplicateWarning && (
+                  <div className="mt-2 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+                    {rosterDuplicateWarning}
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -853,6 +886,18 @@ export default function FacilityIncidentForm({ incident, onSave, onCancel }: Pro
             </div>
           </TabsContent>
         </Tabs>
+
+        {/* Validation Errors */}
+        {validationErrors.length > 0 && (
+          <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+            <p className="text-sm font-semibold text-red-700 mb-1">Please fix the following before saving:</p>
+            <ul className="list-disc list-inside text-sm text-red-600 space-y-1">
+              {validationErrors.map((err, i) => (
+                <li key={i}>{err}</li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {/* Action Buttons */}
         <div className="flex justify-end gap-3 mt-8 pt-4 border-t">

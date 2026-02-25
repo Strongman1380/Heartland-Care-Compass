@@ -15,7 +15,8 @@ import { useToast } from "@/hooks/use-toast";
 import { draftsService } from '@/integrations/firebase/draftsService'
 import { findProfessional } from '@/utils/professionalUtils'
 import { useAuth } from '@/contexts/AuthContext'
-import { getBehaviorPointsByYouth, getProgressNotesByYouth, getDailyRatingsByYouth } from "@/lib/api";
+import { getBehaviorPointsByYouth, getDailyRatingsByYouth } from "@/lib/api";
+import { fetchAllProgressNotes } from "@/utils/local-storage-utils";
 import { getScoresByYouth, type SchoolDailyScore } from "@/utils/schoolScores";
 import { getWeeklyEvalsForYouthInRange, getDailyShiftsForYouthInRange } from "@/utils/shiftScores";
 import * as aiService from "@/services/aiService";
@@ -697,8 +698,7 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
 
       // No saved data — populate with base data and auto-trigger AI population
       if (!loaded) {
-        const baseData = getBaseDataIfEmpty(reportData);
-        setReportData(prev => ({ ...prev, ...baseData }));
+        setReportData(prev => ({ ...prev, ...getBaseDataIfEmpty(prev) }));
         setShouldAutoPopulate(true);
       }
     })();
@@ -901,7 +901,7 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
       const todayISO = new Date().toISOString().split('T')[0];
       const [behaviorPoints, progressNotes, dailyRatings, schoolScores, weeklyEvals, dailyShifts] = await Promise.all([
         getBehaviorPointsByYouth(youth.id),
-        getProgressNotesByYouth(youth.id),
+        fetchAllProgressNotes(youth.id),
         getDailyRatingsByYouth(youth.id),
         getScoresByYouth(youth.id).catch((error) => {
           console.warn('Failed to load school scores for court report auto-populate:', error);
@@ -960,11 +960,11 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
       // Calculate weekly eval averages (4-domain behavioral scoring)
       const allEvalEntries = [...weeklyEvals, ...dailyShifts];
       const evalCount = allEvalEntries.length;
-      const evalAvgPeer = evalCount > 0 ? (allEvalEntries.reduce((s, e) => s + e.peer, 0) / evalCount).toFixed(1) : 'N/A';
-      const evalAvgAdult = evalCount > 0 ? (allEvalEntries.reduce((s, e) => s + e.adult, 0) / evalCount).toFixed(1) : 'N/A';
-      const evalAvgInvestment = evalCount > 0 ? (allEvalEntries.reduce((s, e) => s + e.investment, 0) / evalCount).toFixed(1) : 'N/A';
-      const evalAvgAuthority = evalCount > 0 ? (allEvalEntries.reduce((s, e) => s + e.authority, 0) / evalCount).toFixed(1) : 'N/A';
-      const evalAvgOverall = evalCount > 0 ? (allEvalEntries.reduce((s, e) => s + e.overall, 0) / evalCount).toFixed(1) : 'N/A';
+      const evalAvgPeer = evalCount > 0 ? (allEvalEntries.reduce((s, e) => s + (e.peer ?? 0), 0) / evalCount).toFixed(1) : 'N/A';
+      const evalAvgAdult = evalCount > 0 ? (allEvalEntries.reduce((s, e) => s + (e.adult ?? 0), 0) / evalCount).toFixed(1) : 'N/A';
+      const evalAvgInvestment = evalCount > 0 ? (allEvalEntries.reduce((s, e) => s + (e.investment ?? 0), 0) / evalCount).toFixed(1) : 'N/A';
+      const evalAvgAuthority = evalCount > 0 ? (allEvalEntries.reduce((s, e) => s + (e.authority ?? 0), 0) / evalCount).toFixed(1) : 'N/A';
+      const evalAvgOverall = evalCount > 0 ? (allEvalEntries.reduce((s, e) => s + (e.overall ?? 0), 0) / evalCount).toFixed(1) : 'N/A';
 
       // Calculate length of stay
       const lengthOfStay = youth.admissionDate
@@ -1104,13 +1104,17 @@ Write a professional summary suitable for a court report focusing on future plan
     }
   };
 
+  // Keep a ref to the latest handleAutoPopulate to avoid stale closures
+  const handleAutoPopulateRef = useRef(handleAutoPopulate);
+  handleAutoPopulateRef.current = handleAutoPopulate;
+
   // Auto-trigger AI population when no saved draft exists
   useEffect(() => {
     if (shouldAutoPopulate && youth?.id && !isSaving) {
       setShouldAutoPopulate(false);
-      handleAutoPopulate(true);
+      handleAutoPopulateRef.current(true);
     }
-  }, [shouldAutoPopulate, youth?.id]);
+  }, [shouldAutoPopulate, youth?.id, isSaving]);
 
   const handleReset = async () => {
     if (!youth) {
@@ -1226,7 +1230,7 @@ Write a professional summary suitable for a court report focusing on future plan
               <Button
                 variant="default"
                 size="sm"
-                onClick={handleAutoPopulate}
+                onClick={() => handleAutoPopulate()}
                 className="bg-[#823131] hover:bg-[#6b2828] text-white border-[#823131]"
               >
                 <Sparkles className="mr-2 h-4 w-4" />

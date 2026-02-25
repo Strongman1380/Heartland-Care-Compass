@@ -8,8 +8,8 @@ import type {
 } from '@/types/facility-incident-types'
 
 const ALL_INCIDENT_TYPES: FacilityIncidentType[] = [
-  'Theft', 'Trespasser', 'Property Damage', 'Injury', 'Fighting',
-  'Medication Refusal', 'Physical Altercation', 'Fire/Alarm', 'Runaway', 'Arrest',
+  'Theft', 'Trespasser', 'Property Damage', 'Injury',
+  'Physical Altercation', 'Medication Refusal', 'Fire/Alarm', 'Runaway', 'Arrest',
 ]
 
 const ALL_NOTIFICATION_TYPES: NotificationType[] = [
@@ -41,7 +41,6 @@ const FacilityIncidentPrintView = React.forwardRef<HTMLDivElement, Props>(
     }
 
     const incidentDateTime = [
-      report.incidentDescription,
       report.dateOfIncident ? formatDate(report.dateOfIncident) : '',
       report.timeOfIncident ? formatTime(report.timeOfIncident) : '',
     ].filter(Boolean).join(' ')
@@ -51,7 +50,9 @@ const FacilityIncidentPrintView = React.forwardRef<HTMLDivElement, Props>(
       report.reportTime ? formatTime(report.reportTime) : '',
     ].filter(Boolean).join(' ')
 
-    const isCheckedType = (t: FacilityIncidentType) => report.incidentTypes?.includes(t)
+    // Normalize legacy 'Fighting' → 'Physical Altercation' from older reports
+    const normalizedTypes = report.incidentTypes?.map(t => t === 'Fighting' as any ? 'Physical Altercation' : t) || []
+    const isCheckedType = (t: FacilityIncidentType) => normalizedTypes.includes(t)
     const isCheckedNotif = (t: NotificationType) => report.notifications?.includes(t)
     const isCheckedDoc = (t: DocumentationType) => report.documentation?.includes(t)
 
@@ -78,18 +79,19 @@ const FacilityIncidentPrintView = React.forwardRef<HTMLDivElement, Props>(
 
         <div style={{ textAlign: 'center', marginBottom: '16px' }}>
           <div style={{ fontSize: '14px', fontWeight: 'bold' }}>Heartland Boys Home</div>
-          <div style={{ fontSize: '14px', fontWeight: 'bold' }}>INCIDENT REPORT</div>
         </div>
 
         {/* Subject type row */}
         <div style={{ display: 'flex', justifyContent: 'center', gap: '40px', marginBottom: '8px', borderBottom: '2px solid #000', paddingBottom: '6px' }}>
-          <span>
-            <strong style={{ textDecoration: report.subjectType === 'Resident' ? 'underline' : 'none', fontWeight: report.subjectType === 'Resident' ? 'bold' : 'normal' }}>
-              Resident
-            </strong>
+          <span style={{ textDecoration: report.subjectType === 'Resident' ? 'underline' : 'none', fontWeight: report.subjectType === 'Resident' ? 'bold' : 'normal' }}>
+            Resident
           </span>
-          <span>Non-Resident</span>
-          <span>Employee</span>
+          <span style={{ textDecoration: report.subjectType === 'Non-Resident' ? 'underline' : 'none', fontWeight: report.subjectType === 'Non-Resident' ? 'bold' : 'normal' }}>
+            Non-Resident
+          </span>
+          <span style={{ textDecoration: report.subjectType === 'Employee' ? 'underline' : 'none', fontWeight: report.subjectType === 'Employee' ? 'bold' : 'normal' }}>
+            Employee
+          </span>
         </div>
 
         {/* Name and incident info row */}
@@ -114,7 +116,7 @@ const FacilityIncidentPrintView = React.forwardRef<HTMLDivElement, Props>(
                 {report.initial || ''}
               </td>
               <td style={{ padding: '3px 4px', fontWeight: 'bold', fontSize: '12px', borderBottom: '1px solid #000', textAlign: 'center' }}>
-                {incidentDateTime}
+                {report.incidentDescription || ''}
               </td>
               <td style={{ padding: '3px 4px', borderBottom: '1px solid #000', textAlign: 'center' }}>
                 {incidentDateTime}
@@ -171,7 +173,7 @@ const FacilityIncidentPrintView = React.forwardRef<HTMLDivElement, Props>(
         </div>
 
         {/* Policy Violations (if any) */}
-        {report.policyViolations && report.policyViolations.length > 0 && report.policyViolations.some(p => p.description.trim()) && (
+        {report.policyViolations && report.policyViolations.length > 0 && report.policyViolations.some(p => p.description?.trim()) && (
           <div style={{ marginBottom: '16px' }}>
             <div style={{ fontWeight: 'bold', textDecoration: 'underline', marginBottom: '6px', fontSize: '12px' }}>
               Policy Violations:
@@ -185,7 +187,7 @@ const FacilityIncidentPrintView = React.forwardRef<HTMLDivElement, Props>(
         )}
 
         {/* Staff Actions (if any) */}
-        {report.staffActions && report.staffActions.length > 0 && report.staffActions.some(a => a.description.trim()) && (
+        {report.staffActions && report.staffActions.length > 0 && report.staffActions.some(a => a.description?.trim()) && (
           <div style={{ marginBottom: '16px' }}>
             <div style={{ fontWeight: 'bold', textDecoration: 'underline', marginBottom: '6px', fontSize: '12px' }}>
               Staff Action Taken:
@@ -199,7 +201,7 @@ const FacilityIncidentPrintView = React.forwardRef<HTMLDivElement, Props>(
         )}
 
         {/* Follow-Up (if any) */}
-        {report.followUpRecommendations && report.followUpRecommendations.length > 0 && report.followUpRecommendations.some(f => f.description.trim()) && (
+        {report.followUpRecommendations && report.followUpRecommendations.length > 0 && report.followUpRecommendations.some(f => f.description?.trim()) && (
           <div style={{ marginBottom: '16px' }}>
             <div style={{ fontWeight: 'bold', textDecoration: 'underline', marginBottom: '6px', fontSize: '12px' }}>
               Follow-Up / Recommendations:
@@ -249,9 +251,7 @@ const FacilityIncidentPrintView = React.forwardRef<HTMLDivElement, Props>(
           {ALL_NOTIFICATION_TYPES.map(t => (
             <span key={t} style={{ marginRight: '12px' }}>
               {isCheckedNotif(t) ? (
-                <strong style={{ textDecoration: 'underline' }}>
-                  {t === 'Home Director' ? 'X Home Director' : t}
-                </strong>
+                <strong style={{ textDecoration: 'underline' }}>{t}</strong>
               ) : t}
             </span>
           ))}
@@ -293,11 +293,14 @@ const FacilityIncidentPrintView = React.forwardRef<HTMLDivElement, Props>(
           <div style={{ display: 'flex', gap: '40px' }}>
             {/* Left column */}
             <div>
-              <div style={{ marginBottom: '4px' }}>Yes &nbsp; No &nbsp; (Place an x)</div>
+              <div style={{ marginBottom: '4px' }}>Yes &nbsp; No</div>
               {LEFT_DOCS.map(d => (
                 <div key={d} style={{ marginBottom: '2px' }}>
-                  <span style={{ display: 'inline-block', width: '40px', textAlign: 'center', borderBottom: '1px solid #999' }}>
+                  <span style={{ display: 'inline-block', width: '28px', textAlign: 'center', borderBottom: '1px solid #999' }}>
                     {isCheckedDoc(d) ? 'X' : ''}
+                  </span>
+                  <span style={{ display: 'inline-block', width: '28px', textAlign: 'center', borderBottom: '1px solid #999', marginLeft: '4px' }}>
+                    {isCheckedDoc(d) ? '' : 'X'}
                   </span>
                   {' '}{d}
                 </div>
@@ -305,18 +308,24 @@ const FacilityIncidentPrintView = React.forwardRef<HTMLDivElement, Props>(
             </div>
             {/* Right column */}
             <div>
-              <div style={{ marginBottom: '4px' }}>Yes &nbsp; No &nbsp; (Place an x)</div>
+              <div style={{ marginBottom: '4px' }}>Yes &nbsp; No</div>
               {RIGHT_DOCS.map(d => (
                 <div key={d} style={{ marginBottom: '2px' }}>
-                  <span style={{ display: 'inline-block', width: '40px', textAlign: 'center', borderBottom: '1px solid #999' }}>
+                  <span style={{ display: 'inline-block', width: '28px', textAlign: 'center', borderBottom: '1px solid #999' }}>
                     {isCheckedDoc(d) ? 'X' : ''}
+                  </span>
+                  <span style={{ display: 'inline-block', width: '28px', textAlign: 'center', borderBottom: '1px solid #999', marginLeft: '4px' }}>
+                    {isCheckedDoc(d) ? '' : 'X'}
                   </span>
                   {' '}{d}
                 </div>
               ))}
               <div style={{ marginBottom: '2px' }}>
-                <span style={{ display: 'inline-block', width: '40px', textAlign: 'center', borderBottom: '1px solid #999' }}>
+                <span style={{ display: 'inline-block', width: '28px', textAlign: 'center', borderBottom: '1px solid #999' }}>
                   {isCheckedDoc('Other') ? 'X' : ''}
+                </span>
+                <span style={{ display: 'inline-block', width: '28px', textAlign: 'center', borderBottom: '1px solid #999', marginLeft: '4px' }}>
+                  {isCheckedDoc('Other') ? '' : 'X'}
                 </span>
                 {' '}Other: {report.otherDocumentation || ''}
               </div>

@@ -10,7 +10,10 @@ import {
   AlertTriangle,
   BookOpen,
   Brain,
+  ChevronDown,
+  ChevronUp,
   ClipboardPaste,
+  Eye,
   Home,
   Loader2,
   Pill,
@@ -20,7 +23,7 @@ import {
   Shield,
   User,
 } from "lucide-react";
-import { format } from "date-fns";
+import { format, isValid } from "date-fns";
 import { toast } from "sonner";
 import { referralNotesService, type ReferralNoteRow } from "@/integrations/firebase/referralNotesService";
 
@@ -51,6 +54,8 @@ interface ReferralHistoryItem {
   directorSummary: string;
   archived: boolean;
   archivedAt: string;
+  parsedData: ParsedReferral | null;
+  rawText: string;
 }
 
 interface ParsedEntry {
@@ -335,6 +340,8 @@ const toHistoryItem = (row: ReferralNoteRow): ReferralHistoryItem => {
     directorSummary: row.director_summary || "",
     archived: Boolean(row.archived),
     archivedAt: row.archived_at || "",
+    parsedData: referralData as ParsedReferral | null,
+    rawText: row.raw_text || "",
   };
 };
 
@@ -357,6 +364,10 @@ export const ReferralTab = () => {
   const [archiveView, setArchiveView] = useState("active");
   const [historySearch, setHistorySearch] = useState("");
   const [history, setHistory] = useState<ReferralHistoryItem[]>([]);
+
+  const [visibleCount, setVisibleCount] = useState(15);
+
+  const [expandedReferralId, setExpandedReferralId] = useState<string | null>(null);
 
   const [editingInterviewId, setEditingInterviewId] = useState<string | null>(null);
   const [interviewReport, setInterviewReport] = useState("");
@@ -903,10 +914,14 @@ export const ReferralTab = () => {
                 <p className="text-sm text-muted-foreground">No referral notes saved yet.</p>
               ) : (
                 <div className="space-y-2">
-                  {filteredHistory.slice(0, 15).map((item) => (
+                  {filteredHistory.slice(0, visibleCount).map((item) => {
+                    const createdDate = new Date(item.createdAt);
+                    const formattedDate = isValid(createdDate) ? format(createdDate, "MMM d, yyyy") : "-";
+                    const isExpanded = expandedReferralId === item.id;
+                    return (
                     <div key={item.id} className="rounded-md border p-3">
                       <div className="flex items-center justify-between mb-1 gap-2 flex-wrap">
-                        <span className="text-xs text-muted-foreground">{format(new Date(item.createdAt), "MMM d, yyyy")}</span>
+                        <span className="text-xs text-muted-foreground">{formattedDate}</span>
                         <div className="flex items-center gap-1 flex-wrap">
                           <Badge variant="outline">{item.fieldCount} fields</Badge>
                           <Badge variant="secondary">{item.status}</Badge>
@@ -918,13 +933,21 @@ export const ReferralTab = () => {
                       {item.referralSource && <p className="text-xs text-muted-foreground">Source: {item.referralSource}</p>}
                       <p className="text-sm text-foreground line-clamp-2 mt-1">{item.summary}</p>
                       <p className="text-xs text-muted-foreground mt-1">Staff: {item.staff || "Unknown"} | Sections: {item.sectionCount}</p>
-                      <div className="mt-2">
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setExpandedReferralId(isExpanded ? null : item.id)}
+                        >
+                          <Eye className="h-3.5 w-3.5 mr-1" />
+                          View Details
+                          {isExpanded ? <ChevronUp className="h-3.5 w-3.5 ml-1" /> : <ChevronDown className="h-3.5 w-3.5 ml-1" />}
+                        </Button>
                         <Button size="sm" variant="outline" onClick={() => openInterviewEditor(item)}>Add/Edit Interview Report</Button>
                         {!item.archived && (
                           <Button
                             size="sm"
                             variant="outline"
-                            className="ml-2"
                             onClick={() => setArchived(item.id, true)}
                             disabled={item.interviewReport.trim().length > 0}
                           >
@@ -935,7 +958,6 @@ export const ReferralTab = () => {
                           <Button
                             size="sm"
                             variant="outline"
-                            className="ml-2"
                             onClick={() => setArchived(item.id, false)}
                           >
                             Restore
@@ -947,8 +969,89 @@ export const ReferralTab = () => {
                           Interviewed referrals stay active. Clear interview report first if you need to archive.
                         </p>
                       )}
+
+                      {isExpanded && (
+                        <div className="mt-3 pt-3 border-t space-y-3">
+                          {item.parsedData && Object.values(item.parsedData).some((section: any) => section && typeof section === "object" && Object.keys(section).length > 0) ? (
+                            <>
+                              {SECTION_CONFIG.map((sectionDef) => {
+                                const data = item.parsedData?.[sectionDef.key];
+                                if (!data || typeof data !== "object" || Object.keys(data).length === 0) return null;
+                                const Icon = sectionDef.icon;
+                                return (
+                                  <div key={sectionDef.key} className={`rounded-md border p-3 ${colorMap[sectionDef.color]}`}>
+                                    <div className="flex items-center gap-2 mb-2">
+                                      <Icon className="h-4 w-4" />
+                                      <span className="text-sm font-semibold">{sectionDef.label}</span>
+                                      <Badge variant="outline" className="text-xs">{Object.keys(data).length}</Badge>
+                                    </div>
+                                    <div className="grid grid-cols-1 gap-1">
+                                      {Object.entries(data).map(([key, val]) => (
+                                        <div key={key} className="flex gap-2 text-sm">
+                                          <span className="font-medium text-gray-600 min-w-[120px] shrink-0">{key}:</span>
+                                          <span className="text-gray-900 break-words">{val as string}</span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                              {item.parsedData?.other && typeof item.parsedData.other === "object" && Object.keys(item.parsedData.other).length > 0 && (
+                                <div className="rounded-md border border-gray-200 p-3">
+                                  <span className="text-sm font-semibold mb-2 block">Other Information</span>
+                                  <div className="grid grid-cols-1 gap-1">
+                                    {Object.entries(item.parsedData.other).map(([key, val]) => (
+                                      <div key={key} className="text-sm">
+                                        {key === "Referral Notes" ? (
+                                          <div className="whitespace-pre-wrap text-gray-800">{val as string}</div>
+                                        ) : (
+                                          <div className="flex gap-2">
+                                            <span className="font-medium text-gray-600 min-w-[120px] shrink-0">{key}:</span>
+                                            <span className="text-gray-900 break-words">{val as string}</span>
+                                          </div>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </>
+                          ) : item.rawText ? (
+                            <div className="rounded-md border border-gray-200 bg-gray-50 p-3">
+                              <span className="text-sm font-semibold mb-2 block">Raw Referral Text</span>
+                              <div className="whitespace-pre-wrap text-sm text-gray-800 max-h-[500px] overflow-y-auto">{item.rawText}</div>
+                            </div>
+                          ) : (
+                            <p className="text-sm text-muted-foreground">No detailed referral data available for this entry.</p>
+                          )}
+
+                          {item.interviewReport.trim() && (
+                            <div className="rounded-md border border-blue-200 bg-blue-50 p-3">
+                              <span className="text-sm font-semibold text-blue-800 mb-2 block">Interview Report</span>
+                              <div className="whitespace-pre-wrap text-sm text-blue-900">{item.interviewReport}</div>
+                            </div>
+                          )}
+                          {item.directorSummary.trim() && (
+                            <div className="rounded-md border border-purple-200 bg-purple-50 p-3">
+                              <span className="text-sm font-semibold text-purple-800 mb-2 block">Director Summary</span>
+                              <div className="whitespace-pre-wrap text-sm text-purple-900">{item.directorSummary}</div>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
-                  ))}
+                  );
+                  })}
+                  {filteredHistory.length > visibleCount && (
+                    <Button variant="outline" size="sm" className="w-full" onClick={() => setVisibleCount((prev) => prev + 15)}>
+                      Show more ({filteredHistory.length - visibleCount} remaining)
+                    </Button>
+                  )}
+                  {visibleCount > 15 && filteredHistory.length <= visibleCount && (
+                    <Button variant="outline" size="sm" className="w-full" onClick={() => setVisibleCount(15)}>
+                      Show less
+                    </Button>
+                  )}
                 </div>
               )}
 

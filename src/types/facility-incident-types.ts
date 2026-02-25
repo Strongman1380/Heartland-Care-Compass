@@ -10,9 +10,8 @@ export type FacilityIncidentType =
   | 'Trespasser'
   | 'Property Damage'
   | 'Injury'
-  | 'Fighting'
-  | 'Medication Refusal'
   | 'Physical Altercation'
+  | 'Medication Refusal'
   | 'Fire/Alarm'
   | 'Runaway'
   | 'Arrest'
@@ -98,8 +97,8 @@ export interface FacilityIncidentReport {
   // Supplementary Information
   supplementaryInfo: string;
   // Subject address if non-resident
-  subjectAddress: string;
-  subjectPhone: string;
+  subjectAddress?: string;
+  subjectPhone?: string;
   // Documentation checklist
   documentation: DocumentationType[];
   otherDocumentation?: string;

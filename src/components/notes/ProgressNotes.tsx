@@ -109,7 +109,7 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
 
       // Merge all sources, dedup by id
       const map = new Map<string, ProgressNote>();
-      for (const n of localNotes) map.set(n.id || `local-${n.youth_id}-${String(n.date)}`, n);
+      for (const n of localNotes) map.set(n.id || `local-${n.youth_id}-${String(n.date)}-${n.staff || ''}-${(n.note || '').slice(0, 40)}`, n);
       for (const n of convertedRemote) map.set(n.id, n);
       for (const n of convertedCaseNotes) map.set(n.id, n);
 

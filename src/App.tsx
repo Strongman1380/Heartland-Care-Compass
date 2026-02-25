@@ -21,7 +21,6 @@ import BehaviorAnalysisPage from "./pages/BehaviorAnalysisPage";
 import NotFound from "./pages/NotFound";
 import Auth from "./pages/Auth";
 import { ProtectedRoute } from "@/components/layout/ProtectedRoute";
-import { BottomNav } from "@/components/layout/BottomNav";
 import School from "./pages/School";
 import SchoolScores from "./pages/SchoolScores";
 import AcademicProgressDashboard from "./pages/AcademicProgressDashboard";
@@ -75,7 +74,6 @@ const App = () => {
           <Route path="/migrate-data" element={<ProtectedRoute><DataMigrationPage /></ProtectedRoute>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
-        <BottomNav />
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>

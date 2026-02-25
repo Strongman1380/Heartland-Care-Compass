@@ -26,10 +26,11 @@ import { format, addDays, subDays } from 'date-fns'
 import {
   TrendingUp, TrendingDown, Minus, Save, CheckCircle2,
   RefreshCw, Upload, Sun, Sunset, Moon, Calculator, Calendar,
-  Users, ChevronLeft, ChevronRight
+  Users, ChevronLeft, ChevronRight, FileSpreadsheet
 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { Header } from '@/components/layout/Header'
+import * as XLSX from 'xlsx'
 
 const toISO = (d: Date) => format(d, 'yyyy-MM-dd')
 
@@ -114,20 +115,11 @@ const ShiftScores: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
 
-  const studentOrder = ['Chance', 'Curtis', 'Dagen', 'Elijah', 'Jaeden', 'Jason', 'Nano', 'Paytin', 'TJ', 'Tristan']
-
   useEffect(() => { loadYouths() }, [])
 
   const sortedYouths = useMemo(() => {
     if (!youths || youths.length === 0) return []
-    return [...youths].sort((a, b) => {
-      const iA = studentOrder.indexOf(a.firstName)
-      const iB = studentOrder.indexOf(b.firstName)
-      if (iA !== -1 && iB !== -1) return iA - iB
-      if (iA !== -1) return -1
-      if (iB !== -1) return 1
-      return a.firstName.localeCompare(b.firstName)
-    })
+    return [...youths].sort((a, b) => a.firstName.localeCompare(b.firstName))
   }, [youths])
 
   // ── Weekly eval dates (6 weeks of Mondays) ──
@@ -224,25 +216,27 @@ const ShiftScores: React.FC = () => {
     })
 
     if (!isNaN(num) && autoSaveEnabled) {
-      // Get current cell values for all domains before saving
-      const currentCell = weeklyGrid[youthId]?.[weekDate] || { peer: NaN, adult: NaN, investment: NaN, authority: NaN }
-      const scores: DomainScores = { ...currentCell, [domain]: num }
-      // Only save if at least 1 domain has a value
-      const hasAny = Object.values(scores).some(v => !isNaN(v))
-      if (hasAny) {
-        const safeScores = {
-          peer: isNaN(scores.peer) ? 0 : scores.peer,
-          adult: isNaN(scores.adult) ? 0 : scores.adult,
-          investment: isNaN(scores.investment) ? 0 : scores.investment,
-          authority: isNaN(scores.authority) ? 0 : scores.authority,
+      // Use functional updater to read latest state, avoiding stale closures
+      setWeeklyGrid(current => {
+        const currentCell = current[youthId]?.[weekDate] || { peer: NaN, adult: NaN, investment: NaN, authority: NaN }
+        const scores: DomainScores = { ...currentCell, [domain]: num }
+        const hasAny = Object.values(scores).some(v => !isNaN(v))
+        if (hasAny) {
+          const safeScores = {
+            peer: isNaN(scores.peer) ? null as unknown as number : scores.peer,
+            adult: isNaN(scores.adult) ? null as unknown as number : scores.adult,
+            investment: isNaN(scores.investment) ? null as unknown as number : scores.investment,
+            authority: isNaN(scores.authority) ? null as unknown as number : scores.authority,
+          }
+          upsertWeeklyEval(youthId, weekDate, safeScores, 'manual').then(() => {
+            setLastSaved(new Date())
+          }).catch(err => {
+            console.error('Auto-save weekly eval failed:', err)
+            toast({ title: "Save Failed", description: String(err), variant: "destructive" })
+          })
         }
-        upsertWeeklyEval(youthId, weekDate, safeScores, 'manual').then(() => {
-          setLastSaved(new Date())
-        }).catch(err => {
-          console.error('Auto-save weekly eval failed:', err)
-          toast({ title: "Save Failed", description: String(err), variant: "destructive" })
-        })
-      }
+        return current // no mutation, just reading
+      })
     }
   }
 
@@ -259,23 +253,27 @@ const ShiftScores: React.FC = () => {
     })
 
     if (!isNaN(num) && autoSaveEnabled) {
-      const currentCell = dailyGrid[youthId]?.[key] || { peer: NaN, adult: NaN, investment: NaN, authority: NaN }
-      const scores: DomainScores = { ...currentCell, [domain]: num }
-      const hasAny = Object.values(scores).some(v => !isNaN(v))
-      if (hasAny) {
-        const safeScores = {
-          peer: isNaN(scores.peer) ? 0 : scores.peer,
-          adult: isNaN(scores.adult) ? 0 : scores.adult,
-          investment: isNaN(scores.investment) ? 0 : scores.investment,
-          authority: isNaN(scores.authority) ? 0 : scores.authority,
+      // Use functional updater to read latest state, avoiding stale closures
+      setDailyGrid(current => {
+        const currentCell = current[youthId]?.[key] || { peer: NaN, adult: NaN, investment: NaN, authority: NaN }
+        const scores: DomainScores = { ...currentCell, [domain]: num }
+        const hasAny = Object.values(scores).some(v => !isNaN(v))
+        if (hasAny) {
+          const safeScores = {
+            peer: isNaN(scores.peer) ? null as unknown as number : scores.peer,
+            adult: isNaN(scores.adult) ? null as unknown as number : scores.adult,
+            investment: isNaN(scores.investment) ? null as unknown as number : scores.investment,
+            authority: isNaN(scores.authority) ? null as unknown as number : scores.authority,
+          }
+          upsertDailyShift(youthId, dateISO, shift, safeScores).then(() => {
+            setLastSaved(new Date())
+          }).catch(err => {
+            console.error('Auto-save daily shift failed:', err)
+            toast({ title: "Save Failed", description: String(err), variant: "destructive" })
+          })
         }
-        upsertDailyShift(youthId, dateISO, shift, safeScores).then(() => {
-          setLastSaved(new Date())
-        }).catch(err => {
-          console.error('Auto-save daily shift failed:', err)
-          toast({ title: "Save Failed", description: String(err), variant: "destructive" })
-        })
-      }
+        return current // no mutation, just reading
+      })
     }
   }
 
@@ -290,10 +288,10 @@ const ShiftScores: React.FC = () => {
           const hasAny = Object.values(cell).some(v => !isNaN(v))
           if (hasAny) {
             await upsertWeeklyEval(y.id, wd, {
-              peer: isNaN(cell.peer) ? 0 : cell.peer,
-              adult: isNaN(cell.adult) ? 0 : cell.adult,
-              investment: isNaN(cell.investment) ? 0 : cell.investment,
-              authority: isNaN(cell.authority) ? 0 : cell.authority,
+              peer: isNaN(cell.peer) ? null as unknown as number : cell.peer,
+              adult: isNaN(cell.adult) ? null as unknown as number : cell.adult,
+              investment: isNaN(cell.investment) ? null as unknown as number : cell.investment,
+              authority: isNaN(cell.authority) ? null as unknown as number : cell.authority,
             }, 'manual')
             count++
           }
@@ -363,15 +361,95 @@ const ShiftScores: React.FC = () => {
     }
   }
 
+  // Quote-aware CSV field splitter
+  const splitCSVLine = (line: string): string[] => {
+    const fields: string[] = []
+    let current = ''
+    let inQuotes = false
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i]
+      if (ch === '"') { inQuotes = !inQuotes; continue }
+      if (ch === ',' && !inQuotes) { fields.push(current.trim()); current = ''; continue }
+      current += ch
+    }
+    fields.push(current.trim())
+    return fields
+  }
+
+  // Clamp domain score to valid range, or NaN if out of bounds
+  const clampDomain = (v: number): number => {
+    if (isNaN(v)) return NaN
+    if (v < 0 || v > 4) return NaN
+    return v
+  }
+
+  // ── Parse rows from file (CSV or Excel) ──
+  const parseFileToRows = async (file: File): Promise<string[][]> => {
+    const ext = file.name.split('.').pop()?.toLowerCase()
+
+    if (ext === 'xlsx' || ext === 'xls') {
+      const buffer = await file.arrayBuffer()
+      const wb = XLSX.read(buffer, { type: 'array' })
+      const ws = wb.Sheets[wb.SheetNames[0]]
+      const jsonData = XLSX.utils.sheet_to_json<string[]>(ws, { header: 1, defval: '' })
+      return jsonData.map(row => row.map(cell => String(cell ?? '').trim()))
+    }
+
+    // CSV/TXT fallback
+    const text = await file.text()
+    const lines = text.trim().split('\n')
+    return lines.map(line => splitCSVLine(line))
+  }
+
+  // ── Normalize date strings (Excel serial numbers, MM/DD/YYYY, etc) ──
+  const normalizeDate = (dateVal: string): string => {
+    if (!dateVal) return ''
+
+    // Excel serial number (pure digits, typically 5 digits like 45678)
+    const asNum = Number(dateVal)
+    if (!isNaN(asNum) && asNum > 10000 && asNum < 100000) {
+      const excelEpoch = new Date(1899, 11, 30)
+      const d = new Date(excelEpoch.getTime() + asNum * 86400000)
+      return format(d, 'yyyy-MM-dd')
+    }
+
+    // Already ISO format
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateVal)) return dateVal
+
+    // MM/DD/YYYY
+    if (dateVal.includes('/')) {
+      const parts = dateVal.split('/')
+      if (parts.length === 3) {
+        return `${parts[2]}-${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}`
+      }
+    }
+
+    return dateVal
+  }
+
+  // ── Match youth by name ──
+  const matchYouth = (nameVal: string) => {
+    const lower = nameVal.toLowerCase().trim()
+    return sortedYouths.find(y =>
+      y.firstName.toLowerCase() === lower ||
+      `${y.firstName} ${y.lastName}`.toLowerCase() === lower ||
+      y.lastName.toLowerCase() === lower
+    )
+  }
+
   // ── XLSX/CSV upload ──
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
     setUploading(true)
     try {
-      const text = await file.text()
-      const lines = text.trim().split('\n')
-      const header = lines[0].split(',').map(h => h.trim().toLowerCase())
+      const rows = await parseFileToRows(file)
+      if (rows.length < 2) {
+        toast({ title: "Empty File", description: "No data rows found.", variant: "destructive" })
+        return
+      }
+
+      const header = rows[0].map(h => h.toLowerCase())
 
       // Find column indices
       const nameIdx = header.findIndex(h => h.includes('name') || h.includes('youth'))
@@ -380,51 +458,59 @@ const ShiftScores: React.FC = () => {
       const adultIdx = header.findIndex(h => h.includes('adult'))
       const investIdx = header.findIndex(h => h.includes('invest'))
       const authIdx = header.findIndex(h => h.includes('auth') || h.includes('dealing'))
+      const shiftIdx = header.findIndex(h => h.includes('shift'))
 
       if (nameIdx === -1 || dateIdx === -1) {
-        toast({ title: "Invalid Format", description: "CSV must have youth name and date columns.", variant: "destructive" })
+        toast({ title: "Invalid Format", description: "File must have columns for youth name and date.", variant: "destructive" })
         return
       }
 
+      const isDailyShift = shiftIdx !== -1
+
       let uploaded = 0
-      for (let i = 1; i < lines.length; i++) {
-        const cols = lines[i].split(',').map(c => c.trim())
+      let skipped = 0
+      for (let i = 1; i < rows.length; i++) {
+        const cols = rows[i]
         if (cols.length < 3) continue
 
         const nameVal = cols[nameIdx]
         const dateVal = cols[dateIdx]
-        const peer = peerIdx >= 0 ? parseFloat(cols[peerIdx]) : NaN
-        const adult = adultIdx >= 0 ? parseFloat(cols[adultIdx]) : NaN
-        const invest = investIdx >= 0 ? parseFloat(cols[investIdx]) : NaN
-        const auth = authIdx >= 0 ? parseFloat(cols[authIdx]) : NaN
+        const peer = clampDomain(peerIdx >= 0 ? parseFloat(cols[peerIdx]) : NaN)
+        const adult = clampDomain(adultIdx >= 0 ? parseFloat(cols[adultIdx]) : NaN)
+        const invest = clampDomain(investIdx >= 0 ? parseFloat(cols[investIdx]) : NaN)
+        const auth = clampDomain(authIdx >= 0 ? parseFloat(cols[authIdx]) : NaN)
 
-        if ([peer, adult, invest, auth].every(v => isNaN(v))) continue
+        if ([peer, adult, invest, auth].every(v => isNaN(v))) { skipped++; continue }
 
-        // Match youth
-        const matched = sortedYouths.find(y =>
-          y.firstName.toLowerCase() === nameVal.toLowerCase() ||
-          `${y.firstName} ${y.lastName}`.toLowerCase() === nameVal.toLowerCase()
-        )
-        if (!matched) continue
+        const matched = matchYouth(nameVal)
+        if (!matched) { skipped++; continue }
 
-        // Parse date
-        let isoDate = dateVal
-        if (dateVal.includes('/')) {
-          const parts = dateVal.split('/')
-          isoDate = `${parts[2]}-${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}`
+        const isoDate = normalizeDate(dateVal)
+        if (!isoDate || !/^\d{4}-\d{2}-\d{2}$/.test(isoDate)) { skipped++; continue }
+
+        const scores: DomainScores = {
+          peer: isNaN(peer) ? null as unknown as number : peer,
+          adult: isNaN(adult) ? null as unknown as number : adult,
+          investment: isNaN(invest) ? null as unknown as number : invest,
+          authority: isNaN(auth) ? null as unknown as number : auth,
         }
 
-        await upsertWeeklyEval(matched.id, isoDate, {
-          peer: isNaN(peer) ? 0 : peer,
-          adult: isNaN(adult) ? 0 : adult,
-          investment: isNaN(invest) ? 0 : invest,
-          authority: isNaN(auth) ? 0 : auth,
-        }, 'uploaded')
+        if (isDailyShift) {
+          const shiftVal = (cols[shiftIdx] || 'day').toLowerCase().trim()
+          const shift: ShiftType = shiftVal.startsWith('eve') ? 'evening'
+            : shiftVal.startsWith('nig') || shiftVal.startsWith('ove') ? 'night'
+            : 'day'
+          await upsertDailyShift(matched.id, isoDate, shift, scores, 'uploaded')
+        } else {
+          await upsertWeeklyEval(matched.id, isoDate, scores, 'uploaded')
+        }
         uploaded++
       }
 
-      toast({ title: "Upload Complete", description: `Imported ${uploaded} weekly eval(s).`, duration: 5000 })
+      const type = isDailyShift ? 'daily shift score' : 'weekly eval'
+      toast({ title: "Upload Complete", description: `Imported ${uploaded} ${type}(s).${skipped ? ` ${skipped} row(s) skipped.` : ''}`, duration: 5000 })
     } catch (error) {
+      console.error('Upload error:', error)
       toast({ title: "Upload Failed", description: "Could not parse the file.", variant: "destructive" })
     } finally {
       setUploading(false)
@@ -826,33 +912,53 @@ const ShiftScores: React.FC = () => {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Upload className="w-5 h-5 text-red-600" />
-                  Upload Weekly Eval Scores
+                  Upload Scores
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
+                {/* Upload Button */}
+                <div className="flex items-center gap-4">
+                  <input ref={fileInputRef} type="file" accept=".csv,.txt,.xlsx,.xls" onChange={handleFileUpload} className="hidden" />
+                  <Button onClick={() => fileInputRef.current?.click()} disabled={uploading} className="bg-red-600 hover:bg-red-700" size="lg">
+                    {uploading
+                      ? <><RefreshCw className="w-4 h-4 mr-2 animate-spin" />Uploading...</>
+                      : <><FileSpreadsheet className="w-4 h-4 mr-2" />Choose Excel or CSV File</>}
+                  </Button>
+                  <span className="text-sm text-gray-500">Accepts .xlsx, .xls, .csv</span>
+                </div>
+
+                {/* Weekly Eval Format */}
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-2">
-                  <h4 className="font-medium text-blue-800">CSV Format Instructions</h4>
-                  <p className="text-sm text-blue-700">Upload a CSV matching this format (same as the spreadsheet):</p>
+                  <h4 className="font-medium text-blue-800">Weekly Eval Format</h4>
+                  <p className="text-sm text-blue-700">For weekly evaluations, use columns: Name, Date, and the 4 domain scores.</p>
                   <div className="bg-white rounded p-3 font-mono text-xs text-gray-700 overflow-auto">
                     <div className="font-bold">Youth Name,Date,Peer Interaction,Adult Interaction,Investment Level,Dealing w/authority</div>
                     <div>Chance Thaller,2025-08-06,3.3,3,2.7,3.3</div>
                     <div>DAGEN DICKEY,2025-09-03,3.7,3.5,3.3,3.7</div>
-                    <div>Elijah Christian,2025-07-09,3.7,3.6,3.3,3.6</div>
                   </div>
-                  <ul className="text-sm text-blue-700 space-y-1 list-disc list-inside">
-                    <li><strong>Youth Name</strong>: First name or full name (case-insensitive match)</li>
-                    <li><strong>Date</strong>: YYYY-MM-DD or MM/DD/YYYY</li>
-                    <li><strong>Scores</strong>: 0-4 scale for each domain</li>
-                    <li>Rows with "Pass" or non-numeric scores will be skipped</li>
-                  </ul>
                 </div>
 
-                <div className="flex items-center gap-4">
-                  <input ref={fileInputRef} type="file" accept=".csv,.txt" onChange={handleFileUpload} className="hidden" />
-                  <Button onClick={() => fileInputRef.current?.click()} disabled={uploading} className="bg-red-600 hover:bg-red-700">
-                    {uploading ? <><RefreshCw className="w-4 h-4 mr-2 animate-spin" />Uploading...</> : <><Upload className="w-4 h-4 mr-2" />Choose CSV File</>}
-                  </Button>
+                {/* Daily Shift Format */}
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 space-y-2">
+                  <h4 className="font-medium text-amber-800">Daily Shift Score Format</h4>
+                  <p className="text-sm text-amber-700">For daily shift scores, add a <strong>Shift</strong> column. The file will auto-detect as daily shift data.</p>
+                  <div className="bg-white rounded p-3 font-mono text-xs text-gray-700 overflow-auto">
+                    <div className="font-bold">Youth Name,Date,Shift,Peer Interaction,Adult Interaction,Investment Level,Dealing w/authority</div>
+                    <div>Chance Thaller,2025-08-06,Day,3.3,3,2.7,3.3</div>
+                    <div>Chance Thaller,2025-08-06,Evening,3.0,2.8,2.5,3.0</div>
+                    <div>DAGEN DICKEY,2025-09-03,Night,3.7,3.5,3.3,3.7</div>
+                  </div>
+                  <p className="text-xs text-amber-600">Shift values: Day, Evening, or Night</p>
                 </div>
+
+                {/* Shared notes */}
+                <ul className="text-sm text-gray-600 space-y-1 list-disc list-inside">
+                  <li><strong>Youth Name</strong>: First name, last name, or full name (case-insensitive)</li>
+                  <li><strong>Date</strong>: YYYY-MM-DD, MM/DD/YYYY, or Excel date format</li>
+                  <li><strong>Scores</strong>: 0-4 scale for each domain</li>
+                  <li>Rows with non-numeric scores will be skipped</li>
+                  <li>If no Shift column is found, rows are saved as weekly evals</li>
+                </ul>
 
                 <div className="border-t pt-4">
                   <h4 className="font-medium mb-3">Manual Weekly Entry</h4>
@@ -874,10 +980,10 @@ const ManualWeeklyDomainEntry: React.FC<{ youths: any[]; toast: any }> = ({ yout
   const [saving, setSaving] = useState(false)
 
   const updateEntry = (youthId: string, domain: keyof DomainScores, value: string) => {
-    const num = value === '' ? 0 : Number(value)
+    const num = value === '' ? NaN : Number(value)
     setEntries(prev => ({
       ...prev,
-      [youthId]: { ...(prev[youthId] || { peer: 0, adult: 0, investment: 0, authority: 0 }), [domain]: num }
+      [youthId]: { ...(prev[youthId] || { peer: NaN, adult: NaN, investment: NaN, authority: NaN }), [domain]: num }
     }))
   }
 
@@ -888,7 +994,7 @@ const ManualWeeklyDomainEntry: React.FC<{ youths: any[]; toast: any }> = ({ yout
       for (const y of youths) {
         const e = entries[y.id]
         if (!e) continue
-        const hasAny = Object.values(e).some(v => v > 0)
+        const hasAny = Object.values(e).some(v => !isNaN(v))
         if (hasAny) {
           await upsertWeeklyEval(y.id, weekDate, e, 'manual')
           count++
@@ -922,7 +1028,7 @@ const ManualWeeklyDomainEntry: React.FC<{ youths: any[]; toast: any }> = ({ yout
                   <span className="text-xs text-gray-600 w-12">{d.short}</span>
                   <Input
                     type="number" min={0} max={4} step={0.1} placeholder="0-4"
-                    value={entries[y.id]?.[d.key] || ''}
+                    value={entries[y.id]?.[d.key] ?? ''}
                     onChange={e => updateEntry(y.id, d.key, e.target.value)}
                     className="w-16 h-7 text-center text-xs"
                   />

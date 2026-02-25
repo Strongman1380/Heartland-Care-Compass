@@ -10,9 +10,9 @@ import { useToast } from "@/hooks/use-toast";
 import { CourtReport } from "./CourtReport";
 import { DpnReport } from "./DpnReport";
 import { summarizeReport } from "@/lib/aiClient";
-import { getBehaviorPointsByYouth, getDailyRatingsByYouth, getProgressNotesByYouth } from "@/lib/api";
+import { getBehaviorPointsByYouth, getDailyRatingsByYouth } from "@/lib/api";
 import { getScoresByYouth } from "@/utils/schoolScores";
-import { fetchBehaviorPoints, fetchDailyRatings, fetchProgressNotes } from "@/utils/local-storage-utils";
+import { fetchBehaviorPoints, fetchDailyRatings, fetchAllProgressNotes } from "@/utils/local-storage-utils";
 import { buildReportFilename } from "@/utils/reportFilenames";
 
 interface ReportCenterProps {
@@ -78,7 +78,7 @@ export const ReportCenter = ({ youthId, youth }: ReportCenterProps) => {
           })();
           const [allPoints, allNotes, allRatings, allSchoolScores] = await Promise.all([
             getBehaviorPointsByYouth(youth.id).catch(() => fetchBehaviorPoints(youth.id)),
-            getProgressNotesByYouth(youth.id).catch(() => fetchProgressNotes(youth.id) as any),
+            fetchAllProgressNotes(youth.id),
             getDailyRatingsByYouth(youth.id).catch(() => fetchDailyRatings(youth.id) as any),
             getScoresByYouth(youth.id).catch((error) => {
               console.warn('Failed to load school scores for AI report generation:', error);

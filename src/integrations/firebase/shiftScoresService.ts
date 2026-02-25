@@ -48,18 +48,23 @@ export const weeklyEvalService = {
   async upsert(youth_id: string, week_date: string, peer: number, adult: number, investment: number, authority: number, source: 'manual' | 'uploaded' = 'manual'): Promise<WeeklyEvalRow> {
     const compositeId = `${youth_id}_${week_date}`
     const now = new Date().toISOString()
+    // Preserve created_at if the document already exists
+    const existingSnap = await getDoc(doc(db, WEEKLY_COLLECTION, compositeId))
+    const existingCreatedAt = existingSnap.exists() ? (existingSnap.data()?.created_at || now) : now
     const data: WeeklyEvalRow = {
       id: compositeId,
       youth_id,
       week_date,
       peer, adult, investment, authority,
       source,
-      created_at: now,
+      created_at: existingCreatedAt,
       updated_at: now
     }
     await setDoc(doc(db, WEEKLY_COLLECTION, compositeId), data, { merge: true })
     const snap = await getDoc(doc(db, WEEKLY_COLLECTION, compositeId))
-    return { id: snap.id, ...snap.data() } as WeeklyEvalRow
+    const snapData = snap.data()
+    if (!snapData) throw new Error(`Failed to read weekly eval after upsert: ${compositeId}`)
+    return { id: snap.id, ...snapData } as WeeklyEvalRow
   },
 
   async forYouth(youth_id: string): Promise<WeeklyEvalRow[]> {
@@ -100,19 +105,24 @@ export const dailyShiftService = {
   async upsert(youth_id: string, date: string, shift: ShiftType, peer: number, adult: number, investment: number, authority: number, staff?: string): Promise<DailyShiftRow> {
     const compositeId = `${youth_id}_${date}_${shift}`
     const now = new Date().toISOString()
+    // Preserve created_at if the document already exists
+    const existingSnap = await getDoc(doc(db, DAILY_COLLECTION, compositeId))
+    const existingCreatedAt = existingSnap.exists() ? (existingSnap.data()?.created_at || now) : now
     const data: DailyShiftRow = {
       id: compositeId,
       youth_id,
       date,
       shift,
       peer, adult, investment, authority,
-      staff: staff || '',
-      created_at: now,
+      ...(staff != null && { staff }),
+      created_at: existingCreatedAt,
       updated_at: now
     }
     await setDoc(doc(db, DAILY_COLLECTION, compositeId), data, { merge: true })
     const snap = await getDoc(doc(db, DAILY_COLLECTION, compositeId))
-    return { id: snap.id, ...snap.data() } as DailyShiftRow
+    const snapData = snap.data()
+    if (!snapData) throw new Error(`Failed to read daily shift after upsert: ${compositeId}`)
+    return { id: snap.id, ...snapData } as DailyShiftRow
   },
 
   async range(startISO: string, endISO: string): Promise<DailyShiftRow[]> {

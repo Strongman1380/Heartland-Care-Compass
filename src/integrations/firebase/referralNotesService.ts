@@ -51,14 +51,21 @@ export const referralNotesService = {
     };
     await setDoc(doc(db, COLLECTION, id), data, { merge: true });
     const snap = await getDoc(doc(db, COLLECTION, id));
-    return { id: snap.id, ...snap.data() } as ReferralNoteRow;
+    const snapData = snap.data();
+    if (!snapData) throw new Error(`Failed to read referral note after save: ${id}`);
+    return { id: snap.id, ...snapData } as ReferralNoteRow;
   },
 
   async update(id: string, updates: Partial<ReferralNoteRow>): Promise<ReferralNoteRow> {
     const ref = doc(db, COLLECTION, id);
-    await updateDoc(ref, { ...updates, updated_at: new Date().toISOString() } as any);
+    // Strip protected fields that callers should not overwrite
+    const { id: _id, created_at: _ca, ...allowed } = updates;
+    const payload: Record<string, unknown> = { ...allowed, updated_at: new Date().toISOString() };
+    await updateDoc(ref, payload);
     const snap = await getDoc(ref);
-    return { id: snap.id, ...snap.data() } as ReferralNoteRow;
+    const snapData = snap.data();
+    if (!snapData) throw new Error(`Referral note not found after update: ${id}`);
+    return { id: snap.id, ...snapData } as ReferralNoteRow;
   },
 
   async delete(id: string): Promise<void> {

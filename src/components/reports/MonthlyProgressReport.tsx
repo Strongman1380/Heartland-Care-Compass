@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Youth } from "@/types/app-types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,27 +8,19 @@ import { ReportHeader } from "@/components/reports/ReportHeader";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Calendar, Save, FileDown, RotateCcw, Sparkles, CheckCircle2, Circle } from "lucide-react";
+import { Calendar, Save, FileDown, RotateCcw, Sparkles, CheckCircle2, Circle, Clock } from "lucide-react";
 import { format, differenceInDays } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { exportElementToPDF } from "@/utils/export";
 import { buildReportFilename } from "@/utils/reportFilenames";
-import { fetchProgressNotes, fetchBehaviorPoints } from "@/utils/local-storage-utils";
+import { fetchBehaviorPoints, fetchAllProgressNotes } from "@/utils/local-storage-utils";
 import { findProfessional } from "@/utils/professionalUtils";
-import { getProgressNotesByYouth, getDailyRatingsByYouth } from "@/lib/api";
+import { getDailyRatingsByYouth } from "@/lib/api";
 import { getScoresByYouth, type SchoolDailyScore } from "@/utils/schoolScores";
 import { getWeeklyEvalsForYouthInRange, getDailyShiftsForYouthInRange } from "@/utils/shiftScores";
 import * as aiService from "@/services/aiService";
-
-// API fetch function with fallback to localStorage
-const fetchProgressNotesAPI = async (youthId: string) => {
-  try {
-    return await getProgressNotesByYouth(youthId);
-  } catch (e) {
-    console.warn('API fetch failed for progress-notes; falling back to localStorage:', e);
-    return fetchProgressNotes(youthId);
-  }
-};
+import { draftsService } from "@/integrations/firebase/draftsService";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface MonthlyProgressReportProps {
   youth: Youth;
@@ -75,6 +67,8 @@ interface MonthlyReportData {
   reportDate: string;
   month: string;
   year: string;
+  populatedAt: string;
+  lastSavedAt: string;
 }
 
 export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => {
@@ -103,16 +97,20 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
     preparedBy: "",
     reportDate: format(new Date(), "yyyy-MM-dd"),
     month: format(new Date(), "MMMM"),
-    year: format(new Date(), "yyyy")
+    year: format(new Date(), "yyyy"),
+    populatedAt: "",
+    lastSavedAt: "",
   });
 
   const { toast } = useToast();
+  const { user } = useAuth();
   const printRef = useRef<HTMLDivElement>(null);
 
   // AI enhancement state
   const [isEnhancing, setIsEnhancing] = useState<string | null>(null);
   const [isAutoPopulating, setIsAutoPopulating] = useState(false);
   const [shouldAutoPopulate, setShouldAutoPopulate] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Helper function to check if a section is complete
   const isSectionComplete = (section: string): boolean => {
@@ -149,7 +147,7 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
 
     try {
       // Fetch ALL case notes for this youth
-      const progressNotes = await fetchProgressNotesAPI(youth.id).catch(() => fetchProgressNotes(youth.id));
+      const progressNotes = await fetchAllProgressNotes(youth.id);
 
       console.log('Fetched case notes:', progressNotes.length);
 
@@ -487,24 +485,37 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
     return summary;
   };
 
-  // Load saved data or auto-populate on component mount
+  // Load saved data from Firebase (with localStorage fallback) on mount
   useEffect(() => {
     const loadData = async () => {
       if (!youth?.id) return;
 
+      // Try Firebase first
+      try {
+        const draftType = `monthly_progress_${selectedMonth}`;
+        const draft = await draftsService.get(youth.id, draftType, user?.uid || null);
+        if (draft?.data) {
+          const savedData = draft.data as MonthlyReportData;
+          setReportData(prev => ({ ...prev, ...savedData }));
+          console.log('Loaded saved report data from Firebase');
+          return;
+        }
+      } catch (error) {
+        console.warn('Firebase draft load failed:', error);
+      }
+
+      // Fallback to localStorage
       const saveKey = `monthly-progress-${youth.id}-${selectedMonth}`;
       const saved = localStorage.getItem(saveKey);
 
       if (saved) {
-        // If we have saved data, load it and DON'T auto-populate (preserve manual edits)
         try {
           const savedData = JSON.parse(saved) as MonthlyReportData;
-          // Merge with current defaults so any newly-added fields are never undefined
           setReportData(prev => ({ ...prev, ...savedData }));
           console.log('Loaded saved report data from localStorage');
         } catch (error) {
           console.error("Error loading saved data:", error);
-          await autoPopulateForm();
+          setShouldAutoPopulate(true);
         }
       } else {
         // No saved data exists — auto-populate with AI from case notes and documentation
@@ -514,20 +525,7 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
     };
 
     loadData();
-  }, [youth?.id, selectedMonth]);
-
-  // Auto-save functionality
-  useEffect(() => {
-    const autoSave = () => {
-      if (youth?.id) {
-        const saveKey = `monthly-progress-${youth.id}-${selectedMonth}`;
-        localStorage.setItem(saveKey, JSON.stringify(reportData));
-      }
-    };
-
-    const timeoutId = setTimeout(autoSave, 2000);
-    return () => clearTimeout(timeoutId);
-  }, [reportData, youth?.id, selectedMonth]);
+  }, [youth?.id, selectedMonth, user?.uid]);
 
   // Helper function to calculate length of stay from admission date
   const calculateLengthOfStayFromDate = (admissionDateStr: string): string => {
@@ -691,7 +689,7 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
       const reportMonthLabel = format(monthStart, 'MMMM yyyy');
 
       // Fetch ALL reports for this youth
-      const allProgressNotes = await fetchProgressNotesAPI(youth.id).catch(() => fetchProgressNotes(youth.id));
+      const allProgressNotes = await fetchAllProgressNotes(youth.id);
 
       // Separate reporting period reports from historical context
       const monthEnd = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0);
@@ -788,11 +786,11 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
       // Calculate weekly eval / shift score averages (4-domain, 0-4 scale)
       const allEvalEntries = [...weeklyEvals, ...dailyShifts];
       const evalCount = allEvalEntries.length;
-      const evalAvgPeer = evalCount > 0 ? (allEvalEntries.reduce((s, e) => s + e.peer, 0) / evalCount).toFixed(1) : 'N/A';
-      const evalAvgAdult = evalCount > 0 ? (allEvalEntries.reduce((s, e) => s + e.adult, 0) / evalCount).toFixed(1) : 'N/A';
-      const evalAvgInvestment = evalCount > 0 ? (allEvalEntries.reduce((s, e) => s + e.investment, 0) / evalCount).toFixed(1) : 'N/A';
-      const evalAvgAuthority = evalCount > 0 ? (allEvalEntries.reduce((s, e) => s + e.authority, 0) / evalCount).toFixed(1) : 'N/A';
-      const evalAvgOverall = evalCount > 0 ? (allEvalEntries.reduce((s, e) => s + e.overall, 0) / evalCount).toFixed(1) : 'N/A';
+      const evalAvgPeer = evalCount > 0 ? (allEvalEntries.reduce((s, e) => s + (e.peer ?? 0), 0) / evalCount).toFixed(1) : 'N/A';
+      const evalAvgAdult = evalCount > 0 ? (allEvalEntries.reduce((s, e) => s + (e.adult ?? 0), 0) / evalCount).toFixed(1) : 'N/A';
+      const evalAvgInvestment = evalCount > 0 ? (allEvalEntries.reduce((s, e) => s + (e.investment ?? 0), 0) / evalCount).toFixed(1) : 'N/A';
+      const evalAvgAuthority = evalCount > 0 ? (allEvalEntries.reduce((s, e) => s + (e.authority ?? 0), 0) / evalCount).toFixed(1) : 'N/A';
+      const evalAvgOverall = evalCount > 0 ? (allEvalEntries.reduce((s, e) => s + (e.overall ?? 0), 0) / evalCount).toFixed(1) : 'N/A';
 
       const baseInstruction = `You are a clinical professional writing a monthly progress report for ${youth.firstName} ${youth.lastName} at Heartland Boys Home. The reporting period is ${reportMonthLabel}. Write a professional 2-3 paragraph narrative summary.
 
@@ -862,7 +860,8 @@ Discuss behavioral patterns, compliance, response to redirection, and emphasize 
       }
 
       // Update the report with AI-generated summaries
-      setReportData(prev => ({ ...prev, ...updates }));
+      const populatedAt = new Date().toISOString();
+      setReportData(prev => ({ ...prev, ...updates, populatedAt }));
 
       toast({
         title: "Success",
@@ -881,28 +880,46 @@ Discuss behavioral patterns, compliance, response to redirection, and emphasize 
     }
   };
 
+  // Keep a ref to the latest handleAIPopulateAll to avoid stale closures
+  const handleAIPopulateAllRef = useRef(handleAIPopulateAll);
+  handleAIPopulateAllRef.current = handleAIPopulateAll;
+
   // Auto-trigger AI population when no saved draft exists
   useEffect(() => {
     if (shouldAutoPopulate && youth?.id && !isAutoPopulating) {
       setShouldAutoPopulate(false);
-      handleAIPopulateAll(true);
+      handleAIPopulateAllRef.current(true);
     }
-  }, [shouldAutoPopulate, youth?.id]);
+  }, [shouldAutoPopulate, youth?.id, isAutoPopulating]);
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    if (!youth?.id) return;
+    setIsSaving(true);
+    const now = new Date().toISOString();
+    const dataToSave = { ...reportData, lastSavedAt: now };
+
     try {
+      // Save to localStorage first
       const saveKey = `monthly-progress-${youth.id}-${selectedMonth}`;
-      localStorage.setItem(saveKey, JSON.stringify(reportData));
+      localStorage.setItem(saveKey, JSON.stringify(dataToSave));
+
+      // Save to Firebase
+      const draftType = `monthly_progress_${selectedMonth}`;
+      await draftsService.save(youth.id, draftType, user?.uid || null, dataToSave);
+
+      setReportData(prev => ({ ...prev, lastSavedAt: now }));
       toast({
         title: "Report Saved",
         description: "Monthly progress report has been saved successfully",
       });
     } catch (error) {
+      console.warn('Firebase save failed, saved locally:', error);
       toast({
-        title: "Save Error",
-        description: "Failed to save the report",
-        variant: "destructive"
+        title: "Saved Locally",
+        description: "Saved to local storage. Cloud sync failed.",
       });
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -926,7 +943,7 @@ Discuss behavioral patterns, compliance, response to redirection, and emphasize 
     }
   };
 
-  const handleReset = () => {
+  const handleReset = async () => {
     setReportData({
       fullLegalName: "",
       preferredName: "",
@@ -950,15 +967,23 @@ Discuss behavioral patterns, compliance, response to redirection, and emphasize 
       preparedBy: "",
       reportDate: format(new Date(), "yyyy-MM-dd"),
       month: format(new Date(), "MMMM"),
-      year: format(new Date(), "yyyy")
+      year: format(new Date(), "yyyy"),
+      populatedAt: "",
+      lastSavedAt: "",
     });
-    
+
     // Clear saved data
     if (youth?.id) {
       const saveKey = `monthly-progress-${youth.id}-${selectedMonth}`;
       localStorage.removeItem(saveKey);
+      try {
+        const draftType = `monthly_progress_${selectedMonth}`;
+        await draftsService.delete(youth.id, draftType, user?.uid || null);
+      } catch (error) {
+        console.warn('Failed to delete Firebase draft:', error);
+      }
     }
-    
+
     toast({
       title: "Form Reset",
       description: "All form data has been cleared",
@@ -991,7 +1016,7 @@ Discuss behavioral patterns, compliance, response to redirection, and emphasize 
               <Button
                 variant="default"
                 size="sm"
-                onClick={handleAIPopulateAll}
+                onClick={() => handleAIPopulateAll()}
                 disabled={isAutoPopulating}
                 className="bg-[#823131] hover:bg-[#6b2828] text-white border-[#823131]"
               >
@@ -1002,10 +1027,11 @@ Discuss behavioral patterns, compliance, response to redirection, and emphasize 
                 variant="outline"
                 size="sm"
                 onClick={handleSave}
+                disabled={isSaving}
                 className="flex items-center gap-2 border-gray-300 text-gray-700 hover:bg-gray-50"
               >
                 <Save className="h-4 w-4" />
-                Save Progress
+                {isSaving ? 'Saving...' : 'Save Progress'}
               </Button>
               <Button
                 variant="outline"
@@ -1029,6 +1055,24 @@ Discuss behavioral patterns, compliance, response to redirection, and emphasize 
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
+          {/* Populated / Saved Timestamps */}
+          {(reportData.populatedAt || reportData.lastSavedAt) && (
+            <div className="flex flex-wrap gap-4 text-sm text-gray-500">
+              {reportData.populatedAt && (
+                <span className="flex items-center gap-1">
+                  <Sparkles className="w-3 h-3" />
+                  Populated: {format(new Date(reportData.populatedAt), "MMM d, yyyy 'at' h:mm a")}
+                </span>
+              )}
+              {reportData.lastSavedAt && (
+                <span className="flex items-center gap-1">
+                  <Clock className="w-3 h-3" />
+                  Last saved: {format(new Date(reportData.lastSavedAt), "MMM d, yyyy 'at' h:mm a")}
+                </span>
+              )}
+            </div>
+          )}
+
           {/* Report Settings */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-2">

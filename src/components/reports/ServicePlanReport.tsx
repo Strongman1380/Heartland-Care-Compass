@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { Youth } from "@/types/app-types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,15 +8,18 @@ import { Input } from "@/components/ui/input";
 import { ReportHeader } from "@/components/reports/ReportHeader";
 import { FormattedText } from "@/components/ui/formatted-text";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { FileDown, RotateCcw, Sparkles, Save, CheckCircle2, Circle } from "lucide-react";
-import { format } from "date-fns";
+import { FileDown, RotateCcw, Sparkles, Save, CheckCircle2, Circle, Clock, AlertTriangle } from "lucide-react";
+import { format, differenceInDays, addDays } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { exportElementToPDF } from "@/utils/export";
 import { buildReportFilename } from "@/utils/reportFilenames";
-import { getProgressNotesByYouth, getBehaviorPointsByYouth, getDailyRatingsByYouth } from "@/lib/api";
+import { getBehaviorPointsByYouth, getDailyRatingsByYouth } from "@/lib/api";
+import { fetchAllProgressNotes } from "@/utils/local-storage-utils";
 import { getScoresByYouth, type SchoolDailyScore } from "@/utils/schoolScores";
 import { getWeeklyEvalsForYouthInRange, getDailyShiftsForYouthInRange } from "@/utils/shiftScores";
 import * as aiService from "@/services/aiService";
+import { draftsService } from "@/integrations/firebase/draftsService";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface ServicePlanReportProps {
   youth: Youth;
@@ -53,14 +56,20 @@ interface ServicePlanData {
   // Metadata
   preparedBy: string;
   reportDate: string;
+  populatedAt: string;
+  lastSavedAt: string;
 }
 
 export const ServicePlanReport = ({ youth }: ServicePlanReportProps) => {
   const [activeTab, setActiveTab] = useState("resident-info");
   const [isEnhancing, setIsEnhancing] = useState<string | null>(null);
   const [isAutoPopulating, setIsAutoPopulating] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isLoadingDraft, setIsLoadingDraft] = useState(true);
   const { toast } = useToast();
+  const { user } = useAuth();
   const printRef = useRef<HTMLDivElement>(null);
+  const draftLoadedRef = useRef(false);
 
   const [reportData, setReportData] = useState<ServicePlanData>(() => {
     const dob = youth.dob ? format(new Date(youth.dob), "MMMM d, yyyy") : "";
@@ -88,8 +97,86 @@ export const ServicePlanReport = ({ youth }: ServicePlanReportProps) => {
       recommendations: "",
       preparedBy: "",
       reportDate: format(new Date(), "yyyy-MM-dd"),
+      populatedAt: "",
+      lastSavedAt: "",
     };
   });
+
+  // 60-day cycle tracking
+  const getServicePlanDueInfo = () => {
+    const baseDate = reportData.populatedAt || reportData.lastSavedAt;
+    if (!baseDate) return null;
+    const lastDate = new Date(baseDate);
+    const nextDue = addDays(lastDate, 60);
+    const today = new Date();
+    const daysUntilDue = differenceInDays(nextDue, today);
+    return { lastDate, nextDue, daysUntilDue };
+  };
+
+  const dueInfo = getServicePlanDueInfo();
+
+  // Load saved draft from Firebase on mount
+  useEffect(() => {
+    if (draftLoadedRef.current || !youth?.id) return;
+    draftLoadedRef.current = true;
+
+    const loadDraft = async () => {
+      setIsLoadingDraft(true);
+      try {
+        const draft = await draftsService.get(youth.id, 'service_plan', user?.uid || null);
+        if (draft?.data) {
+          const savedData = draft.data as ServicePlanData;
+          setReportData(prev => ({ ...prev, ...savedData }));
+          setIsLoadingDraft(false);
+          return;
+        }
+      } catch (error) {
+        console.warn('Firebase draft load failed:', error);
+      }
+
+      // Fallback: check localStorage
+      try {
+        const localKey = `service-plan-${youth.id}`;
+        const saved = localStorage.getItem(localKey);
+        if (saved) {
+          const savedData = JSON.parse(saved) as ServicePlanData;
+          setReportData(prev => ({ ...prev, ...savedData }));
+          setIsLoadingDraft(false);
+          return;
+        }
+      } catch (error) {
+        console.warn('localStorage load failed:', error);
+      }
+
+      setIsLoadingDraft(false);
+    };
+
+    loadDraft();
+  }, [youth?.id, user?.uid]);
+
+  // Save handler
+  const handleSave = useCallback(async () => {
+    if (!youth?.id) return;
+    setIsSaving(true);
+    const now = new Date().toISOString();
+    const dataToSave = { ...reportData, lastSavedAt: now };
+
+    try {
+      // Save to localStorage first
+      localStorage.setItem(`service-plan-${youth.id}`, JSON.stringify(dataToSave));
+
+      // Save to Firebase
+      await draftsService.save(youth.id, 'service_plan', user?.uid || null, dataToSave);
+
+      setReportData(prev => ({ ...prev, lastSavedAt: now }));
+      toast({ title: "Saved", description: "Service plan saved successfully" });
+    } catch (error) {
+      console.warn('Firebase save failed, saved locally:', error);
+      toast({ title: "Saved Locally", description: "Saved to local storage. Cloud sync failed." });
+    } finally {
+      setIsSaving(false);
+    }
+  }, [reportData, youth?.id, user?.uid, toast]);
 
   const isSectionComplete = (section: string): boolean => {
     switch (section) {
@@ -138,7 +225,7 @@ export const ServicePlanReport = ({ youth }: ServicePlanReportProps) => {
 
     setIsAutoPopulating(true);
     try {
-      const progressNotes = await getProgressNotesByYouth(youth.id).catch(() => []);
+      const progressNotes = await fetchAllProgressNotes(youth.id);
 
       const admissionDate = youth.admissionDate
         ? format(new Date(youth.admissionDate), "MMMM d, yyyy")
@@ -219,11 +306,11 @@ export const ServicePlanReport = ({ youth }: ServicePlanReportProps) => {
       // Calculate weekly eval / shift score averages
       const allEvalEntries = [...weeklyEvals, ...dailyShifts];
       const evalCount = allEvalEntries.length;
-      const evalAvgPeer = evalCount > 0 ? (allEvalEntries.reduce((s, e) => s + e.peer, 0) / evalCount).toFixed(1) : 'N/A';
-      const evalAvgAdult = evalCount > 0 ? (allEvalEntries.reduce((s, e) => s + e.adult, 0) / evalCount).toFixed(1) : 'N/A';
-      const evalAvgInvestment = evalCount > 0 ? (allEvalEntries.reduce((s, e) => s + e.investment, 0) / evalCount).toFixed(1) : 'N/A';
-      const evalAvgAuthority = evalCount > 0 ? (allEvalEntries.reduce((s, e) => s + e.authority, 0) / evalCount).toFixed(1) : 'N/A';
-      const evalAvgOverall = evalCount > 0 ? (allEvalEntries.reduce((s, e) => s + e.overall, 0) / evalCount).toFixed(1) : 'N/A';
+      const evalAvgPeer = evalCount > 0 ? (allEvalEntries.reduce((s, e) => s + (e.peer ?? 0), 0) / evalCount).toFixed(1) : 'N/A';
+      const evalAvgAdult = evalCount > 0 ? (allEvalEntries.reduce((s, e) => s + (e.adult ?? 0), 0) / evalCount).toFixed(1) : 'N/A';
+      const evalAvgInvestment = evalCount > 0 ? (allEvalEntries.reduce((s, e) => s + (e.investment ?? 0), 0) / evalCount).toFixed(1) : 'N/A';
+      const evalAvgAuthority = evalCount > 0 ? (allEvalEntries.reduce((s, e) => s + (e.authority ?? 0), 0) / evalCount).toFixed(1) : 'N/A';
+      const evalAvgOverall = evalCount > 0 ? (allEvalEntries.reduce((s, e) => s + ((e.peer ?? 0) + (e.adult ?? 0) + (e.investment ?? 0) + (e.authority ?? 0)) / 4, 0) / evalCount).toFixed(1) : 'N/A';
 
       const baseInstruction = `You are a clinical professional writing a service plan for ${youth.firstName} ${youth.lastName} at Heartland Boys Home, a group home.
 
@@ -290,7 +377,8 @@ ${caseNotesText}`;
         }
       }
 
-      setReportData(prev => ({ ...prev, ...updates }));
+      const populatedAt = new Date().toISOString();
+      setReportData(prev => ({ ...prev, ...updates, populatedAt }));
 
       toast({ title: "Success", description: "Service plan populated with AI-generated summaries from case notes. Review and edit as needed." });
     } catch (error) {
@@ -301,12 +389,31 @@ ${caseNotesText}`;
     }
   };
 
-  // Auto-trigger AI population on mount
+  const hasAutoPopulatedRef = useRef(false);
+  const autoPopulateFormRef = useRef(autoPopulateForm);
+  autoPopulateFormRef.current = autoPopulateForm;
+
+  // Auto-trigger AI population on mount only when no saved draft was loaded
   useEffect(() => {
-    if (youth?.id) {
-      autoPopulateForm(true);
+    if (hasAutoPopulatedRef.current) return;
+    if (isLoadingDraft) return;
+    if (!youth?.id) return;
+
+    const hasContent = !!(
+      reportData.assessmentSummary ||
+      reportData.treatmentObjectives ||
+      reportData.permanencyPlanning ||
+      reportData.serviceInterventions ||
+      reportData.progressIndicators ||
+      reportData.recommendations
+    );
+
+    hasAutoPopulatedRef.current = true;
+
+    if (!hasContent) {
+      autoPopulateFormRef.current(true);
     }
-  }, [youth?.id]);
+  }, [youth?.id, isLoadingDraft, reportData.assessmentSummary, reportData.treatmentObjectives, reportData.permanencyPlanning, reportData.serviceInterventions, reportData.progressIndicators, reportData.recommendations]);
 
   const enhanceField = async (field: keyof ServicePlanData) => {
     const currentValue = reportData[field];
@@ -352,7 +459,7 @@ ${caseNotesText}`;
     }
   };
 
-  const handleReset = () => {
+  const handleReset = async () => {
     setReportData({
       fullName: "",
       dateOfBirth: "",
@@ -369,8 +476,22 @@ ${caseNotesText}`;
       recommendations: "",
       preparedBy: "",
       reportDate: format(new Date(), "yyyy-MM-dd"),
+      populatedAt: "",
+      lastSavedAt: "",
     });
     setActiveTab("resident-info");
+
+    // Clear saved data
+    if (youth?.id) {
+      localStorage.removeItem(`service-plan-${youth.id}`);
+      try {
+        await draftsService.delete(youth.id, 'service_plan', user?.uid || null);
+      } catch (error) {
+        console.warn('Failed to delete Firebase draft:', error);
+      }
+    }
+
+    toast({ title: "Form Reset", description: "All form data has been cleared" });
   };
 
   const SectionIndicator = ({ section }: { section: string }) => {
@@ -406,11 +527,60 @@ ${caseNotesText}`;
 
   return (
     <div className="space-y-6">
+      {/* 60-Day Due Date Banner */}
+      {dueInfo && (
+        <div className={`flex items-center gap-3 px-4 py-3 rounded-lg border ${
+          dueInfo.daysUntilDue <= 0
+            ? "bg-red-50 border-red-300 text-red-800"
+            : dueInfo.daysUntilDue <= 14
+            ? "bg-yellow-50 border-yellow-300 text-yellow-800"
+            : "bg-green-50 border-green-300 text-green-800"
+        }`}>
+          {dueInfo.daysUntilDue <= 0 ? (
+            <AlertTriangle className="w-5 h-5 flex-shrink-0" />
+          ) : (
+            <Clock className="w-5 h-5 flex-shrink-0" />
+          )}
+          <div className="flex-1">
+            <span className="font-medium">
+              {dueInfo.daysUntilDue <= 0
+                ? `Service Plan is overdue by ${Math.abs(dueInfo.daysUntilDue)} day${Math.abs(dueInfo.daysUntilDue) !== 1 ? 's' : ''}`
+                : `Next Service Plan due in ${dueInfo.daysUntilDue} day${dueInfo.daysUntilDue !== 1 ? 's' : ''}`}
+            </span>
+            <span className="text-sm ml-2 opacity-75">
+              (Due: {format(dueInfo.nextDue, "MMMM d, yyyy")})
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Populated / Saved Timestamps */}
+      {(reportData.populatedAt || reportData.lastSavedAt) && (
+        <div className="flex flex-wrap gap-4 text-sm text-gray-500">
+          {reportData.populatedAt && (
+            <span className="flex items-center gap-1">
+              <Sparkles className="w-3 h-3" />
+              Populated: {format(new Date(reportData.populatedAt), "MMM d, yyyy 'at' h:mm a")}
+            </span>
+          )}
+          {reportData.lastSavedAt && (
+            <span className="flex items-center gap-1">
+              <Save className="w-3 h-3" />
+              Last saved: {format(new Date(reportData.lastSavedAt), "MMM d, yyyy 'at' h:mm a")}
+            </span>
+          )}
+        </div>
+      )}
+
       {/* Action Buttons */}
       <div className="flex flex-wrap gap-2">
-        <Button onClick={autoPopulateForm} disabled={isAutoPopulating} className="bg-[#823131] hover:bg-[#6b2828] text-white border-[#823131]">
+        <Button onClick={() => autoPopulateForm()} disabled={isAutoPopulating} className="bg-[#823131] hover:bg-[#6b2828] text-white border-[#823131]">
           <Sparkles className="w-4 h-4 mr-2" />
           {isAutoPopulating ? "Loading..." : "Auto-Populate from Youth Data"}
+        </Button>
+        <Button onClick={handleSave} disabled={isSaving} variant="outline" className="border-gray-300 text-gray-700 hover:bg-gray-50">
+          <Save className="w-4 h-4 mr-2" />
+          {isSaving ? "Saving..." : "Save Progress"}
         </Button>
         <Button onClick={handleExportPDF} variant="outline" className="border-gray-300 text-gray-700 hover:bg-gray-50">
           <FileDown className="w-4 h-4 mr-2" />

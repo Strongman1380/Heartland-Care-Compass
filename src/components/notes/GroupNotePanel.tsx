@@ -84,18 +84,8 @@ export const GroupNotePanel = ({ onBack }: GroupNotePanelProps) => {
 
   const updateMasterNote = (text: string) => {
     setMasterNoteText(text);
-    // Optional: Update all selected youths' notes when master note changes?
-    // User requested "toggle all of them if I want or if I want to do one single one I can"
-    // Valid strategy: Master note is a template. Individual notes override it if set.
-    // Or: Master note writes to all selected keys in individualNotes.
-    
-    setIndividualNotes(prev => {
-      const next = { ...prev };
-      selectedYouthIds.forEach(id => {
-        next[id] = text;
-      });
-      return next;
-    });
+    // Master note acts as a template/fallback. Individual notes override it when customized.
+    // We no longer eagerly sync into individualNotes to avoid overwriting customizations.
   };
 
   const updateIndividualNote = (youthId: string, text: string) => {
@@ -154,7 +144,7 @@ export const GroupNotePanel = ({ onBack }: GroupNotePanelProps) => {
         };
 
         const notePayload = {
-          date: new Date(date),
+          date: new Date(date + "T12:00:00"),
           category: noteType === "session" ? "Session Note" : "General Note",
           note: JSON.stringify(structuredNote),
           staff: staff.trim(),
@@ -240,7 +230,17 @@ export const GroupNotePanel = ({ onBack }: GroupNotePanelProps) => {
                   />
                 </div>
 
-                <div className="flex items-end">
+                <div className="flex flex-col items-end gap-1">
+                   {selectedYouthIds.size > 0 && (() => {
+                     const emptyCount = Array.from(selectedYouthIds).filter(id =>
+                       !(individualNotes[id] || masterNoteText).trim()
+                     ).length;
+                     return emptyCount > 0 ? (
+                       <p className="text-xs text-amber-600 w-full text-right">
+                         {emptyCount} selected youth{emptyCount !== 1 ? "s" : ""} will be skipped (empty note)
+                       </p>
+                     ) : null;
+                   })()}
                    <Button
                     onClick={handleSubmit}
                     disabled={isSubmitting || selectedYouthIds.size === 0}
@@ -259,7 +259,7 @@ export const GroupNotePanel = ({ onBack }: GroupNotePanelProps) => {
         <Card className="lg:col-span-12 bg-slate-50 border-dashed">
           <CardContent className="pt-6">
              <Label htmlFor="master-note" className="text-base font-semibold text-slate-700">Master Note (Applies to all selected)</Label>
-             <p className="text-xs text-slate-500 mb-2">Typing here will update the note for all currently selected youth below.</p>
+             <p className="text-xs text-slate-500 mb-2">This note applies to all selected youth unless overridden with an individual note below.</p>
              <Textarea
                 id="master-note"
                 value={masterNoteText}
@@ -305,7 +305,7 @@ export const GroupNotePanel = ({ onBack }: GroupNotePanelProps) => {
                 {sortedYouths.map((youth) => {
                   const isExpanded = expandedYouthIds.has(youth.id);
                   const isSelected = selectedYouthIds.has(youth.id);
-                  const currentNote = individualNotes[youth.id] !== undefined ? individualNotes[youth.id] : "";
+                  const currentNote = individualNotes[youth.id] !== undefined ? individualNotes[youth.id] : masterNoteText;
 
                   return (
                     <div

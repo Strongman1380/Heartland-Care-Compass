@@ -8,8 +8,8 @@ import { Button } from '@/components/ui/button';
 import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
 import { exportElementToPDF, exportElementToDocx } from '@/utils/export';
 import { buildReportFilename } from '@/utils/reportFilenames';
-import { fetchDailyRatings, fetchBehaviorPoints, fetchProgressNotes } from '@/utils/local-storage-utils';
-import { getDailyRatingsByYouth, getBehaviorPointsByYouth, getProgressNotesByYouth } from '@/lib/api';
+import { fetchDailyRatings, fetchBehaviorPoints, fetchAllProgressNotes } from '@/utils/local-storage-utils';
+import { getDailyRatingsByYouth, getBehaviorPointsByYouth } from '@/lib/api';
 import { saveDpnComments, fetchDpnCommentsInRange } from '@/utils/local-storage-utils';
 import { summarizeReport, generateDPNFieldComments, type DPNFieldComments } from '@/lib/aiClient';
 
@@ -81,13 +81,8 @@ export function DpnReport({
   };
 
   const loadNotes = async (start: Date, end: Date) => {
-    try {
-      const api = await getProgressNotesByYouth(youth.id);
-      return api.filter(n => n.date && new Date(n.date) >= start && new Date(n.date) <= end) as any as ProgressNote[];
-    } catch {
-      const local = fetchProgressNotes(youth.id) as any as ProgressNote[];
-      return local.filter(n => n.date && new Date(n.date) >= start && new Date(n.date) <= end);
-    }
+    const all = await fetchAllProgressNotes(youth.id);
+    return all.filter(n => n.date && new Date(n.date) >= start && new Date(n.date) <= end);
   };
 
   const recalc = async () => {

@@ -13,7 +13,7 @@ import {
 
 const clamp = (v: number) => Math.min(Math.max(isNaN(v) ? 0 : v, 0), 4)
 const toStorage = (score: number) => Math.round(clamp(score) * 10)
-const fromStorage = (stored: number) => stored > 4 ? parseFloat((stored / 10).toFixed(1)) : stored
+const fromStorage = (stored: number) => stored >= 5 ? parseFloat((stored / 10).toFixed(1)) : stored
 
 export type DomainScores = {
   peer: number
@@ -274,7 +274,8 @@ export const getEvalStats = async (youthId: string): Promise<EvalStats | null> =
   let previousAverage = avg
 
   if (evals.length >= 4) {
-    // evals already sorted desc by date from service
+    // Sort newest-first to ensure correct windowing regardless of upstream order
+    evals.sort((a, b) => (b.week_date > a.week_date ? 1 : b.week_date < a.week_date ? -1 : 0))
     const windowSize = Math.max(2, Math.min(Math.floor(evals.length / 3), 7))
     if (evals.length >= windowSize * 2) {
       const recent = evals.slice(0, windowSize)

@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { format, subDays, startOfMonth, differenceInDays } from "date-fns";
+import { format, subDays, startOfMonth, differenceInDays, isValid } from "date-fns";
 import {
   AlertCircle, TrendingDown, TrendingUp, FileText, ShieldAlert, Activity,
   Users, BookOpen, Star, BarChart3
@@ -59,12 +59,27 @@ const classifyGrade = (value: number): string => {
   return "unsatisfactory";
 };
 
-const weekKey = (d: Date): string => {
+const weekSortKey = (d: Date): string => {
   const copy = new Date(d);
   const day = copy.getDay();
   const diff = day === 0 ? -6 : 1 - day;
   copy.setDate(copy.getDate() + diff);
-  return format(copy, "MM/dd");
+  return format(copy, "yyyy-MM-dd");
+};
+
+const weekLabel = (sortKey: string): string => {
+  const d = new Date(sortKey);
+  return isValid(d) ? format(d, "MM/dd") : sortKey;
+};
+
+const safeFormatDate = (value: string | null | undefined, fmt: string): string => {
+  if (!value) return "";
+  try {
+    const d = new Date(value);
+    return isValid(d) ? format(d, fmt) : "";
+  } catch {
+    return "";
+  }
 };
 
 export const KpiDashboard = ({ youthId, youth }: KpiDashboardProps) => {
@@ -82,6 +97,7 @@ export const KpiDashboard = ({ youthId, youth }: KpiDashboardProps) => {
 
   // Fetch incident reports and academic data
   useEffect(() => {
+    let cancelled = false;
     const fetchExtras = async () => {
       try {
         setExtrasLoading(true);
@@ -92,6 +108,7 @@ export const KpiDashboard = ({ youthId, youth }: KpiDashboardProps) => {
           academicsService.steps.list().catch(() => []),
           notesService.listForYouth(youthId).catch(() => []),
         ]);
+        if (cancelled) return;
         setIncidents(incidentData);
         setCredits(creditData);
         setGrades(gradeData);
@@ -109,10 +126,11 @@ export const KpiDashboard = ({ youthId, youth }: KpiDashboardProps) => {
       } catch {
         // Silently handle — cards will show zero state
       } finally {
-        setExtrasLoading(false);
+        if (!cancelled) setExtrasLoading(false);
       }
     };
     fetchExtras();
+    return () => { cancelled = true; };
   }, [youthId]);
 
   const analytics = useMemo(() => {
@@ -157,24 +175,28 @@ export const KpiDashboard = ({ youthId, youth }: KpiDashboardProps) => {
     const urgentReferralCount = (referralMeta.byPriority.urgent || 0) + (referralMeta.byPriority.high || 0);
 
     // Documentation volume by date (case notes + referral notes)
-    const volumeByDate: Record<string, number> = {};
+    const volumeByDate: Record<string, { label: string; count: number }> = {};
     filteredNotes.forEach((note) => {
       const d = new Date(note.date || note.createdAt || "");
       if (!Number.isNaN(d.getTime())) {
-        const key = format(d, "MM/dd");
-        volumeByDate[key] = (volumeByDate[key] || 0) + 1;
+        const key = format(d, "yyyy-MM-dd");
+        const label = format(d, "MM/dd");
+        volumeByDate[key] = volumeByDate[key] || { label, count: 0 };
+        volumeByDate[key].count += 1;
       }
     });
     filteredReferralNotes.forEach((note) => {
       const d = new Date(note.created_at || "");
       if (!Number.isNaN(d.getTime())) {
-        const key = format(d, "MM/dd");
-        volumeByDate[key] = (volumeByDate[key] || 0) + 1;
+        const key = format(d, "yyyy-MM-dd");
+        const label = format(d, "MM/dd");
+        volumeByDate[key] = volumeByDate[key] || { label, count: 0 };
+        volumeByDate[key].count += 1;
       }
     });
     const noteVolumeData = Object.entries(volumeByDate)
-      .map(([date, notes]) => ({ date, notes }))
-      .sort((a, b) => a.date.localeCompare(b.date));
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([, { label, count }]) => ({ date: label, notes: count }));
 
     // Documentation categories (case note AI categories + referral)
     const categoriesData = Object.entries(aiAggregate.categoryCounts)
@@ -244,7 +266,7 @@ export const KpiDashboard = ({ youthId, youth }: KpiDashboardProps) => {
     filteredRatings.forEach((r) => {
       const d = new Date(r.date || r.createdAt || "");
       if (Number.isNaN(d.getTime())) return;
-      const key = weekKey(d);
+      const key = weekSortKey(d);
       ratingsByWeek[key] = ratingsByWeek[key] || { peer: 0, adult: 0, investment: 0, authority: 0, count: 0 };
       ratingsByWeek[key].peer += r.peerInteraction || 0;
       ratingsByWeek[key].adult += r.adultInteraction || 0;
@@ -255,8 +277,8 @@ export const KpiDashboard = ({ youthId, youth }: KpiDashboardProps) => {
     const domainTrendData = Object.entries(ratingsByWeek)
       .sort(([a], [b]) => a.localeCompare(b))
       .slice(-10)
-      .map(([week, data]) => ({
-        week,
+      .map(([sortKey, data]) => ({
+        week: weekLabel(sortKey),
         Peer: data.count ? Number((data.peer / data.count).toFixed(2)) : 0,
         Adult: data.count ? Number((data.adult / data.count).toFixed(2)) : 0,
         Investment: data.count ? Number((data.investment / data.count).toFixed(2)) : 0,
@@ -271,24 +293,26 @@ export const KpiDashboard = ({ youthId, youth }: KpiDashboardProps) => {
       : 0;
 
     // Points trend by date
-    const pointsByDate: Record<string, number> = {};
+    const pointsByDate: Record<string, { label: string; total: number }> = {};
     filteredPoints.forEach((p) => {
       const d = new Date(p.date || p.createdAt || "");
       if (!Number.isNaN(d.getTime())) {
-        const key = format(d, "MM/dd");
-        pointsByDate[key] = (pointsByDate[key] || 0) + (p.totalPoints || 0);
+        const key = format(d, "yyyy-MM-dd");
+        const label = format(d, "MM/dd");
+        pointsByDate[key] = pointsByDate[key] || { label, total: 0 };
+        pointsByDate[key].total += (p.totalPoints || 0);
       }
     });
     const pointsTrendData = Object.entries(pointsByDate)
-      .map(([date, points]) => ({ date, points }))
-      .sort((a, b) => a.date.localeCompare(b.date));
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([, { label, total }]) => ({ date: label, points: total }));
 
     // --- Incident Reports ---
-    const youthFullName = `${youth.firstName} ${youth.lastName}`.toLowerCase();
+    const youthFullName = `${youth.firstName} ${youth.lastName}`.trim().toLowerCase();
     const youthIncidents = incidents.filter((inc) => {
-      // Match by youth name in involved list or youthName field
-      if (inc.youthName?.toLowerCase().includes(youthFullName)) return true;
-      if (inc.youthInvolved?.some((y) => y.name.toLowerCase().includes(youthFullName))) return true;
+      // Strict equality match on normalized full name
+      if (inc.youthName?.trim().toLowerCase() === youthFullName) return true;
+      if (inc.youthInvolved?.some((y) => y.name?.trim().toLowerCase() === youthFullName)) return true;
       return false;
     });
     const filteredIncidents = youthIncidents.filter((inc) => inRange(inc.dateOfIncident));
@@ -370,7 +394,7 @@ export const KpiDashboard = ({ youthId, youth }: KpiDashboardProps) => {
     );
   }
 
-  const hasAnyData = notesData.length > 0 || referralNotes.length > 0 || behaviorPoints.length > 0 || dailyRatings.length > 0;
+  const hasAnyData = notesData.length > 0 || referralNotes.length > 0 || behaviorPoints.length > 0 || dailyRatings.length > 0 || incidents.length > 0 || credits.length > 0 || grades.length > 0 || steps.length > 0;
 
   return (
     <div className="space-y-6">
@@ -515,9 +539,9 @@ export const KpiDashboard = ({ youthId, youth }: KpiDashboardProps) => {
                 {youth.hyrnaScore != null && (
                   <p className="text-sm text-muted-foreground">Score: {youth.hyrnaScore}</p>
                 )}
-                {youth.hyrnaAssessmentDate && (
+                {youth.hyrnaAssessmentDate && safeFormatDate(youth.hyrnaAssessmentDate, "MMM d, yyyy") && (
                   <p className="text-xs text-muted-foreground">
-                    Assessed: {format(new Date(youth.hyrnaAssessmentDate), "MMM d, yyyy")}
+                    Assessed: {safeFormatDate(youth.hyrnaAssessmentDate, "MMM d, yyyy")}
                   </p>
                 )}
               </div>
@@ -579,10 +603,10 @@ export const KpiDashboard = ({ youthId, youth }: KpiDashboardProps) => {
           </CardHeader>
           <CardContent>
             <div className="space-y-1.5 text-sm">
-              {youth.admissionDate && (
+              {youth.admissionDate && safeFormatDate(youth.admissionDate, "MMM d, yyyy") && (
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Admitted</span>
-                  <span className="font-medium">{format(new Date(youth.admissionDate), "MMM d, yyyy")}</span>
+                  <span className="font-medium">{safeFormatDate(youth.admissionDate, "MMM d, yyyy")}</span>
                 </div>
               )}
               {youth.realColorsResult && (

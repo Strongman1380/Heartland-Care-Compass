@@ -1,6 +1,6 @@
 import { Youth, BehaviorPoints, DailyRating, ProgressNote } from "@/types/app-types";
-import { fetchBehaviorPoints, fetchDailyRatings, fetchProgressNotes } from "./local-storage-utils";
-import { getBehaviorPointsByYouth, getDailyRatingsByYouth, getProgressNotesByYouth } from "@/lib/api";
+import { fetchBehaviorPoints, fetchDailyRatings, fetchAllProgressNotes } from "./local-storage-utils";
+import { getBehaviorPointsByYouth, getDailyRatingsByYouth } from "@/lib/api";
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subWeeks, subMonths, subDays } from "date-fns";
 import { summarizeReport, generateBehavioralInsights, generateTreatmentRecommendations } from "@/lib/aiClient";
 import { calculateTotalPoints, calculatePointsForPeriod, getPointStatistics } from "./pointCalculations";
@@ -15,14 +15,7 @@ const fetchBehaviorPointsAPI = async (youthId: string): Promise<BehaviorPoints[]
   }
 };
 
-const fetchProgressNotesAPI = async (youthId: string): Promise<ProgressNote[]> => {
-  try {
-    return await getProgressNotesByYouth(youthId);
-  } catch (e) {
-    console.warn('API fetch failed for progress-notes; falling back to localStorage:', e);
-    return fetchProgressNotes(youthId);
-  }
-};
+const fetchProgressNotesAPI = fetchAllProgressNotes;
 
 const fetchDailyRatingsAPI = async (youthId: string): Promise<DailyRating[]> => {
   try {
@@ -168,7 +161,11 @@ export const generateReportHTML = async (youth: Youth, options: ReportOptions): 
 
   const notesSection = () => {
     if (!options.includeOptions.notes || !data.progressNotes) return '';
-    const items = (data.progressNotes as ProgressNote[]).slice(0, 50).map(n => `
+    const items = ([...(data.progressNotes as ProgressNote[])].sort((a, b) => {
+      const dateA = a.date ? new Date(a.date).getTime() : 0;
+      const dateB = b.date ? new Date(b.date).getTime() : 0;
+      return dateB - dateA;
+    })).slice(0, 50).map(n => `
       <li>${fmt(n.date as any)} - ${esc(n.category || 'General')}: ${esc(n.note || 'No note')}</li>`).join('');
     return `
       <div style="margin:12pt 0;">
@@ -685,7 +682,11 @@ Deal with Authority Average: ${calcAvg('dealAuthority')} / 5
     report += `PROGRESS NOTES (${data.progressNotes.length} entries):
 `;
     // Increased limit to 50 notes to provide more context
-    data.progressNotes.slice(0, 50).forEach((note: ProgressNote) => {
+    [...data.progressNotes].sort((a: ProgressNote, b: ProgressNote) => {
+      const dateA = a.date ? new Date(a.date).getTime() : 0;
+      const dateB = b.date ? new Date(b.date).getTime() : 0;
+      return dateB - dateA;
+    }).slice(0, 50).forEach((note: ProgressNote) => {
       report += `${note.date ? format(new Date(note.date), "M/d/yyyy") : "No date"} - ${note.category || "General"}: ${note.note || "No note"}\n`;
     });
     report += "\n";
@@ -903,8 +904,7 @@ const generateCourtReport = async (
   const currentTotalPoints = await calculateTotalPoints(youth.id);
 
   let report = `COURT REPORT
-Heartland Boys Home
-Group Home
+Heartland Boys Home — Group Home
 
 YOUTH INFORMATION:
 Name: ${youth.firstName} ${youth.lastName}
@@ -982,7 +982,11 @@ RECENT PROGRESS NOTES:
 `;
 
   if (reportData.progressNotes && reportData.progressNotes.length > 0) {
-    reportData.progressNotes.slice(0, 30).forEach((note: any) => {
+    [...reportData.progressNotes].sort((a: any, b: any) => {
+      const dateA = a.date ? new Date(a.date).getTime() : 0;
+      const dateB = b.date ? new Date(b.date).getTime() : 0;
+      return dateB - dateA;
+    }).slice(0, 30).forEach((note: any) => {
       report += `${note.date ? format(new Date(note.date), "M/d/yyyy") : "Recent"} - ${note.category || "General"}: ${note.note || "Progress documented"}\n`;
     });
   }
@@ -1086,7 +1090,11 @@ SIGNIFICANT INCIDENTS/ACHIEVEMENTS:
 `;
 
   if (reportData.progressNotes && reportData.progressNotes.length > 0) {
-    const recentNotes = reportData.progressNotes.slice(0, 15);
+    const recentNotes = [...reportData.progressNotes].sort((a: any, b: any) => {
+      const dateA = a.date ? new Date(a.date).getTime() : 0;
+      const dateB = b.date ? new Date(b.date).getTime() : 0;
+      return dateB - dateA;
+    }).slice(0, 15);
     recentNotes.forEach((note: any) => {
       report += `• ${note.date ? format(new Date(note.date), "M/d/yyyy") : "Recent"}: ${note.note || "Progress documented in treatment plan"}\n`;
     });

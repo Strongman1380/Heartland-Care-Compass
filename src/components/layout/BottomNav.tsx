@@ -56,7 +56,7 @@ export const BottomNav = () => {
               `}
             >
               <Icon className={`h-5 w-5 ${active ? "stroke-[2.5]" : ""}`} />
-              <span className={`text-[10px] leading-tight ${active ? "font-semibold" : "font-medium"}`}>
+              <span className={`text-[10px] leading-tight hidden min-[321px]:block ${active ? "font-semibold" : "font-medium"}`}>
                 {tab.label}
               </span>
               {active && (
@@ -79,7 +79,7 @@ export const BottomNav = () => {
               `}
             >
               <MoreHorizontal className={`h-5 w-5 ${isSecondaryActive ? "stroke-[2.5]" : ""}`} />
-              <span className={`text-[10px] leading-tight ${isSecondaryActive ? "font-semibold" : "font-medium"}`}>
+              <span className={`text-[10px] leading-tight hidden min-[321px]:block ${isSecondaryActive ? "font-semibold" : "font-medium"}`}>
                 More
               </span>
               {isSecondaryActive && (

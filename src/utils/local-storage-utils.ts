@@ -178,6 +178,62 @@ export const fetchProgressNotes = (youthId: string): ProgressNote[] => {
     });
 };
 
+/**
+ * Async fetch that merges notes from all 3 sources: notesService, caseNotesService, and localStorage.
+ * Use this in reports and anywhere that needs the complete picture of notes for a youth.
+ */
+export const fetchAllProgressNotes = async (youthId: string): Promise<ProgressNote[]> => {
+  // Dynamic imports to avoid circular dependency issues
+  const { caseNotesService } = await import('@/integrations/firebase/services');
+
+  const localNotes = fetchProgressNotes(youthId);
+
+  const [remoteNotes, remoteCaseNotes] = await Promise.all([
+    notesService.listForYouth(youthId).catch((err) => {
+      console.warn('Failed to fetch from notes collection:', err);
+      return [];
+    }),
+    caseNotesService.getByYouthId(youthId).catch((err) => {
+      console.warn('Failed to fetch from case_notes collection:', err);
+      return [];
+    }),
+  ]);
+
+  // Convert notes collection to ProgressNote format
+  const convertedRemote: ProgressNote[] = remoteNotes.map(r => ({
+    id: r.id,
+    youth_id: r.youth_id,
+    date: new Date(r.created_at),
+    note: r.text,
+    staff: r.author_id || '',
+    category: r.category || 'Progress Note',
+    createdAt: new Date(r.created_at),
+  }));
+
+  // Convert case_notes subcollection to ProgressNote format
+  const convertedCaseNotes: ProgressNote[] = remoteCaseNotes.map((cn: any) => ({
+    id: cn.id,
+    youth_id: cn.youth_id,
+    date: cn.date ? new Date(cn.date + 'T00:00:00') : new Date(),
+    note: cn.note || '',
+    staff: cn.staff || '',
+    category: 'Case Note',
+    createdAt: cn.createdAt ? new Date(cn.createdAt) : new Date(),
+  }));
+
+  // Merge all sources, dedup by id
+  const map = new Map<string, ProgressNote>();
+  for (const n of localNotes) map.set(n.id || `local-${n.youth_id}-${String(n.date)}-${n.staff || ''}-${(n.note || '').slice(0, 40)}`, n);
+  for (const n of convertedRemote) map.set(n.id, n);
+  for (const n of convertedCaseNotes) map.set(n.id, n);
+
+  return Array.from(map.values()).sort((a, b) => {
+    const dateA = a.date ? new Date(a.date).getTime() : 0;
+    const dateB = b.date ? new Date(b.date).getTime() : 0;
+    return dateB - dateA;
+  });
+};
+
 export const saveProgressNote = async (
   youthId: string,
   noteData: Omit<ProgressNote, 'id' | 'createdAt' | 'youth_id'>
@@ -198,7 +254,8 @@ export const saveProgressNote = async (
       youth_id: youthId,
       author_id: newNote.staff || null,
       text: typeof newNote.note === 'string' ? newNote.note : JSON.stringify(newNote.note),
-      category: newNote.category || 'Progress Note'
+      category: newNote.category || 'Progress Note',
+      created_at: newNote.date ? new Date(newNote.date).toISOString() : new Date().toISOString()
     } as any);
   } catch (error) {
     console.error('Failed to save progress note to Supabase:', error);

@@ -64,6 +64,7 @@ export const TopSuccessPlanGoals = ({ youth }: TopSuccessPlanGoalsProps) => {
         }
       } catch (error) {
         console.error("Error fetching success plan goals:", error);
+        setGoals([]);
       } finally {
         setLoading(false);
       }
@@ -72,7 +73,7 @@ export const TopSuccessPlanGoals = ({ youth }: TopSuccessPlanGoalsProps) => {
     if (youth) {
       loadGoals();
     }
-  }, [youth]);
+  }, [youth?.id, youth?.treatmentGoals]);
 
   if (loading) {
     return (

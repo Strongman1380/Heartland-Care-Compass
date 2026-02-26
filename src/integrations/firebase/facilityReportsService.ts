@@ -5,6 +5,7 @@ import {
   doc,
   getDoc,
   getDocs,
+  limit as firestoreLimit,
   orderBy,
   query,
   setDoc,
@@ -29,8 +30,9 @@ export type FacilityReportRow = {
 const COLLECTION = "facility_reports";
 
 export const facilityReportsService = {
-  async list(): Promise<FacilityReportRow[]> {
-    const q = query(collection(db, COLLECTION), orderBy("generated_at", "desc"));
+  async list(limit = 500): Promise<FacilityReportRow[]> {
+    const safeLimit = Math.max(1, Math.min(Math.floor(limit) || 500, 1000));
+    const q = query(collection(db, COLLECTION), orderBy("generated_at", "desc"), firestoreLimit(safeLimit));
     const snapshot = await getDocs(q);
     return snapshot.docs.map((d) => ({ id: d.id, ...d.data() } as FacilityReportRow));
   },
@@ -60,6 +62,8 @@ export const facilityReportsService = {
 
   async update(id: string, updates: Partial<FacilityReportRow>): Promise<FacilityReportRow> {
     const ref = doc(db, COLLECTION, id);
+    const preCheck = await getDoc(ref);
+    if (!preCheck.exists()) throw new Error(`Facility report not found: ${id}`);
     const { id: _id, created_at: _createdAt, ...allowed } = updates;
     await updateDoc(ref, { ...allowed, updated_at: new Date().toISOString() } as Record<string, unknown>);
     const snap = await getDoc(ref);
@@ -69,7 +73,10 @@ export const facilityReportsService = {
   },
 
   async delete(id: string): Promise<void> {
-    await deleteDoc(doc(db, COLLECTION, id));
+    const ref = doc(db, COLLECTION, id);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) throw new Error(`Facility report not found: ${id}`);
+    await deleteDoc(ref);
   },
 };
 

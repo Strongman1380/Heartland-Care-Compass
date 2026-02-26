@@ -73,7 +73,7 @@ export const MentalHealthTab = ({ formData, handleChange, handleCheckboxChange, 
           value={formData.treatmentGoals} 
           onChange={handleChange} 
           rows={3}
-          placeholder="Enter treatment goals, separated by commas or newlines"
+          placeholder="Describe treatment goals…"
         />
       </div>
       

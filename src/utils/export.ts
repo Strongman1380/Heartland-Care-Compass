@@ -19,8 +19,8 @@ export async function exportElementToPDF(element: HTMLElement, filename: string)
         allowTaint: true,
         backgroundColor: '#ffffff',
         logging: false,
-        windowWidth: element.scrollWidth,
-        windowHeight: element.scrollHeight
+        windowWidth: element.scrollWidth || 816,
+        windowHeight: element.scrollHeight || 1056
       },
       jsPDF: { unit: 'pt', format: 'letter', orientation: 'portrait' },
       pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
@@ -77,8 +77,8 @@ export async function exportHTMLToPDF(content: string | HTMLElement, filename: s
         allowTaint: true,
         backgroundColor: '#ffffff',
         logging: false,
-        windowWidth: typeof content === 'string' ? 816 : (content as HTMLElement).scrollWidth, // 816px is roughly 8.5 inches at 96dpi
-        windowHeight: typeof content === 'string' ? undefined : (content as HTMLElement).scrollHeight
+        windowWidth: typeof content === 'string' ? 816 : ((content as HTMLElement).scrollWidth || 816), // 816px is roughly 8.5 inches at 96dpi
+        windowHeight: typeof content === 'string' ? undefined : ((content as HTMLElement).scrollHeight || 1056)
       },
       jsPDF: { unit: 'pt', format: 'letter', orientation: 'portrait' },
       pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },

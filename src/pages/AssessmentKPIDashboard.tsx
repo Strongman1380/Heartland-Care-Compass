@@ -135,6 +135,14 @@ const getTimeframeStart = (timeframe: Timeframe): Date => {
   return start;
 };
 
+const escapeHtml = (value: string): string =>
+  value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
 const AssessmentKPIDashboard = () => {
   const navigate = useNavigate();
 
@@ -369,12 +377,12 @@ const AssessmentKPIDashboard = () => {
     const documentationByYouth = youths
       .map((youth) => {
         const id = youth.id || '';
-        const fullName = `${youth.firstName || ''} ${youth.lastName || ''}`.trim() || id || 'Unknown';
+        const fullName = `${youth.firstName || ''} ${youth.lastName || ''}`.trim() || 'Unknown';
         const notesCount = filteredNotes.filter((n) => n.youth_id === id).length;
         const ratingsCount = filteredRatings.filter((n) => n.youth_id === id).length;
         const pointsCount = filteredPoints.filter((n) => n.youth_id === id).length;
         const total = notesCount + ratingsCount + pointsCount;
-        return { name: fullName, notesCount, ratingsCount, pointsCount, total };
+        return { id, name: fullName, notesCount, ratingsCount, pointsCount, total };
       })
       .filter((row) => row.total > 0)
       .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name))
@@ -415,9 +423,10 @@ const AssessmentKPIDashboard = () => {
     const generatedAt = new Date();
     const html = `
       <div style="font-family: Arial, sans-serif; color: #111827; line-height: 1.45;">
-        <h1 style="margin: 0 0 8px 0;">${reportTitle || 'Program KPI Report'}</h1>
-        <p style="margin: 0 0 12px 0;">Generated: ${format(generatedAt, 'MMMM d, yyyy h:mm a')}</p>
-        <p style="margin: 0 0 18px 0;">Timeframe: ${timeframe}</p>
+        <h1 style="margin: 0 0 8px 0;">${escapeHtml(reportTitle || 'Program KPI Report')}</h1>
+        <p style="margin: 0 0 12px 0;">Generated: ${escapeHtml(format(generatedAt, 'MMMM d, yyyy h:mm a'))}</p>
+        ${reportPreparedBy.trim() ? `<p style="margin: 0 0 4px 0;">Prepared by: ${escapeHtml(reportPreparedBy.trim())}</p>` : ''}
+        <p style="margin: 0 0 18px 0;">Timeframe: ${escapeHtml(timeframe)}</p>
         <h2 style="margin: 16px 0 8px 0;">Core KPIs</h2>
         <ul>
           <li>Active Youth: ${analytics.metrics.activeYouth}</li>
@@ -442,7 +451,7 @@ const AssessmentKPIDashboard = () => {
           analytics.documentationByYouth.length === 0
             ? '<p>No documentation activity in selected timeframe.</p>'
             : `<ol>${analytics.documentationByYouth
-                .map((row) => `<li>${row.name}: total ${row.total} (notes ${row.notesCount}, ratings ${row.ratingsCount}, points ${row.pointsCount})</li>`)
+                .map((row) => `<li>${escapeHtml(row.name)}: total ${row.total} (notes ${row.notesCount}, ratings ${row.ratingsCount}, points ${row.pointsCount})</li>`)
                 .join('')}</ol>`
         }
       </div>
@@ -878,7 +887,7 @@ const AssessmentKPIDashboard = () => {
                 ) : (
                   <div className="space-y-2">
                     {analytics.documentationByYouth.map((row) => (
-                      <div key={row.name} className="rounded-md border p-3 flex items-center justify-between">
+                      <div key={row.id} className="rounded-md border p-3 flex items-center justify-between">
                         <div>
                           <p className="text-sm font-semibold">{row.name}</p>
                           <p className="text-xs text-muted-foreground">

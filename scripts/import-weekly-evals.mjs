@@ -5,20 +5,43 @@ import path from 'node:path';
 import XLSX from 'xlsx';
 import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, getDocs, doc, getDoc, setDoc } from 'firebase/firestore';
+import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
+
+const REQUIRED_ENV_VARS = [
+  'VITE_FIREBASE_API_KEY',
+  'VITE_FIREBASE_AUTH_DOMAIN',
+  'VITE_FIREBASE_PROJECT_ID',
+  'VITE_FIREBASE_STORAGE_BUCKET',
+  'VITE_FIREBASE_MESSAGING_SENDER_ID',
+  'VITE_FIREBASE_APP_ID',
+];
+
+for (const envVar of REQUIRED_ENV_VARS) {
+  if (!process.env[envVar]) {
+    console.error(`Missing required environment variable: ${envVar}`);
+    console.error('Set all Firebase environment variables before running this script.');
+    process.exit(1);
+  }
+}
 
 const firebaseConfig = {
-  apiKey: process.env.VITE_FIREBASE_API_KEY || 'AIzaSyAsLC5kOkGO7YcwxmAFxG91sFGckCYSxaE',
-  authDomain: process.env.VITE_FIREBASE_AUTH_DOMAIN || 'heartland-boys-home-data.firebaseapp.com',
-  projectId: process.env.VITE_FIREBASE_PROJECT_ID || 'heartland-boys-home-data',
-  storageBucket: process.env.VITE_FIREBASE_STORAGE_BUCKET || 'heartland-boys-home-data.firebasestorage.app',
-  messagingSenderId: process.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '30882060333',
-  appId: process.env.VITE_FIREBASE_APP_ID || '1:30882060333:web:aa84a93fd3257b689d80a4',
+  apiKey: process.env.VITE_FIREBASE_API_KEY,
+  authDomain: process.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.VITE_FIREBASE_APP_ID,
 };
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-const inputPath = process.argv[2] || 'Files/Ryan Cruise Weekly Eval. Scores-combined-compressed copy (1) (1).xlsx';
+const inputPath = process.argv[2];
+if (!inputPath) {
+  console.error('Usage: node import-weekly-evals.mjs <path-to-excel-or-csv-file>');
+  console.error('Please provide the Excel/CSV file path as a command-line argument.');
+  process.exit(1);
+}
 
 const normalizeName = (value) => String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
 
@@ -83,9 +106,11 @@ const parseRows = (filePath) => {
     return XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
   }
 
+  // For CSV files, use XLSX to parse properly (handles quoted fields)
   const text = fs.readFileSync(filePath, 'utf8');
-  const lines = text.trim().split(/\r?\n/);
-  return lines.map(line => line.split(','));
+  const wb = XLSX.read(text, { type: 'string' });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  return XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
 };
 
 const main = async () => {
@@ -93,8 +118,18 @@ const main = async () => {
     throw new Error(`Input file not found: ${inputPath}`);
   }
 
+  // Authenticate if credentials are provided
+  if (process.env.FIREBASE_AUTH_EMAIL && process.env.FIREBASE_AUTH_PASSWORD) {
+    const auth = getAuth(app);
+    await signInWithEmailAndPassword(auth, process.env.FIREBASE_AUTH_EMAIL, process.env.FIREBASE_AUTH_PASSWORD);
+    console.log('Authenticated successfully.');
+  } else {
+    console.warn('Warning: No FIREBASE_AUTH_EMAIL/FIREBASE_AUTH_PASSWORD set. Writes may fail if Firestore rules require authentication.');
+  }
+
   const youthSnap = await getDocs(collection(db, 'youth'));
   const youthByName = new Map();
+  const ambiguousKeys = new Set();
 
   youthSnap.forEach((docSnap) => {
     const youth = docSnap.data();
@@ -102,9 +137,35 @@ const main = async () => {
     const last = String(youth.lastName || '').trim();
     const full = `${first} ${last}`.trim();
 
+    // Always allow full-name inserts (overwrites are acceptable for full names)
     if (full) youthByName.set(normalizeName(full), { id: docSnap.id, first, last });
-    if (first) youthByName.set(normalizeName(first), { id: docSnap.id, first, last });
-    if (last) youthByName.set(normalizeName(last), { id: docSnap.id, first, last });
+
+    // For partial names, track collisions to avoid ambiguous matches
+    if (first) {
+      const firstKey = normalizeName(first);
+      if (ambiguousKeys.has(firstKey)) {
+        // Already known ambiguous, skip
+      } else if (youthByName.has(firstKey)) {
+        // Collision detected: mark as ambiguous and remove
+        ambiguousKeys.add(firstKey);
+        youthByName.delete(firstKey);
+      } else {
+        youthByName.set(firstKey, { id: docSnap.id, first, last });
+      }
+    }
+
+    if (last) {
+      const lastKey = normalizeName(last);
+      if (ambiguousKeys.has(lastKey)) {
+        // Already known ambiguous, skip
+      } else if (youthByName.has(lastKey)) {
+        // Collision detected: mark as ambiguous and remove
+        ambiguousKeys.add(lastKey);
+        youthByName.delete(lastKey);
+      } else {
+        youthByName.set(lastKey, { id: docSnap.id, first, last });
+      }
+    }
   });
 
   const rows = parseRows(inputPath);
@@ -169,10 +230,10 @@ const main = async () => {
       id: compositeId,
       youth_id: youth.id,
       week_date: weekDate,
-      peer: peer ?? 0,
-      adult: adult ?? 0,
-      investment: investment ?? 0,
-      authority: authority ?? 0,
+      peer,
+      adult,
+      investment,
+      authority,
       source: 'uploaded',
       created_at: createdAt,
       updated_at: now,

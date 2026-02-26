@@ -43,19 +43,19 @@ export const kpiReportsService = {
       report_html: string;
     }
   ): Promise<KpiReportRow> {
+    const isNew = !row.id;
     const id = row.id || uuidv4();
     const now = new Date().toISOString();
-    const data = {
+    const data: Record<string, unknown> = {
       ...row,
       id,
       updated_at: now,
-      created_at: row.created_at || now,
     };
+    if (isNew) {
+      data.created_at = now;
+    }
     await setDoc(doc(db, COLLECTION, id), data, { merge: true });
-    const snap = await getDoc(doc(db, COLLECTION, id));
-    const snapData = snap.data();
-    if (!snapData) throw new Error(`Failed to read KPI report after save: ${id}`);
-    return { id: snap.id, ...snapData } as KpiReportRow;
+    return { ...data, id } as unknown as KpiReportRow;
   },
 
   async update(id: string, updates: Partial<KpiReportRow>): Promise<KpiReportRow> {

@@ -63,19 +63,23 @@ const normalizeWeekly = (r: WeeklyEvalRow): NormalizedWeeklyEval => {
 }
 
 const toWeekStartISO = (isoDate: string): string => {
-  const d = new Date(`${isoDate}T00:00:00`)
+  const d = new Date(`${isoDate.split('T')[0]}T00:00:00`)
   if (isNaN(d.getTime())) return isoDate
   const day = d.getDay()
   const diff = day === 0 ? -6 : 1 - day
   d.setDate(d.getDate() + diff)
-  return d.toISOString().split('T')[0]
+  // Use local date getters to avoid UTC offset shifting the date
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${dd}`
 }
 
 const dedupeWeekly = (rows: WeeklyEvalRow[]): WeeklyEvalRow[] => {
   const byYouthWeek = new Map<string, WeeklyEvalRow>()
   for (const row of rows) {
     const weekStart = toWeekStartISO(row.week_date)
-    const key = `${row.youth_id}_${weekStart}`
+    const key = `${row.youth_id}||${weekStart}`
     const current = byYouthWeek.get(key)
     if (!current) {
       byYouthWeek.set(key, { ...row, week_date: weekStart })

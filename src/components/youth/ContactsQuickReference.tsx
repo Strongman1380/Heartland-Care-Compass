@@ -13,30 +13,48 @@ interface ContactRow {
   phone: string | null | undefined;
 }
 
-const parseCaseworkerName = (caseworker: unknown): string | null => {
-  if (!caseworker) return null;
-  if (typeof caseworker === "string") {
+const parseContact = (contact: unknown): { name: string | null, phone: string | null } => {
+  if (!contact) return { name: null, phone: null };
+  
+  if (typeof contact === "string") {
     try {
-      const parsed = JSON.parse(caseworker);
-      return parsed?.name || caseworker;
+      const parsed = JSON.parse(contact);
+      return { 
+        name: parsed?.name || contact, 
+        phone: parsed?.phone || null 
+      };
     } catch {
-      return caseworker;
+      return { name: contact, phone: null };
     }
   }
-  if (typeof caseworker === "object") {
-    const obj = caseworker as Record<string, unknown>;
-    return (obj.name as string) || JSON.stringify(caseworker);
+  
+  if (typeof contact === "object") {
+    const obj = contact as Record<string, unknown>;
+    const name = typeof obj.name === "string" && obj.name.trim() ? obj.name.trim() : null;
+    return {
+      name,
+      phone: (obj.phone as string) || null
+    };
   }
-  return String(caseworker);
+
+  return { name: String(contact), phone: null };
 };
 
 export const ContactsQuickReference = ({ youth }: ContactsQuickReferenceProps) => {
+  const po = parseContact(youth.probationOfficer);
+  const cw = parseContact(youth.caseworker);
+  const lg = parseContact(youth.legalGuardian);
+  const mother = parseContact(youth.mother);
+  const father = parseContact(youth.father);
+
   const rows: ContactRow[] = [
-    { label: "Probation Officer", name: youth.probationContact, phone: youth.probationPhone },
-    { label: "Caseworker", name: parseCaseworkerName(youth.caseworker), phone: null },
+    { label: "Probation Officer", name: po.name || youth.probationContact, phone: po.phone || youth.probationPhone },
+    { label: "Caseworker", name: cw.name, phone: cw.phone },
+    { label: "Legal Guardian", name: lg.name || youth.guardianContact, phone: lg.phone || youth.guardianPhone },
+    { label: "Mother", name: mother.name, phone: mother.phone },
+    { label: "Father", name: father.name, phone: father.phone },
     { label: "Attorney", name: youth.attorney, phone: null },
     { label: "Therapist", name: youth.therapistName, phone: youth.therapistContact },
-    { label: "Guardian", name: youth.guardianContact, phone: youth.guardianPhone },
     { label: "School Contact", name: youth.schoolContact, phone: youth.schoolPhone },
   ].filter((row) => (row.name && row.name.trim()) || (row.phone && row.phone.trim()));
 

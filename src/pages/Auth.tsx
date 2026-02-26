@@ -15,7 +15,10 @@ const Auth = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
-  const redirectTo = (location.state as { from?: string } | null)?.from || '/';
+  const rawRedirect = (location.state as { from?: string | { pathname?: string } } | null)?.from;
+  const redirectPath = typeof rawRedirect === 'string' ? rawRedirect : rawRedirect?.pathname || '/';
+  // Prevent open-redirect: only allow same-origin relative paths
+  const redirectTo = (redirectPath.startsWith('/') && !redirectPath.startsWith('//') && !/^\/[a-zA-Z]+:/.test(redirectPath)) ? redirectPath : '/';
 
   useEffect(() => {
     if (user) {

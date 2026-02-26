@@ -24,24 +24,39 @@ const ratingBgColor = (val: number) => {
 export const MonthlyShiftAverage: React.FC<MonthlyShiftAverageProps> = ({ youthId }) => {
   const [averages, setAverages] = useState<DomainAverages | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
+
     const fetchAverages = async () => {
       try {
         setLoading(true);
+        setError(null);
         const today = new Date();
         const year = today.getFullYear();
         const month = today.getMonth() + 1; // 1-indexed
         const avg = await calculateMonthlyAverage(youthId, year, month);
-        setAverages(avg);
-      } catch (error) {
-        console.error("Error fetching monthly averages:", error);
+        if (!cancelled) {
+          setAverages(avg);
+        }
+      } catch (err) {
+        console.error("Error fetching monthly averages:", err);
+        if (!cancelled) {
+          setError("Failed to load monthly averages.");
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     };
 
     fetchAverages();
+
+    return () => {
+      cancelled = true;
+    };
   }, [youthId]);
 
   if (loading) {
@@ -53,6 +68,14 @@ export const MonthlyShiftAverage: React.FC<MonthlyShiftAverageProps> = ({ youthI
     );
   }
 
+  if (error) {
+    return (
+      <div className="mt-4 text-sm text-red-600 p-2">
+        {error}
+      </div>
+    );
+  }
+
   if (!averages || averages.totalEntries === 0) {
     return null; // Don't show if no data
   }
@@ -60,7 +83,7 @@ export const MonthlyShiftAverage: React.FC<MonthlyShiftAverageProps> = ({ youthI
   return (
     <div className="mt-4">
       <h4 className="text-sm font-semibold text-red-800 mb-2 uppercase tracking-wider">Current Month Shift Averages</h4>
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
         <div className={`p-2 rounded-md border ${ratingBgColor(averages.peer)} flex flex-col items-center justify-center`}>
           <span className="text-xs font-medium text-gray-600 uppercase">Peer</span>
           <span className={`text-lg font-bold ${ratingColor(averages.peer)}`}>{averages.peer.toFixed(1)}</span>
@@ -77,7 +100,7 @@ export const MonthlyShiftAverage: React.FC<MonthlyShiftAverageProps> = ({ youthI
           <span className="text-xs font-medium text-gray-600 uppercase">Authority</span>
           <span className={`text-lg font-bold ${ratingColor(averages.authority)}`}>{averages.authority.toFixed(1)}</span>
         </div>
-        <div className={`p-2 rounded-md border ${ratingBgColor(averages.overall)} flex flex-col items-center justify-center shadow-sm`}>
+        <div className={`p-2 rounded-md border ${ratingBgColor(averages.overall)} flex flex-col items-center justify-center shadow-sm col-span-2 sm:col-span-1`}>
           <span className="text-xs font-bold text-gray-700 uppercase">Overall</span>
           <span className={`text-xl font-black ${ratingColor(averages.overall)}`}>{averages.overall.toFixed(1)}</span>
         </div>

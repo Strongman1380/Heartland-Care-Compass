@@ -4,7 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft } from "lucide-react";
-import { format } from "date-fns";
+import { format, isValid } from "date-fns";
 import { type Youth } from "@/types/app-types";
 import { fetchYouth } from "@/utils/local-storage-utils";
 
@@ -106,11 +106,14 @@ export const YouthDashboard = ({ youthId }: YouthDashboardProps) => {
                       Restriction Lvl {youth.restrictionLevel}{youth.restrictionReason ? ` — ${youth.restrictionReason}` : ""}
                     </Badge>
                   )}
-                  {youth.lastIncidentDate && (
-                    <span className="text-xs text-muted-foreground">
-                      Last incident: {format(new Date(youth.lastIncidentDate), "MMM d, yyyy")}
-                    </span>
-                  )}
+                  {youth.lastIncidentDate && (() => {
+                    const incidentDate = new Date(youth.lastIncidentDate);
+                    return isValid(incidentDate) ? (
+                      <span className="text-xs text-muted-foreground">
+                        Last incident: {format(incidentDate, "MMM d, yyyy")}
+                      </span>
+                    ) : null;
+                  })()}
                   {youth.estimatedStay && (
                     <span className="text-xs text-muted-foreground">
                       Est. stay: {youth.estimatedStay}

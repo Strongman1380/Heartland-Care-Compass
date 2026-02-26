@@ -151,10 +151,11 @@ export const BehaviorCard = ({ youthId, youth, onYouthUpdated }: BehaviorCardPro
       toast.error("Enter a positive number of points");
       return;
     }
-    const currentTotal = youth.pointTotal ?? 0;
-    const newTotal = currentTotal + val;
     try {
       setIsUpdatingPoints(true);
+      // Re-read the current total at update time to avoid stale-closure race
+      const currentTotal = youth.pointTotal ?? 0;
+      const newTotal = currentTotal + val;
       await updateYouth(youthId, { pointTotal: newTotal });
       toast.success(`Added ${val.toLocaleString()} points — new total: ${newTotal.toLocaleString()}`);
       setCardPoints("");
@@ -309,7 +310,7 @@ export const BehaviorCard = ({ youthId, youth, onYouthUpdated }: BehaviorCardPro
                   placeholder="e.g. 350"
                   value={cardPoints}
                   onChange={(e) => setCardPoints(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleAddCardPoints()}
+                  onKeyDown={(e) => { if (e.key === "Enter" && !isUpdatingPoints) { e.preventDefault(); handleAddCardPoints(); } }}
                   className="flex-1"
                 />
                 <Button
@@ -336,7 +337,7 @@ export const BehaviorCard = ({ youthId, youth, onYouthUpdated }: BehaviorCardPro
                   placeholder="e.g. 2400"
                   value={correctedTotal}
                   onChange={(e) => setCorrectedTotal(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleSetCorrectedTotal()}
+                  onKeyDown={(e) => { if (e.key === "Enter" && !isUpdatingPoints) { e.preventDefault(); handleSetCorrectedTotal(); } }}
                   className="flex-1"
                 />
                 <Button

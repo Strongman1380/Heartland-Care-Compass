@@ -466,6 +466,7 @@ const STATUS_LABELS: Record<string, string> = {
   interview_scheduled: "Interview Scheduled",
   interviewed_yes: "Interviewed - Yes",
   interviewed_no: "Interviewed - No",
+  already_found_placement: "Already Found Placement",
   denied: "Denied",
   // legacy values
   new: "New",
@@ -478,6 +479,7 @@ const STATUS_COLORS: Record<string, string> = {
   interview_scheduled: "bg-blue-100 text-blue-800 border-blue-300",
   interviewed_yes: "bg-green-100 text-green-800 border-green-300",
   interviewed_no: "bg-orange-100 text-orange-800 border-orange-300",
+  already_found_placement: "bg-slate-100 text-slate-800 border-slate-300",
   denied: "bg-red-100 text-red-800 border-red-300",
   new: "bg-gray-100 text-gray-800 border-gray-300",
   reviewed: "bg-purple-100 text-purple-800 border-purple-300",
@@ -547,14 +549,18 @@ const extractFromParsedData = (
   return results;
 };
 
+const dedup = (arr: string[]): string[] => [...new Set(arr)];
+
 const extractCounties = (item: ReferralHistoryItem): string[] => {
   const fromFields = extractFromParsedData(item.parsedData, (key) => key.includes("county"));
   const fromSource = (item.referralSource.match(/([A-Za-z][A-Za-z\s'-]+?)\s+County/gi) || [])
     .map((m) => normalizeEntityValue(m.replace(/\s+County$/i, "")))
     .map((m) => `${titleCase(m)} County`);
-  return [...fromFields, ...fromSource]
-    .map((x) => (x.toLowerCase().includes("county") ? titleCase(x) : `${titleCase(x)} County`))
-    .filter(Boolean);
+  return dedup(
+    [...fromFields, ...fromSource]
+      .map((x) => (x.toLowerCase().includes("county") ? titleCase(x) : `${titleCase(x)} County`))
+      .filter(Boolean)
+  );
 };
 
 const extractCities = (item: ReferralHistoryItem): string[] => {
@@ -569,7 +575,7 @@ const extractStates = (item: ReferralHistoryItem): string[] => {
     (key) => key.includes("state") || key.includes("province")
   ).map((x) => titleCase(x));
   const fromSource = (item.referralSource.match(/\b([A-Z]{2})\b/g) || []).map((x) => x.toUpperCase());
-  return [...fromFields, ...fromSource].filter(Boolean);
+  return dedup([...fromFields, ...fromSource].filter(Boolean));
 };
 
 const extractProbationOfficer = (item: ReferralHistoryItem): string[] => {
@@ -588,7 +594,7 @@ const extractProbationOfficer = (item: ReferralHistoryItem): string[] => {
 
   const fromRaw = (item.rawText.match(/(?:^|\s)-\s*PO\s+([^-(\n]+?)(?:\s*\(|\s*-|$)/i)?.[1] || "").trim();
   const rawResults = fromRaw ? [titleCase(normalizeEntityValue(fromRaw))] : [];
-  return [...fromFields.map((x) => titleCase(x)), ...rawResults].filter(Boolean);
+  return dedup([...fromFields.map((x) => titleCase(x)), ...rawResults].filter(Boolean));
 };
 
 const tallyTop = (values: string[], limit = 6): { name: string; count: number }[] => {
@@ -732,8 +738,10 @@ export const ReferralTab = () => {
         setParsed(null);
         setParsedEntries(entries);
         if (!referralSource.trim()) {
+          // Prefer globalSource (from header) over per-entry detected source
           const firstDetectedSource = entries.find((e) => e.referralSource.trim())?.referralSource || "";
-          if (firstDetectedSource) setReferralSource(firstDetectedSource);
+          if (globalSource) setReferralSource(globalSource);
+          else if (firstDetectedSource) setReferralSource(firstDetectedSource);
         }
       } else {
         const single = entries[0];
@@ -955,15 +963,25 @@ export const ReferralTab = () => {
       return;
     }
 
-    await setArchived(
-      archiveTargetId,
-      true,
-      archiveReason,
-      archiveReasonDetail.trim() || null
-    );
-    setArchiveTargetId(null);
-    setArchiveReason(ARCHIVE_REASON_OPTIONS[0]);
-    setArchiveReasonDetail("");
+    try {
+      if (archiveTargetId) setArchivingId(archiveTargetId);
+      await referralNotesService.update(archiveTargetId, {
+        archived: true,
+        archived_at: new Date().toISOString(),
+        archive_reason: archiveReason || null,
+        archive_reason_detail: archiveReasonDetail.trim() || null,
+      });
+      toast.success("Referral archived");
+      await loadReferralHistory();
+      setArchiveTargetId(null);
+      setArchiveReason(ARCHIVE_REASON_OPTIONS[0]);
+      setArchiveReasonDetail("");
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "Failed to archive referral";
+      toast.error(msg);
+    } finally {
+      setArchivingId(null);
+    }
   };
 
   const handleDelete = async (id: string) => {
@@ -1178,6 +1196,7 @@ export const ReferralTab = () => {
                         <SelectItem value="interview_scheduled">Interview Scheduled</SelectItem>
                         <SelectItem value="interviewed_yes">Interviewed - Yes</SelectItem>
                         <SelectItem value="interviewed_no">Interviewed - No</SelectItem>
+                        <SelectItem value="already_found_placement">Already Found Placement</SelectItem>
                         <SelectItem value="denied">Denied</SelectItem>
                       </SelectContent>
                     </Select>
@@ -1364,6 +1383,7 @@ export const ReferralTab = () => {
                     <SelectItem value="interview_scheduled">Interview Scheduled</SelectItem>
                     <SelectItem value="interviewed_yes">Interviewed - Yes</SelectItem>
                     <SelectItem value="interviewed_no">Interviewed - No</SelectItem>
+                    <SelectItem value="already_found_placement">Already Found Placement</SelectItem>
                     <SelectItem value="denied">Denied</SelectItem>
                   </SelectContent>
                 </Select>
@@ -1427,6 +1447,7 @@ export const ReferralTab = () => {
                             <SelectItem value="interview_scheduled">Interview Scheduled</SelectItem>
                             <SelectItem value="interviewed_yes">Interviewed - Yes</SelectItem>
                             <SelectItem value="interviewed_no">Interviewed - No</SelectItem>
+                            <SelectItem value="already_found_placement">Already Found Placement</SelectItem>
                             <SelectItem value="denied">Denied</SelectItem>
                           </SelectContent>
                         </Select>
@@ -1606,6 +1627,7 @@ export const ReferralTab = () => {
                             <SelectItem value="interview_scheduled">Interview Scheduled</SelectItem>
                             <SelectItem value="interviewed_yes">Interviewed - Yes</SelectItem>
                             <SelectItem value="interviewed_no">Interviewed - No</SelectItem>
+                            <SelectItem value="already_found_placement">Already Found Placement</SelectItem>
                             <SelectItem value="denied">Denied</SelectItem>
                           </SelectContent>
                         </Select>

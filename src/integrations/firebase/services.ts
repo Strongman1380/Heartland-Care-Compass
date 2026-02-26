@@ -128,9 +128,10 @@ export const youthService = {
 
 // Behavior Points Services
 export const behaviorPointsService = {
-  async getAll(): Promise<BehaviorPoints[]> {
+  async getAll(limit = 500): Promise<BehaviorPoints[]> {
     // Avoid hard dependency on a collection-group composite index; sort client-side.
-    const q = query(collectionGroup(db, 'behavior_points'))
+    const safeLimit = Math.max(1, Math.min(Math.floor(limit) || 500, 2000))
+    const q = query(collectionGroup(db, 'behavior_points'), firestoreLimit(safeLimit))
     const snapshot = await getDocs(q)
     return snapshot.docs
       .map(d => docToData<BehaviorPoints>(d))
@@ -192,9 +193,12 @@ export const behaviorPointsService = {
 // Case Notes Services
 export const caseNotesService = {
   async getAll(): Promise<CaseNotes[]> {
-    const q = query(collectionGroup(db, 'case_notes'), orderBy('date', 'desc'))
+    // Avoid hard dependency on a collection-group composite index; sort client-side.
+    const q = query(collectionGroup(db, 'case_notes'))
     const snapshot = await getDocs(q)
-    return snapshot.docs.map(d => docToData<CaseNotes>(d))
+    return snapshot.docs
+      .map(d => docToData<CaseNotes>(d))
+      .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))
   },
 
   async getByYouthId(youthId: string, limit?: number): Promise<CaseNotes[]> {

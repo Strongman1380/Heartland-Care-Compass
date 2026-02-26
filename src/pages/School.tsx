@@ -1,19 +1,17 @@
 import React from 'react'
 import { Outlet } from 'react-router-dom'
-import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import { Header } from "@/components/layout/Header"
 
-// Parent route that hosts the School sidebar and nested pages.
+// Parent route for all school sub-pages.
+// Use the same full-width container layout as the rest of the app.
 const School: React.FC = () => {
   return (
-    <SidebarProvider defaultOpen={true}>
+    <div className="min-h-screen bg-gradient-to-br from-red-50 via-yellow-50 to-red-100">
       <Header />
-      <SidebarInset>
-        <div className="flex flex-1 flex-col gap-4 p-4 pb-24 lg:pb-4">
-          <Outlet />
-        </div>
-      </SidebarInset>
-    </SidebarProvider>
+      <main className="container mx-auto px-4 py-6 pb-24 lg:pb-8">
+        <Outlet />
+      </main>
+    </div>
   )
 }
 

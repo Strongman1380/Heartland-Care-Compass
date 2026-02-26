@@ -42,14 +42,18 @@ const COMMON_ALLERGIES = [
 ];
 
 // Parse a comma-separated allergies string into selected set + optional "other" text
+// Case-insensitive lookup for common allergies
+const COMMON_ALLERGIES_LOWER = new Map(COMMON_ALLERGIES.map((a) => [a.toLowerCase(), a]));
+
 const parseAllergies = (raw: string | null): { selected: Set<string>; other: string } => {
   if (!raw?.trim()) return { selected: new Set(), other: "" };
   const parts = raw.split(",").map((s) => s.trim()).filter(Boolean);
   const selected = new Set<string>();
   let other = "";
   for (const part of parts) {
-    if (COMMON_ALLERGIES.includes(part)) {
-      selected.add(part);
+    const displayValue = COMMON_ALLERGIES_LOWER.get(part.toLowerCase());
+    if (displayValue) {
+      selected.add(displayValue);
     } else {
       other = other ? `${other}, ${part}` : part;
     }
@@ -75,7 +79,16 @@ const parseMedications = (raw: string | null): MedEntry[] => {
   if (!raw?.trim()) return [];
   try {
     const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed)) return parsed as MedEntry[];
+    if (Array.isArray(parsed)) {
+      return parsed
+        .filter((item): item is Record<string, unknown> => item != null && typeof item === "object" && !Array.isArray(item))
+        .map((item) => ({
+          name: (typeof item.name === "string" ? item.name.trim() : ""),
+          dose: (typeof item.dose === "string" ? item.dose.trim() : ""),
+          frequency: (typeof item.frequency === "string" ? item.frequency.trim() : ""),
+        }))
+        .filter((entry) => entry.name.length > 0);
+    }
   } catch {
     // Legacy plain-text value — treat entire string as a single medication name
     return [{ name: raw.trim(), dose: "", frequency: "" }];
@@ -437,7 +450,10 @@ export const MedicalProfileTab = ({ youth, onYouthUpdated }: MedicalProfileTabPr
   const { updateYouth } = useYouth();
 
   const handleFieldUpdate = async (field: string, value: string) => {
-    const updateData: Record<string, string | null> = { [field]: value || null };
+    // Coerce empty or serialized-empty values to null
+    let normalizedValue: string | null = value || null;
+    if (normalizedValue === "[]") normalizedValue = null;
+    const updateData: Record<string, string | null> = { [field]: normalizedValue };
     const updated = await updateYouth(youth.id, updateData);
     if (onYouthUpdated) onYouthUpdated(updated);
   };

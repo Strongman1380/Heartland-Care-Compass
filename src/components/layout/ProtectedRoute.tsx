@@ -19,7 +19,7 @@ export const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
   }
 
   if (!user) {
-    return <Navigate to="/auth" replace state={{ from: location.pathname }} />;
+    return <Navigate to="/auth" replace state={{ from: location }} />;
   }
 
   return <>{children}</>;

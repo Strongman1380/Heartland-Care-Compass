@@ -72,13 +72,13 @@ export const fetchYouth = (youthId: string): Youth | null => {
 
 export const saveYouth = (youth: Omit<Youth, 'id' | 'createdAt' | 'updatedAt'>): Youth => {
   const youths = fetchAllYouths();
-  const now = new Date();
-  
+  const nowIso = new Date().toISOString();
+
   const newYouth: Youth = {
     ...youth,
     id: uuidv4(),
-    createdAt: now,
-    updatedAt: now
+    createdAt: nowIso as unknown as Date,
+    updatedAt: nowIso as unknown as Date
   };
   
   youths.push(newYouth);
@@ -94,7 +94,7 @@ export const updateYouth = (youthId: string, updates: Partial<Youth>): Youth => 
     const updatedYouth = {
       ...youths[index],
       ...updates,
-      updatedAt: new Date()
+      updatedAt: new Date().toISOString() as unknown as Date
     };
     
     youths[index] = updatedYouth;
@@ -133,7 +133,7 @@ export const saveBehaviorPoints = (
     id: uuidv4(),
     youth_id: youthId,
     ...pointData,
-    createdAt: new Date()
+    createdAt: new Date().toISOString() as unknown as Date
   };
   
   allPoints.push(newPoints);
@@ -252,7 +252,7 @@ export const saveProgressNote = async (
     id: uuidv4(),
     youth_id: youthId,
     ...noteData,
-    createdAt: new Date()
+    createdAt: new Date().toISOString() as unknown as Date
   };
 
   // Persist to Supabase - throw error if it fails so UI can handle it
@@ -300,7 +300,7 @@ export const saveCaseNote = (
     id: uuidv4(),
     youth_id: youthId,
     ...noteData,
-    createdAt: new Date()
+    createdAt: new Date().toISOString() as unknown as Date
   };
   
   allNotes.push(newNote);
@@ -327,12 +327,13 @@ export const saveDailyRating = (
   const allRatings = getItem<DailyRating[]>(STORAGE_KEYS.RATINGS) || [];
   const now = new Date();
   
+  const nowIso = now.toISOString();
   const newRating: DailyRating = {
     id: uuidv4(),
     youth_id: youthId,
     ...ratingData,
-    createdAt: now,
-    updatedAt: now
+    createdAt: nowIso as unknown as Date,
+    updatedAt: nowIso as unknown as Date
   };
   
   allRatings.push(newRating);
@@ -351,7 +352,7 @@ export const updateDailyRating = (
     const updatedRating = {
       ...allRatings[index],
       ...updates,
-      updatedAt: new Date()
+      updatedAt: new Date().toISOString() as unknown as Date
     };
     
     allRatings[index] = updatedRating;

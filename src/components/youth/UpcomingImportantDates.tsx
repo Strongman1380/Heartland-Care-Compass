@@ -2,10 +2,10 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Calendar, Clock } from "lucide-react";
 import { Youth } from "@/integrations/firebase/types";
-import { format, isAfter, isBefore, addDays, parseISO } from "date-fns";
+import { format, isAfter, isBefore, addDays } from "date-fns";
 
 interface UpcomingImportantDatesProps {
-  youth: Youth;
+  youth: Youth | null | undefined;
 }
 
 export const UpcomingImportantDates = ({ youth }: UpcomingImportantDatesProps) => {
@@ -21,7 +21,9 @@ export const UpcomingImportantDates = ({ youth }: UpcomingImportantDatesProps) =
       const addIfUpcoming = (dateStr: string | null | undefined, title: string, type: string, isBirthday: boolean = false) => {
         if (!dateStr) return;
         try {
-          const date = parseISO(dateStr);
+          // Use local-midnight parsing to avoid UTC offset shifting the date
+          const date = new Date(`${dateStr.split('T')[0]}T00:00:00`);
+          if (isNaN(date.getTime())) return;
           
           if (isBirthday) {
             // For birthdays, we want the next occurrence

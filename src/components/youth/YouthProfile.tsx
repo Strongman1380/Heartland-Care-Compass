@@ -196,7 +196,7 @@ export const YouthProfile = ({ youth, onBack, onYouthUpdated }: YouthProfileProp
 
             <TabsContent value="overview" className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <RecentIncidentsAlert youthId={youth.id} />
+                <RecentIncidentsAlert youthId={youth.id} youthName={`${youth.firstName} ${youth.lastName}`} />
                 <TopSuccessPlanGoals youth={youth} />
                 <UpcomingImportantDates youth={youth} />
                 <ContactsQuickReference youth={youth} />

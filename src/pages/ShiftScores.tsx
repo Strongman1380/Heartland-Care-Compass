@@ -630,16 +630,21 @@ const ShiftScores: React.FC = () => {
                             </div>
                           </div>
                           <div className="overflow-auto">
-                            <table className="text-xs sm:text-sm w-full" style={{ minWidth: '600px' }}>
+                            <table className="text-xs sm:text-sm w-full table-fixed" style={{ minWidth: '600px' }}>
+                              <colgroup>
+                                <col style={{ width: '80px' }} />
+                                {weeklyDates.map(wd => <col key={wd} style={{ width: '72px' }} />)}
+                                <col style={{ width: '60px' }} />
+                              </colgroup>
                               <thead className="bg-gray-50/50">
                                 <tr>
-                                  <th className="text-left px-2 py-1.5 w-20">Domain</th>
+                                  <th className="text-left px-2 py-1.5">Domain</th>
                                   {weeklyDates.map(wd => (
-                                    <th key={wd} className="text-center px-1 py-1.5 min-w-[70px]">
+                                    <th key={wd} className="text-center px-1 py-1.5">
                                       <div className="text-xs">{format(new Date(wd + 'T00:00:00'), 'M/d')}</div>
                                     </th>
                                   ))}
-                                  <th className="text-center px-2 py-1.5 bg-blue-50 min-w-[50px]">Avg</th>
+                                  <th className="text-center px-1 py-1.5 bg-blue-50">Avg</th>
                                 </tr>
                               </thead>
                               <tbody>
@@ -649,12 +654,12 @@ const ShiftScores: React.FC = () => {
                                     {weeklyDates.map(wd => {
                                       const val = weeklyGrid[y.id]?.[wd]?.[d.key]
                                       return (
-                                        <td key={wd} className="px-1 py-1">
+                                        <td key={wd} className="p-1">
                                           <Input
                                             type="number" min={0} max={4} step={0.1}
                                             value={val !== undefined && !isNaN(val) ? val : ''}
                                             onChange={e => handleWeeklyChange(y.id, wd, d.key, e.target.value)}
-                                            className="text-center w-16 h-7 text-xs px-1"
+                                            className="text-center w-full h-7 text-xs px-1"
                                           />
                                         </td>
                                       )
@@ -677,7 +682,7 @@ const ShiftScores: React.FC = () => {
                                   {weeklyDates.map(wd => {
                                     const overall = getWeeklyCellOverall(y.id, wd)
                                     return (
-                                      <td key={wd} className="px-1 py-1 text-center font-semibold">
+                                      <td key={wd} className="p-1 text-center font-semibold">
                                         {overall !== null ? (
                                           <span className={ratingColor(overall)}>{overall.toFixed(1)}</span>
                                         ) : '-'}
@@ -748,12 +753,16 @@ const ShiftScores: React.FC = () => {
                     <div key={y.id} className="border rounded-lg overflow-hidden">
                       <div className="bg-gray-50 px-3 py-2 font-semibold text-sm">{y.firstName} {y.lastName}</div>
                       <div className="overflow-auto">
-                        <table className="text-xs sm:text-sm w-full" style={{ minWidth: '500px' }}>
+                        <table className="text-xs sm:text-sm w-full table-fixed" style={{ minWidth: '500px' }}>
+                          <colgroup>
+                            <col style={{ width: '80px' }} />
+                            {dailyDates.map(iso => <col key={iso} style={{ width: '72px' }} />)}
+                          </colgroup>
                           <thead className="bg-gray-50/50">
                             <tr>
-                              <th className="text-left px-2 py-1.5 w-20">Domain</th>
+                              <th className="text-left px-2 py-1.5">Domain</th>
                               {dailyDates.map((iso, idx) => (
-                                <th key={iso} className={`text-center px-1 py-1.5 min-w-[70px] ${toISO(today) === iso ? 'bg-yellow-50' : ''}`}>
+                                <th key={iso} className={`text-center px-1 py-1.5 ${toISO(today) === iso ? 'bg-yellow-50' : ''}`}>
                                   <div className="font-semibold">{WEEKDAYS[idx]}</div>
                                   <div className="text-xs text-gray-500">{format(new Date(iso + 'T00:00:00'), 'M/d')}</div>
                                 </th>
@@ -768,12 +777,12 @@ const ShiftScores: React.FC = () => {
                                   const key = `${iso}_${activeShift}`
                                   const val = dailyGrid[y.id]?.[key]?.[d.key]
                                   return (
-                                    <td key={iso} className={`px-1 py-1 ${toISO(today) === iso ? 'bg-yellow-50' : ''}`}>
+                                    <td key={iso} className={`p-1 ${toISO(today) === iso ? 'bg-yellow-50' : ''}`}>
                                       <Input
                                         type="number" min={0} max={4} step={0.1}
                                         value={val !== undefined && !isNaN(val) ? val : ''}
                                         onChange={e => handleDailyChange(y.id, iso, activeShift, d.key, e.target.value)}
-                                        className="text-center w-16 h-7 text-xs px-1"
+                                        className="text-center w-full h-7 text-xs px-1"
                                       />
                                     </td>
                                   )
@@ -862,17 +871,27 @@ const ShiftScores: React.FC = () => {
 
                 {averageResults.size > 0 && (
                   <div className="overflow-auto border rounded-lg bg-white">
-                    <table className="text-sm w-full">
+                    <table className="text-sm w-full table-fixed">
+                      <colgroup>
+                        <col style={{ minWidth: '140px' }} />
+                        <col style={{ width: '72px' }} />
+                        <col style={{ width: '72px' }} />
+                        <col style={{ width: '90px' }} />
+                        <col style={{ width: '90px' }} />
+                        <col style={{ width: '72px' }} />
+                        <col style={{ width: '100px' }} />
+                        <col style={{ width: '72px' }} />
+                      </colgroup>
                       <thead className="bg-gray-50">
                         <tr>
-                          <th className="text-left px-3 py-2 min-w-[140px]">Youth</th>
-                          <th className="text-center px-3 py-2">Peer</th>
-                          <th className="text-center px-3 py-2">Adult</th>
-                          <th className="text-center px-3 py-2">Investment</th>
-                          <th className="text-center px-3 py-2">Authority</th>
-                          <th className="text-center px-3 py-2 bg-blue-50 font-bold">Overall</th>
-                          <th className="text-center px-3 py-2">Rating</th>
-                          <th className="text-center px-3 py-2">Entries</th>
+                          <th className="text-left px-3 py-2">Youth</th>
+                          <th className="text-center px-2 py-2">Peer</th>
+                          <th className="text-center px-2 py-2">Adult</th>
+                          <th className="text-center px-2 py-2">Investment</th>
+                          <th className="text-center px-2 py-2">Authority</th>
+                          <th className="text-center px-2 py-2 bg-blue-50 font-bold">Overall</th>
+                          <th className="text-center px-2 py-2">Rating</th>
+                          <th className="text-center px-2 py-2">Entries</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -882,21 +901,21 @@ const ShiftScores: React.FC = () => {
                           return (
                             <tr key={y.id} className="border-t hover:bg-gray-50">
                               <td className="px-3 py-2 font-medium">{y.firstName} {y.lastName}</td>
-                              <td className="px-3 py-2 text-center">{r.peer !== null ? <span className={ratingColor(r.peer)}>{r.peer.toFixed(1)}</span> : '-'}</td>
-                              <td className="px-3 py-2 text-center">{r.adult !== null ? <span className={ratingColor(r.adult)}>{r.adult.toFixed(1)}</span> : '-'}</td>
-                              <td className="px-3 py-2 text-center">{r.investment !== null ? <span className={ratingColor(r.investment)}>{r.investment.toFixed(1)}</span> : '-'}</td>
-                              <td className="px-3 py-2 text-center">{r.authority !== null ? <span className={ratingColor(r.authority)}>{r.authority.toFixed(1)}</span> : '-'}</td>
-                              <td className="px-3 py-2 text-center bg-blue-50 font-bold">
+                              <td className="px-2 py-2 text-center">{r.peer !== null ? <span className={ratingColor(r.peer)}>{r.peer.toFixed(1)}</span> : '-'}</td>
+                              <td className="px-2 py-2 text-center">{r.adult !== null ? <span className={ratingColor(r.adult)}>{r.adult.toFixed(1)}</span> : '-'}</td>
+                              <td className="px-2 py-2 text-center">{r.investment !== null ? <span className={ratingColor(r.investment)}>{r.investment.toFixed(1)}</span> : '-'}</td>
+                              <td className="px-2 py-2 text-center">{r.authority !== null ? <span className={ratingColor(r.authority)}>{r.authority.toFixed(1)}</span> : '-'}</td>
+                              <td className="px-2 py-2 text-center bg-blue-50 font-bold">
                                 {r.overall !== null ? <span className={ratingColor(r.overall)}>{r.overall.toFixed(1)}</span> : '-'}
                               </td>
-                              <td className="px-3 py-2 text-center">
+                              <td className="px-2 py-2 text-center">
                                 {r.overall !== null && (
                                   <span className={`text-xs px-2 py-1 rounded-full ${ratingBgColor(r.overall)} ${ratingColor(r.overall)}`}>
                                     {ratingLabel(r.overall)}
                                   </span>
                                 )}
                               </td>
-                              <td className="px-3 py-2 text-center text-gray-500">{r.totalEntries}</td>
+                              <td className="px-2 py-2 text-center text-gray-500">{r.totalEntries}</td>
                             </tr>
                           )
                         })}
@@ -1027,25 +1046,38 @@ const ManualWeeklyDomainEntry: React.FC<{ youths: any[]; toast: any }> = ({ yout
         </div>
       </div>
 
-      <div className="space-y-3">
-        {youths.map(y => (
-          <div key={y.id} className="bg-gray-50 rounded-lg px-3 py-2">
-            <div className="font-medium text-sm mb-2">{y.firstName} {y.lastName}</div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+      <div className="overflow-auto border rounded-lg">
+        <table className="text-xs sm:text-sm w-full table-fixed" style={{ minWidth: '360px' }}>
+          <colgroup>
+            <col style={{ width: '140px' }} />
+            {DOMAINS.map(d => <col key={d.key} style={{ width: '80px' }} />)}
+          </colgroup>
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="text-left px-3 py-2 font-medium text-gray-700">Youth</th>
               {DOMAINS.map(d => (
-                <div key={d.key} className="flex items-center gap-1.5">
-                  <span className="text-xs text-gray-600 w-12">{d.short}</span>
-                  <Input
-                    type="number" min={0} max={4} step={0.1} placeholder="0-4"
-                    value={entries[y.id]?.[d.key] ?? ''}
-                    onChange={e => updateEntry(y.id, d.key, e.target.value)}
-                    className="w-16 h-7 text-center text-xs px-1"
-                  />
-                </div>
+                <th key={d.key} className="text-center px-1 py-2 font-medium text-gray-700">{d.short}</th>
               ))}
-            </div>
-          </div>
-        ))}
+            </tr>
+          </thead>
+          <tbody>
+            {youths.map(y => (
+              <tr key={y.id} className="border-t">
+                <td className="px-3 py-1.5 font-medium text-sm">{y.firstName} {y.lastName}</td>
+                {DOMAINS.map(d => (
+                  <td key={d.key} className="p-1">
+                    <Input
+                      type="number" min={0} max={4} step={0.1} placeholder="—"
+                      value={entries[y.id]?.[d.key] ?? ''}
+                      onChange={e => updateEntry(y.id, d.key, e.target.value)}
+                      className="w-full h-7 text-center text-xs px-1"
+                    />
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
 
       <Button onClick={handleSave} disabled={saving} className="bg-red-600 hover:bg-red-700">

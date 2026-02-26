@@ -3,13 +3,17 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { FileText, Download, Save } from "lucide-react";
+import { FileText, Download, Save, Sparkles, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { buildReportFilename } from "@/utils/reportFilenames";
-// Note: Assessment saving/loading functionality will need to be implemented with local storage
+import { behaviorPointsService, caseNotesService } from "@/integrations/firebase/services";
+import { generateBehavioralInsights } from "@/lib/aiClient";
+import {
+  behaviorAnalysisService,
+  type BehaviorWorksheetRow,
+} from "@/integrations/firebase/behaviorAnalysisService";
 
 interface BehaviorAnalysisProps {
   youthId: string;
@@ -31,8 +35,8 @@ interface BehaviorWorksheet {
   events: BehaviorEvent[];
   summary: string;
   skillsToImprove: string[];
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: string;
+  updatedAt: string;
 }
 
 const DEFAULT_SKILLS = [
@@ -59,35 +63,54 @@ const EMPTY_EVENT: BehaviorEvent = {
 };
 
 export const BehaviorAnalysis = ({ youthId, youth }: BehaviorAnalysisProps) => {
-  const [worksheet, setWorksheet] = useState<BehaviorWorksheet>({
-    events: Array(3).fill({}).map(() => ({ ...EMPTY_EVENT })),
-    summary: "",
-    skillsToImprove: [],
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  });
+  const createDefaultWorksheet = (): BehaviorWorksheet => {
+    const now = new Date().toISOString();
+    return {
+      events: Array(3).fill({}).map(() => ({ ...EMPTY_EVENT })),
+      summary: "",
+      skillsToImprove: [],
+      createdAt: now,
+      updatedAt: now,
+    };
+  };
+
+  const [worksheet, setWorksheet] = useState<BehaviorWorksheet>(createDefaultWorksheet());
   
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
   const [activeEventIndex, setActiveEventIndex] = useState(0);
   
   useEffect(() => {
-    fetchWorksheet();
+    const load = async () => {
+      await fetchWorksheet();
+    };
+    load();
   }, [youthId]);
   
-  const fetchWorksheet = () => {
+  const mapRowToWorksheet = (row: BehaviorWorksheetRow): BehaviorWorksheet => {
+    const events = Array.isArray(row.events) ? row.events.slice(0, 3) : [];
+    while (events.length < 3) events.push({ ...EMPTY_EVENT });
+    return {
+      id: row.id,
+      events,
+      summary: row.summary || "",
+      skillsToImprove: row.skills_to_improve || [],
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  };
+
+  const fetchWorksheet = async () => {
     try {
       setIsLoading(true);
-      
-      // For now, just initialize with default structure
-      // TODO: Implement local storage for behavior worksheets
-      setWorksheet({
-        events: Array(3).fill({}).map(() => ({ ...EMPTY_EVENT })),
-        summary: "",
-        skillsToImprove: [],
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
+      const existing = await behaviorAnalysisService.getByYouthId(youthId);
+      if (existing) {
+        setWorksheet(mapRowToWorksheet(existing));
+      } else {
+        setWorksheet(createDefaultWorksheet());
+      }
+      setActiveEventIndex(0);
     } catch (error) {
       console.error("Error fetching behavior worksheet:", error);
       toast.error("Failed to load behavior analysis worksheet");
@@ -133,13 +156,21 @@ export const BehaviorAnalysis = ({ youthId, youth }: BehaviorAnalysisProps) => {
     });
   };
   
-  const handleSaveWorksheet = () => {
+  const handleSaveWorksheet = async () => {
     try {
       setIsSaving(true);
-      
-      // TODO: Implement local storage for behavior worksheets
-      console.log("Saving worksheet:", worksheet);
-      
+      const saved = await behaviorAnalysisService.save(youthId, {
+        events: worksheet.events,
+        summary: worksheet.summary,
+        skills_to_improve: worksheet.skillsToImprove,
+      });
+
+      setWorksheet((prev) => ({
+        ...prev,
+        id: saved.id,
+        createdAt: saved.created_at,
+        updatedAt: saved.updated_at,
+      }));
       toast.success("Behavior analysis worksheet saved successfully");
     } catch (error) {
       console.error("Error saving behavior worksheet:", error);
@@ -151,6 +182,76 @@ export const BehaviorAnalysis = ({ youthId, youth }: BehaviorAnalysisProps) => {
   
   const handlePrintWorksheet = () => {
     window.print();
+  };
+
+  const handleResetWorksheet = () => {
+    if (!confirm("Reset this worksheet to blank fields? Unsaved changes will be lost.")) return;
+    setWorksheet(createDefaultWorksheet());
+    setActiveEventIndex(0);
+  };
+
+  const inferSkillsFromSummary = (summary: string): string[] => {
+    const text = summary.toLowerCase();
+    const matched: string[] = [];
+    const mapping: Array<{ skill: string; keywords: string[] }> = [
+      { skill: "Anger management", keywords: ["anger", "angry", "frustrat"] },
+      { skill: "Emotional regulation", keywords: ["emotion", "escalat", "mood"] },
+      { skill: "Impulse control", keywords: ["impulse", "impulsive", "reactive"] },
+      { skill: "Social awareness", keywords: ["peer", "social", "relationship"] },
+      { skill: "Problem solving", keywords: ["problem", "solution", "decision"] },
+      { skill: "Communication skills", keywords: ["communication", "communicate", "express"] },
+      { skill: "Conflict resolution", keywords: ["conflict", "argument", "fight"] },
+      { skill: "Stress management", keywords: ["stress", "pressure", "overwhelm"] },
+      { skill: "Coping strategies", keywords: ["coping", "strategy", "de-escalat"] },
+      { skill: "Self-awareness", keywords: ["insight", "self", "awareness"] },
+    ];
+
+    mapping.forEach(({ skill, keywords }) => {
+      if (keywords.some((k) => text.includes(k))) matched.push(skill);
+    });
+
+    return matched.slice(0, 5);
+  };
+
+  const handleGenerateSummary = async () => {
+    try {
+      setIsGeneratingSummary(true);
+      const [points, notes] = await Promise.all([
+        behaviorPointsService.getByYouthId(youthId, 90),
+        caseNotesService.getByYouthId(youthId, 25),
+      ]);
+
+      if (points.length === 0 && notes.length === 0) {
+        toast.error("No behavior points or case notes found to generate analysis");
+        return;
+      }
+
+      const period = {
+        startDate: points[points.length - 1]?.date || "",
+        endDate: points[0]?.date || "",
+      };
+
+      const insight = await generateBehavioralInsights(points, youth, period);
+      const caseNoteSignal =
+        notes.length > 0
+          ? `\n\nCase note context: reviewed ${notes.length} recent notes for corroborating behavioral patterns.`
+          : "";
+      const nextSummary = `${insight}${caseNoteSignal}`.trim();
+      const inferredSkills = inferSkillsFromSummary(nextSummary);
+
+      setWorksheet((prev) => ({
+        ...prev,
+        summary: nextSummary,
+        skillsToImprove: prev.skillsToImprove.length > 0 ? prev.skillsToImprove : inferredSkills,
+      }));
+
+      toast.success("Behavior analysis summary generated from live behavior data");
+    } catch (error) {
+      console.error("Error generating behavior summary:", error);
+      toast.error("Failed to generate behavior analysis summary");
+    } finally {
+      setIsGeneratingSummary(false);
+    }
   };
   
   const handleExportPdf = async () => {
@@ -281,6 +382,10 @@ export const BehaviorAnalysis = ({ youthId, youth }: BehaviorAnalysisProps) => {
           <Button variant="outline" size="sm" onClick={handlePrintWorksheet}>
             <FileText size={16} className="mr-2" />
             Print
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleGenerateSummary} disabled={isGeneratingSummary}>
+            {isGeneratingSummary ? <Loader2 size={16} className="mr-2 animate-spin" /> : <Sparkles size={16} className="mr-2" />}
+            Generate Summary
           </Button>
           <Button variant="outline" size="sm" onClick={handleExportPdf}>
             <Download size={16} className="mr-2" />
@@ -440,7 +545,7 @@ export const BehaviorAnalysis = ({ youthId, youth }: BehaviorAnalysisProps) => {
           </div>
         </CardContent>
         <CardFooter className="flex justify-between">
-          <Button variant="outline">Reset Form</Button>
+          <Button variant="outline" onClick={handleResetWorksheet}>Reset Form</Button>
           <Button onClick={handleSaveWorksheet} disabled={isSaving}>
             {isSaving ? "Saving..." : "Save Worksheet"}
           </Button>

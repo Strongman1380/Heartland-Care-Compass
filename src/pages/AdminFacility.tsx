@@ -40,6 +40,11 @@ const getTimeframeStart = (timeframe: Timeframe): Date => {
 
 const parseDate = (value: string | null | undefined): Date | null => {
   if (!value) return null;
+  // For date-only strings (YYYY-MM-DD), parse as local midnight to avoid UTC offset issues
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const d = new Date(`${value}T00:00:00`);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
   const d = new Date(value);
   return Number.isNaN(d.getTime()) ? null : d;
 };
@@ -60,6 +65,7 @@ const AdminFacility = () => {
   const [noteTitle, setNoteTitle] = useState("");
   const [noteText, setNoteText] = useState("");
   const [staffName, setStaffName] = useState("");
+  const [reportStaffName, setReportStaffName] = useState("");
   const [bulkText, setBulkText] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isBulkSaving, setIsBulkSaving] = useState(false);
@@ -151,6 +157,10 @@ const AdminFacility = () => {
   const handleSaveNote = async () => {
     if (!noteTitle.trim() || !noteText.trim()) {
       toast.error("Title and note text are required");
+      return;
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(noteDate)) {
+      toast.error("Invalid date format");
       return;
     }
     try {
@@ -304,7 +314,7 @@ const AdminFacility = () => {
         title: reportTitle.trim() || `Facility Report - ${format(new Date(), "MMM d, yyyy")}`,
         timeframe,
         generated_at: reportGeneratedAt || new Date().toISOString(),
-        generated_by: staffName.trim() || null,
+        generated_by: reportStaffName.trim() || null,
         report_html: reportHtml,
         kpi_snapshot: {
           activeYouth: metrics.activeYouth,
@@ -532,8 +542,8 @@ const AdminFacility = () => {
                 <Label>Prepared By</Label>
                 <Input
                   placeholder="Staff name for report metadata"
-                  value={staffName}
-                  onChange={(e) => setStaffName(e.target.value)}
+                  value={reportStaffName}
+                  onChange={(e) => setReportStaffName(e.target.value)}
                 />
               </div>
             </div>
@@ -644,13 +654,18 @@ const AdminFacility = () => {
                         </p>
                         <p className="text-sm mt-1 whitespace-pre-wrap">{note.note_text}</p>
                       </div>
-                      <Badge
-                        className="cursor-pointer"
+                      <Button
+                        size="sm"
                         variant="outline"
-                        onClick={() => handleDeleteNote(note.id)}
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+                        onClick={() => {
+                          if (confirm(`Delete note "${note.title}"? This cannot be undone.`)) {
+                            handleDeleteNote(note.id);
+                          }
+                        }}
                       >
                         Delete
-                      </Badge>
+                      </Button>
                     </div>
                   </div>
                 ))}

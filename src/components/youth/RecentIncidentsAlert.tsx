@@ -3,57 +3,105 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AlertTriangle, ShieldAlert } from "lucide-react";
 import { incidentReportsService } from "@/integrations/firebase/incidentReportsService";
 import { schoolIncidentsService } from "@/integrations/firebase/schoolIncidentsService";
-import { format, subDays, isAfter } from "date-fns";
+import { format, subDays, isAfter, isValid } from "date-fns";
+
+interface NormalizedIncident {
+  id: string;
+  type: 'Facility' | 'School';
+  date: string;
+  category: string;
+  severity: string;
+}
 
 interface RecentIncidentsAlertProps {
   youthId: string;
+  youthName: string;
 }
 
-export const RecentIncidentsAlert = ({ youthId }: RecentIncidentsAlertProps) => {
-  const [incidents, setIncidents] = useState<any[]>([]);
+const normalizeSeverity = (value: string | null | undefined): string => {
+  if (!value) return '';
+  const v = value.trim().toLowerCase();
+  if (v === 'critical') return 'Critical';
+  if (v === 'major' || v === 'high') return 'Major';
+  if (v === 'minor' || v === 'low') return 'Minor';
+  if (v === 'moderate' || v === 'medium') return 'Moderate';
+  return value.trim();
+};
+
+export const RecentIncidentsAlert = ({ youthId, youthName }: RecentIncidentsAlertProps) => {
+  const [incidents, setIncidents] = useState<NormalizedIncident[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!youthId) {
+      setLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+
     const fetchIncidents = async () => {
       try {
         setLoading(true);
+        setError(null);
         const fourteenDaysAgo = subDays(new Date(), 14);
-        
-        // Fetch facility incidents
+        const nameLower = youthName.trim().toLowerCase();
+
+        // Fetch and normalize facility incidents — match by youthName field
         const facilityIncidents = await incidentReportsService.list();
-        const youthFacilityIncidents = facilityIncidents.filter(
-          (inc) => 
-            inc.youthId === youthId && 
-            inc.date && 
-            isAfter(new Date(inc.date), fourteenDaysAgo)
-        );
+        const youthFacilityIncidents: NormalizedIncident[] = facilityIncidents
+          .filter((inc) =>
+            inc.dateOfIncident &&
+            isAfter(new Date(inc.dateOfIncident), fourteenDaysAgo) &&
+            (inc.youthName?.toLowerCase().includes(nameLower) ||
+              inc.youthInvolved?.some((y) => y.name?.toLowerCase().includes(nameLower)))
+          )
+          .map((inc) => ({
+            id: inc.id,
+            type: 'Facility' as const,
+            date: inc.dateOfIncident,
+            category: inc.incidentTypes?.[0] ?? 'General',
+            severity: normalizeSeverity((inc as any).severity),
+          }));
 
-        // Fetch school incidents
+        // Fetch and normalize school incidents — no direct youth link, show all recent
         const schoolIncidents = await schoolIncidentsService.list();
-        const youthSchoolIncidents = schoolIncidents.filter(
-          (inc) => 
-            inc.youthId === youthId && 
-            inc.date && 
-            isAfter(new Date(inc.date), fourteenDaysAgo)
+        const recentSchoolIncidents: NormalizedIncident[] = schoolIncidents
+          .filter((inc) => inc.date_time && isAfter(new Date(inc.date_time), fourteenDaysAgo))
+          .map((inc) => ({
+            id: inc.incident_id,
+            type: 'School' as const,
+            date: inc.date_time,
+            category: inc.incident_type ?? 'General',
+            severity: normalizeSeverity(inc.severity),
+          }));
+
+        const allIncidents = [...youthFacilityIncidents, ...recentSchoolIncidents].sort(
+          (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
         );
 
-        const allIncidents = [
-          ...youthFacilityIncidents.map(i => ({ ...i, type: 'Facility' })),
-          ...youthSchoolIncidents.map(i => ({ ...i, type: 'School' }))
-        ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
-        setIncidents(allIncidents);
-      } catch (error) {
-        console.error("Error fetching recent incidents:", error);
+        if (!cancelled) {
+          setIncidents(allIncidents);
+        }
+      } catch (err) {
+        console.error("Error fetching recent incidents:", err);
+        if (!cancelled) {
+          setError("Failed to load recent incidents.");
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     };
 
-    if (youthId) {
-      fetchIncidents();
-    }
-  }, [youthId]);
+    fetchIncidents();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [youthId, youthName]);
 
   if (loading) {
     return (
@@ -66,6 +114,22 @@ export const RecentIncidentsAlert = ({ youthId }: RecentIncidentsAlertProps) => 
         </CardHeader>
         <CardContent>
           <div className="animate-pulse h-10 bg-gray-100 rounded"></div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium text-gray-500 flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4" />
+            Recent Incidents (Last 14 Days)
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-red-600">{error}</p>
         </CardContent>
       </Card>
     );
@@ -87,8 +151,8 @@ export const RecentIncidentsAlert = ({ youthId }: RecentIncidentsAlertProps) => 
     );
   }
 
-  const majorIncidents = incidents.filter(i => 
-    i.severity === 'Major' || i.severity === 'Critical' || i.level === 'Major' || i.level === 'Critical'
+  const majorIncidents = incidents.filter(i =>
+    i.severity === 'Major' || i.severity === 'Critical'
   );
 
   return (
@@ -105,16 +169,16 @@ export const RecentIncidentsAlert = ({ youthId }: RecentIncidentsAlertProps) => 
             <div key={idx} className="flex justify-between items-center text-sm bg-white p-2 rounded border border-white/50">
               <div className="flex flex-col">
                 <span className="font-medium">{incident.type} Incident</span>
-                <span className="text-xs text-gray-500">{incident.category || incident.incidentType || 'General'}</span>
+                <span className="text-xs text-gray-500">{incident.category || 'General'}</span>
               </div>
               <div className="flex flex-col items-end">
-                <span className="text-xs font-medium">{format(new Date(incident.date), 'MMM d, yyyy')}</span>
+                <span className="text-xs font-medium">{(() => { const d = new Date(incident.date); return isValid(d) ? format(d, 'MMM d, yyyy') : 'Unknown date'; })()}</span>
                 <span className={`text-xs px-1.5 py-0.5 rounded-full ${
-                  incident.severity === 'Critical' || incident.level === 'Critical' ? 'bg-red-100 text-red-800' :
-                  incident.severity === 'Major' || incident.level === 'Major' ? 'bg-orange-100 text-orange-800' :
+                  incident.severity === 'Critical' ? 'bg-red-100 text-red-800' :
+                  incident.severity === 'Major' ? 'bg-orange-100 text-orange-800' :
                   'bg-yellow-100 text-yellow-800'
                 }`}>
-                  {incident.severity || incident.level || 'Minor'}
+                  {incident.severity || 'Minor'}
                 </span>
               </div>
             </div>

@@ -33,14 +33,17 @@ export const facilityNotesService = {
   async save(
     row: Partial<FacilityNoteRow> & { note_date: string; title: string; note_text: string }
   ): Promise<FacilityNoteRow> {
+    const isNew = !row.id;
     const id = row.id || uuidv4();
     const now = new Date().toISOString();
-    const data = {
+    const data: Record<string, unknown> = {
       ...row,
       id,
       updated_at: now,
-      created_at: row.created_at || now,
     };
+    if (isNew) {
+      data.created_at = now;
+    }
     await setDoc(doc(db, COLLECTION, id), data, { merge: true });
     const snap = await getDoc(doc(db, COLLECTION, id));
     const snapData = snap.data();

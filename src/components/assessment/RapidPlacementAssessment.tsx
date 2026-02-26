@@ -15,7 +15,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { fetchAllYouths } from '@/utils/local-storage-utils';
 import { Youth } from '@/types/app-types';
 import QuickISPAssessment from './QuickISPAssessment';
-import { RealColorsAssessment } from './RealColorsAssessment';
+import { ColorAssessment } from './ColorAssessment';
 
 interface AssessmentData {
   youthName: string;
@@ -561,7 +561,7 @@ export const RapidPlacementAssessment = () => {
                       <SelectItem value="realcolors">
                         <div className="flex items-center gap-2">
                           <FileText className="h-4 w-4" />
-                          Real Colors Personality Assessment
+                          Color Assessment
                         </div>
                       </SelectItem>
                     </SelectContent>
@@ -634,10 +634,10 @@ export const RapidPlacementAssessment = () => {
                     ← Back to Assessment Selection
                   </Button>
                   <Badge variant="secondary">
-                    Real Colors - {youthSelection === 'new' ? 'New Youth' : 'Existing Youth'}
+                    Color Assessment - {youthSelection === 'new' ? 'New Youth' : 'Existing Youth'}
                   </Badge>
                 </div>
-                <RealColorsAssessment 
+                <ColorAssessment 
                   selectedYouth={youthSelection === 'existing' && selectedYouthId ? youths.find(y => y.id === selectedYouthId) : undefined}
                 />
               </div>

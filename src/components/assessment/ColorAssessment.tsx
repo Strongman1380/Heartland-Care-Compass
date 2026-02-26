@@ -5,89 +5,28 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { Youth } from '@/integrations/firebase/services';
 import { useYouth } from "@/hooks/useSupabase";
-import { User, Palette, FileText, Save, Download, Printer } from 'lucide-react';
+import { User, Palette, Save, Download, Printer } from 'lucide-react';
 import { draftsService } from '@/integrations/firebase/draftsService';
 import { useAuth } from '@/contexts/AuthContext';
 import { buildReportFilename } from '@/utils/reportFilenames';
+import { realColorsAssessmentsService } from '@/integrations/firebase/realColorsAssessmentsService';
 
-const COLOR_PROFILES = {
-  Gold: {
-    description: "I am stable and dependable by nature. I can stick to detailed tasks and see them through. Because of this, I am the person others come to when they need a job done. I am highly responsible and believe that work comes before play. I am neat, orderly and well organized. I follow rules and procedures and have a deep respect for regulations and authority. I am not comfortable in unstructured situations. I am loyal and faithful in my relationships.",
-    traits: ["dependable", "organized", "thorough", "sensible", "punctual", "caring", "loyal", "natural preserver", "parent", "helper"],
-    characteristics: {
-      "Esteemed for": "Being dependable",
-      "Stressed by": "Lack of order", 
-      "Highest virtue is": "Responsibility",
-      "On the job": "Organizer",
-      "Primary needs": "To provide stability and order; to be in control",
-      "Seek for": "Security",
-      "Take pride in": "Dependability"
-    }
-  },
-  Blue: {
-    description: "I am nurturing by nature. I have a vivid imagination and love to talk with others about the way I feel and to learn about their feelings. I will do almost anything to avoid conflict or a confrontation. I am drawn to the helping professions where I feel I can have a greater influence on others and help them discover ways to live more significant lives. I am a true romantic. I value integrity and unity in relationships.",
-    traits: ["sympathetic", "communicative", "compassionate", "idealistic", "sincere", "imaginative"],
-    characteristics: {
-      "Esteemed for": "Being a good listener",
-      "Stressed by": "Feeling artificial",
-      "Highest virtue is": "Loyalty", 
-      "On the job": "Peacemaker",
-      "Primary needs": "To be authentic and care for others",
-      "Seek for": "Love and acceptance",
-      "Take pride in": "Empathy"
-    }
-  },
-  Green: {
-    description: "I am non-conforming by nature. I think in abstract terms and I am always curious. I take time to analyze things. I am independent and because of this people often think that I am impersonal. The truth is that I am more comfortable with things than people. I question authority and have to respect someone before I value their advice. I am impatient with routines. I can get hooked on acquiring and storing knowledge. I am a natural non-conformist, and visionary.",
-    traits: ["perfectionistic", "analytical", "conceptual", "cool", "calm", "inventive", "logical"],
-    characteristics: {
-      "Esteemed for": "Discovering new insights",
-      "Stressed by": "Feeling inadequate",
-      "Highest virtue is": "Objectivity",
-      "On the job": "Pragmatist", 
-      "Primary needs": "To be competent and rational",
-      "Seek for": "Insight and knowledge",
-      "Take pride in": "Competence"
-    }
-  },
-  Orange: {
-    description: "I am fun-loving by nature. I have lots of energy to try new and exciting things. I am easily bored and grow restless with routine and structured jobs or activities. I need the freedom to go and do what I want. I have a hard time following rules and regulations or respecting authority. I learn by and through my experiences. I constantly look for excitement. I act on a moment's notice and value skill, resourcefulness, and courage.",
-    traits: ["witty", "spontaneous", "generous", "optimistic", "eager", "bold"],
-    characteristics: {
-      "Esteemed for": "Being fun; taking risks",
-      "Stressed by": "Restrictions",
-      "Highest virtue is": "Courage",
-      "On the job": "Energizer",
-      "Primary needs": "To be free and spontaneous", 
-      "Seek for": "Freedom",
-      "Take pride in": "Impact"
-    }
-  }
-};
+const COLOR_OPTIONS = ["Gold", "Blue", "Green", "Orange"] as const;
 
-const COLOR_VARIANTS = {
-  Gold: "bg-yellow-100 text-yellow-800 border-yellow-300",
-  Blue: "bg-blue-100 text-blue-800 border-blue-300", 
-  Green: "bg-green-100 text-green-800 border-green-300",
-  Orange: "bg-orange-100 text-orange-800 border-orange-300"
-};
-
-interface RealColorsAssessmentProps {
+interface ColorAssessmentProps {
   selectedYouth?: Youth;
 }
 
-export const RealColorsAssessment = ({ selectedYouth }: RealColorsAssessmentProps) => {
+export const ColorAssessment = ({ selectedYouth }: ColorAssessmentProps) => {
   const [primaryColor, setPrimaryColor] = useState<string>("");
   const [secondaryColor, setSecondaryColor] = useState<string>("");
   const [insights, setInsights] = useState("");
   const [comments, setComments] = useState("");
   const [observations, setObservations] = useState("");
-  const [isScreening, setIsScreening] = useState(false);
+  const [completedByType, setCompletedByType] = useState<'staff' | 'youth'>('staff');
   const [completedBy, setCompletedBy] = useState("");
   const [youthSelection, setYouthSelection] = useState<'existing' | 'new'>('existing');
   const [selectedYouthId, setSelectedYouthId] = useState<string>("");
@@ -111,6 +50,29 @@ export const RealColorsAssessment = ({ selectedYouth }: RealColorsAssessmentProp
     loadDraft();
   }, [selectedYouth, loadYouths]);
 
+  useEffect(() => {
+    const loadLatestAssessment = async () => {
+      const youthId = selectedYouth?.id || selectedYouthId;
+      if (!youthId) return;
+
+      try {
+        const latest = await realColorsAssessmentsService.getLatestByYouthId(youthId);
+        if (!latest) return;
+        setPrimaryColor(latest.primary_color || "");
+        setSecondaryColor(latest.secondary_color || "");
+        setInsights(latest.insights || "");
+        setComments(latest.comments || "");
+        setObservations(latest.observations || "");
+        setCompletedByType(latest.completed_by_type || "staff");
+        setCompletedBy(latest.completed_by_name || "");
+      } catch (error) {
+        console.warn("Failed to load latest color assessment:", error);
+      }
+    };
+
+    void loadLatestAssessment();
+  }, [selectedYouth?.id, selectedYouthId]);
+
   // Cleanup autosave timer on unmount
   useEffect(() => {
     return () => {
@@ -126,7 +88,7 @@ export const RealColorsAssessment = ({ selectedYouth }: RealColorsAssessmentProp
     setInsights("");
     setComments("");
     setObservations("");
-    setIsScreening(false);
+    setCompletedByType("staff");
     setCompletedBy("");
     setNewYouthName("");
     setHasUnsavedChanges(false);
@@ -166,7 +128,7 @@ export const RealColorsAssessment = ({ selectedYouth }: RealColorsAssessmentProp
         insights,
         comments,
         observations,
-        isScreening,
+        completedByType,
         completedBy,
         youthSelection,
         selectedYouthId,
@@ -222,7 +184,7 @@ export const RealColorsAssessment = ({ selectedYouth }: RealColorsAssessmentProp
           setInsights(parsed.insights || "");
           setComments(parsed.comments || "");
           setObservations(parsed.observations || "");
-          setIsScreening(parsed.isScreening || false);
+          setCompletedByType(parsed.completedByType || "staff");
           setCompletedBy(parsed.completedBy || "");
           if (!selectedYouth) {
             setYouthSelection(parsed.youthSelection || 'existing');
@@ -247,7 +209,7 @@ export const RealColorsAssessment = ({ selectedYouth }: RealColorsAssessmentProp
           setInsights(parsed.insights || "");
           setComments(parsed.comments || "");
           setObservations(parsed.observations || "");
-          setIsScreening(parsed.isScreening || false);
+          setCompletedByType(parsed.completedByType || "staff");
           setCompletedBy(parsed.completedBy || "");
 
           if (!selectedYouth) {
@@ -325,33 +287,30 @@ export const RealColorsAssessment = ({ selectedYouth }: RealColorsAssessmentProp
       };
 
       const html = generateRealColorsHTML(exportData);
-      const filename = `${buildReportFilename(currentYouth, "Real Colors Assessment")}.pdf`;
+      const filename = `${buildReportFilename(currentYouth, "Color Assessment")}.pdf`;
 
       await exportHTMLToPDF(html, filename);
       toast({
         title: "Success",
-        description: "Real Colors assessment exported successfully!"
+        description: "Color assessment exported successfully!"
       });
     } catch (error) {
-      console.error("Error exporting Real Colors assessment:", error);
+      console.error("Error exporting color assessment:", error);
       toast({
         title: "Error",
-        description: "Failed to export Real Colors assessment",
+        description: "Failed to export color assessment",
         variant: "destructive"
       });
     }
   };
 
   const generateRealColorsHTML = (data: any) => {
-    const primaryProfile = data.assessment.primaryColor ? COLOR_PROFILES[data.assessment.primaryColor as keyof typeof COLOR_PROFILES] : null;
-    const secondaryProfile = data.assessment.secondaryColor ? COLOR_PROFILES[data.assessment.secondaryColor as keyof typeof COLOR_PROFILES] : null;
-
     return `
       <!DOCTYPE html>
       <html>
         <head>
           <meta charset="utf-8">
-          <title>Real Colors Assessment Report - Heartland Boys Home</title>
+          <title>Color Assessment Report - Heartland Boys Home</title>
           <style>
             body { font-family: Arial, sans-serif; margin: 20px; line-height: 1.6; color: #333; }
             .header {
@@ -386,7 +345,7 @@ export const RealColorsAssessment = ({ selectedYouth }: RealColorsAssessmentProp
           <div class="header">
             <img src="${import.meta.env.BASE_URL}files/BoysHomeLogo.png" alt="Heartland Boys Home Logo" class="logo" crossorigin="anonymous" />
             <h1>Heartland Boys Home</h1>
-            <h2>Real Colors Assessment Report</h2>
+            <h2>Color Assessment Report</h2>
             <p>Generated on ${data.exportDate}</p>
           </div>
 
@@ -397,49 +356,11 @@ export const RealColorsAssessment = ({ selectedYouth }: RealColorsAssessmentProp
             <p><strong>Completed By:</strong> ${data.assessment.completedBy}</p>
           </div>
 
-          ${primaryProfile ? `
-            <div class="color-section ${data.assessment.primaryColor.toLowerCase()}">
-              <div class="color-title">Primary Color: ${data.assessment.primaryColor}</div>
-              <div class="field">
-                <div class="field-label">Description:</div>
-                <div class="field-value">${primaryProfile.description}</div>
-              </div>
-              <div class="field">
-                <div class="field-label">Key Traits:</div>
-                <div class="traits">
-                  ${primaryProfile.traits.map((trait: string) => `<span class="trait">${trait}</span>`).join('')}
-                </div>
-              </div>
-              <div class="characteristics">
-                <div class="field-label">Characteristics:</div>
-                ${Object.entries(primaryProfile.characteristics).map(([key, value]) => `
-                  <div class="characteristic"><strong>${key}:</strong> ${value}</div>
-                `).join('')}
-              </div>
-            </div>
-          ` : ''}
-
-          ${secondaryProfile ? `
-            <div class="color-section ${data.assessment.secondaryColor.toLowerCase()}">
-              <div class="color-title">Secondary Color: ${data.assessment.secondaryColor}</div>
-              <div class="field">
-                <div class="field-label">Description:</div>
-                <div class="field-value">${secondaryProfile.description}</div>
-              </div>
-              <div class="field">
-                <div class="field-label">Key Traits:</div>
-                <div class="traits">
-                  ${secondaryProfile.traits.map((trait: string) => `<span class="trait">${trait}</span>`).join('')}
-                </div>
-              </div>
-              <div class="characteristics">
-                <div class="field-label">Characteristics:</div>
-                ${Object.entries(secondaryProfile.characteristics).map(([key, value]) => `
-                  <div class="characteristic"><strong>${key}:</strong> ${value}</div>
-                `).join('')}
-              </div>
-            </div>
-          ` : ''}
+          <div class="color-section">
+            <div class="color-title">Assessment Result</div>
+            <div class="field"><div class="field-label">Primary Color:</div><div class="field-value">${data.assessment.primaryColor || "Not set"}</div></div>
+            <div class="field"><div class="field-label">Secondary Color:</div><div class="field-value">${data.assessment.secondaryColor || "Not set"}</div></div>
+          </div>
 
           ${data.assessment.insights ? `
             <div class="field">
@@ -524,43 +445,43 @@ export const RealColorsAssessment = ({ selectedYouth }: RealColorsAssessmentProp
         await loadYouths(); // Refresh the list
       }
 
-      // Save Real Colors result to youth record
+      // Keep compatibility field on youth record
       const realColorsResult = secondaryColor && secondaryColor !== 'none' 
         ? `${primaryColor}/${secondaryColor}`
         : primaryColor;
       
-      // Save Real Colors result (updatedAt will be handled by database trigger)
+      // Save result string on youth (updatedAt handled by hook/service)
       await updateYouth(youthId, {
         realColorsResult: realColorsResult
       });
 
-      console.log('Saved Real Colors assessment:', {
+      await realColorsAssessmentsService.save({
         youth_id: youthId,
-        primary_color: primaryColor,
-        secondary_color: secondaryColor === 'none' ? null : secondaryColor || null,
+        primary_color: primaryColor as "Gold" | "Blue" | "Green" | "Orange",
+        secondary_color: secondaryColor === 'none' ? null : (secondaryColor as "Gold" | "Blue" | "Green" | "Orange" | null),
         real_colors_result: realColorsResult,
         insights: insights || null,
         comments: comments || null,
         observations: observations || null,
-        is_screening: isScreening,
-        completed_by: completedBy || null,
+        completed_by_type: completedByType,
+        completed_by_name: completedBy || null,
       });
 
       toast({
         title: "Success",
-        description: "Real Colors assessment saved successfully",
+        description: "Color assessment saved successfully",
       });
 
       resetForm();
       clearDraft();
 
     } catch (error) {
-      console.error('Error saving Real Colors assessment:', error);
+      console.error('Error saving color assessment:', error);
       
       // Enhanced error logging for debugging
       if (error && typeof error === 'object' && 'message' in error) {
         const supabaseError = error as any;
-        console.error('Detailed Real Colors save error:', {
+        console.error('Detailed color assessment save error:', {
           message: supabaseError.message,
           details: supabaseError.details,
           hint: supabaseError.hint,
@@ -574,7 +495,7 @@ export const RealColorsAssessment = ({ selectedYouth }: RealColorsAssessmentProp
       
       toast({
         title: "Error",
-        description: `Failed to save Real Colors assessment: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        description: `Failed to save color assessment: ${error instanceof Error ? error.message : 'Unknown error'}`,
         variant: "destructive",
       });
     } finally {
@@ -582,15 +503,13 @@ export const RealColorsAssessment = ({ selectedYouth }: RealColorsAssessmentProp
     }
   };
 
-  const selectedColorProfile = primaryColor ? COLOR_PROFILES[primaryColor as keyof typeof COLOR_PROFILES] : null;
-
   return (
     <div className="space-y-6">
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Palette className="h-5 w-5" />
-            Real Colors Personality Assessment
+            Color Assessment
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -652,16 +571,6 @@ export const RealColorsAssessment = ({ selectedYouth }: RealColorsAssessmentProp
             </div>
           )}
 
-          {/* Assessment Type */}
-          <div className="flex items-center space-x-2">
-            <Checkbox
-              id="screening"
-              checked={isScreening}
-              onCheckedChange={(checked) => handleFormChange(setIsScreening, checked === true)}
-            />
-            <Label htmlFor="screening">Quick Screening (for follow-up assessments)</Label>
-          </div>
-
           {/* Primary Color */}
           <div className="space-y-2">
             <Label className="text-base font-medium">Primary Color *</Label>
@@ -670,7 +579,7 @@ export const RealColorsAssessment = ({ selectedYouth }: RealColorsAssessmentProp
                 <SelectValue placeholder="Select primary color" />
               </SelectTrigger>
               <SelectContent>
-                {Object.keys(COLOR_PROFILES).map((color) => (
+                {COLOR_OPTIONS.map((color) => (
                   <SelectItem key={color} value={color}>
                     <div className="flex items-center gap-2">
                       <div className={`w-4 h-4 rounded-full ${
@@ -695,7 +604,7 @@ export const RealColorsAssessment = ({ selectedYouth }: RealColorsAssessmentProp
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">None</SelectItem>
-                {Object.keys(COLOR_PROFILES)
+                {COLOR_OPTIONS
                   .filter(color => color !== primaryColor)
                   .map((color) => (
                   <SelectItem key={color} value={color}>
@@ -712,48 +621,6 @@ export const RealColorsAssessment = ({ selectedYouth }: RealColorsAssessmentProp
               </SelectContent>
             </Select>
           </div>
-
-          {/* Color Profile Display */}
-          {selectedColorProfile && (
-            <Card className="border-2">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Badge className={COLOR_VARIANTS[primaryColor as keyof typeof COLOR_VARIANTS]}>
-                    {primaryColor}
-                  </Badge>
-                  Color Profile
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <h4 className="font-medium mb-2">Description:</h4>
-                  <p className="text-sm text-muted-foreground">{selectedColorProfile.description}</p>
-                </div>
-                
-                <div>
-                  <h4 className="font-medium mb-2">Key Traits:</h4>
-                  <div className="flex flex-wrap gap-1">
-                    {selectedColorProfile.traits.map((trait, index) => (
-                      <Badge key={index} variant="outline" className="text-xs">
-                        {trait}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <h4 className="font-medium mb-2">Characteristics:</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
-                    {Object.entries(selectedColorProfile.characteristics).map(([key, value]) => (
-                      <div key={key}>
-                        <span className="font-medium">{key}:</span> {value}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
 
           {/* Assessment Details */}
           <div className="space-y-4">
@@ -794,10 +661,22 @@ export const RealColorsAssessment = ({ selectedYouth }: RealColorsAssessmentProp
               <Label htmlFor="completedBy">Completed By</Label>
               <Input
                 id="completedBy"
-                placeholder="Staff member name"
+                placeholder={completedByType === "youth" ? "Youth name" : "Staff member name"}
                 value={completedBy}
                 onChange={(e) => handleFormChange(setCompletedBy, e.target.value)}
               />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="completedByType">Completed By Type</Label>
+              <Select value={completedByType} onValueChange={(value) => handleFormChange(setCompletedByType, value as 'staff' | 'youth')}>
+                <SelectTrigger id="completedByType">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="staff">Staff</SelectItem>
+                  <SelectItem value="youth">Youth</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
 

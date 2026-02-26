@@ -24,7 +24,7 @@ import { EducationProfileTab } from "./EducationProfileTab";
 import { MedicalProfileTab } from "./MedicalProfileTab";
 import { MentalHealthProfileTab } from "./MentalHealthProfileTab";
 import { SuccessPlan } from "@/components/planning/SuccessPlan";
-import { RealColorsAssessment } from "@/components/assessment/RealColorsAssessment";
+import { ColorAssessment } from "@/components/assessment/ColorAssessment";
 import { RiskAssessment } from "@/components/assessment/RiskAssessment";
 import { EditYouthDialog } from "./EditYouthDialog";
 import { DischargeDialog } from "./DischargeDialog";
@@ -228,7 +228,7 @@ export const YouthProfile = ({ youth, onBack, onYouthUpdated }: YouthProfileProp
             </TabsContent>
 
             <TabsContent value="personality">
-              <RealColorsAssessment selectedYouth={youth} />
+              <ColorAssessment selectedYouth={youth} />
             </TabsContent>
 
             <TabsContent value="service-plan">

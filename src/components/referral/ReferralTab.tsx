@@ -1535,52 +1535,56 @@ export const ReferralTab = () => {
                         </Button>
                       )}
                     </div>
-                    <div className="mt-3 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-[minmax(220px,1fr)_minmax(220px,1fr)_auto_auto_auto] gap-2">
-                      <Select value={bulkStatus} onValueChange={setBulkStatus}>
-                        <SelectTrigger className="bg-white"><SelectValue placeholder="Bulk status update" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="no_change">No status change</SelectItem>
-                          <SelectItem value="pending_interview">Pending Interview</SelectItem>
-                          <SelectItem value="interview_scheduled">Interview Scheduled</SelectItem>
-                          <SelectItem value="interviewed_yes">Interviewed - Yes</SelectItem>
-                          <SelectItem value="interviewed_no">Interviewed - No</SelectItem>
-                          <SelectItem value="already_found_placement">Already Found Placement</SelectItem>
-                          <SelectItem value="denied">Denied</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <Select value={bulkPriority} onValueChange={setBulkPriority}>
-                        <SelectTrigger className="bg-white"><SelectValue placeholder="Bulk priority update" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="no_change">No priority change</SelectItem>
-                          <SelectItem value="urgent">Urgent</SelectItem>
-                          <SelectItem value="high">High</SelectItem>
-                          <SelectItem value="routine">Routine</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <Button
-                        variant="outline"
-                        onClick={handleBulkEdit}
-                        disabled={isBulkApplying || selectedReferralKeys.size === 0}
-                        className="whitespace-nowrap"
-                      >
-                        {isBulkApplying ? <Loader2 className="h-4 w-4 animate-spin" /> : "Apply Updates"}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        onClick={handleBulkArchive}
-                        disabled={isBulkApplying || selectedReferralKeys.size === 0}
-                        className="whitespace-nowrap"
-                      >
-                        {isBulkApplying ? <Loader2 className="h-4 w-4 animate-spin" /> : "Archive Selected"}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        onClick={handleBulkDelete}
-                        disabled={isBulkApplying || selectedReferralKeys.size === 0}
-                        className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200 whitespace-nowrap"
-                      >
-                        {isBulkApplying ? <Loader2 className="h-4 w-4 animate-spin" /> : "Delete Selected"}
-                      </Button>
+                    <div className="mt-3 space-y-2">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                        <Select value={bulkStatus} onValueChange={setBulkStatus}>
+                          <SelectTrigger className="bg-white w-full"><SelectValue placeholder="Bulk status update" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="no_change">No status change</SelectItem>
+                            <SelectItem value="pending_interview">Pending Interview</SelectItem>
+                            <SelectItem value="interview_scheduled">Interview Scheduled</SelectItem>
+                            <SelectItem value="interviewed_yes">Interviewed - Yes</SelectItem>
+                            <SelectItem value="interviewed_no">Interviewed - No</SelectItem>
+                            <SelectItem value="already_found_placement">Already Found Placement</SelectItem>
+                            <SelectItem value="denied">Denied</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Select value={bulkPriority} onValueChange={setBulkPriority}>
+                          <SelectTrigger className="bg-white w-full"><SelectValue placeholder="Bulk priority update" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="no_change">No priority change</SelectItem>
+                            <SelectItem value="urgent">Urgent</SelectItem>
+                            <SelectItem value="high">High</SelectItem>
+                            <SelectItem value="routine">Routine</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        <Button
+                          variant="outline"
+                          onClick={handleBulkEdit}
+                          disabled={isBulkApplying || selectedReferralKeys.size === 0}
+                          className="w-full min-w-0"
+                        >
+                          {isBulkApplying ? <Loader2 className="h-4 w-4 animate-spin" /> : "Apply Updates"}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onClick={handleBulkArchive}
+                          disabled={isBulkApplying || selectedReferralKeys.size === 0}
+                          className="w-full min-w-0"
+                        >
+                          {isBulkApplying ? <Loader2 className="h-4 w-4 animate-spin" /> : "Archive Selected"}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onClick={handleBulkDelete}
+                          disabled={isBulkApplying || selectedReferralKeys.size === 0}
+                          className="w-full min-w-0 text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+                        >
+                          {isBulkApplying ? <Loader2 className="h-4 w-4 animate-spin" /> : "Delete Selected"}
+                        </Button>
+                      </div>
                     </div>
                     {selectedReferralKeys.size === 0 && (
                       <p className="mt-2 text-xs text-slate-500">Select one or more referrals to enable bulk actions.</p>

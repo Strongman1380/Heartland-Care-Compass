@@ -30,10 +30,19 @@ const parseContact = (contact: unknown): { name: string | null, phone: string | 
   
   if (typeof contact === "object") {
     const obj = contact as Record<string, unknown>;
-    const name = typeof obj.name === "string" && obj.name.trim() ? obj.name.trim() : null;
+    const nameFromName = typeof obj.name === "string" && obj.name.trim() ? obj.name.trim() : "";
+    const firstName = typeof obj.firstName === "string" ? obj.firstName.trim() : "";
+    const lastName = typeof obj.lastName === "string" ? obj.lastName.trim() : "";
+    const fullName = [firstName, lastName].filter(Boolean).join(" ").trim();
+    const name = nameFromName || fullName || null;
+    const phoneValue =
+      (typeof obj.phone === "string" && obj.phone) ||
+      (typeof obj.contact === "string" && obj.contact) ||
+      (typeof obj.mobile === "string" && obj.mobile) ||
+      null;
     return {
       name,
-      phone: (obj.phone as string) || null
+      phone: phoneValue,
     };
   }
 

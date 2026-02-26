@@ -3,8 +3,6 @@ import {
   collection,
   doc,
   getDocs,
-  limit as firestoreLimit,
-  orderBy,
   query,
   setDoc,
   where,
@@ -30,16 +28,22 @@ const COLLECTION = "real_colors_assessments";
 
 export const realColorsAssessmentsService = {
   async getLatestByYouthId(youthId: string): Promise<ColorAssessmentRow | null> {
-    const q = query(
-      collection(db, COLLECTION),
-      where("youth_id", "==", youthId),
-      orderBy("created_at", "desc"),
-      firestoreLimit(1)
-    );
+    const q = query(collection(db, COLLECTION), where("youth_id", "==", youthId));
     const snapshot = await getDocs(q);
     if (snapshot.empty) return null;
-    const docSnap = snapshot.docs[0];
-    return { id: docSnap.id, ...docSnap.data() } as ColorAssessmentRow;
+    const latest = snapshot.docs
+      .map((docSnap) => ({ id: docSnap.id, ...docSnap.data() } as ColorAssessmentRow))
+      .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")))[0];
+    return latest || null;
+  },
+
+  async getByYouthId(youthId: string, limit = 10): Promise<ColorAssessmentRow[]> {
+    const q = query(collection(db, COLLECTION), where("youth_id", "==", youthId));
+    const snapshot = await getDocs(q);
+    return snapshot.docs
+      .map((docSnap) => ({ id: docSnap.id, ...docSnap.data() } as ColorAssessmentRow))
+      .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")))
+      .slice(0, Math.max(1, limit));
   },
 
   async save(

@@ -165,12 +165,30 @@ const AssessmentKPIDashboard = () => {
         if (showLoading) setIsLoading(true);
         else setIsRefreshing(true);
 
-        const [youthData, pointsData, notesData, reportData] = await Promise.all([
+        const [youthResult, pointsResult, notesResult, reportsResult] = await Promise.allSettled([
           youthService.getAll(),
           behaviorPointsService.getAll(),
           caseNotesService.getAll(),
           kpiReportsService.list(),
         ]);
+
+        const youthData = youthResult.status === 'fulfilled' ? youthResult.value : [];
+        const pointsData = pointsResult.status === 'fulfilled' ? pointsResult.value : [];
+        const notesData = notesResult.status === 'fulfilled' ? notesResult.value : [];
+        const reportData = reportsResult.status === 'fulfilled' ? reportsResult.value : [];
+
+        if (youthResult.status === 'rejected') {
+          console.error('KPI load failed: youthService.getAll()', youthResult.reason);
+        }
+        if (pointsResult.status === 'rejected') {
+          console.error('KPI load failed: behaviorPointsService.getAll()', pointsResult.reason);
+        }
+        if (notesResult.status === 'rejected') {
+          console.error('KPI load failed: caseNotesService.getAll()', notesResult.reason);
+        }
+        if (reportsResult.status === 'rejected') {
+          console.error('KPI load failed: kpiReportsService.list()', reportsResult.reason);
+        }
 
         console.log('Fetched data:', {
           youthCount: youthData.length,

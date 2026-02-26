@@ -14,12 +14,13 @@ import { useToast } from "@/hooks/use-toast";
 import { exportElementToPDF } from "@/utils/export";
 import { buildReportFilename } from "@/utils/reportFilenames";
 import { getBehaviorPointsByYouth, getDailyRatingsByYouth } from "@/lib/api";
-import { fetchAllProgressNotes } from "@/utils/local-storage-utils";
+import { fetchAllProgressNotes, fetchAssessment } from "@/utils/local-storage-utils";
 import { getScoresByYouth, type SchoolDailyScore } from "@/utils/schoolScores";
 import { getWeeklyEvalsForYouthInRange, getDailyShiftsForYouthInRange } from "@/utils/shiftScores";
 import * as aiService from "@/services/aiService";
 import { draftsService } from "@/integrations/firebase/draftsService";
 import { useAuth } from "@/contexts/AuthContext";
+import { findProfessional } from "@/utils/professionalUtils";
 
 interface ServicePlanReportProps {
   youth: Youth;
@@ -58,6 +59,47 @@ interface ServicePlanData {
   reportDate: string;
   populatedAt: string;
   lastSavedAt: string;
+}
+
+interface StoredSuccessPlanData {
+  assessmentsummary?: {
+    presentingConcerns?: string;
+    identifiedStrengths?: string;
+    academicStatus?: string;
+    familyDynamics?: string;
+    riskFactors?: string[];
+  };
+  treatmentobjectives?: {
+    behavioralObjective1?: string;
+    behavioralObjective2?: string;
+    socialSkillsFocus?: string;
+    academicGoals?: string;
+    familyEngagementGoals?: string;
+    independentLivingSkills?: string;
+    emotionalRegulationStrategies?: string;
+  };
+  permanencyobjective?: {
+    permanencyGoal?: string;
+    anticipatedLengthOfStay?: string;
+    transitionTimelineBenchmarks?: string;
+  };
+  specializedservices?: {
+    individualTherapy?: boolean;
+    groupInterventions?: boolean;
+    additionalServices?: string[];
+  };
+  transitionplanning?: {
+    communityIntegrationActivities?: string;
+    supportSystemDevelopment?: string;
+    postDischargeResources?: string;
+    relapsePreventionPlanning?: string;
+  };
+  levelsystemintegration?: {
+    currentLevelStatus?: string;
+    requirementsForNextLevel?: string;
+    privilegesAtCurrentLevel?: string;
+    incentivesForAdvancement?: string;
+  };
 }
 
 export const ServicePlanReport = ({ youth }: ServicePlanReportProps) => {
@@ -203,6 +245,87 @@ export const ServicePlanReport = ({ youth }: ServicePlanReportProps) => {
     setReportData(prev => ({ ...prev, [field]: value }));
   };
 
+  const formatList = (items: (string | undefined)[] = []): string => {
+    return items.map(item => item?.trim()).filter(Boolean).join("\n");
+  };
+
+  const buildDatabasePrefillData = (
+    successPlan: StoredSuccessPlanData | null,
+    guardianInfo: string
+  ): Partial<ServicePlanData> => {
+    const sections = successPlan?.assessmentsummary;
+    const treatment = successPlan?.treatmentobjectives;
+    const permanency = successPlan?.permanencyobjective;
+    const services = successPlan?.specializedservices;
+    const transition = successPlan?.transitionplanning;
+    const levelIntegration = successPlan?.levelsystemintegration;
+
+    const guardianName = youth.legalGuardian?.name;
+    const guardianRelationship = youth.legalGuardian?.relationship;
+    const caseworker = findProfessional(youth, "caseworker")?.name || youth.caseworker?.name;
+    const probationOfficer = findProfessional(youth, "probationOfficer")?.name || youth.probationOfficer?.name;
+
+    const assessmentSummary = formatList([
+      sections?.presentingConcerns && `Presenting concerns: ${sections.presentingConcerns}`,
+      sections?.identifiedStrengths && `Identified strengths: ${sections.identifiedStrengths}`,
+      sections?.academicStatus && `Academic status: ${sections.academicStatus}`,
+      sections?.familyDynamics && `Family dynamics: ${sections.familyDynamics}`,
+      sections?.riskFactors?.length ? `Risk factors: ${sections.riskFactors.join(", ")}` : undefined,
+      youth.currentDiagnoses || youth.diagnoses ? `Current diagnoses: ${youth.currentDiagnoses || youth.diagnoses}` : undefined,
+    ]);
+
+    const treatmentObjectives = formatList([
+      treatment?.behavioralObjective1,
+      treatment?.behavioralObjective2,
+      treatment?.socialSkillsFocus,
+      treatment?.academicGoals,
+      treatment?.familyEngagementGoals,
+      treatment?.independentLivingSkills,
+      treatment?.emotionalRegulationStrategies,
+      levelIntegration?.requirementsForNextLevel && `Level advancement requirements: ${levelIntegration.requirementsForNextLevel}`,
+      levelIntegration?.incentivesForAdvancement && `Level incentives: ${levelIntegration.incentivesForAdvancement}`,
+    ]);
+
+    const permanencyPlanning = formatList([
+      permanency?.permanencyGoal && `Permanency goal: ${permanency.permanencyGoal}`,
+      permanency?.anticipatedLengthOfStay && `Anticipated length of stay: ${permanency.anticipatedLengthOfStay}`,
+      permanency?.transitionTimelineBenchmarks && `Transition timeline: ${permanency.transitionTimelineBenchmarks}`,
+      guardianName ? `Primary guardian: ${guardianName}${guardianRelationship ? ` (${guardianRelationship})` : ""}` : undefined,
+      caseworker ? `Caseworker: ${caseworker}` : undefined,
+      probationOfficer ? `Probation officer: ${probationOfficer}` : undefined,
+    ]);
+
+    const serviceInterventions = formatList([
+      services?.individualTherapy ? "Individual therapy services are active." : undefined,
+      services?.groupInterventions ? "Group interventions are active." : undefined,
+      services?.additionalServices?.length ? `Additional services: ${services.additionalServices.join(", ")}` : undefined,
+      transition?.communityIntegrationActivities && `Community integration: ${transition.communityIntegrationActivities}`,
+      transition?.supportSystemDevelopment && `Support system development: ${transition.supportSystemDevelopment}`,
+      transition?.postDischargeResources && `Post-discharge resources: ${transition.postDischargeResources}`,
+      transition?.relapsePreventionPlanning && `Relapse prevention planning: ${transition.relapsePreventionPlanning}`,
+    ]);
+
+    const progressIndicators = formatList([
+      levelIntegration?.currentLevelStatus && `Current level status: ${levelIntegration.currentLevelStatus}`,
+      levelIntegration?.privilegesAtCurrentLevel && `Current level privileges: ${levelIntegration.privilegesAtCurrentLevel}`,
+      treatment?.behavioralObjective1 && "Behavioral objective tracking is active.",
+      treatment?.academicGoals && "Academic objective tracking is active.",
+      treatment?.socialSkillsFocus && "Social skills objective tracking is active.",
+    ]);
+
+    return {
+      fullName: `${youth.firstName} ${youth.lastName}`,
+      currentLevel: levelIntegration?.currentLevelStatus || `Level ${youth.level}`,
+      referralSource: youth.placingAgencyCounty || "",
+      guardianInfo: guardianInfo || "",
+      assessmentSummary,
+      treatmentObjectives,
+      permanencyPlanning,
+      serviceInterventions,
+      progressIndicators,
+    };
+  };
+
   const extractCaseNoteContent = (note: any): string => {
     if (!note) return "";
     if (typeof note.summary === 'string' && note.summary.trim().length > 0) return note.summary.trim();
@@ -225,7 +348,12 @@ export const ServicePlanReport = ({ youth }: ServicePlanReportProps) => {
 
     setIsAutoPopulating(true);
     try {
-      const progressNotes = await fetchAllProgressNotes(youth.id);
+      const [progressNotes, savedSuccessPlan] = await Promise.all([
+        fetchAllProgressNotes(youth.id),
+        Promise.resolve(
+          fetchAssessment(youth.id, "successplans", "heartlandSuccessPlan") as StoredSuccessPlanData | null
+        ),
+      ]);
 
       const admissionDate = youth.admissionDate
         ? format(new Date(youth.admissionDate), "MMMM d, yyyy")
@@ -242,17 +370,36 @@ export const ServicePlanReport = ({ youth }: ServicePlanReportProps) => {
         ? format(new Date(youth.dob), "MMMM d, yyyy")
         : "";
 
-      // Always populate demographics
+      const preparedByValue = reportData.preparedBy || user?.displayName || user?.email || "";
+      const dbPrefill = buildDatabasePrefillData(savedSuccessPlan, guardianInfo);
+
+      // Always populate demographics and saved service-plan data
       setReportData(prev => ({
         ...prev,
         fullName: `${youth.firstName} ${youth.lastName}`,
         dateOfBirth: dob,
         dateOfAdmission: admissionDate,
-        currentLevel: `Level ${youth.level}`,
+        currentLevel: dbPrefill.currentLevel || `Level ${youth.level}`,
         placementType: "Group Home",
         referralSource: youth.placingAgencyCounty || "",
         guardianInfo,
+        preparedBy: prev.preparedBy || preparedByValue,
+        assessmentSummary: prev.assessmentSummary || dbPrefill.assessmentSummary || "",
+        treatmentObjectives: prev.treatmentObjectives || dbPrefill.treatmentObjectives || "",
+        permanencyPlanning: prev.permanencyPlanning || dbPrefill.permanencyPlanning || "",
+        serviceInterventions: prev.serviceInterventions || dbPrefill.serviceInterventions || "",
+        progressIndicators: prev.progressIndicators || dbPrefill.progressIndicators || "",
       }));
+
+      const dbUpdates: Partial<ServicePlanData> = {
+        assessmentSummary: dbPrefill.assessmentSummary || "",
+        treatmentObjectives: dbPrefill.treatmentObjectives || "",
+        permanencyPlanning: dbPrefill.permanencyPlanning || "",
+        serviceInterventions: dbPrefill.serviceInterventions || "",
+        progressIndicators: dbPrefill.progressIndicators || "",
+      };
+      const fieldsMissingAfterDb = (Object.keys(dbUpdates) as (keyof ServicePlanData)[])
+        .filter((field) => !reportData[field]?.trim() && !dbUpdates[field]?.trim());
 
       // Build case notes context for AI
       const caseNotesText = progressNotes
@@ -269,8 +416,11 @@ export const ServicePlanReport = ({ youth }: ServicePlanReportProps) => {
         })
         .join('\n\n');
 
-      if (!caseNotesText.trim()) {
-        toast({ title: "Form populated", description: "Youth data loaded. No case notes available for AI summaries." });
+      if (!caseNotesText.trim() || fieldsMissingAfterDb.length === 0) {
+        const description = fieldsMissingAfterDb.length === 0
+          ? "Service plan fields were populated from youth records and saved service plan data."
+          : "Youth and service plan data loaded. No case notes available for AI summaries.";
+        toast({ title: "Form populated", description });
         return;
       }
 
@@ -346,19 +496,25 @@ School Score Average: ${schoolAvg}/4
 Case Notes:
 ${caseNotesText}`;
 
-      const aiPrompts: Record<string, string> = {
-        assessmentSummary: `${baseInstruction}\n\nWrite a 2-3 paragraph assessment summary covering: presenting problems, clinical observations, strengths, areas of need, and current functioning level. This should provide context for the treatment plan.`,
-
-        treatmentObjectives: `${baseInstruction}\n\nWrite 2-3 paragraphs outlining treatment objectives based on the youth's documented needs. Include specific, measurable goals across behavioral, social, emotional, and educational domains. Reference treatment goals if documented.`,
-
-        permanencyPlanning: `${baseInstruction}\n\nWrite 2-3 paragraphs about permanency planning: family reunification efforts, family engagement, discharge planning considerations, and the long-term plan for stable placement after residential care.`,
-
-        serviceInterventions: `${baseInstruction}\n\nWrite 2-3 paragraphs describing service interventions currently in place or recommended: individual therapy, group counseling, behavioral modification program, educational supports, life skills training, family therapy, and any specialized interventions.`,
-
-        progressIndicators: `${baseInstruction}\n\nWrite 2-3 paragraphs about progress indicators: what measurable improvements have been observed, behavioral trends, level advancement progress, academic engagement, social skill development, and areas still requiring intervention.`,
-
+      const aiPrompts: Partial<Record<keyof ServicePlanData, string>> = {
         recommendations: `${baseInstruction}\n\nWrite 2-3 paragraphs of clinical recommendations: continued treatment needs, suggested modifications to the service plan, referrals, discharge readiness assessment, and next steps for the treatment team.`,
       };
+
+      if (!reportData.assessmentSummary.trim() && !dbUpdates.assessmentSummary?.trim()) {
+        aiPrompts.assessmentSummary = `${baseInstruction}\n\nWrite a 2-3 paragraph assessment summary covering: presenting problems, clinical observations, strengths, areas of need, and current functioning level. This should provide context for the treatment plan.`;
+      }
+      if (!reportData.treatmentObjectives.trim() && !dbUpdates.treatmentObjectives?.trim()) {
+        aiPrompts.treatmentObjectives = `${baseInstruction}\n\nWrite 2-3 paragraphs outlining treatment objectives based on the youth's documented needs. Include specific, measurable goals across behavioral, social, emotional, and educational domains. Reference treatment goals if documented.`;
+      }
+      if (!reportData.permanencyPlanning.trim() && !dbUpdates.permanencyPlanning?.trim()) {
+        aiPrompts.permanencyPlanning = `${baseInstruction}\n\nWrite 2-3 paragraphs about permanency planning: family reunification efforts, family engagement, discharge planning considerations, and the long-term plan for stable placement after residential care.`;
+      }
+      if (!reportData.serviceInterventions.trim() && !dbUpdates.serviceInterventions?.trim()) {
+        aiPrompts.serviceInterventions = `${baseInstruction}\n\nWrite 2-3 paragraphs describing service interventions currently in place or recommended: individual therapy, group counseling, behavioral modification program, educational supports, life skills training, family therapy, and any specialized interventions.`;
+      }
+      if (!reportData.progressIndicators.trim() && !dbUpdates.progressIndicators?.trim()) {
+        aiPrompts.progressIndicators = `${baseInstruction}\n\nWrite 2-3 paragraphs about progress indicators: what measurable improvements have been observed, behavioral trends, level advancement progress, academic engagement, social skill development, and areas still requiring intervention.`;
+      }
 
       const updates: Partial<ServicePlanData> = {};
 

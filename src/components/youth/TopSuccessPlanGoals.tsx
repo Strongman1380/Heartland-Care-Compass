@@ -13,14 +13,35 @@ export const TopSuccessPlanGoals = ({ youth }: TopSuccessPlanGoalsProps) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    type StoredTreatmentObjectives = {
+      behavioralObjective1?: string;
+      behavioralObjective2?: string;
+      socialSkillsFocus?: string;
+      academicGoals?: string;
+      familyEngagementGoals?: string;
+      independentLivingSkills?: string;
+      emotionalRegulationStrategies?: string;
+    };
+
     const loadGoals = () => {
       try {
         setLoading(true);
-        const assessment = fetchAssessment(youth.id, 'successplans', 'heartlandSuccessPlan');
-        
-        if (assessment && assessment.data && assessment.data.treatmentobjectives) {
-          const obj = assessment.data.treatmentobjectives;
-          const activeGoals = [];
+        const assessment = fetchAssessment(youth.id, 'successplans', 'heartlandSuccessPlan') as
+          | {
+              data?: { treatmentobjectives?: StoredTreatmentObjectives; treatmentObjectives?: StoredTreatmentObjectives };
+              treatmentobjectives?: StoredTreatmentObjectives;
+              treatmentObjectives?: StoredTreatmentObjectives;
+            }
+          | null;
+
+        const obj: StoredTreatmentObjectives | undefined =
+          assessment?.treatmentobjectives ||
+          assessment?.treatmentObjectives ||
+          assessment?.data?.treatmentobjectives ||
+          assessment?.data?.treatmentObjectives;
+
+        if (obj) {
+          const activeGoals: { objective: string; type: string }[] = [];
           
           if (obj.behavioralObjective1) {
             activeGoals.push({ objective: obj.behavioralObjective1, type: 'Behavioral' });
@@ -52,7 +73,10 @@ export const TopSuccessPlanGoals = ({ youth }: TopSuccessPlanGoalsProps) => {
         
         // Fallback to youth.treatmentGoals if no success plan goals found
         if (youth.treatmentGoals) {
-          const fallbackGoals = youth.treatmentGoals
+          const rawGoals = Array.isArray(youth.treatmentGoals)
+            ? youth.treatmentGoals.join("\n")
+            : youth.treatmentGoals;
+          const fallbackGoals = rawGoals
             .split(/[\n,]+/)
             .map(g => g.trim())
             .filter(g => g.length > 0)

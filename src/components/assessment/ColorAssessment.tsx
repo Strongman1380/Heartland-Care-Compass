@@ -12,20 +12,158 @@ import { User, Palette, Save, Download, Printer } from 'lucide-react';
 import { draftsService } from '@/integrations/firebase/draftsService';
 import { useAuth } from '@/contexts/AuthContext';
 import { buildReportFilename } from '@/utils/reportFilenames';
-import { realColorsAssessmentsService } from '@/integrations/firebase/realColorsAssessmentsService';
+import { realColorsAssessmentsService, type ColorAssessmentRow } from '@/integrations/firebase/realColorsAssessmentsService';
 
 const COLOR_OPTIONS = ["Gold", "Blue", "Green", "Orange"] as const;
+type ColorType = typeof COLOR_OPTIONS[number];
+
+type QuestionOption = {
+  value: ColorType;
+  label: string;
+};
+
+type AssessmentQuestion = {
+  id: string;
+  prompt: string;
+  options: QuestionOption[];
+};
+
+const COLOR_ASSESSMENT_QUESTIONS: AssessmentQuestion[] = [
+  {
+    id: "q1",
+    prompt: "What motivates you most in a daily routine?",
+    options: [
+      { value: "Gold", label: "Structure, clear expectations, and responsibility" },
+      { value: "Blue", label: "Connection, meaning, and helping others" },
+      { value: "Green", label: "Understanding, strategy, and solving problems" },
+      { value: "Orange", label: "Action, variety, and hands-on challenges" },
+    ],
+  },
+  {
+    id: "q2",
+    prompt: "When conflict happens, your first instinct is to...",
+    options: [
+      { value: "Gold", label: "Follow rules/process and restore order" },
+      { value: "Blue", label: "Talk it through and protect relationships" },
+      { value: "Green", label: "Analyze what caused it and find a logical fix" },
+      { value: "Orange", label: "Address it quickly and move forward" },
+    ],
+  },
+  {
+    id: "q3",
+    prompt: "In school or programming groups, you naturally...",
+    options: [
+      { value: "Gold", label: "Keep everyone organized and on schedule" },
+      { value: "Blue", label: "Support people emotionally and encourage teamwork" },
+      { value: "Green", label: "Handle complex thinking and technical details" },
+      { value: "Orange", label: "Take initiative and keep energy high" },
+    ],
+  },
+  {
+    id: "q4",
+    prompt: "You usually make decisions by...",
+    options: [
+      { value: "Gold", label: "Considering responsibility and proven steps" },
+      { value: "Blue", label: "Considering impact on people and values" },
+      { value: "Green", label: "Considering evidence and logic" },
+      { value: "Orange", label: "Considering immediate opportunity and momentum" },
+    ],
+  },
+  {
+    id: "q5",
+    prompt: "The environment you do best in is...",
+    options: [
+      { value: "Gold", label: "Predictable, organized, and accountable" },
+      { value: "Blue", label: "Supportive, collaborative, and personal" },
+      { value: "Green", label: "Independent, thoughtful, and intellectually challenging" },
+      { value: "Orange", label: "Flexible, active, and fast-paced" },
+    ],
+  },
+  {
+    id: "q6",
+    prompt: "When you are stressed, you tend to...",
+    options: [
+      { value: "Gold", label: "Get stricter with structure and expectations" },
+      { value: "Blue", label: "Become sensitive to others' reactions" },
+      { value: "Green", label: "Withdraw to think and process alone" },
+      { value: "Orange", label: "Act quickly or become restless" },
+    ],
+  },
+  {
+    id: "q7",
+    prompt: "Others often describe your strength as...",
+    options: [
+      { value: "Gold", label: "Reliable and dependable" },
+      { value: "Blue", label: "Empathetic and caring" },
+      { value: "Green", label: "Insightful and analytical" },
+      { value: "Orange", label: "Bold and adaptable" },
+    ],
+  },
+  {
+    id: "q8",
+    prompt: "Your preferred way to learn is...",
+    options: [
+      { value: "Gold", label: "Step-by-step examples and clear instructions" },
+      { value: "Blue", label: "Discussion and real-life personal connection" },
+      { value: "Green", label: "Independent research and deeper concepts" },
+      { value: "Orange", label: "Hands-on practice and trial-and-error" },
+    ],
+  },
+  {
+    id: "q9",
+    prompt: "A successful day feels like...",
+    options: [
+      { value: "Gold", label: "I met my goals and stayed responsible" },
+      { value: "Blue", label: "I built trust and meaningful interactions" },
+      { value: "Green", label: "I solved difficult problems and learned something new" },
+      { value: "Orange", label: "I took action and made progress quickly" },
+    ],
+  },
+  {
+    id: "q10",
+    prompt: "What kind of support helps you most?",
+    options: [
+      { value: "Gold", label: "Clear expectations and consistent accountability" },
+      { value: "Blue", label: "Encouragement, affirmation, and relationship support" },
+      { value: "Green", label: "Space to think with rational feedback" },
+      { value: "Orange", label: "Direct coaching with practical next steps" },
+    ],
+  },
+];
+
+const COLOR_INSIGHT_TEMPLATES: Record<ColorType, { summary: string; supports: string }> = {
+  Gold: {
+    summary: "Gold traits suggest responsibility, loyalty, and preference for structure.",
+    supports: "Use clear routines, explicit expectations, and recognition for reliability.",
+  },
+  Blue: {
+    summary: "Blue traits suggest empathy, relationship-focus, and strong personal values.",
+    supports: "Use relational check-ins, encouragement, and collaborative goal setting.",
+  },
+  Green: {
+    summary: "Green traits suggest analytical thinking, independence, and problem solving.",
+    supports: "Use logic-based explanations, autonomy, and structured reflection time.",
+  },
+  Orange: {
+    summary: "Orange traits suggest adaptability, action-orientation, and practical learning.",
+    supports: "Use hands-on activities, short milestones, and immediate feedback loops.",
+  },
+};
 
 interface ColorAssessmentProps {
   selectedYouth?: Youth;
+  onSaved?: () => void;
 }
 
-export const ColorAssessment = ({ selectedYouth }: ColorAssessmentProps) => {
+export const ColorAssessment = ({ selectedYouth, onSaved }: ColorAssessmentProps) => {
   const [primaryColor, setPrimaryColor] = useState<string>("");
   const [secondaryColor, setSecondaryColor] = useState<string>("");
   const [insights, setInsights] = useState("");
   const [comments, setComments] = useState("");
   const [observations, setObservations] = useState("");
+  const [questionResponses, setQuestionResponses] = useState<Record<string, ColorType | "">>(() =>
+    Object.fromEntries(COLOR_ASSESSMENT_QUESTIONS.map((q) => [q.id, ""]))
+  );
   const [completedByType, setCompletedByType] = useState<'staff' | 'youth'>('staff');
   const [completedBy, setCompletedBy] = useState("");
   const [youthSelection, setYouthSelection] = useState<'existing' | 'new'>('existing');
@@ -35,9 +173,16 @@ export const ColorAssessment = ({ selectedYouth }: ColorAssessmentProps) => {
   const [autoSaveTimer, setAutoSaveTimer] = useState<NodeJS.Timeout | null>(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isAutoSaving, setIsAutoSaving] = useState(false);
+  const [assessments, setAssessments] = useState<ColorAssessmentRow[]>([]);
+  const [isLoadingAssessments, setIsLoadingAssessments] = useState(false);
+  const [editingAssessmentId, setEditingAssessmentId] = useState<string | null>(null);
+  const [lastSavedAt, setLastSavedAt] = useState<string>("");
   const { toast } = useToast();
   const { user } = useAuth();
   const { youths, loadYouths, createYouth, updateYouth } = useYouth();
+  const userId = (user as any)?.uid || (user as any)?.id || null;
+  const answeredCount = Object.values(questionResponses).filter(Boolean).length;
+  const allQuestionsAnswered = answeredCount === COLOR_ASSESSMENT_QUESTIONS.length;
 
   useEffect(() => {
     loadYouths();
@@ -65,6 +210,8 @@ export const ColorAssessment = ({ selectedYouth }: ColorAssessmentProps) => {
         setObservations(latest.observations || "");
         setCompletedByType(latest.completed_by_type || "staff");
         setCompletedBy(latest.completed_by_name || "");
+        setEditingAssessmentId(latest.id);
+        setLastSavedAt(latest.updated_at || latest.created_at || "");
       } catch (error) {
         console.warn("Failed to load latest color assessment:", error);
       }
@@ -72,6 +219,31 @@ export const ColorAssessment = ({ selectedYouth }: ColorAssessmentProps) => {
 
     void loadLatestAssessment();
   }, [selectedYouth?.id, selectedYouthId]);
+
+  useEffect(() => {
+    const youthId = selectedYouth?.id || selectedYouthId;
+    if (!youthId) return;
+
+    const loadHistory = async () => {
+      setIsLoadingAssessments(true);
+      try {
+        const rows = await realColorsAssessmentsService.getByYouthId(youthId, 20);
+        setAssessments(rows);
+      } catch (error) {
+        console.warn("Failed to load color assessment history:", error);
+      } finally {
+        setIsLoadingAssessments(false);
+      }
+    };
+
+    void loadHistory();
+  }, [selectedYouth?.id, selectedYouthId]);
+
+  useEffect(() => {
+    if (completedBy.trim()) return;
+    const display = (user as any)?.displayName || (user as any)?.email || "";
+    if (display) setCompletedBy(display);
+  }, [user, completedBy]);
 
   // Cleanup autosave timer on unmount
   useEffect(() => {
@@ -88,13 +260,76 @@ export const ColorAssessment = ({ selectedYouth }: ColorAssessmentProps) => {
     setInsights("");
     setComments("");
     setObservations("");
+    setQuestionResponses(Object.fromEntries(COLOR_ASSESSMENT_QUESTIONS.map((q) => [q.id, ""])));
     setCompletedByType("staff");
     setCompletedBy("");
     setNewYouthName("");
+    setEditingAssessmentId(null);
+    setLastSavedAt("");
     setHasUnsavedChanges(false);
 
     // Clear draft from localStorage
     clearDraft();
+  };
+
+  const calculateResultsFromResponses = (responses: Record<string, ColorType | "">) => {
+    const scores: Record<ColorType, number> = { Gold: 0, Blue: 0, Green: 0, Orange: 0 };
+    Object.values(responses).forEach((value) => {
+      if (value) scores[value] += 1;
+    });
+    const ranked = Object.entries(scores)
+      .sort((a, b) => b[1] - a[1]) as [ColorType, number][];
+    const primary = ranked[0][1] > 0 ? ranked[0][0] : "";
+    const secondary = ranked[1][1] > 0 ? ranked[1][0] : "";
+    return { scores, primary, secondary };
+  };
+
+  const buildInsightsText = (
+    primary: ColorType,
+    secondary: ColorType | "",
+    scores: Record<ColorType, number>
+  ) => {
+    const primaryTemplate = COLOR_INSIGHT_TEMPLATES[primary];
+    const secondaryTemplate = secondary ? COLOR_INSIGHT_TEMPLATES[secondary] : null;
+    const scoreLine = `Score breakdown: Gold ${scores.Gold}, Blue ${scores.Blue}, Green ${scores.Green}, Orange ${scores.Orange}.`;
+    const secondaryLine = secondary
+      ? `Secondary color influence: ${secondary}. ${secondaryTemplate?.summary || ""}`
+      : "Secondary color influence: Not strongly expressed.";
+
+    return [
+      `Primary color identified: ${primary}. ${primaryTemplate.summary}`,
+      secondaryLine,
+      `Recommended support approach: ${primaryTemplate.supports}`,
+      scoreLine,
+    ].join("\n\n");
+  };
+
+  const applyCalculatedResults = () => {
+    if (!allQuestionsAnswered) {
+      toast({
+        title: "Incomplete Assessment",
+        description: `Please answer all ${COLOR_ASSESSMENT_QUESTIONS.length} questions.`,
+        variant: "destructive",
+      });
+      return null;
+    }
+
+    const { scores, primary, secondary } = calculateResultsFromResponses(questionResponses);
+    if (!primary) {
+      toast({
+        title: "Unable to Calculate",
+        description: "Please review responses and try again.",
+        variant: "destructive",
+      });
+      return null;
+    }
+
+    const generatedInsights = buildInsightsText(primary as ColorType, secondary as ColorType | "", scores);
+    setPrimaryColor(primary);
+    setSecondaryColor(secondary || "");
+    setInsights(generatedInsights);
+    setHasUnsavedChanges(true);
+    return { primary, secondary, generatedInsights };
   };
 
   // Auto-save functionality
@@ -123,6 +358,7 @@ export const ColorAssessment = ({ selectedYouth }: ColorAssessmentProps) => {
 
       // Save to localStorage as draft
       const draftData = {
+        questionResponses,
         primaryColor,
         secondaryColor,
         insights,
@@ -137,7 +373,7 @@ export const ColorAssessment = ({ selectedYouth }: ColorAssessmentProps) => {
       };
 
       const draftKey = getDraftKey();
-      try { await draftsService.save(selectedYouth?.id || selectedYouthId || null, 'real_colors_assessment', (user as any)?.id || null, draftData) } catch {}
+      try { await draftsService.save(selectedYouth?.id || selectedYouthId || null, 'real_colors_assessment', userId, draftData) } catch {}
       localStorage.setItem(draftKey, JSON.stringify(draftData));
 
       setHasUnsavedChanges(false);
@@ -176,9 +412,10 @@ export const ColorAssessment = ({ selectedYouth }: ColorAssessmentProps) => {
   const loadDraft = async () => {
     try {
       try {
-        const remote = await draftsService.get(selectedYouth?.id || selectedYouthId || null, 'real_colors_assessment', (user as any)?.id || null)
+        const remote = await draftsService.get(selectedYouth?.id || selectedYouthId || null, 'real_colors_assessment', userId)
         if (remote?.data) {
           const parsed: any = remote.data
+          setQuestionResponses(parsed.questionResponses || Object.fromEntries(COLOR_ASSESSMENT_QUESTIONS.map((q) => [q.id, ""])));
           setPrimaryColor(parsed.primaryColor || "");
           setSecondaryColor(parsed.secondaryColor || "");
           setInsights(parsed.insights || "");
@@ -205,6 +442,7 @@ export const ColorAssessment = ({ selectedYouth }: ColorAssessmentProps) => {
         const dayInMs = 24 * 60 * 60 * 1000;
         if (parsed.timestamp && (Date.now() - parsed.timestamp < dayInMs)) {
           setPrimaryColor(parsed.primaryColor || "");
+          setQuestionResponses(parsed.questionResponses || Object.fromEntries(COLOR_ASSESSMENT_QUESTIONS.map((q) => [q.id, ""])));
           setSecondaryColor(parsed.secondaryColor || "");
           setInsights(parsed.insights || "");
           setComments(parsed.comments || "");
@@ -234,13 +472,19 @@ export const ColorAssessment = ({ selectedYouth }: ColorAssessmentProps) => {
 
   const clearDraft = () => {
     const draftKey = getDraftKey();
-    try { void draftsService.delete(selectedYouth?.id || selectedYouthId || null, 'real_colors_assessment', (user as any)?.id || null) } catch {}
+    try { void draftsService.delete(selectedYouth?.id || selectedYouthId || null, 'real_colors_assessment', userId) } catch {}
     localStorage.removeItem(draftKey);
   };
 
   // Form change handlers that trigger autosave
   const handleFormChange = (setter: (value: any) => void, value: any) => {
     setter(value);
+    setHasUnsavedChanges(true);
+    triggerAutoSave();
+  };
+
+  const handleQuestionResponseChange = (questionId: string, value: ColorType) => {
+    setQuestionResponses((prev) => ({ ...prev, [questionId]: value }));
     setHasUnsavedChanges(true);
     triggerAutoSave();
   };
@@ -388,10 +632,11 @@ export const ColorAssessment = ({ selectedYouth }: ColorAssessmentProps) => {
   };
 
   const handleSubmit = async () => {
-    if (!primaryColor) {
+    const calculated = applyCalculatedResults();
+    if (!calculated) {
       toast({
         title: "Validation Error",
-        description: "Primary color is required",
+        description: "Complete the assessment questions to generate results.",
         variant: "destructive",
       });
       return;
@@ -445,35 +690,48 @@ export const ColorAssessment = ({ selectedYouth }: ColorAssessmentProps) => {
         await loadYouths(); // Refresh the list
       }
 
+      const resolvedPrimary = calculated.primary;
+      const resolvedSecondary = calculated.secondary;
+      const resolvedInsights = calculated.generatedInsights;
+
       // Keep compatibility field on youth record
-      const realColorsResult = secondaryColor && secondaryColor !== 'none' 
-        ? `${primaryColor}/${secondaryColor}`
-        : primaryColor;
+      const realColorsResult = resolvedSecondary && resolvedSecondary !== 'none'
+        ? `${resolvedPrimary}/${resolvedSecondary}`
+        : resolvedPrimary;
       
       // Save result string on youth (updatedAt handled by hook/service)
       await updateYouth(youthId, {
         realColorsResult: realColorsResult
       });
 
-      await realColorsAssessmentsService.save({
+      const savedAssessment = await realColorsAssessmentsService.save({
+        id: editingAssessmentId || undefined,
         youth_id: youthId,
-        primary_color: primaryColor as "Gold" | "Blue" | "Green" | "Orange",
-        secondary_color: secondaryColor === 'none' ? null : (secondaryColor as "Gold" | "Blue" | "Green" | "Orange" | null),
+        primary_color: resolvedPrimary as "Gold" | "Blue" | "Green" | "Orange",
+        secondary_color: resolvedSecondary === 'none' ? null : (resolvedSecondary as "Gold" | "Blue" | "Green" | "Orange" | null),
         real_colors_result: realColorsResult,
-        insights: insights || null,
+        insights: resolvedInsights || null,
         comments: comments || null,
         observations: observations || null,
         completed_by_type: completedByType,
         completed_by_name: completedBy || null,
       });
 
+      setEditingAssessmentId(savedAssessment.id);
+      setLastSavedAt(savedAssessment.updated_at || savedAssessment.created_at || "");
+      setHasUnsavedChanges(false);
+      clearDraft();
+
+      try {
+        const rows = await realColorsAssessmentsService.getByYouthId(youthId, 20);
+        setAssessments(rows);
+      } catch {}
+
       toast({
         title: "Success",
-        description: "Color assessment saved successfully",
+        description: "Assessment completed and saved. Results and insights are now available below.",
       });
-
-      resetForm();
-      clearDraft();
+      onSaved?.();
 
     } catch (error) {
       console.error('Error saving color assessment:', error);
@@ -501,6 +759,20 @@ export const ColorAssessment = ({ selectedYouth }: ColorAssessmentProps) => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadAssessmentForEditing = (assessment: ColorAssessmentRow) => {
+    setQuestionResponses(Object.fromEntries(COLOR_ASSESSMENT_QUESTIONS.map((q) => [q.id, ""])));
+    setPrimaryColor(assessment.primary_color || "");
+    setSecondaryColor(assessment.secondary_color || "");
+    setInsights(assessment.insights || "");
+    setComments(assessment.comments || "");
+    setObservations(assessment.observations || "");
+    setCompletedByType(assessment.completed_by_type || "staff");
+    setCompletedBy(assessment.completed_by_name || "");
+    setEditingAssessmentId(assessment.id);
+    setLastSavedAt(assessment.updated_at || assessment.created_at || "");
+    setHasUnsavedChanges(false);
   };
 
   return (
@@ -563,18 +835,124 @@ export const ColorAssessment = ({ selectedYouth }: ColorAssessmentProps) => {
 
           {/* Show current youth info when selectedYouth is provided */}
           {selectedYouth && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-3">
               <div className="flex items-center gap-2 text-blue-800">
                 <User className="h-4 w-4" />
                 <span className="font-medium">Assessment for: {selectedYouth.firstName} {selectedYouth.lastName}</span>
               </div>
+              {lastSavedAt && (
+                <p className="text-xs text-blue-700">Last saved: {new Date(lastSavedAt).toLocaleString()}</p>
+              )}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-medium text-blue-900">Saved assessments</p>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={resetForm}
+                    className="h-8 border-blue-300 text-blue-800 hover:bg-blue-100"
+                  >
+                    New Assessment
+                  </Button>
+                </div>
+                {isLoadingAssessments ? (
+                  <p className="text-xs text-blue-700">Loading assessments...</p>
+                ) : assessments.length === 0 ? (
+                  <p className="text-xs text-blue-700">No previous assessments saved for this youth yet.</p>
+                ) : (
+                  <div className="space-y-2 max-h-40 overflow-auto pr-1">
+                    {assessments.map((assessment) => (
+                      <button
+                        key={assessment.id}
+                        type="button"
+                        onClick={() => loadAssessmentForEditing(assessment)}
+                        className={`w-full text-left text-xs rounded-md border px-3 py-2 transition-colors ${
+                          editingAssessmentId === assessment.id
+                            ? "border-blue-400 bg-blue-100 text-blue-900"
+                            : "border-blue-200 bg-white text-blue-800 hover:bg-blue-50"
+                        }`}
+                      >
+                        <span className="font-semibold">{assessment.real_colors_result}</span>
+                        <span className="ml-2 opacity-80">
+                          {new Date(assessment.created_at).toLocaleDateString()}
+                        </span>
+                        {assessment.completed_by_name ? (
+                          <span className="ml-2 opacity-70">by {assessment.completed_by_name}</span>
+                        ) : null}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Questionnaire */}
+          <div className="space-y-4 border rounded-lg p-4 bg-gray-50/50">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-base font-semibold">Personality Assessment Questions</p>
+                <p className="text-sm text-gray-600">
+                  Answer all questions to calculate primary and secondary colors.
+                </p>
+              </div>
+              <div className="text-sm font-medium text-gray-700">
+                {answeredCount}/{COLOR_ASSESSMENT_QUESTIONS.length} answered
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              {COLOR_ASSESSMENT_QUESTIONS.map((question, index) => (
+                <div key={question.id} className="rounded-md border bg-white p-3 space-y-2">
+                  <Label className="text-sm font-medium">
+                    {index + 1}. {question.prompt}
+                  </Label>
+                  <Select
+                    value={questionResponses[question.id] || ""}
+                    onValueChange={(value) => handleQuestionResponseChange(question.id, value as ColorType)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Choose the option that best fits" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {question.options.map((opt) => (
+                        <SelectItem key={`${question.id}-${opt.value}`} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ))}
+            </div>
+
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full sm:w-auto"
+              onClick={applyCalculatedResults}
+              disabled={!allQuestionsAnswered}
+            >
+              Generate Results & Insights
+            </Button>
+          </div>
+
+          {(primaryColor || insights) && (
+            <div className="border rounded-lg p-4 bg-emerald-50/40 border-emerald-200 space-y-2">
+              <p className="font-semibold text-emerald-900">Assessment Results</p>
+              <p className="text-sm text-emerald-900">
+                Primary: <span className="font-semibold">{primaryColor || "Not calculated"}</span>
+                {"  |  "}
+                Secondary: <span className="font-semibold">{secondaryColor || "Not calculated"}</span>
+              </p>
             </div>
           )}
 
           {/* Primary Color */}
           <div className="space-y-2">
             <Label className="text-base font-medium">Primary Color *</Label>
-            <Select value={primaryColor} onValueChange={(value) => handleFormChange(setPrimaryColor, value)}>
+            <Select value={primaryColor} onValueChange={(value) => handleFormChange(setPrimaryColor, value)} disabled>
               <SelectTrigger>
                 <SelectValue placeholder="Select primary color" />
               </SelectTrigger>
@@ -598,7 +976,7 @@ export const ColorAssessment = ({ selectedYouth }: ColorAssessmentProps) => {
           {/* Secondary Color */}
           <div className="space-y-2">
             <Label className="text-base font-medium">Secondary Color</Label>
-            <Select value={secondaryColor} onValueChange={(value) => handleFormChange(setSecondaryColor, value)}>
+            <Select value={secondaryColor} onValueChange={(value) => handleFormChange(setSecondaryColor, value)} disabled>
               <SelectTrigger>
                 <SelectValue placeholder="Select secondary color (optional)" />
               </SelectTrigger>

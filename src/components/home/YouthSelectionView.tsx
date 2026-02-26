@@ -1,5 +1,5 @@
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Youth } from "@/integrations/firebase/services";
 import { WelcomeSection } from "./WelcomeSection";
@@ -7,6 +7,8 @@ import { EmptyYouthState } from "./EmptyYouthState";
 import { Edit, LogOut, ChevronRight, StickyNote } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { QuickNoteDialog } from "@/components/notes/QuickNoteDialog";
+import { Badge } from "@/components/ui/badge";
+import { calculateResidentAwardsForYouths, type ResidentAwards } from "@/utils/residentAwards";
 
 interface YouthSelectionViewProps {
   youths: Youth[];
@@ -28,6 +30,12 @@ export const YouthSelectionView = ({
   formatDate
 }: YouthSelectionViewProps) => {
   const [quickNoteYouth, setQuickNoteYouth] = useState<Youth | null>(null);
+  const [awardData, setAwardData] = useState<ResidentAwards>({
+    residentOfWeek: null,
+    mostImprovedWeek: null,
+    residentOfMonth: null,
+  });
+  const [loadingAwards, setLoadingAwards] = useState(false);
 
   // Sort youth alphabetically by last name, then first name
   const sortedYouths = useMemo(() => {
@@ -37,6 +45,55 @@ export const YouthSelectionView = ({
       return a.firstName.localeCompare(b.firstName);
     });
   }, [youths]);
+
+  useEffect(() => {
+    if (!youths.length) {
+      setAwardData({
+        residentOfWeek: null,
+        mostImprovedWeek: null,
+        residentOfMonth: null,
+      });
+      return;
+    }
+
+    let cancelled = false;
+    const loadAwards = async () => {
+      try {
+        setLoadingAwards(true);
+        const calculated = await calculateResidentAwardsForYouths(youths);
+        if (!cancelled) setAwardData(calculated);
+      } catch (error) {
+        console.error("Failed to calculate resident awards for dashboard cards:", error);
+      } finally {
+        if (!cancelled) setLoadingAwards(false);
+      }
+    };
+
+    void loadAwards();
+    return () => {
+      cancelled = true;
+    };
+  }, [youths]);
+
+  const parseTopColors = (rawResult: string | null | undefined) => {
+    const raw = rawResult || "";
+    if (!raw || typeof raw !== "string") return [];
+    return raw
+      .split(/[,/&|\s]+/)
+      .map((value) => value.trim())
+      .filter(Boolean)
+      .map((value) => value.charAt(0).toUpperCase() + value.slice(1).toLowerCase())
+      .filter((value, index, arr) => arr.indexOf(value) === index)
+      .slice(0, 2);
+  };
+
+  const getYouthAwards = (youthId: string) => {
+    const items: string[] = [];
+    if (awardData.residentOfWeek?.youthId === youthId) items.push("Resident of the Week");
+    if (awardData.mostImprovedWeek?.youthId === youthId) items.push("Most Improved (Week)");
+    if (awardData.residentOfMonth?.youthId === youthId) items.push("Resident of the Month");
+    return items;
+  };
 
   // Calculate length of stay
   const calculateLengthOfStay = (admissionDate: string | null): string => {
@@ -144,7 +201,25 @@ export const YouthSelectionView = ({
                               Stay: {calculateLengthOfStay(youth.admissionDate)}
                             </span>
                           )}
+                        </div>
 
+                        <div className="flex items-center gap-2 mt-2 flex-wrap">
+                          {parseTopColors(youth.realColorsResult).map((color) => (
+                            <Badge key={`${youth.id}-color-${color}`} variant="secondary" className="bg-white border border-red-200 text-red-800">
+                              {color}
+                            </Badge>
+                          ))}
+                          {loadingAwards && (
+                            <Badge variant="outline" className="bg-white/80 border-yellow-300 text-yellow-800">
+                              Calculating awards...
+                            </Badge>
+                          )}
+                          {!loadingAwards &&
+                            getYouthAwards(youth.id).map((award) => (
+                              <Badge key={`${youth.id}-award-${award}`} className="bg-yellow-500 hover:bg-yellow-500 text-black border border-yellow-600">
+                                {award}
+                              </Badge>
+                            ))}
                         </div>
                       </div>
 

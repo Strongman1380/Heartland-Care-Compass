@@ -65,17 +65,35 @@ export const RecentIncidentsAlert = ({ youthId, youthName }: RecentIncidentsAler
             severity: normalizeSeverity((inc as any).severity),
           }));
 
-        // Fetch and normalize school incidents — no direct youth link, show all recent
+        // Fetch and normalize school incidents — map incidents to this youth via involved records
         const schoolIncidents = await schoolIncidentsService.list();
-        const recentSchoolIncidents: NormalizedIncident[] = schoolIncidents
-          .filter((inc) => inc.date_time && isAfter(new Date(inc.date_time), fourteenDaysAgo))
-          .map((inc) => ({
-            id: inc.incident_id,
-            type: 'School' as const,
-            date: inc.date_time,
-            category: inc.incident_type ?? 'General',
-            severity: normalizeSeverity(inc.severity),
-          }));
+        const recentSchoolCandidates = schoolIncidents.filter(
+          (inc) => inc.date_time && isAfter(new Date(inc.date_time), fourteenDaysAgo)
+        );
+
+        const schoolIncidentMatches = await Promise.all(
+          recentSchoolCandidates.map(async (inc) => {
+            const involved = await schoolIncidentsService.listInvolved(inc.incident_id).catch(() => []);
+            const matchesYouth = involved.some((row) => {
+              const byId = row.resident_id === youthId;
+              const byName = !!row.name && row.name.toLowerCase().includes(nameLower);
+              return byId || byName;
+            });
+
+            if (!matchesYouth) return null;
+
+            return {
+              id: inc.incident_id,
+              type: 'School' as const,
+              date: inc.date_time,
+              category: inc.incident_type ?? 'General',
+              severity: normalizeSeverity(inc.severity),
+            } satisfies NormalizedIncident;
+          })
+        );
+        const recentSchoolIncidents: NormalizedIncident[] = schoolIncidentMatches.filter(
+          (inc): inc is NormalizedIncident => inc !== null
+        );
 
         const allIncidents = [...youthFacilityIncidents, ...recentSchoolIncidents].sort(
           (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()

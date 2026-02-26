@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowLeft, Edit, Printer, LogOut, Trash2 } from "lucide-react";
@@ -33,6 +34,7 @@ import { RecentIncidentsAlert } from "./RecentIncidentsAlert";
 import { TopSuccessPlanGoals } from "./TopSuccessPlanGoals";
 import { UpcomingImportantDates } from "./UpcomingImportantDates";
 import { ContactsQuickReference } from "./ContactsQuickReference";
+import { calculateResidentAwardsForYouths, type ResidentAwards } from "@/utils/residentAwards";
 
 interface YouthProfileProps {
   youth: Youth;
@@ -46,7 +48,57 @@ export const YouthProfile = ({ youth, onBack, onYouthUpdated }: YouthProfileProp
   const [dischargeDialogOpen, setDischargeDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const { updateYouth, deleteYouth } = useYouth();
+  const [awardData, setAwardData] = useState<ResidentAwards>({
+    residentOfWeek: null,
+    mostImprovedWeek: null,
+    residentOfMonth: null,
+  });
+  const [loadingAwards, setLoadingAwards] = useState(false);
+  const { updateYouth, deleteYouth, youths, loadYouths } = useYouth();
+
+  useEffect(() => {
+    loadYouths();
+  }, [loadYouths]);
+
+  useEffect(() => {
+    if (!youths?.length) return;
+    let cancelled = false;
+    const loadAwards = async () => {
+      try {
+        setLoadingAwards(true);
+        const calculated = await calculateResidentAwardsForYouths(youths);
+        if (!cancelled) setAwardData(calculated);
+      } catch (error) {
+        console.error("Failed to calculate resident awards:", error);
+      } finally {
+        if (!cancelled) setLoadingAwards(false);
+      }
+    };
+    void loadAwards();
+    return () => {
+      cancelled = true;
+    };
+  }, [youths]);
+
+  const colors = useMemo(() => {
+    const raw = youth.realColorsResult || "";
+    if (!raw || typeof raw !== "string") return [];
+    return raw
+      .split(/[,/&|\s]+/)
+      .map((value) => value.trim())
+      .filter(Boolean)
+      .map((value) => value.charAt(0).toUpperCase() + value.slice(1).toLowerCase())
+      .filter((value, index, arr) => arr.indexOf(value) === index)
+      .slice(0, 2);
+  }, [youth.realColorsResult]);
+
+  const youthAwards = useMemo(() => {
+    const items: string[] = [];
+    if (awardData.residentOfWeek?.youthId === youth.id) items.push("Resident of the Week");
+    if (awardData.mostImprovedWeek?.youthId === youth.id) items.push("Most Improved (Week)");
+    if (awardData.residentOfMonth?.youthId === youth.id) items.push("Resident of the Month");
+    return items;
+  }, [awardData, youth.id]);
 
   const formatDate = (dateString: string | null) => {
     if (!dateString) return "Not specified";
@@ -123,6 +175,26 @@ export const YouthProfile = ({ youth, onBack, onYouthUpdated }: YouthProfileProp
               <CardTitle className="text-3xl text-red-800 mb-2">
                 {youth.firstName} {youth.lastName}
               </CardTitle>
+              {(colors.length > 0 || youthAwards.length > 0 || loadingAwards) && (
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {colors.map((color) => (
+                    <Badge key={color} variant="secondary" className="bg-white/80 border border-red-200 text-red-800">
+                      {color}
+                    </Badge>
+                  ))}
+                  {loadingAwards && (
+                    <Badge variant="outline" className="bg-white/70 border-yellow-300 text-yellow-800">
+                      Calculating awards...
+                    </Badge>
+                  )}
+                  {!loadingAwards &&
+                    youthAwards.map((award) => (
+                      <Badge key={award} className="bg-yellow-500 hover:bg-yellow-500 text-black border border-yellow-600">
+                        {award}
+                      </Badge>
+                    ))}
+                </div>
+              )}
               <div className="text-sm text-red-600 mb-3">
                 <span className="font-semibold">Youth ID:</span> 
                 <span className="font-mono ml-2">{youth.id}</span>
@@ -228,7 +300,7 @@ export const YouthProfile = ({ youth, onBack, onYouthUpdated }: YouthProfileProp
             </TabsContent>
 
             <TabsContent value="personality">
-              <ColorAssessment selectedYouth={youth} />
+              <ColorAssessment selectedYouth={youth} onSaved={onYouthUpdated} />
             </TabsContent>
 
             <TabsContent value="service-plan">

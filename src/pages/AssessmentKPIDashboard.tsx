@@ -22,9 +22,6 @@ import {
 } from 'recharts';
 import {
   Users,
-  FileText,
-  ClipboardList,
-  Activity,
   AlertTriangle,
   TrendingUp,
   ArrowLeft,
@@ -175,6 +172,13 @@ const AssessmentKPIDashboard = () => {
           kpiReportsService.list(),
         ]);
 
+        console.log('Fetched data:', {
+          youthCount: youthData.length,
+          pointsCount: pointsData.length,
+          notesCount: notesData.length,
+          reportsCount: reportData.length
+        });
+
         setYouths(youthData);
         setAllBehaviorPoints(pointsData);
         setAllCaseNotes(notesData);
@@ -220,6 +224,14 @@ const AssessmentKPIDashboard = () => {
     const filteredNotes = allCaseNotes.filter((note) => isInRange(parseDate(note.date || note.createdAt), startDate));
     const filteredPoints = allBehaviorPoints.filter((point) => isInRange(parseDate(point.date || point.createdAt), startDate));
     const filteredRatings = allDailyRatings.filter((rating) => isInRange(parseDate(rating.date || rating.createdAt), startDate));
+
+    console.log('Filtered data:', {
+      timeframe,
+      startDate,
+      filteredNotesCount: filteredNotes.length,
+      filteredPointsCount: filteredPoints.length,
+      filteredRatingsCount: filteredRatings.length
+    });
 
     const documentedYouth = new Set<string>();
     filteredNotes.forEach((x) => x.youth_id && documentedYouth.add(x.youth_id));
@@ -430,29 +442,24 @@ const AssessmentKPIDashboard = () => {
         <h2 style="margin: 16px 0 8px 0;">Core KPIs</h2>
         <ul>
           <li>Active Youth: ${analytics.metrics.activeYouth}</li>
-          <li>Documentation Coverage: ${analytics.metrics.coveragePercent}%</li>
-          <li>Case Notes: ${analytics.metrics.notesCount}</li>
-          <li>Daily Ratings: ${analytics.metrics.ratingsCount}</li>
-          <li>Behavior Point Entries: ${analytics.metrics.pointsCount}</li>
-          <li>Average Points Per Entry: ${analytics.metrics.avgPoints}</li>
-          <li>High-Risk Youth: ${analytics.metrics.highRiskYouth} (${analytics.metrics.highRiskPercent}%)</li>
+          <li>Admissions in Window: ${analytics.metrics.admissionsInWindow}</li>
           <li>Average HYRNA Score: ${analytics.metrics.avgRiskScore || '--'}</li>
+          <li>High-Risk Youth: ${analytics.metrics.highRiskYouth} (${analytics.metrics.highRiskPercent}%)</li>
         </ul>
-        <h2 style="margin: 16px 0 8px 0;">Data Quality and Coverage</h2>
+        <h2 style="margin: 16px 0 8px 0;">Behavioral Domain Averages (0–4 scale)</h2>
         <ul>
-          <li>Youth Missing HYRNA Data: ${analytics.metrics.missingRiskData}</li>
-          <li>Notes per Youth: ${analytics.metrics.notesPerYouth}</li>
-          <li>Ratings per Youth: ${analytics.metrics.ratingsPerYouth}</li>
-          <li>Points Entries per Youth: ${analytics.metrics.pointsPerYouth}</li>
-          <li>Domain Composite Average: ${analytics.metrics.domainComposite}</li>
+          <li>Avg Peer Interaction: ${analytics.metrics.avgDomain.peer.toFixed(2)}</li>
+          <li>Avg Adult Interaction: ${analytics.metrics.avgDomain.adult.toFixed(2)}</li>
+          <li>Avg Investment Level: ${analytics.metrics.avgDomain.investment.toFixed(2)}</li>
+          <li>Avg Authority: ${analytics.metrics.avgDomain.authority.toFixed(2)}</li>
         </ul>
-        <h2 style="margin: 16px 0 8px 0;">Top Documentation Volume by Youth</h2>
+        <h2 style="margin: 16px 0 8px 0;">Real Colors Distribution</h2>
         ${
-          analytics.documentationByYouth.length === 0
-            ? '<p>No documentation activity in selected timeframe.</p>'
-            : `<ol>${analytics.documentationByYouth
-                .map((row) => `<li>${escapeHtml(row.name)}: total ${row.total} (notes ${row.notesCount}, ratings ${row.ratingsCount}, points ${row.pointsCount})</li>`)
-                .join('')}</ol>`
+          analytics.realColorsDistribution.length === 0
+            ? '<p>No Real Colors results stored yet.</p>'
+            : `<ul>${analytics.realColorsDistribution
+                .map((item) => `<li>${escapeHtml(item.name)}: ${item.value}</li>`)
+                .join('')}</ul>`
         }
       </div>
     `;
@@ -477,17 +484,14 @@ const AssessmentKPIDashboard = () => {
         report_html: reportHtml,
         metrics_snapshot: {
           activeYouth: analytics.metrics.activeYouth,
-          documentedYouth: analytics.metrics.documentedYouth,
-          coveragePercent: analytics.metrics.coveragePercent,
-          notesCount: analytics.metrics.notesCount,
-          ratingsCount: analytics.metrics.ratingsCount,
-          pointsCount: analytics.metrics.pointsCount,
-          avgPoints: analytics.metrics.avgPoints,
+          admissionsInWindow: analytics.metrics.admissionsInWindow,
           avgRiskScore: analytics.metrics.avgRiskScore,
           highRiskYouth: analytics.metrics.highRiskYouth,
           highRiskPercent: analytics.metrics.highRiskPercent,
-          missingRiskData: analytics.metrics.missingRiskData,
-          domainComposite: analytics.metrics.domainComposite,
+          avgPeer: analytics.metrics.avgDomain.peer,
+          avgAdult: analytics.metrics.avgDomain.adult,
+          avgInvestment: analytics.metrics.avgDomain.investment,
+          avgAuthority: analytics.metrics.avgDomain.authority,
         },
         archived: false,
         archived_at: null,
@@ -640,108 +644,91 @@ const AssessmentKPIDashboard = () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium flex items-center gap-2"><Users className="h-4 w-4" />Active Youth</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{analytics.metrics.activeYouth}</div>
-            </CardContent>
-          </Card>
+        <div className="max-w-5xl mx-auto space-y-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium flex items-center gap-2"><Users className="h-4 w-4" />Active Youth</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{analytics.metrics.activeYouth}</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium flex items-center gap-2"><Shield className="h-4 w-4" />Avg HYRNA Score</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{analytics.metrics.avgRiskScore || '--'}</div>
+                <p className="text-xs text-muted-foreground">{analytics.metrics.youthWithRiskData} youth with risk data</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium flex items-center gap-2"><TrendingUp className="h-4 w-4" />Admissions in Window</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{analytics.metrics.admissionsInWindow}</div>
+              </CardContent>
+            </Card>
+          </div>
 
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium flex items-center gap-2"><ClipboardList className="h-4 w-4" />Documentation Coverage</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{analytics.metrics.coveragePercent}%</div>
-              <p className="text-xs text-muted-foreground">{analytics.metrics.documentedYouth} youth documented</p>
-            </CardContent>
-          </Card>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Card>
+              <CardHeader className="pb-2"><CardTitle className="text-sm">Avg Peer Interaction</CardTitle></CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{analytics.metrics.avgDomain.peer.toFixed(2)}</div>
+                <p className="text-xs text-muted-foreground">0–4 scale</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2"><CardTitle className="text-sm">Avg Adult Interaction</CardTitle></CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{analytics.metrics.avgDomain.adult.toFixed(2)}</div>
+                <p className="text-xs text-muted-foreground">0–4 scale</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2"><CardTitle className="text-sm">Avg Investment Level</CardTitle></CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{analytics.metrics.avgDomain.investment.toFixed(2)}</div>
+                <p className="text-xs text-muted-foreground">0–4 scale</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2"><CardTitle className="text-sm">Avg Authority</CardTitle></CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{analytics.metrics.avgDomain.authority.toFixed(2)}</div>
+                <p className="text-xs text-muted-foreground">0–4 scale</p>
+              </CardContent>
+            </Card>
+          </div>
 
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium flex items-center gap-2"><FileText className="h-4 w-4" />Case Notes</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{analytics.metrics.notesCount}</div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium flex items-center gap-2"><Activity className="h-4 w-4" />Daily Ratings</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{analytics.metrics.ratingsCount}</div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium flex items-center gap-2"><TrendingUp className="h-4 w-4" />Avg Points / Entry</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{analytics.metrics.avgPoints}</div>
-              <p className="text-xs text-muted-foreground">{analytics.metrics.pointsCount} point entries</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium flex items-center gap-2"><AlertTriangle className="h-4 w-4" />Risk Snapshot</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{analytics.metrics.highRiskYouth}</div>
-              <p className="text-xs text-muted-foreground">High-risk youth</p>
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-sm">Avg HYRNA Score</CardTitle></CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{analytics.metrics.avgRiskScore || '--'}</div>
-              <p className="text-xs text-muted-foreground">{analytics.metrics.youthWithRiskData} youth with risk data</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-sm">Admissions in Window</CardTitle></CardHeader>
-            <CardContent><div className="text-2xl font-bold">{analytics.metrics.admissionsInWindow}</div></CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-sm">Avg Peer Interaction</CardTitle></CardHeader>
-            <CardContent><div className="text-2xl font-bold">{analytics.metrics.avgDomain.peer.toFixed(2)}</div></CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-sm">Avg Authority</CardTitle></CardHeader>
-            <CardContent><div className="text-2xl font-bold">{analytics.metrics.avgDomain.authority.toFixed(2)}</div></CardContent>
-          </Card>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-          <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-sm">Missing HYRNA Data</CardTitle></CardHeader>
-            <CardContent><div className="text-2xl font-bold">{analytics.metrics.missingRiskData}</div></CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-sm">High Risk %</CardTitle></CardHeader>
-            <CardContent><div className="text-2xl font-bold">{analytics.metrics.highRiskPercent}%</div></CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-sm">Notes per Youth</CardTitle></CardHeader>
-            <CardContent><div className="text-2xl font-bold">{analytics.metrics.notesPerYouth}</div></CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-sm">Ratings per Youth</CardTitle></CardHeader>
-            <CardContent><div className="text-2xl font-bold">{analytics.metrics.ratingsPerYouth}</div></CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-sm">Domain Composite</CardTitle></CardHeader>
-            <CardContent><div className="text-2xl font-bold">{analytics.metrics.domainComposite}</div></CardContent>
-          </Card>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium flex items-center gap-2"><AlertTriangle className="h-4 w-4" />Overall Risk Level</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{analytics.metrics.highRiskYouth}</div>
+                <p className="text-xs text-muted-foreground">High-risk youth</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2"><CardTitle className="text-sm">High Risk %</CardTitle></CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{analytics.metrics.highRiskPercent}%</div>
+                <p className="text-xs text-muted-foreground">of {analytics.metrics.activeYouth} youth</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2"><CardTitle className="text-sm">Real Colors Assessed</CardTitle></CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{analytics.realColorsDistribution.reduce((s, x) => s + x.value, 0)}</div>
+                <p className="text-xs text-muted-foreground">personality profiles</p>
+              </CardContent>
+            </Card>
+          </div>
         </div>
 
         <Card>
@@ -814,7 +801,7 @@ const AssessmentKPIDashboard = () => {
                           {report.archived && <Badge variant="outline">Archived</Badge>}
                           {report.metrics_snapshot && (
                             <Badge variant="secondary">
-                              Coverage: {(report.metrics_snapshot.coveragePercent as number) ?? '-'}% | High Risk: {(report.metrics_snapshot.highRiskYouth as number) ?? '-'}
+                              Youth: {(report.metrics_snapshot.activeYouth as number) ?? '-'} | High Risk: {(report.metrics_snapshot.highRiskYouth as number) ?? '-'}
                             </Badge>
                           )}
                         </div>
@@ -848,60 +835,12 @@ const AssessmentKPIDashboard = () => {
           </CardContent>
         </Card>
 
-        <Tabs defaultValue="documentation" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="documentation">Documentation</TabsTrigger>
+        <Tabs defaultValue="domains" className="space-y-6">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="domains">Behavior Domains</TabsTrigger>
             <TabsTrigger value="risk">Risk & Levels</TabsTrigger>
             <TabsTrigger value="points">Points Trend</TabsTrigger>
           </TabsList>
-
-          <TabsContent value="documentation">
-            <Card>
-              <CardHeader>
-                <CardTitle>Documentation Volume by Month</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={320}>
-                  <BarChart data={analytics.documentationTrend}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="month" />
-                    <YAxis />
-                    <Tooltip />
-                    <Legend />
-                    <Bar dataKey="notes" name="Case Notes" fill={HEARTLAND_CHART_COLORS.burgundy} />
-                    <Bar dataKey="ratings" name="Daily Ratings" fill={HEARTLAND_CHART_COLORS.amber} />
-                    <Bar dataKey="points" name="Behavior Points" fill={HEARTLAND_CHART_COLORS.neutral} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-
-            <Card className="mt-6">
-              <CardHeader>
-                <CardTitle>Top Documentation Activity by Youth</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {analytics.documentationByYouth.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No activity in selected timeframe.</p>
-                ) : (
-                  <div className="space-y-2">
-                    {analytics.documentationByYouth.map((row) => (
-                      <div key={row.id} className="rounded-md border p-3 flex items-center justify-between">
-                        <div>
-                          <p className="text-sm font-semibold">{row.name}</p>
-                          <p className="text-xs text-muted-foreground">
-                            Notes {row.notesCount} | Ratings {row.ratingsCount} | Points {row.pointsCount}
-                          </p>
-                        </div>
-                        <Badge variant="secondary">Total {row.total}</Badge>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
 
           <TabsContent value="domains">
             <Card>

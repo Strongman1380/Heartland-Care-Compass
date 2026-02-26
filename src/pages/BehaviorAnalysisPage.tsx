@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Header } from "@/components/layout/Header";
 import { BehaviorAnalysis } from "@/components/analysis/BehaviorAnalysis";
 import { YouthSelector } from "@/components/common/YouthSelector";
@@ -11,18 +11,30 @@ const BehaviorAnalysisPage = () => {
   const [selectedYouth, setSelectedYouth] = useState<Youth | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Use Supabase hook for youth operations
-  const { youths } = useYouth();
+  const { youths, loadYouths } = useYouth();
+  const didLoad = useRef(false);
+
+  useEffect(() => {
+    if (!didLoad.current) {
+      didLoad.current = true;
+      loadYouths();
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!selectedYouthId) {
+      setSelectedYouth(null);
+      return;
+    }
+    const youth = youths.find(y => y.id === selectedYouthId);
+    if (youth) {
+      setSelectedYouth(youth);
+    }
+  }, [selectedYouthId, youths]);
 
   const handleYouthSelect = (youthId: string) => {
     setIsLoading(true);
     setSelectedYouthId(youthId);
-
-    // Find the selected youth from Supabase data
-    const youth = youths.find(y => y.id === youthId);
-    setSelectedYouth(youth || null);
-
-    // Simulate loading for a smoother UX
     setTimeout(() => setIsLoading(false), 500);
   };
 

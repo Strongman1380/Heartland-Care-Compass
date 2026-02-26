@@ -22,11 +22,12 @@ import {
   type DomainScores,
 } from '@/utils/shiftScores'
 import type { ShiftType } from '@/integrations/firebase/shiftScoresService'
-import { format, addDays, subDays } from 'date-fns'
+import { behaviorPointsService } from '@/integrations/firebase/services'
+import { format, addDays, subDays, startOfWeek, endOfWeek, subWeeks, startOfMonth, endOfMonth } from 'date-fns'
 import {
   TrendingUp, TrendingDown, Minus, Save, CheckCircle2,
   RefreshCw, Upload, Sun, Sunset, Moon, Calculator, Calendar,
-  Users, ChevronLeft, ChevronRight, FileSpreadsheet
+  Users, ChevronLeft, ChevronRight, FileSpreadsheet, Trophy, Star
 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { Header } from '@/components/layout/Header'
@@ -89,10 +90,26 @@ const ratingLabel = (val: number) => {
 type WeeklyGridValue = { [youthId: string]: { [weekDate: string]: DomainScores } }
 type DailyGridValue = { [youthId: string]: { [dateShift: string]: DomainScores } }
 
+type AwardWinner = {
+  youthId: string;
+  name: string;
+  evalAverage: number;
+  totalPoints: number;
+  improvement?: number;
+}
+
 const ShiftScores: React.FC = () => {
   const { youths, loadYouths, loading } = useYouth()
   const { toast } = useToast()
   const today = new Date()
+
+  // Awards state
+  const [awards, setAwards] = useState<{
+    residentOfWeek: AwardWinner | null;
+    mostImprovedWeek: AwardWinner | null;
+    residentOfMonth: AwardWinner | null;
+  }>({ residentOfWeek: null, mostImprovedWeek: null, residentOfMonth: null })
+  const [calculatingAwards, setCalculatingAwards] = useState(false)
 
   // Weekly eval state
   const [weeklyStart, setWeeklyStart] = useState<Date>(subDays(getMonday(today), 7 * 5)) // show last 6 weeks
@@ -369,6 +386,102 @@ const ShiftScores: React.FC = () => {
     }
   }
 
+  // ── Calculate Awards ──
+  const calculateAwards = async () => {
+    setCalculatingAwards(true)
+    try {
+      const today = new Date()
+      const currentWeekStart = toISO(startOfWeek(today, { weekStartsOn: 1 }))
+      const currentWeekEnd = toISO(endOfWeek(today, { weekStartsOn: 1 }))
+      const lastWeekStart = toISO(startOfWeek(subWeeks(today, 1), { weekStartsOn: 1 }))
+      const lastWeekEnd = toISO(endOfWeek(subWeeks(today, 1), { weekStartsOn: 1 }))
+      const currentMonthStart = toISO(startOfMonth(today))
+      const currentMonthEnd = toISO(endOfMonth(today))
+
+      const weekCandidates: AwardWinner[] = []
+      const monthCandidates: AwardWinner[] = []
+      const improvementCandidates: AwardWinner[] = []
+
+      for (const y of sortedYouths) {
+        // Fetch behavior points
+        const points = await behaviorPointsService.getByYouthId(y.id)
+        
+        // Current Week
+        const weekPoints = points.filter(p => p.date && p.date >= currentWeekStart && p.date <= currentWeekEnd)
+        const weekTotalPoints = weekPoints.reduce((sum, p) => sum + (p.totalPoints || 0), 0)
+        const weekEvals = await calculateCombinedAveragesForRange(y.id, currentWeekStart, currentWeekEnd)
+        const weekEvalAvg = weekEvals.overall || 0
+
+        if (weekTotalPoints > 0 || weekEvalAvg > 0) {
+          weekCandidates.push({
+            youthId: y.id,
+            name: `${y.firstName} ${y.lastName}`,
+            evalAverage: weekEvalAvg,
+            totalPoints: weekTotalPoints
+          })
+        }
+
+        // Last Week (for improvement)
+        const lastWeekEvals = await calculateCombinedAveragesForRange(y.id, lastWeekStart, lastWeekEnd)
+        const lastWeekEvalAvg = lastWeekEvals.overall || 0
+        
+        if (weekEvalAvg > 0 && lastWeekEvalAvg > 0) {
+          improvementCandidates.push({
+            youthId: y.id,
+            name: `${y.firstName} ${y.lastName}`,
+            evalAverage: weekEvalAvg,
+            totalPoints: weekTotalPoints,
+            improvement: weekEvalAvg - lastWeekEvalAvg
+          })
+        }
+
+        // Current Month
+        const monthPoints = points.filter(p => p.date && p.date >= currentMonthStart && p.date <= currentMonthEnd)
+        const monthTotalPoints = monthPoints.reduce((sum, p) => sum + (p.totalPoints || 0), 0)
+        const monthEvals = await calculateCombinedAveragesForRange(y.id, currentMonthStart, currentMonthEnd)
+        const monthEvalAvg = monthEvals.overall || 0
+
+        if (monthTotalPoints > 0 || monthEvalAvg > 0) {
+          monthCandidates.push({
+            youthId: y.id,
+            name: `${y.firstName} ${y.lastName}`,
+            evalAverage: monthEvalAvg,
+            totalPoints: monthTotalPoints
+          })
+        }
+      }
+
+      // Rank candidates
+      // Resident of the Week: Highest eval average, tie-breaker: highest points
+      weekCandidates.sort((a, b) => {
+        if (b.evalAverage !== a.evalAverage) return b.evalAverage - a.evalAverage
+        return b.totalPoints - a.totalPoints
+      })
+
+      // Most Improved: Highest improvement
+      improvementCandidates.sort((a, b) => (b.improvement || 0) - (a.improvement || 0))
+
+      // Resident of the Month: Highest points, tie-breaker: highest eval average
+      monthCandidates.sort((a, b) => {
+        if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints
+        return b.evalAverage - a.evalAverage
+      })
+
+      setAwards({
+        residentOfWeek: weekCandidates[0] || null,
+        mostImprovedWeek: improvementCandidates[0] || null,
+        residentOfMonth: monthCandidates[0] || null
+      })
+
+      toast({ title: "Awards Calculated", duration: 3000 })
+    } catch (error) {
+      console.error('Error calculating awards:', error)
+      toast({ title: "Error", description: "Failed to calculate awards.", variant: "destructive" })
+    } finally {
+      setCalculatingAwards(false)
+    }
+  }
+
   // Quote-aware CSV field splitter
   const splitCSVLine = (line: string): string[] => {
     const fields: string[] = []
@@ -559,10 +672,94 @@ const ShiftScores: React.FC = () => {
             <TabsTrigger value="averages" className="data-[state=active]:bg-red-50 data-[state=active]:text-red-800">
               Averages
             </TabsTrigger>
+            <TabsTrigger value="awards" className="data-[state=active]:bg-red-50 data-[state=active]:text-red-800">
+              Awards
+            </TabsTrigger>
             <TabsTrigger value="upload" className="data-[state=active]:bg-red-50 data-[state=active]:text-red-800">
               Upload
             </TabsTrigger>
           </TabsList>
+
+          {/* ═══════ AWARDS TAB ═══════ */}
+          <TabsContent value="awards">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center justify-between">
+                  <span>Resident Awards</span>
+                  <Button onClick={calculateAwards} disabled={calculatingAwards}>
+                    {calculatingAwards ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Calculator className="w-4 h-4 mr-2" />}
+                    Calculate Awards
+                  </Button>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {/* Resident of the Week */}
+                  <Card className="bg-blue-50 border-blue-200">
+                    <CardHeader>
+                      <CardTitle className="text-blue-800 flex items-center gap-2">
+                        <Trophy className="w-5 h-5" />
+                        Resident of the Week
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {awards.residentOfWeek ? (
+                        <div className="space-y-2">
+                          <p className="text-2xl font-bold text-blue-900">{awards.residentOfWeek.name}</p>
+                          <p className="text-sm text-blue-700">Eval Average: {awards.residentOfWeek.evalAverage.toFixed(2)}</p>
+                          <p className="text-sm text-blue-700">Total Points: {awards.residentOfWeek.totalPoints}</p>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-blue-600 italic">Click calculate to determine winner</p>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  {/* Most Improved */}
+                  <Card className="bg-green-50 border-green-200">
+                    <CardHeader>
+                      <CardTitle className="text-green-800 flex items-center gap-2">
+                        <TrendingUp className="w-5 h-5" />
+                        Most Improved (Week)
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {awards.mostImprovedWeek ? (
+                        <div className="space-y-2">
+                          <p className="text-2xl font-bold text-green-900">{awards.mostImprovedWeek.name}</p>
+                          <p className="text-sm text-green-700">Improvement: +{awards.mostImprovedWeek.improvement?.toFixed(2)}</p>
+                          <p className="text-sm text-green-700">Current Avg: {awards.mostImprovedWeek.evalAverage.toFixed(2)}</p>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-green-600 italic">Click calculate to determine winner</p>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  {/* Resident of the Month */}
+                  <Card className="bg-purple-50 border-purple-200">
+                    <CardHeader>
+                      <CardTitle className="text-purple-800 flex items-center gap-2">
+                        <Star className="w-5 h-5" />
+                        Resident of the Month
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {awards.residentOfMonth ? (
+                        <div className="space-y-2">
+                          <p className="text-2xl font-bold text-purple-900">{awards.residentOfMonth.name}</p>
+                          <p className="text-sm text-purple-700">Total Points: {awards.residentOfMonth.totalPoints}</p>
+                          <p className="text-sm text-purple-700">Eval Average: {awards.residentOfMonth.evalAverage.toFixed(2)}</p>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-purple-600 italic">Click calculate to determine winner</p>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
 
           {/* ═══════ WEEKLY EVALS TAB ═══════ */}
           <TabsContent value="weekly">

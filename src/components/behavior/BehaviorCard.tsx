@@ -316,7 +316,7 @@ export const BehaviorCard = ({ youthId, youth, onYouthUpdated }: BehaviorCardPro
                 <Button
                   onClick={handleAddCardPoints}
                   disabled={isUpdatingPoints || !cardPoints}
-                  className="bg-green-700 hover:bg-green-600 text-white"
+                  className="bg-green-700 hover:bg-green-600 text-white disabled:opacity-100 disabled:bg-green-200 disabled:text-green-900 disabled:border disabled:border-green-300"
                 >
                   Add
                 </Button>
@@ -344,7 +344,7 @@ export const BehaviorCard = ({ youthId, youth, onYouthUpdated }: BehaviorCardPro
                   onClick={handleSetCorrectedTotal}
                   disabled={isUpdatingPoints || !correctedTotal}
                   variant="outline"
-                  className="border-gray-400 hover:border-red-700 hover:text-red-700"
+                  className="border-gray-400 hover:border-red-700 hover:text-red-700 disabled:opacity-100 disabled:bg-gray-100 disabled:text-gray-700 disabled:border-gray-400"
                 >
                   Set
                 </Button>

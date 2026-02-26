@@ -174,7 +174,7 @@ export default function IncidentReports() {
           </div>
 
           {/* Print-ready view */}
-          <div className="bg-white rounded-lg shadow-sm border print:shadow-none print:border-none">
+          <div className="print-section bg-white rounded-lg shadow-sm border print:shadow-none print:border-none">
             <FacilityIncidentPrintView ref={printRef} report={selectedIncident} />
           </div>
         </main>

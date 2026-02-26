@@ -13,6 +13,25 @@ import type { FacilityIncidentReport } from '@/types/facility-incident-types'
 
 const COLLECTION = 'facility_incidents'
 
+function stripUndefinedDeep<T>(value: T): T {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => stripUndefinedDeep(item))
+      .filter((item) => item !== undefined) as T
+  }
+
+  if (value && typeof value === 'object') {
+    const result: Record<string, unknown> = {}
+    Object.entries(value as Record<string, unknown>).forEach(([key, val]) => {
+      if (val === undefined) return
+      result[key] = stripUndefinedDeep(val)
+    })
+    return result as T
+  }
+
+  return value
+}
+
 function generateId(): string {
   const year = new Date().getFullYear()
   const rand = Math.floor(Math.random() * 100000).toString().padStart(5, '0')
@@ -35,12 +54,12 @@ export const incidentReportsService = {
   async save(report: Partial<FacilityIncidentReport> & { id?: string }): Promise<FacilityIncidentReport> {
     const id = report.id || generateId()
     const now = new Date().toISOString()
-    const data = {
+    const data = stripUndefinedDeep({
       ...report,
       id,
       updatedAt: now,
       createdAt: report.createdAt || now,
-    }
+    })
     await setDoc(doc(db, COLLECTION, id), data, { merge: true })
     const snap = await getDoc(doc(db, COLLECTION, id))
     return { id: snap.id, ...snap.data() } as FacilityIncidentReport

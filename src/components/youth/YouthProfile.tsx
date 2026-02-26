@@ -24,6 +24,8 @@ import { EducationProfileTab } from "./EducationProfileTab";
 import { MedicalProfileTab } from "./MedicalProfileTab";
 import { MentalHealthProfileTab } from "./MentalHealthProfileTab";
 import { SuccessPlan } from "@/components/planning/SuccessPlan";
+import { RealColorsAssessment } from "@/components/assessment/RealColorsAssessment";
+import { RiskAssessment } from "@/components/assessment/RiskAssessment";
 import { EditYouthDialog } from "./EditYouthDialog";
 import { DischargeDialog } from "./DischargeDialog";
 import { MonthlyShiftAverage } from "./MonthlyShiftAverage";
@@ -184,14 +186,16 @@ export const YouthProfile = ({ youth, onBack, onYouthUpdated }: YouthProfileProp
 
         <CardContent className="p-6">
           <Tabs defaultValue="overview" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-7">
+            <TabsList className="grid w-full grid-cols-9">
               <TabsTrigger value="overview">Overview</TabsTrigger>
               <TabsTrigger value="personal">Personal</TabsTrigger>
               <TabsTrigger value="background">Background</TabsTrigger>
               <TabsTrigger value="education">Education</TabsTrigger>
               <TabsTrigger value="medical">Medical</TabsTrigger>
               <TabsTrigger value="mental-health">Mental Health</TabsTrigger>
+              <TabsTrigger value="personality">Personality</TabsTrigger>
               <TabsTrigger value="service-plan">Service Plan</TabsTrigger>
+              <TabsTrigger value="hyrna">HYRNA</TabsTrigger>
             </TabsList>
 
             <TabsContent value="overview" className="space-y-6">
@@ -223,8 +227,16 @@ export const YouthProfile = ({ youth, onBack, onYouthUpdated }: YouthProfileProp
               <MentalHealthProfileTab youth={youth} onYouthUpdated={onYouthUpdated} />
             </TabsContent>
 
+            <TabsContent value="personality">
+              <RealColorsAssessment selectedYouth={youth} />
+            </TabsContent>
+
             <TabsContent value="service-plan">
               <SuccessPlan youthId={youth.id} youth={youth} />
+            </TabsContent>
+
+            <TabsContent value="hyrna">
+              <RiskAssessment youthId={youth.id} youth={youth} />
             </TabsContent>
           </Tabs>
         </CardContent>

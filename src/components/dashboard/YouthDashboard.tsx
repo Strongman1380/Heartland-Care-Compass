@@ -12,7 +12,6 @@ import { YouthProfile } from "@/components/youth/YouthProfile";
 import { BehaviorCard } from "@/components/behavior/BehaviorCard";
 import { ProgressNotes } from "@/components/notes/ProgressNotes";
 import { BehaviorAnalysis } from "@/components/analysis/BehaviorAnalysis";
-import { RiskAssessment } from "@/components/assessment/RiskAssessment";
 import { KpiDashboard } from "@/components/dashboard/KpiDashboard";
 import { ReportCenter } from "@/components/reports/ReportCenter";
 
@@ -145,7 +144,6 @@ export const YouthDashboard = ({ youthId }: YouthDashboardProps) => {
           <TabsTrigger value="behavior">Daily Points</TabsTrigger>
           <TabsTrigger value="notes">Case Notes</TabsTrigger>
           <TabsTrigger value="analysis">Behavior Analysis</TabsTrigger>
-          <TabsTrigger value="assessment">Risk Assessment</TabsTrigger>
           <TabsTrigger value="kpi">Dashboard</TabsTrigger>
           <TabsTrigger value="reports">Reports</TabsTrigger>
         </TabsList>
@@ -177,14 +175,6 @@ export const YouthDashboard = ({ youthId }: YouthDashboardProps) => {
             return <BehaviorAnalysis youthId={youth.id} youth={youth} />;
           })()}
         </TabsContent>
-        
-        <TabsContent value="assessment">
-          {(() => {
-            console.log("Rendering RiskAssessment tab");
-            return <RiskAssessment youthId={youth.id} youth={youth} />;
-          })()}
-        </TabsContent>
-        
         
         <TabsContent value="kpi">
           {(() => {

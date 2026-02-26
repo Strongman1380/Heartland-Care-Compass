@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   AlertTriangle,
   BookOpen,
@@ -486,14 +487,6 @@ const STATUS_COLORS: Record<string, string> = {
   actioned: "bg-teal-100 text-teal-800 border-teal-300",
 };
 
-const ARCHIVE_REASON_OPTIONS = [
-  "Did not interview",
-  "Referral not accepted due to:",
-  "Accepted into program pending PO approval",
-  "Duplicate referral",
-  "Other",
-];
-
 const colorMap: Record<string, string> = {
   blue: "bg-blue-50 border-blue-200 text-blue-800",
   amber: "bg-amber-50 border-amber-200 text-amber-800",
@@ -667,17 +660,18 @@ export const ReferralTab = () => {
 
   const [expandedReferralId, setExpandedReferralId] = useState<string | null>(null);
 
-  const [editingInterviewId, setEditingInterviewId] = useState<string | null>(null);
+  const [editingInterviewTarget, setEditingInterviewTarget] = useState<ReferralHistoryItem | null>(null);
   const [interviewReport, setInterviewReport] = useState("");
   const [directorSummary, setDirectorSummary] = useState("");
   const [editStatus, setEditStatus] = useState("interview_scheduled");
   const [savingInterview, setSavingInterview] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null);
-  const [archiveTargetId, setArchiveTargetId] = useState<string | null>(null);
-  const [archiveReason, setArchiveReason] = useState(ARCHIVE_REASON_OPTIONS[0]);
-  const [archiveReasonDetail, setArchiveReasonDetail] = useState("");
   const [archivingId, setArchivingId] = useState<string | null>(null);
+  const [selectedReferralKeys, setSelectedReferralKeys] = useState<Set<string>>(new Set());
+  const [bulkStatus, setBulkStatus] = useState("no_change");
+  const [bulkPriority, setBulkPriority] = useState("no_change");
+  const [isBulkApplying, setIsBulkApplying] = useState(false);
 
   const parseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -882,29 +876,50 @@ export const ReferralTab = () => {
     }
   };
 
+  const toReferralLookup = (item: ReferralHistoryItem) => ({
+    id: item.id || null,
+    created_at: item.createdAt || null,
+    referral_name: item.referralName || null,
+    staff_name: item.staff || null,
+  });
+  const referralRowKey = (item: ReferralHistoryItem) =>
+    item.id || `${item.createdAt}__${item.referralName}__${item.staff}__${item.referralSource}`;
+  const sameReferral = (a: ReferralHistoryItem, b: ReferralHistoryItem) =>
+    a.id === b.id &&
+    a.createdAt === b.createdAt &&
+    a.referralName === b.referralName &&
+    a.staff === b.staff;
+
   const openInterviewEditor = (item: ReferralHistoryItem) => {
-    if (!item.id) {
-      toast.error("This referral is missing an ID and cannot be edited. Please refresh and try again.");
-      return;
-    }
-    setEditingInterviewId(item.id);
+    setEditingInterviewTarget(item);
     setInterviewReport(item.interviewReport || "");
     setDirectorSummary(item.directorSummary || "");
     setEditStatus(item.status || "reviewed");
   };
 
   const saveInterviewUpdate = async () => {
-    if (!editingInterviewId) return;
+    if (!editingInterviewTarget) return;
     try {
       setSavingInterview(true);
-      await referralNotesService.update(editingInterviewId, {
+      await referralNotesService.update(toReferralLookup(editingInterviewTarget), {
         interview_report: interviewReport.trim() || null,
         director_summary: directorSummary.trim() || null,
         status: editStatus,
       });
       toast.success("Interview update saved");
-      await loadReferralHistory();
-      setEditingInterviewId(null);
+      setHistory((prev) =>
+        prev.map((h) =>
+          sameReferral(h, editingInterviewTarget)
+            ? {
+                ...h,
+                interviewReport: interviewReport.trim(),
+                directorSummary: directorSummary.trim(),
+                status: editStatus,
+              }
+            : h
+        )
+      );
+      setEditingInterviewTarget(null);
       setInterviewReport("");
       setDirectorSummary("");
     } catch (error) {
@@ -916,25 +931,33 @@ export const ReferralTab = () => {
   };
 
   const setArchived = async (
-    id: string,
+    item: ReferralHistoryItem,
     archived: boolean,
     reason?: string | null,
     reasonDetail?: string | null
   ) => {
-    if (!id) {
-      toast.error("This referral is missing an ID and cannot be archived.");
-      return;
-    }
     try {
-      if (archived) setArchivingId(id);
-      await referralNotesService.update(id, {
+      if (archived) setArchivingId(item.id || item.createdAt);
+      await referralNotesService.update(toReferralLookup(item), {
         archived,
         archived_at: archived ? new Date().toISOString() : null,
         archive_reason: archived ? (reason || null) : null,
         archive_reason_detail: archived ? (reasonDetail || null) : null,
       });
+      setHistory((prev) =>
+        prev.map((h) =>
+          sameReferral(h, item)
+            ? {
+                ...h,
+                archived,
+                archivedAt: archived ? new Date().toISOString() : "",
+                archiveReason: archived ? reason || "" : "",
+                archiveReasonDetail: archived ? reasonDetail || "" : "",
+              }
+            : h
+        )
+      );
       toast.success(archived ? "Referral archived" : "Referral restored");
-      await loadReferralHistory();
     } catch (error) {
       const msg = error instanceof Error ? error.message : "Failed to update archive status";
       toast.error(msg);
@@ -943,57 +966,21 @@ export const ReferralTab = () => {
     }
   };
 
-  const openArchiveReasonPrompt = (id: string) => {
-    setArchiveTargetId(id);
-    setArchiveReason(ARCHIVE_REASON_OPTIONS[0]);
-    setArchiveReasonDetail("");
-  };
-
-  const submitArchiveWithReason = async () => {
-    if (!archiveTargetId) return;
-    if (!archiveReason.trim()) {
-      toast.error("Please select an archive reason");
-      return;
-    }
-    if (
-      archiveReason === "Referral not accepted due to:" &&
-      !archiveReasonDetail.trim()
-    ) {
-      toast.error("Please enter why the referral was not accepted");
-      return;
-    }
-
+  const handleDelete = async (item: ReferralHistoryItem) => {
     try {
-      if (archiveTargetId) setArchivingId(archiveTargetId);
-      await referralNotesService.update(archiveTargetId, {
-        archived: true,
-        archived_at: new Date().toISOString(),
-        archive_reason: archiveReason || null,
-        archive_reason_detail: archiveReasonDetail.trim() || null,
-      });
-      toast.success("Referral archived");
-      await loadReferralHistory();
-      setArchiveTargetId(null);
-      setArchiveReason(ARCHIVE_REASON_OPTIONS[0]);
-      setArchiveReasonDetail("");
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : "Failed to archive referral";
-      toast.error(msg);
-    } finally {
-      setArchivingId(null);
-    }
-  };
-
-  const handleDelete = async (id: string) => {
-    if (!id) {
-      toast.error("This referral is missing an ID and cannot be deleted.");
-      return;
-    }
-    try {
-      setDeletingId(id);
-      await referralNotesService.delete(id);
+      setDeletingId(item.id || item.createdAt);
+      await referralNotesService.delete(toReferralLookup(item));
       toast.success("Referral deleted");
-      setHistory((prev) => prev.filter((h) => h.id !== id));
+      setHistory((prev) =>
+        prev.filter(
+          (h) =>
+            !(
+              h.createdAt === item.createdAt &&
+              h.referralName === item.referralName &&
+              h.staff === item.staff
+            )
+        )
+      );
     } catch (error) {
       const msg = error instanceof Error ? error.message : "Failed to delete referral";
       toast.error(msg);
@@ -1002,11 +989,12 @@ export const ReferralTab = () => {
     }
   };
 
-  const handleQuickStatusUpdate = async (id: string, newStatus: string) => {
+  const handleQuickStatusUpdate = async (item: ReferralHistoryItem, newStatus: string) => {
+    const rowKey = referralRowKey(item);
     try {
-      setUpdatingStatusId(id);
-      await referralNotesService.update(id, { status: newStatus });
-      setHistory((prev) => prev.map((h) => h.id === id ? { ...h, status: newStatus } : h));
+      setUpdatingStatusId(rowKey);
+      await referralNotesService.update(toReferralLookup(item), { status: newStatus });
+      setHistory((prev) => prev.map((h) => sameReferral(h, item) ? { ...h, status: newStatus } : h));
     } catch (error) {
       const msg = error instanceof Error ? error.message : "Failed to update status";
       toast.error(msg);
@@ -1027,6 +1015,122 @@ export const ReferralTab = () => {
     const haystack = `${item.referralName} ${item.summary} ${item.staff} ${item.priority} ${item.referralSource}`.toLowerCase();
     return haystack.includes(historySearch.toLowerCase().trim());
   });
+  const visibleHistory = filteredHistory.slice(0, visibleCount);
+  const selectedItems = history.filter((item) => selectedReferralKeys.has(referralRowKey(item)));
+  const selectedVisibleCount = visibleHistory.filter((item) => selectedReferralKeys.has(referralRowKey(item))).length;
+
+  const toggleReferralSelection = (item: ReferralHistoryItem, checked: boolean) => {
+    const key = referralRowKey(item);
+    setSelectedReferralKeys((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(key);
+      else next.delete(key);
+      return next;
+    });
+  };
+
+  const toggleVisibleSelection = (checked: boolean) => {
+    setSelectedReferralKeys((prev) => {
+      const next = new Set(prev);
+      visibleHistory.forEach((item) => {
+        const key = referralRowKey(item);
+        if (checked) next.add(key);
+        else next.delete(key);
+      });
+      return next;
+    });
+  };
+
+  const handleBulkArchive = async () => {
+    if (selectedItems.length === 0) return;
+    try {
+      setIsBulkApplying(true);
+      await Promise.all(
+        selectedItems.map((item) =>
+          referralNotesService.update(toReferralLookup(item), {
+            archived: true,
+            archived_at: new Date().toISOString(),
+            archive_reason: "Archived by staff",
+            archive_reason_detail: null,
+          })
+        )
+      );
+      setHistory((prev) =>
+        prev.map((item) =>
+          selectedReferralKeys.has(referralRowKey(item))
+            ? {
+                ...item,
+                archived: true,
+                archivedAt: new Date().toISOString(),
+                archiveReason: "Archived by staff",
+                archiveReasonDetail: "",
+              }
+            : item
+        )
+      );
+      setSelectedReferralKeys(new Set());
+      toast.success(`Archived ${selectedItems.length} referral${selectedItems.length === 1 ? "" : "s"}`);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "Bulk archive failed";
+      toast.error(msg);
+    } finally {
+      setIsBulkApplying(false);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedItems.length === 0) return;
+    if (!confirm(`Delete ${selectedItems.length} selected referral${selectedItems.length === 1 ? "" : "s"}? This cannot be undone.`)) return;
+    try {
+      setIsBulkApplying(true);
+      await Promise.all(selectedItems.map((item) => referralNotesService.delete(toReferralLookup(item))));
+      setHistory((prev) => prev.filter((item) => !selectedReferralKeys.has(referralRowKey(item))));
+      setSelectedReferralKeys(new Set());
+      toast.success(`Deleted ${selectedItems.length} referral${selectedItems.length === 1 ? "" : "s"}`);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "Bulk delete failed";
+      toast.error(msg);
+    } finally {
+      setIsBulkApplying(false);
+    }
+  };
+
+  const handleBulkEdit = async () => {
+    if (selectedItems.length === 0) return;
+    if (bulkStatus === "no_change" && bulkPriority === "no_change") {
+      toast.error("Choose a status or priority to edit");
+      return;
+    }
+
+    const updates: Record<string, string> = {};
+    if (bulkStatus !== "no_change") updates.status = bulkStatus;
+    if (bulkPriority !== "no_change") updates.priority = bulkPriority;
+
+    try {
+      setIsBulkApplying(true);
+      await Promise.all(selectedItems.map((item) => referralNotesService.update(toReferralLookup(item), updates)));
+      setHistory((prev) =>
+        prev.map((item) =>
+          selectedReferralKeys.has(referralRowKey(item))
+            ? {
+                ...item,
+                status: bulkStatus !== "no_change" ? bulkStatus : item.status,
+                priority: bulkPriority !== "no_change" ? bulkPriority : item.priority,
+              }
+            : item
+        )
+      );
+      setSelectedReferralKeys(new Set());
+      setBulkStatus("no_change");
+      setBulkPriority("no_change");
+      toast.success(`Updated ${selectedItems.length} referral${selectedItems.length === 1 ? "" : "s"}`);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "Bulk edit failed";
+      toast.error(msg);
+    } finally {
+      setIsBulkApplying(false);
+    }
+  };
 
   const kpis = useMemo(() => {
     const active = history.filter((h) => !h.archived);
@@ -1397,6 +1501,9 @@ export const ReferralTab = () => {
                 </Select>
                 <Input value={historySearch} onChange={(e) => setHistorySearch(e.target.value)} placeholder="Search referral, source, staff" />
               </div>
+              <p className="text-xs text-muted-foreground mb-3">
+                Bulk actions support archive, edit, and delete only. Interview report and view details are single-referral actions.
+              </p>
 
               {isLoadingHistory ? (
                 <p className="text-sm text-muted-foreground">Loading referral history...</p>
@@ -1404,14 +1511,98 @@ export const ReferralTab = () => {
                 <p className="text-sm text-muted-foreground">No referral notes saved yet.</p>
               ) : (
                 <div className="space-y-2">
-                  {filteredHistory.slice(0, visibleCount).map((item) => {
+                  <div className="rounded-lg border border-slate-200 p-4 bg-slate-50/70">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <label className="inline-flex items-center gap-2 text-sm font-medium text-slate-700">
+                        <input
+                          type="checkbox"
+                          checked={visibleHistory.length > 0 && selectedVisibleCount === visibleHistory.length}
+                          onChange={(e) => toggleVisibleSelection(e.target.checked)}
+                        />
+                        Select visible
+                      </label>
+                      <span className="inline-flex items-center rounded-full bg-white border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-700">
+                        {selectedReferralKeys.size} selected
+                      </span>
+                      {selectedReferralKeys.size > 0 && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 px-2 text-xs text-slate-600 hover:text-slate-900"
+                          onClick={() => setSelectedReferralKeys(new Set())}
+                        >
+                          Clear selection
+                        </Button>
+                      )}
+                    </div>
+                    <div className="mt-3 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-[minmax(220px,1fr)_minmax(220px,1fr)_auto_auto_auto] gap-2">
+                      <Select value={bulkStatus} onValueChange={setBulkStatus}>
+                        <SelectTrigger className="bg-white"><SelectValue placeholder="Bulk status update" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="no_change">No status change</SelectItem>
+                          <SelectItem value="pending_interview">Pending Interview</SelectItem>
+                          <SelectItem value="interview_scheduled">Interview Scheduled</SelectItem>
+                          <SelectItem value="interviewed_yes">Interviewed - Yes</SelectItem>
+                          <SelectItem value="interviewed_no">Interviewed - No</SelectItem>
+                          <SelectItem value="already_found_placement">Already Found Placement</SelectItem>
+                          <SelectItem value="denied">Denied</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Select value={bulkPriority} onValueChange={setBulkPriority}>
+                        <SelectTrigger className="bg-white"><SelectValue placeholder="Bulk priority update" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="no_change">No priority change</SelectItem>
+                          <SelectItem value="urgent">Urgent</SelectItem>
+                          <SelectItem value="high">High</SelectItem>
+                          <SelectItem value="routine">Routine</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        variant="outline"
+                        onClick={handleBulkEdit}
+                        disabled={isBulkApplying || selectedReferralKeys.size === 0}
+                        className="whitespace-nowrap"
+                      >
+                        {isBulkApplying ? <Loader2 className="h-4 w-4 animate-spin" /> : "Apply Updates"}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={handleBulkArchive}
+                        disabled={isBulkApplying || selectedReferralKeys.size === 0}
+                        className="whitespace-nowrap"
+                      >
+                        {isBulkApplying ? <Loader2 className="h-4 w-4 animate-spin" /> : "Archive Selected"}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={handleBulkDelete}
+                        disabled={isBulkApplying || selectedReferralKeys.size === 0}
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200 whitespace-nowrap"
+                      >
+                        {isBulkApplying ? <Loader2 className="h-4 w-4 animate-spin" /> : "Delete Selected"}
+                      </Button>
+                    </div>
+                    {selectedReferralKeys.size === 0 && (
+                      <p className="mt-2 text-xs text-slate-500">Select one or more referrals to enable bulk actions.</p>
+                    )}
+                  </div>
+
+                  {visibleHistory.map((item) => {
                     const createdDate = new Date(item.createdAt);
                     const formattedDate = isValid(createdDate) ? format(createdDate, "MMM d, yyyy") : "-";
-                    const isExpanded = expandedReferralId === item.id;
+                    const rowKey = referralRowKey(item);
+                    const isExpanded = expandedReferralId === rowKey;
                     return (
-                    <div key={item.id} className="rounded-md border p-3">
+                    <div key={rowKey} className="rounded-md border p-3">
                       <div className="flex items-center justify-between mb-1 gap-2 flex-wrap">
-                        <span className="text-xs text-muted-foreground">{formattedDate}</span>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={selectedReferralKeys.has(rowKey)}
+                            onChange={(e) => toggleReferralSelection(item, e.target.checked)}
+                          />
+                          <span className="text-xs text-muted-foreground">{formattedDate}</span>
+                        </div>
                         <div className="flex items-center gap-1 flex-wrap">
                           <Badge variant="outline">{item.fieldCount} fields</Badge>
                           <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${STATUS_COLORS[item.status] || STATUS_COLORS.new}`}>
@@ -1436,8 +1627,8 @@ export const ReferralTab = () => {
                         <span className="text-xs text-gray-500 shrink-0">Status:</span>
                         <Select
                           value={item.status || "pending_interview"}
-                          onValueChange={(val) => handleQuickStatusUpdate(item.id, val)}
-                          disabled={updatingStatusId === item.id}
+                          onValueChange={(val) => handleQuickStatusUpdate(item, val)}
+                          disabled={updatingStatusId === rowKey}
                         >
                           <SelectTrigger className="h-7 text-xs w-[160px]">
                             <SelectValue />
@@ -1457,7 +1648,7 @@ export const ReferralTab = () => {
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => setExpandedReferralId(isExpanded ? null : item.id)}
+                          onClick={() => setExpandedReferralId(isExpanded ? null : rowKey)}
                         >
                           <Eye className="h-3.5 w-3.5 mr-1" />
                           View Details
@@ -1468,17 +1659,17 @@ export const ReferralTab = () => {
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => openArchiveReasonPrompt(item.id)}
-                            disabled={archivingId === item.id}
+                            onClick={() => setArchived(item, true, "Archived by staff", null)}
+                            disabled={archivingId === (item.id || item.createdAt)}
                           >
-                            {archivingId === item.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Archive"}
+                            {archivingId === (item.id || item.createdAt) ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Archive"}
                           </Button>
                         )}
                         {item.archived && (
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => setArchived(item.id, false)}
+                            onClick={() => setArchived(item, false)}
                           >
                             Restore
                           </Button>
@@ -1489,12 +1680,12 @@ export const ReferralTab = () => {
                           className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
                           onClick={() => {
                             if (confirm(`Delete referral for "${item.referralName}"? This cannot be undone.`)) {
-                              handleDelete(item.id);
+                              handleDelete(item);
                             }
                           }}
-                          disabled={deletingId === item.id}
+                          disabled={deletingId === (item.id || item.createdAt)}
                         >
-                          {deletingId === item.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Delete"}
+                          {deletingId === (item.id || item.createdAt) ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Delete"}
                         </Button>
                       </div>
 
@@ -1592,13 +1783,18 @@ export const ReferralTab = () => {
                 </div>
               )}
 
-              {editingInterviewId && (
-                <Card className="mt-4">
-                  <CardHeader>
-                    <CardTitle className="text-sm">Interview Report and Director Brief</CardTitle>
-                    <CardDescription>Use this after the referral interview to prepare leadership-ready notes</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
+              <Dialog
+                open={Boolean(editingInterviewTarget)}
+                onOpenChange={(open) => {
+                  if (!open) setEditingInterviewTarget(null);
+                }}
+              >
+                <DialogContent className="sm:max-w-2xl">
+                  <DialogHeader>
+                    <DialogTitle>Interview Report and Director Brief</DialogTitle>
+                    <DialogDescription>Use this after the referral interview to prepare leadership-ready notes</DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-3">
                     <div>
                       <Label>Interview Report</Label>
                       <Textarea
@@ -1636,68 +1832,12 @@ export const ReferralTab = () => {
                         <Button onClick={saveInterviewUpdate} disabled={savingInterview} className="w-full">
                           {savingInterview ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving...</> : <><Save className="h-4 w-4 mr-2" />Save Interview Update</>}
                         </Button>
-                        <Button variant="outline" onClick={() => setEditingInterviewId(null)}>Cancel</Button>
+                        <Button variant="outline" onClick={() => setEditingInterviewTarget(null)}>Cancel</Button>
                       </div>
                     </div>
-                  </CardContent>
-                </Card>
-              )}
-
-              {archiveTargetId && (
-                <Card className="mt-4 border-amber-200">
-                  <CardHeader>
-                    <CardTitle className="text-sm">Archive Referral Reason</CardTitle>
-                    <CardDescription>
-                      Select why this referral is being archived. This will be saved with the referral.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <div>
-                      <Label>Archive Reason</Label>
-                      <Select value={archiveReason} onValueChange={setArchiveReason}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          {ARCHIVE_REASON_OPTIONS.map((option) => (
-                            <SelectItem key={option} value={option}>{option}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label>Reason Details</Label>
-                      <Textarea
-                        value={archiveReasonDetail}
-                        onChange={(e) => setArchiveReasonDetail(e.target.value)}
-                        rows={3}
-                        placeholder={
-                          archiveReason === "Referral not accepted due to:"
-                            ? "Required: add the specific reason not accepted"
-                            : "Optional details"
-                        }
-                      />
-                    </div>
-                    <div className="flex gap-2">
-                      <Button onClick={submitArchiveWithReason} disabled={archivingId === archiveTargetId}>
-                        {archivingId === archiveTargetId ? (
-                          <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Archiving...</>
-                        ) : (
-                          "Archive Referral"
-                        )}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        onClick={() => {
-                          setArchiveTargetId(null);
-                          setArchiveReason(ARCHIVE_REASON_OPTIONS[0]);
-                          setArchiveReasonDetail("");
-                        }}
-                      >
-                        Cancel
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
+                  </div>
+                </DialogContent>
+              </Dialog>
             </CardContent>
           </Card>
         </div>

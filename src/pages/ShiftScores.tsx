@@ -22,7 +22,7 @@ import {
   type DomainScores,
 } from '@/utils/shiftScores'
 import type { ShiftType } from '@/integrations/firebase/shiftScoresService'
-import { behaviorPointsService } from '@/integrations/firebase/services'
+import { useAwards } from '@/contexts/AwardsContext'
 import { format, addDays, subDays, startOfWeek, endOfWeek, subWeeks, startOfMonth, endOfMonth } from 'date-fns'
 import {
   TrendingUp, TrendingDown, Minus, Save, CheckCircle2,
@@ -73,10 +73,10 @@ const ratingColor = (val: number) => {
 }
 
 const ratingBgColor = (val: number) => {
-  if (val >= 3.5) return 'bg-green-100'
-  if (val >= 3.0) return 'bg-yellow-100'
-  if (val >= 2.0) return 'bg-orange-100'
-  return 'bg-red-100'
+  if (val >= 3.5) return 'bg-green-100 dark:bg-green-900/40'
+  if (val >= 3.0) return 'bg-yellow-100 dark:bg-yellow-900/40'
+  if (val >= 2.0) return 'bg-orange-100 dark:bg-orange-900/40'
+  return 'bg-red-100 dark:bg-red-900/40'
 }
 
 const ratingLabel = (val: number) => {
@@ -90,26 +90,13 @@ const ratingLabel = (val: number) => {
 type WeeklyGridValue = { [youthId: string]: { [weekDate: string]: DomainScores } }
 type DailyGridValue = { [youthId: string]: { [dateShift: string]: DomainScores } }
 
-type AwardWinner = {
-  youthId: string;
-  name: string;
-  evalAverage: number;
-  totalPoints: number;
-  improvement?: number;
-}
-
 const ShiftScores: React.FC = () => {
   const { youths, loadYouths, loading } = useYouth()
   const { toast } = useToast()
   const today = new Date()
 
-  // Awards state
-  const [awards, setAwards] = useState<{
-    residentOfWeek: AwardWinner | null;
-    mostImprovedWeek: AwardWinner | null;
-    residentOfMonth: AwardWinner | null;
-  }>({ residentOfWeek: null, mostImprovedWeek: null, residentOfMonth: null })
-  const [calculatingAwards, setCalculatingAwards] = useState(false)
+  // Awards from shared context — no per-component recalculation
+  const { awards: contextAwards, loading: calculatingAwards, refresh: refreshAwards } = useAwards()
 
   // Weekly eval state
   const [weeklyStart, setWeeklyStart] = useState<Date>(subDays(getMonday(today), 7 * 5)) // show last 6 weeks
@@ -124,6 +111,7 @@ const ShiftScores: React.FC = () => {
   // Shared
   const [autoSaveEnabled, setAutoSaveEnabled] = useState(true)
   const [lastSaved, setLastSaved] = useState<Date | null>(null)
+  const [isSaving, setIsSaving] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
 
   // Averages state
@@ -138,6 +126,10 @@ const ShiftScores: React.FC = () => {
   // Upload
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
+
+  // Debounce refs for auto-save (prevents spamming DB on every keystroke)
+  const weeklyDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const dailyDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => { loadYouths() }, [])
 
@@ -231,7 +223,12 @@ const ShiftScores: React.FC = () => {
 
   // ── Weekly eval handlers ──
   const handleWeeklyChange = (youthId: string, weekDate: string, domain: keyof DomainScores, value: string) => {
-    const num = value === '' ? NaN : Number(value)
+    const raw = value === '' ? NaN : Number(value)
+    // Clamp to valid 0–4 range
+    const num = isNaN(raw) ? NaN : Math.min(4, Math.max(0, raw))
+    if (!isNaN(raw) && (raw < 0 || raw > 4)) {
+      toast({ title: "Invalid Score", description: "Scores must be between 0 and 4.", variant: "destructive" })
+    }
     setWeeklyGrid(prev => {
       const youthRow = { ...(prev[youthId] || {}) }
       const cell = { ...(youthRow[weekDate] || { peer: NaN, adult: NaN, investment: NaN, authority: NaN }) }
@@ -241,33 +238,53 @@ const ShiftScores: React.FC = () => {
     })
 
     if (!isNaN(num) && autoSaveEnabled) {
-      // Use functional updater to read latest state, avoiding stale closures
-      setWeeklyGrid(current => {
-        const currentCell = current[youthId]?.[weekDate] || { peer: NaN, adult: NaN, investment: NaN, authority: NaN }
-        const scores: DomainScores = { ...currentCell, [domain]: num }
-        const hasAny = Object.values(scores).some(v => !isNaN(v))
-        if (hasAny) {
-          const safeScores = {
-            peer: isNaN(scores.peer) ? null as unknown as number : scores.peer,
-            adult: isNaN(scores.adult) ? null as unknown as number : scores.adult,
-            investment: isNaN(scores.investment) ? null as unknown as number : scores.investment,
-            authority: isNaN(scores.authority) ? null as unknown as number : scores.authority,
+      // Debounce: clear any pending save and schedule a new one 400ms out
+      if (weeklyDebounceRef.current) clearTimeout(weeklyDebounceRef.current)
+      weeklyDebounceRef.current = setTimeout(() => {
+        setWeeklyGrid(current => {
+          const snapshot = current[youthId]?.[weekDate] // previous state for rollback
+          const currentCell = current[youthId]?.[weekDate] || { peer: NaN, adult: NaN, investment: NaN, authority: NaN }
+          const scores: DomainScores = { ...currentCell, [domain]: num }
+          const hasAny = Object.values(scores).some(v => !isNaN(v))
+          if (hasAny) {
+            const safeScores = {
+              peer: isNaN(scores.peer) ? null as unknown as number : scores.peer,
+              adult: isNaN(scores.adult) ? null as unknown as number : scores.adult,
+              investment: isNaN(scores.investment) ? null as unknown as number : scores.investment,
+              authority: isNaN(scores.authority) ? null as unknown as number : scores.authority,
+            }
+            setIsSaving(true)
+            upsertWeeklyEval(youthId, weekDate, safeScores, 'manual').then(() => {
+              setLastSaved(new Date())
+              setIsSaving(false)
+            }).catch(err => {
+              console.error('Auto-save weekly eval failed:', err)
+              toast({ title: "Save Failed", description: String(err), variant: "destructive" })
+              setIsSaving(false)
+              // Rollback to previous cell value
+              if (snapshot !== undefined) {
+                setWeeklyGrid(prev => {
+                  const youthRow = { ...(prev[youthId] || {}) }
+                  youthRow[weekDate] = snapshot
+                  return { ...prev, [youthId]: youthRow }
+                })
+              }
+            })
           }
-          upsertWeeklyEval(youthId, weekDate, safeScores, 'manual').then(() => {
-            setLastSaved(new Date())
-          }).catch(err => {
-            console.error('Auto-save weekly eval failed:', err)
-            toast({ title: "Save Failed", description: String(err), variant: "destructive" })
-          })
-        }
-        return current // no mutation, just reading
-      })
+          return current // no mutation, just reading
+        })
+      }, 400)
     }
   }
 
   // ── Daily shift handlers ──
   const handleDailyChange = (youthId: string, dateISO: string, shift: ShiftType, domain: keyof DomainScores, value: string) => {
-    const num = value === '' ? NaN : Number(value)
+    const raw = value === '' ? NaN : Number(value)
+    // Clamp to valid 0–4 range
+    const num = isNaN(raw) ? NaN : Math.min(4, Math.max(0, raw))
+    if (!isNaN(raw) && (raw < 0 || raw > 4)) {
+      toast({ title: "Invalid Score", description: "Scores must be between 0 and 4.", variant: "destructive" })
+    }
     const key = `${dateISO}_${shift}`
     setDailyGrid(prev => {
       const youthRow = { ...(prev[youthId] || {}) }
@@ -278,27 +295,42 @@ const ShiftScores: React.FC = () => {
     })
 
     if (!isNaN(num) && autoSaveEnabled) {
-      // Use functional updater to read latest state, avoiding stale closures
-      setDailyGrid(current => {
-        const currentCell = current[youthId]?.[key] || { peer: NaN, adult: NaN, investment: NaN, authority: NaN }
-        const scores: DomainScores = { ...currentCell, [domain]: num }
-        const hasAny = Object.values(scores).some(v => !isNaN(v))
-        if (hasAny) {
-          const safeScores = {
-            peer: isNaN(scores.peer) ? null as unknown as number : scores.peer,
-            adult: isNaN(scores.adult) ? null as unknown as number : scores.adult,
-            investment: isNaN(scores.investment) ? null as unknown as number : scores.investment,
-            authority: isNaN(scores.authority) ? null as unknown as number : scores.authority,
+      // Debounce: clear any pending save and schedule a new one 400ms out
+      if (dailyDebounceRef.current) clearTimeout(dailyDebounceRef.current)
+      dailyDebounceRef.current = setTimeout(() => {
+        setDailyGrid(current => {
+          const snapshot = current[youthId]?.[key] // previous state for rollback
+          const currentCell = current[youthId]?.[key] || { peer: NaN, adult: NaN, investment: NaN, authority: NaN }
+          const scores: DomainScores = { ...currentCell, [domain]: num }
+          const hasAny = Object.values(scores).some(v => !isNaN(v))
+          if (hasAny) {
+            const safeScores = {
+              peer: isNaN(scores.peer) ? null as unknown as number : scores.peer,
+              adult: isNaN(scores.adult) ? null as unknown as number : scores.adult,
+              investment: isNaN(scores.investment) ? null as unknown as number : scores.investment,
+              authority: isNaN(scores.authority) ? null as unknown as number : scores.authority,
+            }
+            setIsSaving(true)
+            upsertDailyShift(youthId, dateISO, shift, safeScores).then(() => {
+              setLastSaved(new Date())
+              setIsSaving(false)
+            }).catch(err => {
+              console.error('Auto-save daily shift failed:', err)
+              toast({ title: "Save Failed", description: String(err), variant: "destructive" })
+              setIsSaving(false)
+              // Rollback to previous cell value
+              if (snapshot !== undefined) {
+                setDailyGrid(prev => {
+                  const youthRow = { ...(prev[youthId] || {}) }
+                  youthRow[key] = snapshot
+                  return { ...prev, [youthId]: youthRow }
+                })
+              }
+            })
           }
-          upsertDailyShift(youthId, dateISO, shift, safeScores).then(() => {
-            setLastSaved(new Date())
-          }).catch(err => {
-            console.error('Auto-save daily shift failed:', err)
-            toast({ title: "Save Failed", description: String(err), variant: "destructive" })
-          })
-        }
-        return current // no mutation, just reading
-      })
+          return current // no mutation, just reading
+        })
+      }, 400)
     }
   }
 
@@ -346,7 +378,7 @@ const ShiftScores: React.FC = () => {
     switch (trend) {
       case 'improving': return <TrendingUp className="w-4 h-4 text-green-600" title={title} />
       case 'declining': return <TrendingDown className="w-4 h-4 text-red-600" title={title} />
-      default: return <Minus className="w-4 h-4 text-gray-500" title={title} />
+      default: return <Minus className="w-4 h-4 text-gray-500 dark:text-slate-400" title={title} />
     }
   }
 
@@ -386,101 +418,6 @@ const ShiftScores: React.FC = () => {
     }
   }
 
-  // ── Calculate Awards ──
-  const calculateAwards = async () => {
-    setCalculatingAwards(true)
-    try {
-      const today = new Date()
-      const currentWeekStart = toISO(startOfWeek(today, { weekStartsOn: 1 }))
-      const currentWeekEnd = toISO(endOfWeek(today, { weekStartsOn: 1 }))
-      const lastWeekStart = toISO(startOfWeek(subWeeks(today, 1), { weekStartsOn: 1 }))
-      const lastWeekEnd = toISO(endOfWeek(subWeeks(today, 1), { weekStartsOn: 1 }))
-      const currentMonthStart = toISO(startOfMonth(today))
-      const currentMonthEnd = toISO(endOfMonth(today))
-
-      const weekCandidates: AwardWinner[] = []
-      const monthCandidates: AwardWinner[] = []
-      const improvementCandidates: AwardWinner[] = []
-
-      for (const y of sortedYouths) {
-        // Fetch behavior points
-        const points = await behaviorPointsService.getByYouthId(y.id)
-        
-        // Current Week
-        const weekPoints = points.filter(p => p.date && p.date >= currentWeekStart && p.date <= currentWeekEnd)
-        const weekTotalPoints = weekPoints.reduce((sum, p) => sum + (p.totalPoints || 0), 0)
-        const weekEvals = await calculateCombinedAveragesForRange(y.id, currentWeekStart, currentWeekEnd)
-        const weekEvalAvg = weekEvals.overall || 0
-
-        if (weekTotalPoints > 0 || weekEvalAvg > 0) {
-          weekCandidates.push({
-            youthId: y.id,
-            name: `${y.firstName} ${y.lastName}`,
-            evalAverage: weekEvalAvg,
-            totalPoints: weekTotalPoints
-          })
-        }
-
-        // Last Week (for improvement)
-        const lastWeekEvals = await calculateCombinedAveragesForRange(y.id, lastWeekStart, lastWeekEnd)
-        const lastWeekEvalAvg = lastWeekEvals.overall || 0
-        
-        if (weekEvalAvg > 0 && lastWeekEvalAvg > 0) {
-          improvementCandidates.push({
-            youthId: y.id,
-            name: `${y.firstName} ${y.lastName}`,
-            evalAverage: weekEvalAvg,
-            totalPoints: weekTotalPoints,
-            improvement: weekEvalAvg - lastWeekEvalAvg
-          })
-        }
-
-        // Current Month
-        const monthPoints = points.filter(p => p.date && p.date >= currentMonthStart && p.date <= currentMonthEnd)
-        const monthTotalPoints = monthPoints.reduce((sum, p) => sum + (p.totalPoints || 0), 0)
-        const monthEvals = await calculateCombinedAveragesForRange(y.id, currentMonthStart, currentMonthEnd)
-        const monthEvalAvg = monthEvals.overall || 0
-
-        if (monthTotalPoints > 0 || monthEvalAvg > 0) {
-          monthCandidates.push({
-            youthId: y.id,
-            name: `${y.firstName} ${y.lastName}`,
-            evalAverage: monthEvalAvg,
-            totalPoints: monthTotalPoints
-          })
-        }
-      }
-
-      // Rank candidates
-      // Resident of the Week: Highest eval average, tie-breaker: highest points
-      weekCandidates.sort((a, b) => {
-        if (b.evalAverage !== a.evalAverage) return b.evalAverage - a.evalAverage
-        return b.totalPoints - a.totalPoints
-      })
-
-      // Most Improved: Highest improvement
-      improvementCandidates.sort((a, b) => (b.improvement || 0) - (a.improvement || 0))
-
-      // Resident of the Month: Highest points, tie-breaker: highest eval average
-      monthCandidates.sort((a, b) => {
-        if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints
-        return b.evalAverage - a.evalAverage
-      })
-
-      setAwards({
-        residentOfWeek: weekCandidates[0] || null,
-        mostImprovedWeek: improvementCandidates[0] || null,
-        residentOfMonth: monthCandidates[0] || null
-      })
-
-      toast({ title: "Awards Calculated", duration: 3000 })
-    } catch (error) {
-      console.error('Error calculating awards:', error)
-      toast({ title: "Error", description: "Failed to calculate awards.", variant: "destructive" })
-    } finally {
-      setCalculatingAwards(false)
-    }
-  }
 
   // Quote-aware CSV field splitter
   const splitCSVLine = (line: string): string[] => {
@@ -590,16 +527,37 @@ const ShiftScores: React.FC = () => {
 
       let uploaded = 0
       let skipped = 0
+      const invalidRows: string[] = []
+
       for (let i = 1; i < rows.length; i++) {
         const cols = rows[i]
         if (cols.length < 3) continue
 
         const nameVal = cols[nameIdx]
         const dateVal = cols[dateIdx]
-        const peer = clampDomain(peerIdx >= 0 ? parseFloat(cols[peerIdx]) : NaN)
-        const adult = clampDomain(adultIdx >= 0 ? parseFloat(cols[adultIdx]) : NaN)
-        const invest = clampDomain(investIdx >= 0 ? parseFloat(cols[investIdx]) : NaN)
-        const auth = clampDomain(authIdx >= 0 ? parseFloat(cols[authIdx]) : NaN)
+
+        // Parse raw values before clamping so we can detect out-of-range
+        const rawPeer = peerIdx >= 0 ? parseFloat(cols[peerIdx]) : NaN
+        const rawAdult = adultIdx >= 0 ? parseFloat(cols[adultIdx]) : NaN
+        const rawInvest = investIdx >= 0 ? parseFloat(cols[investIdx]) : NaN
+        const rawAuth = authIdx >= 0 ? parseFloat(cols[authIdx]) : NaN
+
+        const peer = clampDomain(rawPeer)
+        const adult = clampDomain(rawAdult)
+        const invest = clampDomain(rawInvest)
+        const auth = clampDomain(rawAuth)
+
+        // Detect values that were provided but out of 0–4 range
+        const outOfRange = [
+          { label: 'Peer', raw: rawPeer },
+          { label: 'Adult', raw: rawAdult },
+          { label: 'Investment', raw: rawInvest },
+          { label: 'Authority', raw: rawAuth },
+        ].filter(d => !isNaN(d.raw) && (d.raw < 0 || d.raw > 4))
+
+        if (outOfRange.length > 0) {
+          invalidRows.push(`Row ${i + 1} (${nameVal}): ${outOfRange.map(d => `${d.label}=${d.raw}`).join(', ')} out of 0–4 range — clamped`)
+        }
 
         if ([peer, adult, invest, auth].every(v => isNaN(v))) { skipped++; continue }
 
@@ -629,7 +587,17 @@ const ShiftScores: React.FC = () => {
       }
 
       const type = isDailyShift ? 'daily shift score' : 'weekly eval'
-      toast({ title: "Upload Complete", description: `Imported ${uploaded} ${type}(s).${skipped ? ` ${skipped} row(s) skipped.` : ''}`, duration: 5000 })
+      const invalidSummary = invalidRows.length > 0
+        ? ` ${invalidRows.length} row(s) had out-of-range values and were clamped to 0–4.`
+        : ''
+      toast({
+        title: "Upload Complete",
+        description: `Imported ${uploaded} ${type}(s).${skipped ? ` ${skipped} row(s) skipped.` : ''}${invalidSummary}`,
+        duration: 7000,
+      })
+      if (invalidRows.length > 0) {
+        console.warn('Import rows with out-of-range values (clamped to 0–4):\n' + invalidRows.join('\n'))
+      }
       setRefreshKey(k => k + 1)
     } catch (error) {
       console.error('Upload error:', error)
@@ -662,7 +630,7 @@ const ShiftScores: React.FC = () => {
         </div>
 
         <Tabs defaultValue="weekly" className="space-y-4">
-          <TabsList className="bg-white shadow border">
+          <TabsList className="bg-white dark:bg-slate-800 shadow border dark:border-slate-700">
             <TabsTrigger value="weekly" className="data-[state=active]:bg-red-50 data-[state=active]:text-red-800">
               Weekly Evals
             </TabsTrigger>
@@ -686,14 +654,14 @@ const ShiftScores: React.FC = () => {
               <CardHeader>
                 <CardTitle className="flex items-center justify-between">
                   <span>Resident Awards</span>
-                  <Button onClick={calculateAwards} disabled={calculatingAwards}>
+                  <Button onClick={refreshAwards} disabled={calculatingAwards}>
                     {calculatingAwards ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Calculator className="w-4 h-4 mr-2" />}
-                    Calculate Awards
+                    Refresh Awards
                   </Button>
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                   {/* Resident of the Week */}
                   <Card className="bg-blue-50 border-blue-200">
                     <CardHeader>
@@ -703,11 +671,11 @@ const ShiftScores: React.FC = () => {
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
-                      {awards.residentOfWeek ? (
+                      {contextAwards?.residentOfWeek ? (
                         <div className="space-y-2">
-                          <p className="text-2xl font-bold text-blue-900">{awards.residentOfWeek.name}</p>
-                          <p className="text-sm text-blue-700">Eval Average: {awards.residentOfWeek.evalAverage.toFixed(2)}</p>
-                          <p className="text-sm text-blue-700">Total Points: {awards.residentOfWeek.totalPoints}</p>
+                          <p className="text-2xl font-bold text-blue-900">{contextAwards.residentOfWeek.name}</p>
+                          <p className="text-sm text-blue-700">Eval Average: {contextAwards.residentOfWeek.evalAverage.toFixed(2)}</p>
+                          <p className="text-sm text-blue-700">Total Points: {contextAwards.residentOfWeek.totalPoints}</p>
                         </div>
                       ) : (
                         <p className="text-sm text-blue-600 italic">Click calculate to determine winner</p>
@@ -715,20 +683,20 @@ const ShiftScores: React.FC = () => {
                     </CardContent>
                   </Card>
 
-                  {/* Most Improved */}
+                  {/* Most Improved Resident */}
                   <Card className="bg-green-50 border-green-200">
                     <CardHeader>
                       <CardTitle className="text-green-800 flex items-center gap-2">
                         <TrendingUp className="w-5 h-5" />
-                        Most Improved (Week)
+                        Most Improved Resident
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
-                      {awards.mostImprovedWeek ? (
+                      {contextAwards?.mostImprovedWeek ? (
                         <div className="space-y-2">
-                          <p className="text-2xl font-bold text-green-900">{awards.mostImprovedWeek.name}</p>
-                          <p className="text-sm text-green-700">Improvement: +{awards.mostImprovedWeek.improvement?.toFixed(2)}</p>
-                          <p className="text-sm text-green-700">Current Avg: {awards.mostImprovedWeek.evalAverage.toFixed(2)}</p>
+                          <p className="text-2xl font-bold text-green-900">{contextAwards.mostImprovedWeek.name}</p>
+                          <p className="text-sm text-green-700">Improvement: +{contextAwards.mostImprovedWeek.improvement?.toFixed(2)}</p>
+                          <p className="text-sm text-green-700">Current Avg: {contextAwards.mostImprovedWeek.evalAverage.toFixed(2)}</p>
                         </div>
                       ) : (
                         <p className="text-sm text-green-600 italic">Click calculate to determine winner</p>
@@ -745,11 +713,11 @@ const ShiftScores: React.FC = () => {
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
-                      {awards.residentOfMonth ? (
+                      {contextAwards?.residentOfMonth ? (
                         <div className="space-y-2">
-                          <p className="text-2xl font-bold text-purple-900">{awards.residentOfMonth.name}</p>
-                          <p className="text-sm text-purple-700">Total Points: {awards.residentOfMonth.totalPoints}</p>
-                          <p className="text-sm text-purple-700">Eval Average: {awards.residentOfMonth.evalAverage.toFixed(2)}</p>
+                          <p className="text-2xl font-bold text-purple-900">{contextAwards.residentOfMonth.name}</p>
+                          <p className="text-sm text-purple-700">Total Points: {contextAwards.residentOfMonth.totalPoints}</p>
+                          <p className="text-sm text-purple-700">Eval Average: {contextAwards.residentOfMonth.evalAverage.toFixed(2)}</p>
                         </div>
                       ) : (
                         <p className="text-sm text-purple-600 italic">Click calculate to determine winner</p>
@@ -768,7 +736,11 @@ const ShiftScores: React.FC = () => {
                 <CardTitle className="flex items-center justify-between flex-wrap gap-3">
                   <div className="flex items-center gap-3">
                     <span>Weekly Evaluation Scores</span>
-                    {lastSaved && (
+                    {isSaving ? (
+                      <span className="text-sm font-normal text-blue-600 flex items-center gap-1">
+                        <RefreshCw className="w-4 h-4 animate-spin" /> Saving...
+                      </span>
+                    ) : lastSaved && (
                       <span className="text-sm font-normal text-green-600 flex items-center gap-1">
                         <CheckCircle2 className="w-4 h-4" /> Saved {format(lastSaved, 'h:mm a')}
                       </span>
@@ -790,7 +762,7 @@ const ShiftScores: React.FC = () => {
                     <Button onClick={handleManualSaveWeekly} size="sm" className="bg-red-600 hover:bg-red-700">
                       <Save className="w-4 h-4 mr-1" /> Save All
                     </Button>
-                    <label className="text-sm text-gray-600 flex items-center gap-1 ml-2">
+                    <label className="text-sm text-gray-600 dark:text-slate-400 flex items-center gap-1 ml-2">
                       <input type="checkbox" checked={autoSaveEnabled} onChange={e => setAutoSaveEnabled(e.target.checked)} className="rounded" />
                       Auto-save
                     </label>
@@ -798,22 +770,22 @@ const ShiftScores: React.FC = () => {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="mb-2 text-xs text-gray-500">
+                <div className="mb-2 text-xs text-gray-500 dark:text-slate-400">
                   4 Domains: Peer Interaction, Adult Interaction, Investment Level, Dealing w/ Authority. Scale 0-4.
                 </div>
 
                 {/* One card per youth with their weekly scores */}
                 <div className="space-y-4">
                   {loading ? (
-                    <p className="text-center text-gray-500 py-8">Loading youths...</p>
+                    <p className="text-center text-gray-500 dark:text-slate-400 py-8">Loading youths...</p>
                   ) : sortedYouths.length === 0 ? (
-                    <p className="text-center text-gray-500 py-8">No youths found.</p>
+                    <p className="text-center text-gray-500 dark:text-slate-400 py-8">No youths found.</p>
                   ) : (
                     sortedYouths.map(y => {
                       const stats = youthStats.get(y.id)
                       return (
                         <div key={y.id} className="border rounded-lg overflow-hidden">
-                          <div className="bg-gray-50 px-3 py-2 flex items-center justify-between">
+                          <div className="bg-gray-50 dark:bg-slate-800 px-3 py-2 flex items-center justify-between">
                             <span className="font-semibold text-sm">{y.firstName} {y.lastName}</span>
                             <div className="flex items-center gap-3 text-xs">
                               {stats && (
@@ -833,7 +805,7 @@ const ShiftScores: React.FC = () => {
                                 {weeklyDates.map(wd => <col key={wd} style={{ width: '72px' }} />)}
                                 <col style={{ width: '60px' }} />
                               </colgroup>
-                              <thead className="bg-gray-50/50">
+                              <thead className="bg-gray-50/50 dark:bg-slate-800/50">
                                 <tr>
                                   <th className="text-left px-2 py-1.5">Domain</th>
                                   {weeklyDates.map(wd => (
@@ -847,7 +819,7 @@ const ShiftScores: React.FC = () => {
                               <tbody>
                                 {DOMAINS.map(d => (
                                   <tr key={d.key} className="border-t">
-                                    <td className="px-2 py-1 font-medium text-gray-700">{d.short}</td>
+                                    <td className="px-2 py-1 font-medium text-gray-700 dark:text-slate-300">{d.short}</td>
                                     {weeklyDates.map(wd => {
                                       const val = weeklyGrid[y.id]?.[wd]?.[d.key]
                                       return (
@@ -874,8 +846,8 @@ const ShiftScores: React.FC = () => {
                                   </tr>
                                 ))}
                                 {/* Overall row */}
-                                <tr className="border-t bg-gray-50/50">
-                                  <td className="px-2 py-1 font-bold text-gray-800">Overall</td>
+                                <tr className="border-t bg-gray-50/50 dark:bg-slate-800/50">
+                                  <td className="px-2 py-1 font-bold text-gray-800 dark:text-slate-200">Overall</td>
                                   {weeklyDates.map(wd => {
                                     const overall = getWeeklyCellOverall(y.id, wd)
                                     return (
@@ -909,7 +881,18 @@ const ShiftScores: React.FC = () => {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center justify-between flex-wrap gap-3">
-                  <span>Daily Shift Scores</span>
+                  <div className="flex items-center gap-3">
+                    <span>Daily Shift Scores</span>
+                    {isSaving ? (
+                      <span className="text-sm font-normal text-blue-600 flex items-center gap-1">
+                        <RefreshCw className="w-4 h-4 animate-spin" /> Saving...
+                      </span>
+                    ) : lastSaved && (
+                      <span className="text-sm font-normal text-green-600 flex items-center gap-1">
+                        <CheckCircle2 className="w-4 h-4" /> Saved {format(lastSaved, 'h:mm a')}
+                      </span>
+                    )}
+                  </div>
                   <div className="flex items-center gap-2 flex-wrap">
                     <Button variant="outline" size="sm" onClick={() => setDailyWeekStart(prev => addDays(prev, -7))}>
                       <ChevronLeft className="w-4 h-4" />
@@ -940,7 +923,7 @@ const ShiftScores: React.FC = () => {
                   ))}
                 </div>
 
-                <div className="text-sm font-medium text-gray-700 mb-3">
+                <div className="text-sm font-medium text-gray-700 dark:text-slate-300 mb-3">
                   Week: {format(dailyWeekStart, 'MMM dd')} - {format(addDays(dailyWeekStart, 6), 'MMM dd, yyyy')} | {SHIFTS.find(s => s.key === activeShift)?.label} Shift
                 </div>
 
@@ -948,7 +931,7 @@ const ShiftScores: React.FC = () => {
                 <div className="space-y-4">
                   {sortedYouths.map(y => (
                     <div key={y.id} className="border rounded-lg overflow-hidden">
-                      <div className="bg-gray-50 px-3 py-2 font-semibold text-sm">{y.firstName} {y.lastName}</div>
+                      <div className="bg-gray-50 dark:bg-slate-800 px-3 py-2 font-semibold text-sm">{y.firstName} {y.lastName}</div>
                       <div className="overflow-auto">
                         <table className="text-xs sm:text-sm w-full table-fixed" style={{ minWidth: '500px' }}>
                           <colgroup>
@@ -961,7 +944,7 @@ const ShiftScores: React.FC = () => {
                               {dailyDates.map((iso, idx) => (
                                 <th key={iso} className={`text-center px-1 py-1.5 ${toISO(today) === iso ? 'bg-yellow-50' : ''}`}>
                                   <div className="font-semibold">{WEEKDAYS[idx]}</div>
-                                  <div className="text-xs text-gray-500">{format(new Date(iso + 'T00:00:00'), 'M/d')}</div>
+                                  <div className="text-xs text-gray-500 dark:text-slate-400">{format(new Date(iso + 'T00:00:00'), 'M/d')}</div>
                                 </th>
                               ))}
                             </tr>
@@ -993,7 +976,7 @@ const ShiftScores: React.FC = () => {
                   ))}
                 </div>
 
-                <div className="text-xs text-gray-500 mt-3">
+                <div className="text-xs text-gray-500 dark:text-slate-400 mt-3">
                   Enter 0-4 scores per domain, per day, per shift. Scores auto-save and feed into weekly/monthly/duration averages.
                 </div>
               </CardContent>
@@ -1063,11 +1046,11 @@ const ShiftScores: React.FC = () => {
                 </div>
 
                 {avgMode === 'duration' && (
-                  <p className="text-sm text-gray-600">Averages from admission date to today. Defaults to last 90 days if no admission date.</p>
+                  <p className="text-sm text-gray-600 dark:text-slate-400">Averages from admission date to today. Defaults to last 90 days if no admission date.</p>
                 )}
 
                 {averageResults.size > 0 && (
-                  <div className="overflow-auto border rounded-lg bg-white">
+                  <div className="overflow-auto border rounded-lg bg-white dark:bg-slate-900">
                     <table className="text-sm w-full table-fixed">
                       <colgroup>
                         <col style={{ minWidth: '140px' }} />
@@ -1079,7 +1062,7 @@ const ShiftScores: React.FC = () => {
                         <col style={{ width: '100px' }} />
                         <col style={{ width: '72px' }} />
                       </colgroup>
-                      <thead className="bg-gray-50">
+                      <thead className="bg-gray-50 dark:bg-slate-800">
                         <tr>
                           <th className="text-left px-3 py-2">Youth</th>
                           <th className="text-center px-2 py-2">Peer</th>
@@ -1096,7 +1079,7 @@ const ShiftScores: React.FC = () => {
                           const r = averageResults.get(y.id)
                           if (!r) return null
                           return (
-                            <tr key={y.id} className="border-t hover:bg-gray-50">
+                            <tr key={y.id} className="border-t hover:bg-gray-50 dark:hover:bg-slate-800">
                               <td className="px-3 py-2 font-medium">{y.firstName} {y.lastName}</td>
                               <td className="px-2 py-2 text-center">{r.peer !== null ? <span className={ratingColor(r.peer)}>{r.peer.toFixed(1)}</span> : '-'}</td>
                               <td className="px-2 py-2 text-center">{r.adult !== null ? <span className={ratingColor(r.adult)}>{r.adult.toFixed(1)}</span> : '-'}</td>
@@ -1112,7 +1095,7 @@ const ShiftScores: React.FC = () => {
                                   </span>
                                 )}
                               </td>
-                              <td className="px-2 py-2 text-center text-gray-500">{r.totalEntries}</td>
+                              <td className="px-2 py-2 text-center text-gray-500 dark:text-slate-400">{r.totalEntries}</td>
                             </tr>
                           )
                         })}
@@ -1122,8 +1105,8 @@ const ShiftScores: React.FC = () => {
                 )}
 
                 {averageResults.size === 0 && (
-                  <div className="text-center py-8 text-gray-500">
-                    <Calendar className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                  <div className="text-center py-8 text-gray-500 dark:text-slate-400">
+                    <Calendar className="w-12 h-12 mx-auto mb-3 text-gray-300 dark:text-slate-600" />
                     <p>Select a time range and click Calculate to see domain averages.</p>
                   </div>
                 )}
@@ -1149,14 +1132,14 @@ const ShiftScores: React.FC = () => {
                       ? <><RefreshCw className="w-4 h-4 mr-2 animate-spin" />Uploading...</>
                       : <><FileSpreadsheet className="w-4 h-4 mr-2" />Choose Excel or CSV File</>}
                   </Button>
-                  <span className="text-sm text-gray-500">Accepts .xlsx, .xls, .csv</span>
+                  <span className="text-sm text-gray-500 dark:text-slate-400">Accepts .xlsx, .xls, .csv</span>
                 </div>
 
                 {/* Weekly Eval Format */}
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-2">
                   <h4 className="font-medium text-blue-800">Weekly Eval Format</h4>
                   <p className="text-sm text-blue-700">For weekly evaluations, use columns: Name, Date, and the 4 domain scores.</p>
-                  <div className="bg-white rounded p-3 font-mono text-xs text-gray-700 overflow-auto">
+                  <div className="bg-white dark:bg-slate-900 rounded p-3 font-mono text-xs text-gray-700 dark:text-slate-300 overflow-auto">
                     <div className="font-bold">Youth Name,Date,Peer Interaction,Adult Interaction,Investment Level,Dealing w/authority</div>
                     <div>Chance Thaller,2025-08-06,3.3,3,2.7,3.3</div>
                     <div>DAGEN DICKEY,2025-09-03,3.7,3.5,3.3,3.7</div>
@@ -1167,7 +1150,7 @@ const ShiftScores: React.FC = () => {
                 <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 space-y-2">
                   <h4 className="font-medium text-amber-800">Daily Shift Score Format</h4>
                   <p className="text-sm text-amber-700">For daily shift scores, add a <strong>Shift</strong> column. The file will auto-detect as daily shift data.</p>
-                  <div className="bg-white rounded p-3 font-mono text-xs text-gray-700 overflow-auto">
+                  <div className="bg-white dark:bg-slate-900 rounded p-3 font-mono text-xs text-gray-700 dark:text-slate-300 overflow-auto">
                     <div className="font-bold">Youth Name,Date,Shift,Peer Interaction,Adult Interaction,Investment Level,Dealing w/authority</div>
                     <div>Chance Thaller,2025-08-06,Day,3.3,3,2.7,3.3</div>
                     <div>Chance Thaller,2025-08-06,Evening,3.0,2.8,2.5,3.0</div>
@@ -1177,7 +1160,7 @@ const ShiftScores: React.FC = () => {
                 </div>
 
                 {/* Shared notes */}
-                <ul className="text-sm text-gray-600 space-y-1 list-disc list-inside">
+                <ul className="text-sm text-gray-600 dark:text-slate-400 space-y-1 list-disc list-inside">
                   <li><strong>Youth Name</strong>: First name, last name, or full name (case-insensitive)</li>
                   <li><strong>Date</strong>: YYYY-MM-DD, MM/DD/YYYY, or Excel date format</li>
                   <li><strong>Scores</strong>: 0-4 scale for each domain</li>
@@ -1249,11 +1232,11 @@ const ManualWeeklyDomainEntry: React.FC<{ youths: any[]; toast: any }> = ({ yout
             <col style={{ width: '140px' }} />
             {DOMAINS.map(d => <col key={d.key} style={{ width: '80px' }} />)}
           </colgroup>
-          <thead className="bg-gray-50">
+          <thead className="bg-gray-50 dark:bg-slate-800">
             <tr>
-              <th className="text-left px-3 py-2 font-medium text-gray-700">Youth</th>
+              <th className="text-left px-3 py-2 font-medium text-gray-700 dark:text-slate-300">Youth</th>
               {DOMAINS.map(d => (
-                <th key={d.key} className="text-center px-1 py-2 font-medium text-gray-700">{d.short}</th>
+                <th key={d.key} className="text-center px-1 py-2 font-medium text-gray-700 dark:text-slate-300">{d.short}</th>
               ))}
             </tr>
           </thead>

@@ -1,13 +1,14 @@
 
 import { useState, useEffect, useMemo } from "react";
+import { format, startOfWeek, endOfWeek } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { PlusCircle, User, ChevronRight, StickyNote } from "lucide-react";
+import { PlusCircle, User, ChevronRight, StickyNote, Award, TrendingUp } from "lucide-react";
 import { AddYouthDialog } from "@/components/youth/AddYouthDialog";
 import { QuickNoteDialog } from "@/components/notes/QuickNoteDialog";
 import { useYouth } from "@/hooks/useSupabase";
 import { type Youth } from "@/integrations/firebase/services";
-import { useToast } from "@/hooks/use-toast";
+import { useAwards } from "@/contexts/AwardsContext";
 
 interface YouthSelectorProps {
   onSelectYouth: (youthId: string) => void;
@@ -17,14 +18,31 @@ interface YouthSelectorProps {
 export const YouthSelector = ({ onSelectYouth, selectedYouthId }: YouthSelectorProps) => {
   const [isAddYouthDialogOpen, setIsAddYouthDialogOpen] = useState(false);
   const [quickNoteYouth, setQuickNoteYouth] = useState<Youth | null>(null);
-  const { toast } = useToast();
 
   // Use Supabase hook for youth operations
   const { youths, loading, error, loadYouths } = useYouth();
 
+  // Use shared awards context — no more per-component calculation
+  const { awards, loading: awardsLoading } = useAwards();
+
   useEffect(() => {
     loadYouths();
   }, []);
+
+  // Check if a youth is Resident of the Week
+  const isResidentOfWeek = (youthId: string): boolean => {
+    return awards?.residentOfWeek?.youthId === youthId;
+  };
+
+  // Check if a youth is Resident of the Month
+  const isResidentOfMonth = (youthId: string): boolean => {
+    return awards?.residentOfMonth?.youthId === youthId;
+  };
+
+  // Check if a youth is Most Improved Resident
+  const isMostImprovedResident = (youthId: string): boolean => {
+    return awards?.mostImprovedWeek?.youthId === youthId;
+  };
 
   // Sort youth alphabetically by last name, then first name
   const sortedYouths = useMemo(() => {
@@ -64,8 +82,97 @@ export const YouthSelector = ({ onSelectYouth, selectedYouthId }: YouthSelectorP
     );
   }
 
+  // Get week date range for display
+  const getWeekRange = () => {
+    const today = new Date();
+    const weekStart = startOfWeek(today, { weekStartsOn: 1 });
+    const weekEnd = endOfWeek(today, { weekStartsOn: 1 });
+    return `${format(weekStart, 'MMM d')} - ${format(weekEnd, 'MMM d')}`;
+  };
+
   return (
     <div className="space-y-4">
+      {/* Awards Summary */}
+      {(awardsLoading || awards) && (
+        <Card className="bg-gradient-to-r from-amber-50 to-yellow-50 border-amber-200">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg flex items-center text-amber-800">
+              <Award className="mr-2 h-5 w-5" />
+              Resident Awards - {getWeekRange()}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {/* Resident of the Week */}
+              <div className="flex items-center gap-3 p-3 bg-white dark:bg-slate-800 rounded-lg border border-amber-200 dark:border-amber-800 shadow-sm overflow-hidden">
+                <div className="h-12 w-12 shrink-0 rounded-full bg-gradient-to-br from-amber-400 to-yellow-500 flex items-center justify-center text-white">
+                  <Award className="h-6 w-6" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs text-amber-600 dark:text-amber-400 font-bold uppercase line-clamp-1">Resident of the Week</p>
+                  {awardsLoading ? (
+                    <p className="text-sm text-gray-500 dark:text-slate-400 truncate">Calculating...</p>
+                  ) : awards?.residentOfWeek ? (
+                    <>
+                      <p className="text-lg font-bold text-gray-900 dark:text-slate-100 truncate">{awards.residentOfWeek.name}</p>
+                      <p className="text-sm text-gray-500 dark:text-slate-400 truncate">
+                        {awards.residentOfWeek.evalAverage.toFixed(1)} avg • {awards.residentOfWeek.totalPoints} pts
+                      </p>
+                    </>
+                  ) : (
+                    <p className="text-sm text-gray-500 dark:text-slate-400 truncate">No eligible resident</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Resident of the Month */}
+              <div className="flex items-center gap-3 p-3 bg-white dark:bg-slate-800 rounded-lg border border-purple-200 dark:border-purple-800 shadow-sm overflow-hidden">
+                <div className="h-12 w-12 shrink-0 rounded-full bg-gradient-to-br from-purple-400 to-indigo-500 flex items-center justify-center text-white">
+                  <Award className="h-6 w-6" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs text-purple-600 dark:text-purple-400 font-bold uppercase line-clamp-1">Resident of the Month</p>
+                  {awardsLoading ? (
+                    <p className="text-sm text-gray-500 dark:text-slate-400 truncate">Calculating...</p>
+                  ) : awards?.residentOfMonth ? (
+                    <>
+                      <p className="text-lg font-bold text-gray-900 dark:text-slate-100 truncate">{awards.residentOfMonth.name}</p>
+                      <p className="text-sm text-gray-500 dark:text-slate-400 truncate">
+                        {awards.residentOfMonth.totalPoints} pts • {awards.residentOfMonth.evalAverage.toFixed(1)} avg
+                      </p>
+                    </>
+                  ) : (
+                    <p className="text-sm text-gray-500 dark:text-slate-400 truncate">No eligible resident</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Most Improved Resident */}
+              <div className="flex items-center gap-3 p-3 bg-white dark:bg-slate-800 rounded-lg border border-emerald-200 dark:border-emerald-800 shadow-sm overflow-hidden">
+                <div className="h-12 w-12 shrink-0 rounded-full bg-gradient-to-br from-emerald-400 to-green-500 flex items-center justify-center text-white">
+                  <TrendingUp className="h-6 w-6" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs text-emerald-600 dark:text-emerald-400 font-bold uppercase line-clamp-1">Most Improved</p>
+                  {awardsLoading ? (
+                    <p className="text-sm text-gray-500 dark:text-slate-400 truncate">Calculating...</p>
+                  ) : awards?.mostImprovedWeek ? (
+                    <>
+                      <p className="text-lg font-bold text-gray-900 dark:text-slate-100 truncate">{awards.mostImprovedWeek.name}</p>
+                      <p className="text-sm text-gray-500 dark:text-slate-400 truncate">
+                        +{(awards.mostImprovedWeek.improvement || 0).toFixed(2)} improvement
+                      </p>
+                    </>
+                  ) : (
+                    <p className="text-sm text-gray-500 dark:text-slate-400 truncate">No eligible resident</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <div className="flex justify-between items-center">
         <h3 className="text-lg font-medium">Select a Youth</h3>
         <Button 
@@ -81,9 +188,9 @@ export const YouthSelector = ({ onSelectYouth, selectedYouthId }: YouthSelectorP
       {youths.length === 0 ? (
         <Card className="border-dashed border-2">
           <CardContent className="flex flex-col items-center justify-center p-6">
-            <User className="h-12 w-12 text-gray-400 mb-4" />
-            <p className="text-gray-500 text-center">No youth profiles found</p>
-            <p className="text-sm text-gray-400 text-center mt-2">
+            <User className="h-12 w-12 text-gray-400 dark:text-slate-500 mb-4" />
+            <p className="text-gray-500 dark:text-slate-400 text-center">No youth profiles found</p>
+            <p className="text-sm text-gray-400 dark:text-slate-500 text-center mt-2">
               Click "Add New Youth" to create the first profile
             </p>
           </CardContent>
@@ -91,13 +198,13 @@ export const YouthSelector = ({ onSelectYouth, selectedYouthId }: YouthSelectorP
       ) : (
         <Card>
           <CardContent className="p-0">
-            <div className="divide-y divide-gray-200">
+            <div className="divide-y divide-gray-200 dark:divide-slate-700">
               {sortedYouths.map((youth) => (
                 <div
                   key={youth.id}
-                  className={`flex items-center justify-between px-4 py-3 cursor-pointer transition-colors hover:bg-gray-50 ${
+                  className={`flex items-center justify-between px-4 py-3 cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-slate-800 ${
                     selectedYouthId === youth.id
-                      ? 'bg-blue-50 border-l-4 border-blue-500'
+                      ? 'bg-blue-50 dark:bg-blue-950 border-l-4 border-blue-500'
                       : ''
                   }`}
                   onClick={() => handleYouthSelect(youth.id)}
@@ -109,13 +216,34 @@ export const YouthSelector = ({ onSelectYouth, selectedYouthId }: YouthSelectorP
                       </div>
                     </div>
                     <div className="flex-1">
-                      <h4 className="text-base font-semibold text-gray-900">
+                      <h4 className="text-base font-semibold text-gray-900 dark:text-slate-100">
                         {youth.lastName}, {youth.firstName}
                       </h4>
                       <div className="flex items-center gap-2 mt-2 flex-wrap">
+                        {/* Resident of the Week Badge */}
+                        {isResidentOfWeek(youth.id) && (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 border border-amber-300">
+                            <Award size={12} className="mr-1" /> Resident of the Week
+                          </span>
+                        )}
+
+                        {/* Resident of the Month Badge */}
+                        {isResidentOfMonth(youth.id) && (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800 border border-purple-300">
+                            <Award size={12} className="mr-1" /> Resident of the Month
+                          </span>
+                        )}
+
+                        {/* Most Improved Resident Badge */}
+                        {isMostImprovedResident(youth.id) && (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-800 border border-emerald-300">
+                            <TrendingUp size={12} className="mr-1" /> Most Improved Resident
+                          </span>
+                        )}
+
                         {/* Age Badge */}
                         {youth.age && (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800 border border-gray-300">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 dark:bg-slate-700 text-gray-800 dark:text-slate-200 border border-gray-300 dark:border-slate-600">
                             Age: {youth.age}
                           </span>
                         )}
@@ -130,10 +258,10 @@ export const YouthSelector = ({ onSelectYouth, selectedYouthId }: YouthSelectorP
                           {youth.pointTotal || 0} pts
                         </span>
 
-                        {/* Grade Badge (supports currentGrade or grade) */}
-                        {(youth.currentGrade || (youth as any).grade) && (
+                        {/* Grade Badge */}
+                        {(youth.currentGrade || youth.grade) && (
                           <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800 border border-purple-300">
-                            Grade {youth.currentGrade || (youth as any).grade}
+                            Grade {youth.currentGrade || youth.grade}
                           </span>
                         )}
                       </div>
@@ -142,7 +270,7 @@ export const YouthSelector = ({ onSelectYouth, selectedYouthId }: YouthSelectorP
                   <button
                     type="button"
                     title="Quick note"
-                    className="p-2 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors flex-shrink-0"
+                    className="p-2 rounded-md text-gray-400 dark:text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950 transition-colors flex-shrink-0"
                     onClick={(e) => {
                       e.stopPropagation();
                       setQuickNoteYouth(youth);
@@ -150,7 +278,7 @@ export const YouthSelector = ({ onSelectYouth, selectedYouthId }: YouthSelectorP
                   >
                     <StickyNote className="h-5 w-5" />
                   </button>
-                  <ChevronRight className="h-5 w-5 text-gray-400 flex-shrink-0" />
+                  <ChevronRight className="h-5 w-5 text-gray-400 dark:text-slate-500 flex-shrink-0" />
                 </div>
               ))}
             </div>

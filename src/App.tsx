@@ -21,6 +21,7 @@ import BehaviorAnalysisPage from "./pages/BehaviorAnalysisPage";
 import NotFound from "./pages/NotFound";
 import Auth from "./pages/Auth";
 import { ProtectedRoute } from "@/components/layout/ProtectedRoute";
+import { AwardsProvider } from "@/contexts/AwardsContext";
 import School from "./pages/School";
 import SchoolScores from "./pages/SchoolScores";
 import AcademicProgressDashboard from "./pages/AcademicProgressDashboard";
@@ -30,6 +31,7 @@ import IncidentReports from "./pages/IncidentReports";
 import Referrals from "./pages/Referrals";
 import ShiftScores from "./pages/ShiftScores";
 import AdminFacility from "./pages/AdminFacility";
+import AdminForms from "./pages/AdminForms";
 
 const queryClient = new QueryClient();
 
@@ -48,6 +50,7 @@ const App = () => {
       <Toaster />
       <Sonner />
       <BrowserRouter basename={import.meta.env.BASE_URL}>
+        <AwardsProvider>
         <Routes>
           <Route path="/auth" element={<Auth />} />
           <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
@@ -60,7 +63,8 @@ const App = () => {
           <Route path="/daily-points" element={<ProtectedRoute><DailyPoints /></ProtectedRoute>} />
           <Route path="/behavior-analysis" element={<ProtectedRoute><BehaviorAnalysisPage /></ProtectedRoute>} />
           <Route path="/assessment-kpi" element={<ProtectedRoute><AssessmentKPIDashboard /></ProtectedRoute>} />
-          <Route path="/admin/facility" element={<ProtectedRoute><AdminFacility /></ProtectedRoute>} />
+          <Route path="/admin/facility" element={<ProtectedRoute requireAdmin><AdminFacility /></ProtectedRoute>} />
+          <Route path="/admin/forms" element={<ProtectedRoute><AdminForms /></ProtectedRoute>} />
           <Route path="/referrals" element={<ProtectedRoute><Referrals /></ProtectedRoute>} />
 
           <Route path="/school" element={<ProtectedRoute><School /></ProtectedRoute>}>
@@ -73,9 +77,10 @@ const App = () => {
 
           <Route path="/shift-scores" element={<ProtectedRoute><ShiftScores /></ProtectedRoute>} />
           <Route path="/incident-reports" element={<ProtectedRoute><IncidentReports /></ProtectedRoute>} />
-          <Route path="/migrate-data" element={<ProtectedRoute><DataMigrationPage /></ProtectedRoute>} />
+          <Route path="/migrate-data" element={<ProtectedRoute requireAdmin><DataMigrationPage /></ProtectedRoute>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
+        </AwardsProvider>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>

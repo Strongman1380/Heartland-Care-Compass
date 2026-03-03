@@ -74,6 +74,7 @@ const navGroups: NavGroup[] = [
       { path: "/dashboard", label: "Dashboard", icon: BarChart3 },
       { path: "/assessment-kpi", label: "KPI Dashboard", icon: ClipboardList },
       { path: "/admin/facility", label: "Facility Ops", icon: Building2 },
+      { path: "/admin/forms", label: "Forms Library", icon: FileText },
       { path: "/migrate-data", label: "Data Migration", icon: Database },
     ],
   },

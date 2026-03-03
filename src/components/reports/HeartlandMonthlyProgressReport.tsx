@@ -246,7 +246,7 @@ export const HeartlandMonthlyProgressReport = ({ youth }: HeartlandMonthlyProgre
   return (
     <div className="space-y-6">
       {/* Control Panel */}
-      <Card className="no-print">
+      <Card className="heartland-monthly-print-hide">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <FileText className="h-5 w-5" />
@@ -644,7 +644,7 @@ export const HeartlandMonthlyProgressReport = ({ youth }: HeartlandMonthlyProgre
       <style dangerouslySetInnerHTML={{
         __html: `
           @media print {
-            .no-print { display: none !important; }
+            .heartland-monthly-print-hide { display: none !important; }
             .print-section {
               box-shadow: none !important;
               border: none !important;

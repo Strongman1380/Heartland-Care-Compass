@@ -176,6 +176,51 @@ export const useYouth = () => {
     }
   }
 
+  const archiveYouth = async (id: string, archivedBy: string) => {
+    try {
+      setLoading(true)
+      const youth = youths.find(y => y.id === id)
+      await youthService.archiveYouth(id, archivedBy)
+      setYouths(prev => prev.filter(y => y.id !== id))
+      if (youth) {
+        toast({
+          title: "Profile Archived",
+          description: `${youth.firstName} ${youth.lastName}'s profile has been archived.`,
+        })
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to archive youth profile'
+      toast({ title: "Error", description: errorMessage, variant: "destructive" })
+      throw err
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const restoreYouth = async (id: string) => {
+    try {
+      setLoading(true)
+      await youthService.restoreYouth(id)
+      toast({ title: "Profile Restored", description: "Youth profile has been restored to active." })
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to restore youth profile'
+      toast({ title: "Error", description: errorMessage, variant: "destructive" })
+      throw err
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const getArchivedYouths = async () => {
+    try {
+      return await youthService.getArchived()
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to load archived profiles'
+      toast({ title: "Error", description: errorMessage, variant: "destructive" })
+      return []
+    }
+  }
+
   return {
     youths,
     loading,
@@ -185,6 +230,9 @@ export const useYouth = () => {
     updateYouth,
     deleteYouth,
     dischargeYouth,
+    archiveYouth,
+    restoreYouth,
+    getArchivedYouths,
     searchYouths
   }
 }

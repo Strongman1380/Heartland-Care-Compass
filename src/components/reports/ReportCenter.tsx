@@ -9,6 +9,7 @@ import { useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { CourtReport } from "./CourtReport";
 import { DpnReport } from "./DpnReport";
+import { ProgressEvaluationReport, type EvalReportType } from "./ProgressEvaluationReport";
 import { summarizeReport } from "@/lib/aiClient";
 import { getBehaviorPointsByYouth, getDailyRatingsByYouth } from "@/lib/api";
 import { getScoresByYouth } from "@/utils/schoolScores";
@@ -26,6 +27,7 @@ export const ReportCenter = ({ youthId, youth }: ReportCenterProps) => {
   const exportRef = useRef<HTMLDivElement>(null);
   const [showCourtReport, setShowCourtReport] = useState(false);
   const [dpnVariant, setDpnVariant] = useState<null | 'weekly' | 'biweekly' | 'monthly'>(null);
+  const [evalVariant, setEvalVariant] = useState<EvalReportType | null>(null);
   const [formKey, setFormKey] = useState(0);
   
   const handleGenerateReport = async (options: ReportOptions) => {
@@ -43,6 +45,14 @@ export const ReportCenter = ({ youthId, youth }: ReportCenterProps) => {
       }
       if (['dpnWeekly','dpnBiWeekly','dpnMonthly'].includes(options.reportType as any)) {
         setDpnVariant(options.reportType === 'dpnWeekly' ? 'weekly' : options.reportType === 'dpnBiWeekly' ? 'biweekly' : 'monthly');
+        setIsGenerating(false);
+        return;
+      }
+      if (['evalWeekly','evalMonthly'].includes(options.reportType as any)) {
+        const variantMap: Record<string, EvalReportType> = {
+          evalWeekly: 'weekly', evalMonthly: 'monthly',
+        };
+        setEvalVariant(variantMap[options.reportType]);
         setIsGenerating(false);
         return;
       }
@@ -171,6 +181,16 @@ export const ReportCenter = ({ youthId, youth }: ReportCenterProps) => {
               setDpnVariant(null);
               setFormKey(k => k + 1);
             }}
+          />
+        </div>
+      )}
+
+      {evalVariant && (
+        <div className="space-y-4">
+          <ProgressEvaluationReport
+            key={`${youth?.id || 'eval'}-${evalVariant}`}
+            youth={youth}
+            variant={evalVariant}
           />
         </div>
       )}

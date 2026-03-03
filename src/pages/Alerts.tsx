@@ -13,7 +13,9 @@ import { useEffect, useState } from "react";
 import { alertsService } from '@/integrations/firebase/alertsService'
 import { toast } from "sonner";
 import { useYouth } from "@/hooks/useSupabase";
-import { type Youth } from "@/integrations/firebase/services";
+import { type Youth, behaviorPointsService, dailyRatingsService, youthService } from "@/integrations/firebase/services";
+import { canLevelUp, getCurrentLevel } from "@/utils/levelSystem";
+import { RefreshCw } from "lucide-react";
 
 type Alert = {
   id: string;
@@ -129,6 +131,7 @@ const Alerts = () => {
   const [isTemplateDialogOpen, setIsTemplateDialogOpen] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<AlertTemplate | null>(null);
+  const [isScanning, setIsScanning] = useState(false);
   const [newAlert, setNewAlert] = useState<{
     type: "warning" | "info" | "urgent";
     title: string;
@@ -279,6 +282,176 @@ const Alerts = () => {
       priority: "medium",
       category: ""
     });
+  };
+
+  const scanForSystemAlerts = async () => {
+    setIsScanning(true);
+    try {
+      const today = new Date().toISOString().split("T")[0];
+      const allYouths = await youthService.getAll();
+      const generated: Omit<Alert, "id" | "createdAt">[] = [];
+
+      await Promise.all(
+        allYouths.map(async (youth: Youth) => {
+          const name = `${youth.firstName} ${youth.lastName}`;
+          const levelIndex = youth.level ?? 0;
+          const levelData = getCurrentLevel(levelIndex);
+
+          // 1. Missing behavior points today
+          const todayPoints = await behaviorPointsService.getByDate(youth.id, today);
+          if (!todayPoints) {
+            generated.push({
+              type: "info",
+              title: "Missing Daily Points",
+              description: `No behavior points recorded for ${name} today (${today}). Points entry may be overdue.`,
+              timestamp: "Just now",
+              youth: name,
+              youthId: youth.id,
+              priority: "medium",
+              category: "Behavior",
+              resolved: false,
+            });
+          }
+
+          // 2. Low domain score (any domain = 0) in most recent daily rating
+          const recentRatings = await dailyRatingsService.getByYouthId(youth.id, 1);
+          if (recentRatings.length > 0) {
+            const r = recentRatings[0];
+            const zeroDomains: string[] = [];
+            if (r.peerInteraction === 0) zeroDomains.push("Peer Interaction");
+            if (r.adultInteraction === 0) zeroDomains.push("Adult Interaction");
+            if (r.investmentLevel === 0) zeroDomains.push("Investment");
+            if (r.dealAuthority === 0) zeroDomains.push("Authority");
+            if (zeroDomains.length > 0) {
+              generated.push({
+                type: "warning",
+                title: "Zero Domain Score",
+                description: `${name} scored 0 in: ${zeroDomains.join(", ")} on their most recent rating (${r.date ?? "recent"}). Review behavior documentation.`,
+                timestamp: "Just now",
+                youth: name,
+                youthId: youth.id,
+                priority: "high",
+                category: "Behavior",
+                resolved: false,
+              });
+            }
+
+            // 3. Below privilege threshold
+            const totalDomainPoints =
+              (r.peerInteraction ?? 0) +
+              (r.adultInteraction ?? 0) +
+              (r.investmentLevel ?? 0) +
+              (r.dealAuthority ?? 0);
+            const maxDomainPoints = 16;
+            // Estimate daily points as domain average scaled to typical range
+            const dailyPointsEst = Math.round((totalDomainPoints / maxDomainPoints) * (levelData.dailyPointsForPrivileges * 1.5));
+            if (totalDomainPoints < maxDomainPoints * 0.5 && levelData.dailyPointsForPrivileges > 0) {
+              generated.push({
+                type: "info",
+                title: "Below Privilege Threshold",
+                description: `${name} (${levelData.name}) scored ${totalDomainPoints}/16 domain points on their last rating — likely below the ${levelData.dailyPointsForPrivileges}-pt daily privilege requirement for their level.`,
+                timestamp: "Just now",
+                youth: name,
+                youthId: youth.id,
+                priority: "low",
+                category: "Behavior",
+                resolved: false,
+              });
+            }
+          }
+
+          // 4. Level up eligible
+          if (canLevelUp(levelIndex, youth.pointsInCurrentLevel ?? 0)) {
+            generated.push({
+              type: "info",
+              title: "Level Up Eligible",
+              description: `${name} has earned enough points to advance from ${levelData.name}. Review their record and process the level up.`,
+              timestamp: "Just now",
+              youth: name,
+              youthId: youth.id,
+              priority: "medium",
+              category: "Level",
+              resolved: false,
+            });
+          }
+
+          // 5. On subsystem
+          if (youth.subsystemActive) {
+            generated.push({
+              type: "warning",
+              title: "Active Subsystem",
+              description: `${name} is currently on subsystem. Reason: ${youth.subsystemReason ?? "Not specified"}. Points earned: ${youth.subsystemPointsEarned ?? 0}/${youth.subsystemPointsRequired ?? "?"}.`,
+              timestamp: "Just now",
+              youth: name,
+              youthId: youth.id,
+              priority: "high",
+              category: "Behavior",
+              resolved: false,
+            });
+          }
+
+          // 6. On restriction
+          if (youth.restrictionLevel && youth.restrictionLevel > 0) {
+            generated.push({
+              type: "warning",
+              title: "Active Restriction",
+              description: `${name} is on Restriction Level ${youth.restrictionLevel}. Reason: ${youth.restrictionReason ?? "Not specified"}. Progress: ${youth.restrictionPointsEarned ?? 0}/${youth.restrictionPointsRequired ?? "?"} pts.`,
+              timestamp: "Just now",
+              youth: name,
+              youthId: youth.id,
+              priority: "high",
+              category: "Safety",
+              resolved: false,
+            });
+          }
+
+          // 7. High HYRNA risk
+          if (youth.hyrnaRiskLevel && youth.hyrnaRiskLevel.toLowerCase() === "high") {
+            generated.push({
+              type: "urgent",
+              title: "High HYRNA Risk Level",
+              description: `${name} has a HIGH HYRNA risk score (${youth.hyrnaScore ?? "N/A"}). Last assessed: ${youth.hyrnaAssessmentDate ?? "Unknown"}. Ensure treatment plan reflects current risk level.`,
+              timestamp: "Just now",
+              youth: name,
+              youthId: youth.id,
+              priority: "high",
+              category: "Safety",
+              resolved: false,
+            });
+          }
+        })
+      );
+
+      if (generated.length === 0) {
+        toast.success("Scan complete — no issues found across all youth.");
+        return;
+      }
+
+      // Save each generated alert
+      for (const a of generated) {
+        await alertsService.save({ title: a.title, body: a.description, level: a.type, status: "open" });
+      }
+
+      // Reload alerts
+      const remote = await alertsService.list();
+      const mapped = remote.map((r) => ({
+        id: r.id,
+        type: (r.level === "urgent" ? "urgent" : r.level === "warning" ? "warning" : "info") as Alert["type"],
+        title: r.title,
+        description: r.body || "",
+        timestamp: "Now",
+        priority: (r.level === "urgent" ? "high" : "medium") as Alert["priority"],
+        createdAt: new Date(r.created_at),
+        resolved: r.status === "closed",
+        category: "System",
+      }));
+      setAlerts(mapped);
+      toast.success(`Scan complete — ${generated.length} alert${generated.length !== 1 ? "s" : ""} generated.`);
+    } catch (err) {
+      toast.error("Scan failed: " + (err instanceof Error ? err.message : "Unknown error"));
+    } finally {
+      setIsScanning(false);
+    }
   };
 
   const deleteAlert = async (alertId: string) => {
@@ -505,7 +678,17 @@ const Alerts = () => {
               </DialogContent>
             </Dialog>
             
-            <Button 
+            <Button
+              onClick={scanForSystemAlerts}
+              disabled={isScanning}
+              variant="outline"
+              className="border-amber-500 text-amber-700 hover:bg-amber-50"
+            >
+              <RefreshCw className={`h-4 w-4 mr-2 ${isScanning ? "animate-spin" : ""}`} />
+              {isScanning ? "Scanning..." : "Scan for Alerts"}
+            </Button>
+
+            <Button
               onClick={requestNotificationPermission}
               variant={notificationsEnabled ? "outline" : "default"}
               className={notificationsEnabled ? "border-green-500 text-green-600" : "bg-[#823131] hover:bg-[#6b2828] text-white border-[#823131]"}

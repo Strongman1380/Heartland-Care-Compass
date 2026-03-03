@@ -13,44 +13,51 @@
 - Explain your OBSERVATIONS clearly, then provide REASONING to identify the exact issue. Add console logs when needed to gather more information.
 
 
-YOUTH RESIDENTIAL MANAGEMENT SYSTEM
+Youth Behavioral Management System
 
-Core Behavioral Assessment Engine:
-- 10-level progression system with point-based advancement
-- 4-domain behavioral scoring (Peer/Adult/Investment/Authority) on 0-4 scale
-- AI-enhanced behavioral pattern analysis and risk assessment
-- Treatment goal tracking with 5-point progress scale
+Core Business Domains:
 
-Clinical Documentation System:
-- Structured case notes with auto-classification
-- Version-controlled note management ("formatVersion": "v2")
-- AI-assisted clinical narrative generation
-- Treatment effectiveness analysis with pattern recognition
+1. Behavioral Assessment Engine
+- Four-domain evaluation framework tracking peer interaction, adult interaction, investment level, and authority handling
+- Automated scoring system with AI-enhanced comment generation
+- Custom behavioral pattern recognition across multiple timeframes
+- Level progression system (10 levels + orientation) with point-based advancement
 
-Academic Performance Tracking:
-- Thursday-to-Wednesday weekly schedule
-- Custom scoring thresholds:
-  * Exceeding: 3.5-4.0
-  * Meeting: 3.0-3.4
-  * Needs Improvement: 2.0-2.9
-  * Unsatisfactory: <2.0
-- Credit accumulation with behavioral integration
-- School incident classification system
+2. Clinical Documentation System
+- Trauma-informed case note structure with AI-assisted categorization
+- Custom DPN (Daily Progress Note) workflow with automated scoring
+- Treatment plan management with goal hierarchies
+- Multi-source progress tracking integrating behavioral and academic metrics
 
-Incident Management Framework:
-- Trauma-informed reporting workflow
-- Authority notification chains
-- Medical documentation requirements
-- Evidence tracking system
-- Follow-up action management
+3. Risk Assessment Framework
+- HYRNA (Heartland Youth Risk & Needs Assessment) implementation
+- Eight-domain risk evaluation with weighted scoring algorithm
+- Automated risk level classification system
+- Treatment recommendation engine based on assessment results
+
+4. Academic Integration Platform
+- Custom Thursday-to-Wednesday academic week calculations
+- Real-time grade distribution analysis with behavioral correlation
+- Multi-dimensional student evaluation incorporating IEP status
+- Academic-behavioral trend analysis with AI-powered insights
+
+5. Incident Management System
+- Specialized facility incident workflow with severity classification
+- Role-based documentation requirements
+- Automated notification chains based on incident type
+- Clinical data protection with healthcare-specific encryption
 
 Key Integration Points:
-1. src/utils/levelSystem.ts: Core behavioral progression engine
-2. src/services/aiService.ts: Treatment analysis and risk assessment
-3. src/components/notes/EnhancedCaseNotes.tsx: Clinical documentation
-4. src/components/assessment/RiskAssessment.tsx: Multi-domain risk evaluation
+- Cross-system risk assessment synthesis
+- Behavioral-academic correlation engine
+- Treatment plan automation
+- Clinical reporting pipeline
 
-The system emphasizes behavioral health tracking, academic integration, and compliance with youth care facility requirements, using AI augmentation for decision support and pattern recognition.
+Critical File Paths:
+/src/utils/levelSystem.ts - Core level progression logic
+/src/lib/aiClient.ts - AI-powered behavioral analysis
+/src/utils/kpiCaseNoteAi.ts - Clinical note processing
+/src/services/aiService.ts - Treatment recommendation engine
 
 $END$
 

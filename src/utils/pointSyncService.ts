@@ -10,8 +10,14 @@ export class PointSyncService {
   private syncInProgress = false;
   private lastSyncTime = 0;
   private readonly SYNC_INTERVAL = 5 * 60 * 1000; // 5 minutes
+  private readonly debugLoggingEnabled = import.meta.env.DEV;
 
   private constructor() {}
+
+  private debugLog(message: string, ...args: unknown[]): void {
+    if (!this.debugLoggingEnabled) return;
+    console.log(message, ...args);
+  }
 
   static getInstance(): PointSyncService {
     if (!PointSyncService.instance) {
@@ -25,13 +31,13 @@ export class PointSyncService {
    */
   async syncAllYouthPoints(): Promise<void> {
     if (this.syncInProgress) {
-      console.log('Point sync already in progress, skipping...');
+      this.debugLog('Point sync already in progress, skipping...');
       return;
     }
 
     const now = Date.now();
     if (now - this.lastSyncTime < this.SYNC_INTERVAL) {
-      console.log('Point sync too recent, skipping...');
+      this.debugLog('Point sync too recent, skipping...');
       return;
     }
 
@@ -39,12 +45,11 @@ export class PointSyncService {
     this.lastSyncTime = now;
 
     try {
-      console.log('Starting point synchronization for all youth...');
       const youths = fetchAllYouths();
       const syncPromises = youths.map(youth => this.syncYouthPoints(youth));
       
       await Promise.all(syncPromises);
-      console.log(`Point synchronization completed for ${youths.length} youth`);
+      this.debugLog(`Point synchronization completed for ${youths.length} youth`);
     } catch (error) {
       console.error('Error during point synchronization:', error);
     } finally {
@@ -60,7 +65,7 @@ export class PointSyncService {
       const calculatedTotal = await calculateTotalPoints(youth.id);
       
       if (calculatedTotal !== youth.pointTotal) {
-        console.log(`Syncing points for ${youth.firstName} ${youth.lastName}: ${youth.pointTotal} -> ${calculatedTotal}`);
+        this.debugLog(`Syncing points for ${youth.firstName} ${youth.lastName}: ${youth.pointTotal} -> ${calculatedTotal}`);
         
         updateYouth(youth.id, { 
           pointTotal: calculatedTotal,
@@ -113,7 +118,7 @@ export class PointSyncService {
       this.syncAllYouthPoints();
     }, this.SYNC_INTERVAL);
 
-    console.log('Point sync service initialized with automatic syncing every 5 minutes');
+    this.debugLog('Point sync service initialized with automatic syncing every 5 minutes');
   }
 
   /**
@@ -152,17 +157,17 @@ export class PointSyncService {
     const discrepancies = await this.validatePointTotals();
     
     if (discrepancies.length === 0) {
-      console.log('No point discrepancies found');
+      this.debugLog('No point discrepancies found');
       return;
     }
 
-    console.log(`Fixing ${discrepancies.length} point discrepancies...`);
+    this.debugLog(`Fixing ${discrepancies.length} point discrepancies...`);
     
     for (const discrepancy of discrepancies) {
       await this.syncYouthPoints(discrepancy.youth);
     }
 
-    console.log('All point discrepancies fixed');
+    this.debugLog('All point discrepancies fixed');
   }
 }
 

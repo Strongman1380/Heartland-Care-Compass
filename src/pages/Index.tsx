@@ -35,13 +35,11 @@ const Index = () => {
 
 
   const handleYouthSelect = (youth: Youth) => {
-    console.log('Youth selected:', youth);
     setSelectedYouth(youth);
     setActiveTab("profile"); // Reset to profile tab when selecting a youth
   };
 
   const handleBackToHome = () => {
-    console.log('Back to home');
     setSelectedYouth(null);
     setActiveTab("profile");
   };
@@ -99,11 +97,6 @@ const Index = () => {
     }
   };
 
-  // Debug logging
-  useEffect(() => {
-    console.log('Index state:', { selectedYouth: selectedYouth?.firstName, activeTab, youthsCount: youths.length });
-  }, [selectedYouth, activeTab, youths.length]);
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-red-50 via-yellow-50 to-red-100">
       <Header />
@@ -122,10 +115,12 @@ const Index = () => {
           </>
         ) : selectedYouth && selectedYouth.id ? (
           <YouthDetailView
+            youths={youths}
             selectedYouth={selectedYouth}
             activeTab={activeTab}
             onTabChange={setActiveTab}
             onBackToHome={handleBackToHome}
+            onYouthSelect={handleYouthSelect}
             onYouthUpdated={(updated?) => {
               if (updated) setSelectedYouth(updated);
               loadYouths();

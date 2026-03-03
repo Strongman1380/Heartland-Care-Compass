@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from "react";
 import { Header } from "@/components/layout/Header";
 import { BehaviorCard } from "@/components/behavior/BehaviorCard";
 import { YouthSelector } from "@/components/common/YouthSelector";
+import { AwardsSection } from "@/components/common/AwardsSection";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useYouth } from "@/hooks/useSupabase";
 import { type Youth } from "@/integrations/firebase/services";
@@ -50,28 +51,43 @@ const DailyPoints = () => {
           <p className="text-red-700 text-base sm:text-lg">Track and manage daily behavior points</p>
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <div className="md:col-span-1">
-            <YouthSelector onSelectYouth={handleYouthSelect} selectedYouthId={selectedYouthId || undefined} />
+        {!selectedYouthId ? (
+          /* No youth selected — full-width: awards → controls → list */
+          <div className="space-y-6">
+            <AwardsSection />
+            <YouthSelector
+              onSelectYouth={handleYouthSelect}
+              showAwards={false}
+            />
           </div>
-          
-          <div className="md:col-span-3">
-            {isLoading ? (
-              <div className="space-y-4 p-6 border rounded-lg bg-white">
-                <Skeleton className="h-8 w-3/4" />
-                <Skeleton className="h-4 w-1/2" />
-                <div className="space-y-2">
-                  <Skeleton className="h-12 w-full" />
-                  <Skeleton className="h-12 w-full" />
-                  <Skeleton className="h-12 w-full" />
+        ) : (
+          /* Youth selected — sidebar + behavior card */
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div className="md:col-span-1">
+              <YouthSelector
+                onSelectYouth={handleYouthSelect}
+                selectedYouthId={selectedYouthId}
+                showAwards={false}
+              />
+            </div>
+            <div className="md:col-span-3">
+              {isLoading ? (
+                <div className="space-y-4 p-6 border rounded-lg bg-white">
+                  <Skeleton className="h-8 w-3/4" />
+                  <Skeleton className="h-4 w-1/2" />
+                  <div className="space-y-2">
+                    <Skeleton className="h-12 w-full" />
+                    <Skeleton className="h-12 w-full" />
+                    <Skeleton className="h-12 w-full" />
+                  </div>
+                  <Skeleton className="h-40 w-full" />
                 </div>
-                <Skeleton className="h-40 w-full" />
-              </div>
-            ) : (
-              <BehaviorCard youthId={selectedYouthId} youth={selectedYouth} />
-            )}
+              ) : (
+                <BehaviorCard youthId={selectedYouthId} youth={selectedYouth} />
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </main>
     </div>
   );

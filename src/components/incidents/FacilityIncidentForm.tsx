@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
+import { format } from 'date-fns'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -65,6 +66,9 @@ interface Props {
   onCancel: () => void
 }
 
+const getCurrentLocalDate = () => format(new Date(), 'yyyy-MM-dd')
+const getCurrentLocalTime = () => format(new Date(), 'HH:mm')
+
 export default function FacilityIncidentForm({ incident, onSave, onCancel }: Props) {
   const [activeTab, setActiveTab] = useState('details')
   const { youths, loadYouths } = useYouth()
@@ -79,8 +83,8 @@ export default function FacilityIncidentForm({ incident, onSave, onCancel }: Pro
   const [incidentDescription, setIncidentDescription] = useState(incident?.incidentDescription ?? '')
   const [dateOfIncident, setDateOfIncident] = useState(incident?.dateOfIncident ?? '')
   const [timeOfIncident, setTimeOfIncident] = useState(incident?.timeOfIncident ?? '')
-  const [reportDate, setReportDate] = useState(incident?.reportDate ?? '')
-  const [reportTime, setReportTime] = useState(incident?.reportTime ?? '')
+  const [reportDate, setReportDate] = useState(incident?.reportDate?.trim() || getCurrentLocalDate())
+  const [reportTime, setReportTime] = useState(incident?.reportTime?.trim() || getCurrentLocalTime())
   const [staffCompletingReport, setStaffCompletingReport] = useState(incident?.staffCompletingReport ?? '')
   const [location, setLocation] = useState(incident?.location ?? '')
 
@@ -137,9 +141,11 @@ export default function FacilityIncidentForm({ incident, onSave, onCancel }: Pro
   )
 
   // Signatures
-  const [submittedBy, setSubmittedBy] = useState(incident?.submittedBy ?? '')
+  const [submittedBy, setSubmittedBy] = useState(
+    incident?.submittedBy?.trim() || incident?.staffCompletingReport?.trim() || ''
+  )
   const [reviewedBy, setReviewedBy] = useState(incident?.reviewedBy ?? '')
-  const [signatureDate, setSignatureDate] = useState(incident?.signatureDate ?? '')
+  const [signatureDate, setSignatureDate] = useState(incident?.signatureDate?.trim() || getCurrentLocalDate())
 
   const sortedYouths = useMemo(() =>
     [...youths].sort((a, b) => {
@@ -188,6 +194,13 @@ export default function FacilityIncidentForm({ incident, onSave, onCancel }: Pro
     }
     setValidationErrors([])
 
+    const currentLocalDate = getCurrentLocalDate()
+    const currentLocalTime = getCurrentLocalTime()
+    const resolvedReportDate = reportDate.trim() || currentLocalDate
+    const resolvedReportTime = reportTime.trim() || currentLocalTime
+    const resolvedSubmittedBy = submittedBy.trim() || staffCompletingReport.trim()
+    const resolvedSignatureDate = signatureDate.trim() || resolvedReportDate
+
     const nameParts = [lastName, [firstName, initial].filter(Boolean).join(' ')].filter(Boolean)
     const youthName = nameParts.join(', ')
     const isNonResident = subjectType === 'Non-Resident'
@@ -201,8 +214,8 @@ export default function FacilityIncidentForm({ incident, onSave, onCancel }: Pro
       incidentDescription,
       dateOfIncident,
       timeOfIncident,
-      reportDate,
-      reportTime,
+      reportDate: resolvedReportDate,
+      reportTime: resolvedReportTime,
       staffCompletingReport,
       location,
       youthInvolved: youthInvolved.filter(y => y.name.trim() !== ''),
@@ -220,9 +233,9 @@ export default function FacilityIncidentForm({ incident, onSave, onCancel }: Pro
       policyViolations: policyViolations.filter(p => p.trim() !== '').map(p => ({ description: p })),
       staffActions: staffActions.filter(a => a.trim() !== '').map(a => ({ description: a })),
       followUpRecommendations: followUpRecommendations.filter(f => f.trim() !== '').map(f => ({ description: f })),
-      submittedBy,
+      submittedBy: resolvedSubmittedBy,
       reviewedBy,
-      signatureDate,
+      signatureDate: resolvedSignatureDate,
     }
     onSave(data)
   }
@@ -412,6 +425,9 @@ export default function FacilityIncidentForm({ incident, onSave, onCancel }: Pro
                     value={staffCompletingReport}
                     onChange={e => setStaffCompletingReport(e.target.value)}
                   />
+                  <p className="text-xs text-slate-500 mt-1">
+                    This will be used for the printed submitted-by signature if that field is left blank.
+                  </p>
                 </div>
                 <div>
                   <Label htmlFor="location">Location</Label>

@@ -47,6 +47,40 @@ const formatAIErrorMessage = (status: number, payload: any): string => {
   return `AI request failed with status ${status}`;
 };
 
+// ============================================================================
+// Circuit Breaker
+// Prevents cascading failures when the AI service is consistently unavailable.
+// Opens after 5 consecutive failures and stays open for 30 seconds.
+// ============================================================================
+
+const circuitBreaker = {
+  failureCount: 0,
+  openedAt: null as number | null,
+  threshold: 5,
+  cooldownMs: 30_000,
+
+  isOpen(): boolean {
+    if (this.openedAt === null) return false;
+    if (Date.now() - this.openedAt < this.cooldownMs) return true;
+    // Cooldown elapsed — move to half-open (allow one probe)
+    this.openedAt = null;
+    return false;
+  },
+
+  recordSuccess() {
+    this.failureCount = 0;
+    this.openedAt = null;
+  },
+
+  recordFailure() {
+    this.failureCount += 1;
+    if (this.failureCount >= this.threshold && this.openedAt === null) {
+      this.openedAt = Date.now();
+      console.warn('AI circuit breaker opened — too many consecutive failures.');
+    }
+  },
+};
+
 /**
  * Make an authenticated AI API request
  */
@@ -56,6 +90,16 @@ async function makeAIRequest<T>(
   config: AIRequestConfig = {}
 ): Promise<AIResponse<T>> {
   const { maxRetries = 2, timeout = 30000, fallbackEnabled = true } = config;
+
+  // Short-circuit when the breaker is open
+  if (circuitBreaker.isOpen()) {
+    return {
+      success: false,
+      error: 'AI service temporarily unavailable (circuit breaker open). Please try again shortly.',
+      code: 'CIRCUIT_OPEN',
+      retryable: false,
+    };
+  }
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
@@ -115,6 +159,7 @@ async function makeAIRequest<T>(
         throw requestError;
       }
 
+      circuitBreaker.recordSuccess();
       return {
         success: true,
         data: data,
@@ -127,6 +172,7 @@ async function makeAIRequest<T>(
       };
     } catch (error: any) {
       console.warn(`AI request attempt ${attempt + 1} failed:`, error.message);
+      circuitBreaker.recordFailure();
       const retryable = error?.retryable === true
         || error?.name === 'AbortError'
         || /network|failed to fetch/i.test(error?.message || '');
@@ -871,6 +917,16 @@ export async function parseYouthProfileText(
   });
 }
 
+/**
+ * Referral Intake Screener
+ * Runs the referral text through the Heartland intake screener prompt and returns
+ * a structured recommendation (INTERVIEW / POSSIBLY INTERVIEW / DO NOT INTERVIEW)
+ * with risk screens, violence assessment, house-fit analysis, and clarification questions.
+ */
+export async function screenReferralIntake(referralText: string): Promise<AIResponse<{ screening: string }>> {
+  return makeAIRequest('/api/ai/screen-referral', { referralText }, { timeout: 60000 });
+}
+
 // ============================================================================
 // EXPORT ALL SERVICES
 // ============================================================================
@@ -909,6 +965,9 @@ export const aiService = {
 
   // Youth Profile Import
   parseYouthProfileText,
+
+  // Referral Intake Screener
+  screenReferralIntake,
 
   // Utilities
   checkAIStatus,

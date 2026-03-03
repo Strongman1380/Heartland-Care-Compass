@@ -166,6 +166,25 @@
     width: 100%;
     display: block !important;
   }
+
+  .print-section,
+  .print-section * {
+    box-sizing: border-box;
+    overflow-wrap: break-word;
+    word-break: normal;
+  }
+
+  .print-section table {
+    width: 100%;
+    max-width: 100%;
+    table-layout: fixed;
+    border-collapse: collapse;
+  }
+
+  .print-section th,
+  .print-section td {
+    vertical-align: top;
+  }
   
   .print-report {
     padding: 20px;

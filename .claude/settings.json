@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//Users/brandonhinrichs/Local Repositories/Web Applications/Heartland-Care-Compass-main/**)",
+      "Bash(cat jest.config.*)",
+      "Bash(npx jest --config jest.config.ts --testPathPattern=\"__tests__\" --no-coverage)",
+      "Bash(npx jest --config jest.config.ts --testPathPatterns=\"__tests__\" --no-coverage)",
+      "Bash(npx jest --config jest.config.cjs --testPathPatterns=\"__tests__\" --no-coverage)",
+      "Bash(node_modules/.bin/tsc --noEmit)"
+    ],
+    "additionalDirectories": [
+      "/Users/brandonhinrichs/.claude/projects/-Users-brandonhinrichs-Local-Repositories-Web-Applications-Heartland-Care-Compass-main"
+    ]
+  }
+}

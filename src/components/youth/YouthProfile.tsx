@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, Edit, Printer, LogOut, Trash2 } from "lucide-react";
+import { ArrowLeft, Edit, Printer, LogOut, Archive } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -34,7 +34,9 @@ import { RecentIncidentsAlert } from "./RecentIncidentsAlert";
 import { TopSuccessPlanGoals } from "./TopSuccessPlanGoals";
 import { UpcomingImportantDates } from "./UpcomingImportantDates";
 import { ContactsQuickReference } from "./ContactsQuickReference";
-import { calculateResidentAwardsForYouths, type ResidentAwards } from "@/utils/residentAwards";
+import { useAwards } from "@/contexts/AwardsContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { useBehaviorPointSummary } from "@/hooks/useBehaviorPointSummary";
 
 interface YouthProfileProps {
   youth: Youth;
@@ -47,56 +49,35 @@ export const YouthProfile = ({ youth, onBack, onYouthUpdated }: YouthProfileProp
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [dischargeDialogOpen, setDischargeDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [awardData, setAwardData] = useState<ResidentAwards>({
-    residentOfWeek: null,
-    mostImprovedWeek: null,
-    residentOfMonth: null,
-  });
-  const [loadingAwards, setLoadingAwards] = useState(false);
-  const { updateYouth, deleteYouth, youths, loadYouths } = useYouth();
+  const [isArchiving, setIsArchiving] = useState(false);
+  const { updateYouth, archiveYouth } = useYouth();
+  const { user, isAdmin } = useAuth();
+  const { todayTotal, weekTotal, monthTotal, lifetimeTotal } = useBehaviorPointSummary(youth.id);
 
-  useEffect(() => {
-    loadYouths();
-  }, [loadYouths]);
-
-  useEffect(() => {
-    if (!youths?.length) return;
-    let cancelled = false;
-    const loadAwards = async () => {
-      try {
-        setLoadingAwards(true);
-        const calculated = await calculateResidentAwardsForYouths(youths);
-        if (!cancelled) setAwardData(calculated);
-      } catch (error) {
-        console.error("Failed to calculate resident awards:", error);
-      } finally {
-        if (!cancelled) setLoadingAwards(false);
-      }
-    };
-    void loadAwards();
-    return () => {
-      cancelled = true;
-    };
-  }, [youths]);
+  // Use shared awards context — no per-component recalculation
+  const { awards: awardData, loading: loadingAwards } = useAwards();
 
   const colors = useMemo(() => {
-    const raw = youth.realColorsResult || "";
-    if (!raw || typeof raw !== "string") return [];
-    return raw
-      .split(/[,/&|\s]+/)
-      .map((value) => value.trim())
-      .filter(Boolean)
-      .map((value) => value.charAt(0).toUpperCase() + value.slice(1).toLowerCase())
-      .filter((value, index, arr) => arr.indexOf(value) === index)
+    const VALID = new Set(["HEART", "ANCHOR", "MIND", "SPARK"]);
+    const raw = youth.realColorsResult;
+    if (!raw) return [];
+    const tokens = Array.isArray(raw)
+      ? raw.map((v) => v.trim().toUpperCase())
+      : typeof raw === "string"
+        ? raw.split(/[,/&|\s]+/).map((v) => v.trim().toUpperCase())
+        : [];
+    return tokens
+      .filter((v) => VALID.has(v))
+      .filter((v, i, arr) => arr.indexOf(v) === i)
       .slice(0, 2);
   }, [youth.realColorsResult]);
 
   const youthAwards = useMemo(() => {
+    if (!awardData) return [];
     const items: string[] = [];
     if (awardData.residentOfWeek?.youthId === youth.id) items.push("Resident of the Week");
-    if (awardData.mostImprovedWeek?.youthId === youth.id) items.push("Most Improved (Week)");
     if (awardData.residentOfMonth?.youthId === youth.id) items.push("Resident of the Month");
+    if (awardData.mostImprovedWeek?.youthId === youth.id) items.push("Most Improved Resident");
     return items;
   }, [awardData, youth.id]);
 
@@ -135,18 +116,18 @@ export const YouthProfile = ({ youth, onBack, onYouthUpdated }: YouthProfileProp
     }
   };
 
-  const handleDelete = async () => {
+  const handleArchive = async () => {
     try {
-      setIsDeleting(true);
-      await deleteYouth(youth.id);
+      setIsArchiving(true);
+      await archiveYouth(youth.id, user?.email ?? "unknown");
       setDeleteDialogOpen(false);
-      toast.success(`${youth.firstName} ${youth.lastName}'s profile has been deleted.`);
+      toast.success(`${youth.firstName} ${youth.lastName}'s profile has been archived. Contact an admin to restore.`);
       if (onBack) onBack();
     } catch (error) {
-      console.error("Delete error:", error);
-      toast.error("Failed to delete youth profile.");
+      console.error("Archive error:", error);
+      toast.error("Failed to archive youth profile.");
     } finally {
-      setIsDeleting(false);
+      setIsArchiving(false);
     }
   };
 
@@ -178,12 +159,12 @@ export const YouthProfile = ({ youth, onBack, onYouthUpdated }: YouthProfileProp
               {(colors.length > 0 || youthAwards.length > 0 || loadingAwards) && (
                 <div className="flex flex-wrap gap-2 mb-2">
                   {colors.map((color) => (
-                    <Badge key={color} variant="secondary" className="bg-white/80 border border-red-200 text-red-800">
+                    <Badge key={color} variant="secondary" className="bg-white/80 dark:bg-slate-800/80 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-300">
                       {color}
                     </Badge>
                   ))}
                   {loadingAwards && (
-                    <Badge variant="outline" className="bg-white/70 border-yellow-300 text-yellow-800">
+                    <Badge variant="outline" className="bg-white/70 dark:bg-slate-800/70 border-yellow-300 dark:border-yellow-700 text-yellow-800 dark:text-yellow-300">
                       Calculating awards...
                     </Badge>
                   )}
@@ -199,7 +180,7 @@ export const YouthProfile = ({ youth, onBack, onYouthUpdated }: YouthProfileProp
                 <span className="font-semibold">Youth ID:</span> 
                 <span className="font-mono ml-2">{youth.id}</span>
               </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm text-red-700">
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm text-red-700">
                 <div>
                   <span className="font-semibold">Age:</span> {youth.age || "Not specified"}
                 </div>
@@ -207,11 +188,20 @@ export const YouthProfile = ({ youth, onBack, onYouthUpdated }: YouthProfileProp
                   <span className="font-semibold">Level:</span> {youth.level}
                 </div>
                 <div>
-                  <span className="font-semibold">Points:</span> {youth.pointTotal || 0}
+                  <span className="font-semibold">Today's Points:</span> {todayTotal.toLocaleString()}
+                </div>
+                <div>
+                  <span className="font-semibold">Last 7 Days:</span> {weekTotal.toLocaleString()}
+                </div>
+                <div>
+                  <span className="font-semibold">Month Total:</span> {monthTotal.toLocaleString()}
                 </div>
                 <div>
                   <span className="font-semibold">Admitted:</span> {formatDate(youth.admissionDate)}
                 </div>
+              </div>
+              <div className="mt-3 text-sm text-red-700">
+                <span className="font-semibold">Lifetime Total:</span> {lifetimeTotal.toLocaleString()}
               </div>
               <MonthlyShiftAverage youthId={youth.id} />
             </div>
@@ -220,7 +210,7 @@ export const YouthProfile = ({ youth, onBack, onYouthUpdated }: YouthProfileProp
                 variant="outline"
                 size="sm"
                 onClick={handlePrintProfile}
-                className="border-gray-300 text-gray-700 hover:bg-gray-50"
+                className="border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800"
               >
                 <Printer className="h-4 w-4 mr-2" />
                 Print
@@ -229,29 +219,33 @@ export const YouthProfile = ({ youth, onBack, onYouthUpdated }: YouthProfileProp
                 variant="outline"
                 size="sm"
                 onClick={() => setEditDialogOpen(true)}
-                className="border-gray-300 text-gray-700 hover:bg-gray-50"
+                className="border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800"
               >
                 <Edit className="h-4 w-4 mr-2" />
                 Edit
               </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setDischargeDialogOpen(true)}
-                className="border-orange-300 text-orange-700 hover:bg-orange-50"
-              >
-                <LogOut className="h-4 w-4 mr-2" />
-                Discharge
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setDeleteDialogOpen(true)}
-                className="border-red-300 text-red-700 hover:bg-red-50"
-              >
-                <Trash2 className="h-4 w-4 mr-2" />
-                Delete
-              </Button>
+              {isAdmin && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setDischargeDialogOpen(true)}
+                  className="border-orange-300 text-orange-700 hover:bg-orange-50"
+                >
+                  <LogOut className="h-4 w-4 mr-2" />
+                  Discharge
+                </Button>
+              )}
+              {isAdmin && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setDeleteDialogOpen(true)}
+                  className="border-orange-300 text-orange-700 hover:bg-orange-50"
+                >
+                  <Archive className="h-4 w-4 mr-2" />
+                  Archive
+                </Button>
+              )}
             </div>
           </div>
         </CardHeader>
@@ -333,19 +327,19 @@ export const YouthProfile = ({ youth, onBack, onYouthUpdated }: YouthProfileProp
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Youth Profile</AlertDialogTitle>
+            <AlertDialogTitle>Archive Youth Profile</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete <strong>{youth.firstName} {youth.lastName}</strong>'s profile and all associated data including case notes, behavior points, and assessments. This action cannot be undone.
+              This will archive <strong>{youth.firstName} {youth.lastName}</strong>'s profile, removing them from the active youth list. Their data will be preserved and an admin can restore the profile if needed.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={isArchiving}>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={handleDelete}
-              disabled={isDeleting}
-              className="bg-red-600 hover:bg-red-700 text-white"
+              onClick={handleArchive}
+              disabled={isArchiving}
+              className="bg-orange-600 hover:bg-orange-700 text-white"
             >
-              {isDeleting ? "Deleting..." : "Delete Profile"}
+              {isArchiving ? "Archiving..." : "Archive Profile"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

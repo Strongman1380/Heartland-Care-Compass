@@ -764,8 +764,9 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
                           <div className="pl-6 border-l-2 border-gray-200 space-y-3">
                             {renderNoteSections(note)}
                             <div className="text-sm text-gray-500">
+                              <p>Date Discussed: {note.date ? format(new Date(note.date), 'MMM d, yyyy') : 'Not specified'}</p>
                               <p>Recorded by: {note.staff || 'Staff Member'}</p>
-                              <p>Added: {note.createdAt ? format(new Date(note.createdAt), 'MMM d, yyyy h:mm a') : 'Unknown'}</p>
+                              <p>Entered In System: {note.createdAt ? format(new Date(note.createdAt), 'MMM d, yyyy h:mm a') : 'Unknown'}</p>
                             </div>
                           </div>
                         </div>

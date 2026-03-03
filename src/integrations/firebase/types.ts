@@ -137,6 +137,8 @@ export interface Youth {
   dischargeReason: string | null
   dischargeNotes: string | null
   dischargedBy: string | null
+  archivedAt: string | null
+  archivedBy: string | null
 }
 
 export type YouthInsert = Omit<Youth, 'id'> & { id?: string }

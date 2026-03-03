@@ -13,29 +13,34 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { AlertTriangle, TrendingUp, TrendingDown } from "lucide-react";
 import { toast } from "sonner";
-import { 
-  LEVELS_DATA, 
-  getCurrentLevel, 
-  getNextLevel, 
-  canLevelUp, 
+import {
+  LEVELS_DATA,
+  getCurrentLevel,
+  getNextLevel,
+  canLevelUp,
   meetsPrivilegeRequirement,
   processLevelUp,
-  processLevelDemotion 
+  processLevelDemotion
 } from "@/utils/levelSystem";
+import { levelEventService } from "@/integrations/firebase/services";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface EnhancedBehaviorCardProps {
   youthId: string;
+  youthName?: string;
   initialLevel?: number;
   initialPoints?: number;
   initialSubsystem?: boolean;
 }
 
-export const EnhancedBehaviorCard = ({ 
-  youthId, 
-  initialLevel = 0, 
-  initialPoints = 0, 
-  initialSubsystem = false 
+export const EnhancedBehaviorCard = ({
+  youthId,
+  youthName,
+  initialLevel = 0,
+  initialPoints = 0,
+  initialSubsystem = false
 }: EnhancedBehaviorCardProps) => {
+  const { user } = useAuth();
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [dailyPoints, setDailyPoints] = useState(0);
   const [comments, setComments] = useState("");
@@ -89,14 +94,19 @@ export const EnhancedBehaviorCard = ({
     const result = processLevelUp(currentLevelIndex, pointsInCurrentLevel);
     if (result) {
       try {
-        // Update level in local storage
         updateYouth(youthId, { level: result.newLevelIndex });
-
         setCurrentLevelIndex(result.newLevelIndex);
         setPointsInCurrentLevel(result.pointsInNewLevel);
-        
         const newLevel = getCurrentLevel(result.newLevelIndex);
         toast.success(`Congratulations! Advanced to ${newLevel.name}!`);
+        levelEventService.logLevelChange(
+          youthId,
+          youthName ?? youthId,
+          currentLevelIndex,
+          result.newLevelIndex,
+          'level_up',
+          user?.email ?? 'unknown'
+        ).catch(console.error);
       } catch (error) {
         console.error("Error updating level:", error);
         toast.error("Failed to update level");
@@ -108,14 +118,19 @@ export const EnhancedBehaviorCard = ({
     const result = processLevelDemotion(currentLevelIndex);
     if (result) {
       try {
-        // Update level in local storage
         updateYouth(youthId, { level: result.newLevelIndex });
-
         setCurrentLevelIndex(result.newLevelIndex);
         setPointsInCurrentLevel(result.pointsInNewLevel);
-        
         const newLevel = getCurrentLevel(result.newLevelIndex);
         toast.error(`Demoted to ${newLevel.name}`);
+        levelEventService.logLevelChange(
+          youthId,
+          youthName ?? youthId,
+          currentLevelIndex,
+          result.newLevelIndex,
+          'demotion',
+          user?.email ?? 'unknown'
+        ).catch(console.error);
       } catch (error) {
         console.error("Error updating level:", error);
         toast.error("Failed to update level in database");

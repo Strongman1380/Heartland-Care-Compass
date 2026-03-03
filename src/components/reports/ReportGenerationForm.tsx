@@ -32,12 +32,13 @@ export const ReportGenerationForm = ({ onGenerateReport, isGenerating }: ReportG
 
   // Check if selected report type should auto-export to PDF
   const isDPNReport = selectedReportType.startsWith('dpn') || selectedReportType === 'court';
+  const isEvalReport = selectedReportType.startsWith('eval');
   const shouldAutoExportPDF = isDPNReport;
 
-  // Handle report type change and auto-set PDF format for DPN reports
+  // Handle report type change and auto-set PDF format for DPN/eval reports
   const handleReportTypeChange = (value: string) => {
     setSelectedReportType(value);
-    if (value.startsWith('dpn') || value === 'court') {
+    if (value.startsWith('dpn') || value === 'court' || value.startsWith('eval')) {
       setOutputFormat('pdf');
     }
   };
@@ -70,6 +71,8 @@ export const ReportGenerationForm = ({ onGenerateReport, isGenerating }: ReportG
                   <SelectItem value="dpnWeekly">DPN Weekly Progress Evaluation (auto-exports PDF)</SelectItem>
                   <SelectItem value="dpnBiWeekly">DPN Bi-Weekly Progress Evaluation (auto-exports PDF)</SelectItem>
                   <SelectItem value="dpnMonthly">DPN Monthly Progress Evaluation (auto-exports PDF)</SelectItem>
+                  <SelectItem value="evalWeekly">Resident Weekly Progress Evaluation</SelectItem>
+                  <SelectItem value="evalMonthly">Resident Monthly Progress Evaluation</SelectItem>
                 </SelectContent>
               </Select>
             </div>

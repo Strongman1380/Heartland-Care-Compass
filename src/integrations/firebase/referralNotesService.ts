@@ -15,6 +15,13 @@ import {
 } from "firebase/firestore";
 import { v4 as uuidv4 } from "uuid";
 
+export type POContactEntry = {
+  id: string;
+  date: string;
+  notes: string;
+  followUpDate: string;
+};
+
 export type ReferralNoteRow = {
   id: string;
   referral_name: string;
@@ -28,6 +35,10 @@ export type ReferralNoteRow = {
   raw_text?: string | null;
   interview_report?: string | null;
   director_summary?: string | null;
+  interview_scheduled_date?: string | null;
+  screening_result?: string | null;
+  staff_recommendation?: "yes" | "maybe" | "no" | null;
+  po_contact_log?: POContactEntry[];
   archived?: boolean;
   archived_at?: string | null;
   archive_reason?: string | null;

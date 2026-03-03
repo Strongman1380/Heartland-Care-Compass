@@ -1,14 +1,23 @@
 
+import { useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Navigate, useLocation } from 'react-router-dom';
+import { toast } from 'sonner';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
+  requireAdmin?: boolean;
 }
 
-export const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
-  const { user, loading } = useAuth();
+export const ProtectedRoute = ({ children, requireAdmin = false }: ProtectedRouteProps) => {
+  const { user, isAdmin, loading } = useAuth();
   const location = useLocation();
+
+  useEffect(() => {
+    if (!loading && user && requireAdmin && !isAdmin) {
+      toast.error('Admin access required');
+    }
+  }, [loading, user, requireAdmin, isAdmin]);
 
   if (loading) {
     return (
@@ -20,6 +29,10 @@ export const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
 
   if (!user) {
     return <Navigate to="/auth" replace state={{ from: location }} />;
+  }
+
+  if (requireAdmin && !isAdmin) {
+    return <Navigate to="/" replace />;
   }
 
   return <>{children}</>;

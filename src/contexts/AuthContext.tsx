@@ -7,10 +7,14 @@ import {
   signOut,
   type User
 } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
+import { doc, getDoc } from 'firebase/firestore';
+import { auth, db } from '@/lib/firebase';
+import type { UserRole } from '@/types/app-types';
 
 interface AuthContextValue {
   user: User | null;
+  role: UserRole | null;
+  isAdmin: boolean;
   loading: boolean;
   signInWithGoogle: () => Promise<{ error?: Error }>;
   signOutUser: () => Promise<void>;
@@ -20,11 +24,22 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [role, setRole] = useState<UserRole | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser);
+      if (firebaseUser) {
+        try {
+          const roleDoc = await getDoc(doc(db, 'user_roles', firebaseUser.uid));
+          setRole(roleDoc.exists() ? (roleDoc.data().role as UserRole) : 'staff');
+        } catch {
+          setRole('staff');
+        }
+      } else {
+        setRole(null);
+      }
       setLoading(false);
     });
 
@@ -49,6 +64,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const value: AuthContextValue = {
     user,
+    role,
+    isAdmin: role === 'admin',
     loading,
     signInWithGoogle,
     signOutUser,

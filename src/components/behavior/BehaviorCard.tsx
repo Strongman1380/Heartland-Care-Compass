@@ -8,14 +8,15 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle, TrendingUp, TrendingDown, Users, History, Shield, Ban, X, CreditCard, RotateCcw } from "lucide-react";
-import { useYouth } from "@/hooks/useSupabase";
+import { useBehaviorPoints, useYouth } from "@/hooks/useSupabase";
+import { useBehaviorPointSummary } from "@/hooks/useBehaviorPointSummary";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface BehaviorCardProps {
   youthId: string;
   youth: any;
-  onYouthUpdated?: () => void;
+  onYouthUpdated?: (updated?: any) => void;
 }
 
 // Level system data
@@ -41,6 +42,17 @@ interface SubsystemHistoryEntry {
 
 export const BehaviorCard = ({ youthId, youth, onYouthUpdated }: BehaviorCardProps) => {
   const { updateYouth } = useYouth();
+  const { behaviorPoints, loading: pointsLoading, saveBehaviorPoints } = useBehaviorPoints(youthId);
+  const {
+    todayTotal,
+    weekTotal,
+    monthTotal,
+    lifetimeTotal,
+    history,
+  } = useBehaviorPointSummary(youthId);
+
+  // Level change in-flight guard
+  const [isLevelChanging, setIsLevelChanging] = useState(false);
 
   // Point management state
   const [correctedTotal, setCorrectedTotal] = useState("");
@@ -77,51 +89,81 @@ export const BehaviorCard = ({ youthId, youth, onYouthUpdated }: BehaviorCardPro
     );
   }
 
+  // Normalize null/undefined level to 0 (Orientation) for all calculations
+  const currentLevelValue = youth.level ?? 0;
+
   // Get current level data
   const getCurrentLevel = () => {
-    return levelsData.find(level => level.level === youth.level) || levelsData[0];
+    return levelsData.find(level => level.level === currentLevelValue) || levelsData[0];
   };
 
   const getNextLevel = () => {
-    const nextLevelIndex = youth.level + 1;
-    return levelsData.find(level => level.level === nextLevelIndex);
+    return levelsData.find(level => level.level === currentLevelValue + 1);
   };
 
   const currentLevel = getCurrentLevel();
   const nextLevel = getNextLevel();
+  const todayIso = format(new Date(), "yyyy-MM-dd");
+  const todayEntry = behaviorPoints.find((entry) => entry.date === todayIso) || null;
+
+  const syncLifetimeTotal = async (nextTodayTotal: number) => {
+    const nonTodayTotal = behaviorPoints.reduce((sum, entry) => {
+      if (entry.date === todayIso) return sum;
+      return sum + (entry.totalPoints || 0);
+    }, 0);
+    await updateYouth(youthId, { pointTotal: nonTodayTotal + nextTodayTotal });
+  };
+
+  const upsertTodayPoints = async (nextTodayTotal: number) => {
+    await saveBehaviorPoints({
+      youth_id: youthId,
+      date: todayIso,
+      morningPoints: todayEntry?.morningPoints ?? null,
+      afternoonPoints: todayEntry?.afternoonPoints ?? null,
+      eveningPoints: todayEntry?.eveningPoints ?? null,
+      totalPoints: nextTodayTotal,
+      comments: todayEntry?.comments || null,
+      createdAt: todayEntry?.createdAt || new Date().toISOString(),
+    });
+    await syncLifetimeTotal(nextTodayTotal);
+  };
 
   const handleLevelUp = async () => {
-    if (nextLevel) {
-      try {
-        await updateYouth(youthId, {
-          level: youth.level + 1,
-        });
+    if (!nextLevel || isLevelChanging) return;
+    setIsLevelChanging(true);
+    try {
+      const updated = await updateYouth(youthId, {
+        level: currentLevelValue + 1,
+      });
 
-        toast.success(`Congratulations! Advanced to ${nextLevel.name}!`);
-        onYouthUpdated?.();
-      } catch (error) {
-        console.error("Error updating level:", error);
-        const errorMessage = error instanceof Error ? error.message : "Failed to update level";
-        toast.error(errorMessage);
-      }
+      toast.success(`Congratulations! Advanced to ${nextLevel.name}!`);
+      onYouthUpdated?.(updated);
+    } catch (error) {
+      console.error("Error updating level:", error);
+      const errorMessage = error instanceof Error ? error.message : "Failed to update level";
+      toast.error(errorMessage);
+    } finally {
+      setIsLevelChanging(false);
     }
   };
 
   const handleLevelDemotion = async () => {
-    if (youth.level > 1) {
-      try {
-        await updateYouth(youthId, {
-          level: youth.level - 1,
-        });
+    if (currentLevelValue <= 0 || isLevelChanging) return;
+    setIsLevelChanging(true);
+    try {
+      const updated = await updateYouth(youthId, {
+        level: currentLevelValue - 1,
+      });
 
-        const previousLevel = levelsData.find(level => level.level === youth.level - 1);
-        toast.warning(`Demoted to ${previousLevel?.name || `Level ${youth.level - 1}`}.`);
-        onYouthUpdated?.();
-      } catch (error) {
-        console.error("Error updating level:", error);
-        const errorMessage = error instanceof Error ? error.message : "Failed to update level";
-        toast.error(errorMessage);
-      }
+      const previousLevel = levelsData.find(level => level.level === currentLevelValue - 1);
+      toast.warning(`Demoted to ${previousLevel?.name || `Level ${currentLevelValue - 1}`}.`);
+      onYouthUpdated?.(updated);
+    } catch (error) {
+      console.error("Error updating level:", error);
+      const errorMessage = error instanceof Error ? error.message : "Failed to update level";
+      toast.error(errorMessage);
+    } finally {
+      setIsLevelChanging(false);
     }
   };
 
@@ -134,8 +176,8 @@ export const BehaviorCard = ({ youthId, youth, onYouthUpdated }: BehaviorCardPro
     }
     try {
       setIsUpdatingPoints(true);
-      await updateYouth(youthId, { pointTotal: val });
-      toast.success(`Point total set to ${val.toLocaleString()}`);
+      await upsertTodayPoints(val);
+      toast.success(`Today's points set to ${val.toLocaleString()}`);
       setCorrectedTotal("");
       onYouthUpdated?.();
     } catch (error) {
@@ -153,11 +195,9 @@ export const BehaviorCard = ({ youthId, youth, onYouthUpdated }: BehaviorCardPro
     }
     try {
       setIsUpdatingPoints(true);
-      // Re-read the current total at update time to avoid stale-closure race
-      const currentTotal = youth.pointTotal ?? 0;
-      const newTotal = currentTotal + val;
-      await updateYouth(youthId, { pointTotal: newTotal });
-      toast.success(`Added ${val.toLocaleString()} points — new total: ${newTotal.toLocaleString()}`);
+      const newTotal = todayTotal + val;
+      await upsertTodayPoints(newTotal);
+      toast.success(`Added ${val.toLocaleString()} points to today — new daily total: ${newTotal.toLocaleString()}`);
       setCardPoints("");
       onYouthUpdated?.();
     } catch (error) {
@@ -266,19 +306,19 @@ export const BehaviorCard = ({ youthId, youth, onYouthUpdated }: BehaviorCardPro
             <div className="flex gap-3 pt-2">
               <Button
                 onClick={handleLevelUp}
-                disabled={!nextLevel}
+                disabled={!nextLevel || isLevelChanging}
                 className="flex-1 bg-gradient-to-r from-red-900 to-red-800 hover:from-red-800 hover:to-red-700 text-white font-semibold py-6 shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <TrendingUp size={18} className="mr-2" />
-                Level Up
+                {isLevelChanging ? "Saving..." : "Level Up"}
               </Button>
               <Button
                 onClick={handleLevelDemotion}
-                disabled={youth.level <= 1}
+                disabled={currentLevelValue <= 0 || isLevelChanging}
                 className="flex-1 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white font-semibold py-6 shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <TrendingDown size={18} className="mr-2" />
-                Demote
+                {isLevelChanging ? "Saving..." : "Demote"}
               </Button>
             </div>
           </div>
@@ -290,7 +330,7 @@ export const BehaviorCard = ({ youthId, youth, onYouthUpdated }: BehaviorCardPro
         <CardHeader className="bg-green-50">
           <CardTitle>Point Management</CardTitle>
           <CardDescription>
-            Current total: <span className="font-bold text-green-800">{(youth.pointTotal ?? 0).toLocaleString()} pts</span>
+            Today's total: <span className="font-bold text-green-800">{todayTotal.toLocaleString()} pts</span>
           </CardDescription>
         </CardHeader>
         <CardContent className="pt-6">
@@ -302,7 +342,7 @@ export const BehaviorCard = ({ youthId, youth, onYouthUpdated }: BehaviorCardPro
                 <CreditCard size={14} />
                 Add Card Points
               </Label>
-              <p className="text-xs text-gray-500">Enter the points from a physical card to add to the grand total.</p>
+              <p className="text-xs text-gray-500">Add points to today's dated point record so the current-day cards and history stay accurate.</p>
               <div className="flex gap-2">
                 <Input
                   type="number"
@@ -327,9 +367,9 @@ export const BehaviorCard = ({ youthId, youth, onYouthUpdated }: BehaviorCardPro
             <div className="space-y-2">
               <Label className="flex items-center gap-1.5">
                 <RotateCcw size={14} />
-                Set Corrected Total
+                Set Today's Total
               </Label>
-              <p className="text-xs text-gray-500">Overwrite the current total with an exact corrected number.</p>
+              <p className="text-xs text-gray-500">Overwrite today's dated point record with the exact corrected total.</p>
               <div className="flex gap-2">
                 <Input
                   type="number"
@@ -352,6 +392,79 @@ export const BehaviorCard = ({ youthId, youth, onYouthUpdated }: BehaviorCardPro
             </div>
 
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="bg-emerald-50">
+          <CardTitle>Point Summary</CardTitle>
+          <CardDescription>
+            Totals calculated from the dated point entries imported from your CSV and any newer daily entries.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="pt-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="rounded-lg border border-emerald-200 bg-white p-3">
+              <p className="text-xs font-medium uppercase text-emerald-700">Today</p>
+              <p className="text-lg font-bold text-emerald-900">{todayTotal.toLocaleString()}</p>
+            </div>
+            <div className="rounded-lg border border-blue-200 bg-white p-3">
+              <p className="text-xs font-medium uppercase text-blue-700">Last 7 Days</p>
+              <p className="text-lg font-bold text-blue-900">{weekTotal.toLocaleString()}</p>
+            </div>
+            <div className="rounded-lg border border-purple-200 bg-white p-3">
+              <p className="text-xs font-medium uppercase text-purple-700">This Month</p>
+              <p className="text-lg font-bold text-purple-900">{monthTotal.toLocaleString()}</p>
+            </div>
+            <div className="rounded-lg border border-amber-200 bg-white p-3">
+              <p className="text-xs font-medium uppercase text-amber-700">Lifetime</p>
+              <p className="text-lg font-bold text-amber-900">{lifetimeTotal.toLocaleString()}</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="bg-slate-50">
+          <CardTitle className="flex items-center gap-2">
+            <History size={18} />
+            Recent Point History
+          </CardTitle>
+          <CardDescription>
+            Timestamped history from the dated behavior point records. The most recent row reflects where they were at on that date.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="pt-6">
+          {pointsLoading ? (
+            <p className="text-sm text-gray-500">Loading point history...</p>
+          ) : history.length === 0 ? (
+            <p className="text-sm text-gray-500">No behavior point history recorded yet.</p>
+          ) : (
+            <div className="space-y-3 max-h-[28rem] overflow-y-auto pr-1">
+              {history.map((entry) => (
+                <div key={entry.id} className="rounded-lg border border-slate-200 p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="font-medium text-slate-900">
+                        {entry.date ? format(new Date(`${entry.date}T00:00:00`), "MMM d, yyyy") : "No date"}
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        Entered in system: {entry.createdAt ? format(new Date(entry.createdAt), "MMM d, yyyy h:mm a") : "Unknown"}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-semibold text-green-700">
+                        {typeof entry.totalPoints === "number" ? entry.totalPoints.toLocaleString() : "Status only"}
+                      </p>
+                      {entry.comments && (
+                        <p className="text-xs text-slate-500">{entry.comments}</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
 

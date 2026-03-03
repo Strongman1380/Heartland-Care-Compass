@@ -108,13 +108,12 @@ const formatWeekLabel = (key: string): string => {
 
 const extractRealColors = (value: unknown): string[] => {
   if (!value || typeof value !== 'string') return [];
-  const allowed = ['blue', 'gold', 'green', 'orange'];
+  const allowed = new Set(['HEART', 'ANCHOR', 'MIND', 'SPARK']);
   return value
-    .toLowerCase()
+    .toUpperCase()
     .split(/[,/&|\s]+/)
     .map((v) => v.trim())
-    .filter((v) => allowed.includes(v))
-    .map((v) => v.charAt(0).toUpperCase() + v.slice(1));
+    .filter((v) => allowed.has(v));
 };
 
 const getTimeframeStart = (timeframe: Timeframe): Date => {
@@ -301,7 +300,7 @@ const AssessmentKPIDashboard = () => {
       .sort((a, b) => a[0] - b[0])
       .map(([level, count]) => ({ level: `L${level}`, count }));
 
-    const realColorsCount: Record<string, number> = { Blue: 0, Gold: 0, Green: 0, Orange: 0 };
+    const realColorsCount: Record<string, number> = { HEART: 0, ANCHOR: 0, MIND: 0, SPARK: 0 };
     youths.forEach((youth) => {
       extractRealColors(youth.realColorsResult).forEach((color) => {
         realColorsCount[color] = (realColorsCount[color] || 0) + 1;

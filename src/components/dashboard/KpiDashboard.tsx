@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { format, subDays, startOfMonth, differenceInDays, isValid } from "date-fns";
+import { format, subDays, startOfMonth, differenceInDays, isValid, startOfDay, endOfDay } from "date-fns";
 import {
   AlertCircle, TrendingDown, TrendingUp, FileText, ShieldAlert, Activity,
   Users, BookOpen, Star, BarChart3
@@ -18,6 +18,7 @@ import { academicsService, type CreditRow, type GradeRow, type StepRow } from "@
 import { notesService, type NoteRow } from "@/integrations/firebase/notesService";
 import type { FacilityIncidentReport } from "@/types/facility-incident-types";
 import { aggregateCaseNoteKpis } from "@/utils/kpiCaseNoteAi";
+import { useTodayPoints } from "@/hooks/useTodayPoints";
 
 interface KpiDashboardProps {
   youthId: string;
@@ -90,6 +91,7 @@ export const KpiDashboard = ({ youthId, youth }: KpiDashboardProps) => {
   const [steps, setSteps] = useState<StepRow[]>([]);
   const [referralNotes, setReferralNotes] = useState<NoteRow[]>([]);
   const [extrasLoading, setExtrasLoading] = useState(true);
+  const { todayPoints } = useTodayPoints(youthId);
 
   const { caseNotes: notesData, loading: notesLoading } = useCaseNotes(youthId);
   const { behaviorPoints, loading: pointsLoading } = useBehaviorPoints(youthId);
@@ -134,23 +136,23 @@ export const KpiDashboard = ({ youthId, youth }: KpiDashboardProps) => {
   }, [youthId]);
 
   const analytics = useMemo(() => {
-    const now = new Date();
+    const windowEnd = endOfDay(new Date());
     let startDate: Date;
     if (timeframe === "week") {
-      startDate = subDays(now, 7);
+      startDate = startOfDay(subDays(windowEnd, 6));
     } else if (timeframe === "month") {
-      startDate = startOfMonth(now);
+      startDate = startOfMonth(windowEnd);
     } else {
-      startDate = subDays(now, 90);
+      startDate = startOfDay(subDays(windowEnd, 89));
     }
 
     const inRange = (dateStr: string | null | undefined): boolean => {
       if (!dateStr) return false;
       const d = new Date(dateStr);
-      return !Number.isNaN(d.getTime()) && d >= startDate && d <= now;
+      return !Number.isNaN(d.getTime()) && d >= startDate && d <= windowEnd;
     };
 
-    const daySpan = Math.max(1, differenceInDays(now, startDate));
+    const daySpan = Math.max(1, differenceInDays(windowEnd, startDate) + 1);
 
     // --- Case Notes ---
     const filteredNotes = notesData.filter((n) => inRange(n.date || n.createdAt));
@@ -461,8 +463,13 @@ export const KpiDashboard = ({ youthId, youth }: KpiDashboardProps) => {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{analytics.avgPointsPerEntry || "--"}</div>
-            <p className="text-xs text-muted-foreground">{analytics.pointsCount} entries avg</p>
+            <div className="text-2xl font-bold">{analytics.totalPointsSum.toLocaleString()}</div>
+            <p className="text-xs text-muted-foreground">
+              {analytics.pointsCount} entries in period
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Avg entry: {analytics.avgPointsPerEntry || "--"}
+            </p>
           </CardContent>
         </Card>
 
@@ -609,16 +616,28 @@ export const KpiDashboard = ({ youthId, youth }: KpiDashboardProps) => {
                   <span className="font-medium">{safeFormatDate(youth.admissionDate, "MMM d, yyyy")}</span>
                 </div>
               )}
-              {youth.realColorsResult && (
+              {(() => {
+                const VALID = new Set(["HEART", "ANCHOR", "MIND", "SPARK"]);
+                const styles = typeof youth.realColorsResult === "string"
+                  ? youth.realColorsResult.toUpperCase().split(/[,/&|\s]+/).filter((v) => VALID.has(v)).slice(0, 2)
+                  : [];
+                return styles.length > 0 ? (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Personal Style</span>
+                    <span className="font-medium">{styles.join(" / ")}</span>
+                  </div>
+                ) : null;
+              })()}
+              {youth.pointTotal != null && (
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Real Colors</span>
-                  <span className="font-medium">{youth.realColorsResult}</span>
+                  <span className="text-muted-foreground">Today's Points</span>
+                  <span className="font-medium">{todayPoints.toLocaleString()}</span>
                 </div>
               )}
               {youth.pointTotal != null && (
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Lifetime Points</span>
-                  <span className="font-medium">{youth.pointTotal}</span>
+                  <span className="font-medium">{youth.pointTotal.toLocaleString()}</span>
                 </div>
               )}
               {analytics.totalSteps > 0 && (

@@ -1,5 +1,5 @@
 ---
-description: Documents core data models and their relationships for youth residential program management system
+description: Guidelines for documenting data models and relationships in youth facility management systems
 ---
 
 
@@ -7,60 +7,55 @@ description: Documents core data models and their relationships for youth reside
 
 ## Core Data Models
 
-### Youth Profile Model
-- Unique ID format: HBH-YYYY-NNN 
-- Personal demographics and legal status
-- Treatment goals with behavioral categories
-- Point/level system progression data
-- Medical, trauma, and safety plan records
-- Professional relationships and placements
+### Youth Profile Schema
+- Hierarchical behavioral rating system across 4 domains:
+  - Peer interaction
+  - Adult interaction 
+  - Investment level
+  - Authority handling
+- Treatment progression tracking with 10 levels + orientation
+- Medical profile with structured medication/allergy tracking
+- Professional contact relationship mapping
+- Behavioral incident classification system
 
-### Behavioral Assessment Model
-- 4 core domains: Peer/Adult Interaction, Investment, Authority
-- 0-4 scoring scale with calculated averages
-- Historical trends and patterns storage
-- Domain-specific assessment criteria
-- Generated behavioral narratives
+### Assessment Models
+- HYRNA risk assessment with 8 weighted domains
+- Real Colors personality matrix (Heart, Anchor, Mind, Spark)
+- Individual Service Plan (ISP) framework
+- Treatment goal hierarchy with categorized objectives
 
-### Academic Progress Model
-- Credit-based tracking (0.25, 0.5, 1.0 increments)
-- Thursday-Wednesday week calculations
-- Performance thresholds (0.0-4.0 scale)
-- Subject-specific grade tracking
-- Behavioral incident integration
-
-### Case Notes Model
-- Structured sections: Summary, Strengths/Challenges, Interventions, Plan
-- Version control ("formatVersion": "v2")
-- AI-enhanced categorization
-- Clinical keyword tagging system
-- Treatment goal linkages
+### Progress Tracking Schema
+- Point-based privilege system
+- Academic performance metrics
+- Behavioral incident severity classification
+- Color assessment status tracking
+- Professional relationship management
 
 ## Key Relationships
 
-### Youth-to-Professional
-- Hierarchical professional relationships
-- Role-based documentation access
-- Multi-professional coordination tracking
-- Guardian relationship documentation
+### Youth to Assessments
+- One-to-many relationship between youth and behavioral assessments
+- Assessments drive treatment level assignments
+- Risk scores map to program level recommendations
+- Personality assessments influence staff interaction guidelines
 
-### Behavioral-to-Academic
-- Integrated point calculations
-- Level progression dependencies
-- Incident impact tracking
-- Performance correlation metrics
+### Youth to Progress Data
+- Daily behavioral ratings link to monthly averages
+- Point totals determine level progression
+- Incident records associate with behavioral trends
+- Academic scores integrate with behavioral assessments
 
-### Assessment-to-Treatment
-- Risk level determination (HYRNA scoring)
-- Treatment goal mapping
-- Progress indicator relationships
-- Service plan integration
+### Professional Relationships
+- Role-based associations (legal, medical, educational)
+- Unique professional type constraints
+- Contact management hierarchies
+- Treatment team assignments
 
-### Notes-to-Progress
-- Goal achievement documentation
-- Behavioral trend documentation
-- Academic progress correlation
-- Treatment effectiveness tracking
+File Paths:
+src/models/youth-profile.ts
+src/models/assessment-types.ts
+src/models/progress-tracking.ts
+src/types/relationships.ts
 
 $END$
 

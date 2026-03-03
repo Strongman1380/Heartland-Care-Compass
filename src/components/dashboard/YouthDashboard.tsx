@@ -5,8 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft } from "lucide-react";
 import { format, isValid } from "date-fns";
-import { type Youth } from "@/types/app-types";
-import { fetchYouth } from "@/utils/local-storage-utils";
+import { type Youth, youthService } from "@/integrations/firebase/services";
+import { useTodayPoints } from "@/hooks/useTodayPoints";
 
 import { YouthProfile } from "@/components/youth/YouthProfile";
 import { BehaviorCard } from "@/components/behavior/BehaviorCard";
@@ -14,6 +14,7 @@ import { ProgressNotes } from "@/components/notes/ProgressNotes";
 import { BehaviorAnalysis } from "@/components/analysis/BehaviorAnalysis";
 import { KpiDashboard } from "@/components/dashboard/KpiDashboard";
 import { ReportCenter } from "@/components/reports/ReportCenter";
+import { ProgressEvaluationReport } from "@/components/reports/ProgressEvaluationReport";
 
 interface YouthDashboardProps {
   youthId: string;
@@ -23,16 +24,17 @@ export const YouthDashboard = ({ youthId }: YouthDashboardProps) => {
   const [youth, setYouth] = useState<Youth | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { todayPoints } = useTodayPoints(youthId);
 
   useEffect(() => {
-    const fetchYouthData = () => {
+    const fetchYouthData = async () => {
       try {
         console.log("Fetching youth data for ID:", youthId);
         setIsLoading(true);
         setError(null);
-        
-        const youthData = fetchYouth(youthId);
-        
+
+        const youthData = await youthService.getById(youthId);
+
         if (youthData) {
           console.log("Found youth data:", youthData);
           setYouth(youthData);
@@ -48,7 +50,7 @@ export const YouthDashboard = ({ youthId }: YouthDashboardProps) => {
     };
 
     if (youthId) {
-      fetchYouthData();
+      void fetchYouthData();
     }
   }, [youthId]);
 
@@ -92,7 +94,7 @@ export const YouthDashboard = ({ youthId }: YouthDashboardProps) => {
           <div className="flex flex-col md:flex-row md:items-center justify-between mb-4">
             <div>
               <h2 className="text-2xl font-bold text-primary">{youth.firstName} {youth.lastName}</h2>
-              <p className="text-muted-foreground">Age: {youth.age} • Level {youth.level} • Points: {youth.pointTotal || 0}</p>
+              <p className="text-muted-foreground">Age: {youth.age} • Level {youth.level} • Today's Points: {todayPoints.toLocaleString()}</p>
               {(youth.subsystemActive || (youth.restrictionLevel != null && youth.restrictionLevel > 0) || youth.lastIncidentDate || youth.estimatedStay) && (
                 <div className="flex flex-wrap items-center gap-2 mt-2">
                   {youth.subsystemActive && (
@@ -145,6 +147,7 @@ export const YouthDashboard = ({ youthId }: YouthDashboardProps) => {
           <TabsTrigger value="notes">Case Notes</TabsTrigger>
           <TabsTrigger value="analysis">Behavior Analysis</TabsTrigger>
           <TabsTrigger value="kpi">Dashboard</TabsTrigger>
+          <TabsTrigger value="evaluations">Evaluations</TabsTrigger>
           <TabsTrigger value="reports">Reports</TabsTrigger>
         </TabsList>
 
@@ -183,6 +186,13 @@ export const YouthDashboard = ({ youthId }: YouthDashboardProps) => {
           })()}
         </TabsContent>
         
+        <TabsContent value="evaluations">
+          {(() => {
+            console.log("Rendering Evaluations tab");
+            return <ProgressEvaluationReport youth={youth as any} />;
+          })()}
+        </TabsContent>
+
         <TabsContent value="reports">
           {(() => {
             console.log("Rendering ReportCenter tab");

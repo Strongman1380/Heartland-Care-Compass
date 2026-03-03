@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { format } from "date-fns";
+import { collection, getDocs, setDoc, doc } from "firebase/firestore";
+import { db } from "@/lib/firebase";
+import type { UserRole } from "@/types/app-types";
+import { useLevelConfig, type LevelConfigEntry } from "@/hooks/useLevelConfig";
 import { Header } from "@/components/layout/Header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -87,11 +91,21 @@ const AdminFacility = () => {
   const [dailyRatings, setDailyRatings] = useState<DailyRatings[]>([]);
   const [facilityIncidents, setFacilityIncidents] = useState<FacilityIncidentReport[]>([]);
   const [referrals, setReferrals] = useState<ReferralNoteRow[]>([]);
+  const [archivedYouths, setArchivedYouths] = useState<Youth[]>([]);
+  const [isRestoringYouth, setIsRestoringYouth] = useState<string | null>(null);
+  const [isDeletingYouth, setIsDeletingYouth] = useState<string | null>(null);
+  const [userRoles, setUserRoles] = useState<Array<{ uid: string; email: string; role: UserRole }>>([]);
+  const [isUpdatingRole, setIsUpdatingRole] = useState<string | null>(null);
+
+  // Level configuration
+  const { levels: levelConfig, loading: loadingLevels, save: saveLevels } = useLevelConfig();
+  const [editingLevels, setEditingLevels] = useState<LevelConfigEntry[] | null>(null);
+  const [isSavingLevels, setIsSavingLevels] = useState(false);
 
   const loadData = async () => {
     try {
       setIsRefreshing(true);
-      const [loadedNotes, loadedReports, loadedYouths, loadedPoints, loadedCaseNotes, loadedIncidents, loadedReferrals] = await Promise.all([
+      const [loadedNotes, loadedReports, loadedYouths, loadedPoints, loadedCaseNotes, loadedIncidents, loadedReferrals, loadedArchived] = await Promise.all([
         facilityNotesService.list(),
         facilityReportsService.list(),
         youthService.getAll(),
@@ -99,6 +113,7 @@ const AdminFacility = () => {
         caseNotesService.getAll(),
         incidentReportsService.list(),
         referralNotesService.list(),
+        youthService.getArchived(),
       ]);
 
       const ratingPromises = loadedYouths.map((youth) =>
@@ -114,6 +129,7 @@ const AdminFacility = () => {
       setFacilityIncidents(loadedIncidents);
       setReferrals(loadedReferrals);
       setDailyRatings(loadedRatings);
+      setArchivedYouths(loadedArchived);
       setLastRefreshAt(new Date().toISOString());
     } catch (error) {
       console.error("Failed to load facility admin data", error);
@@ -125,6 +141,17 @@ const AdminFacility = () => {
 
   useEffect(() => {
     loadData();
+    getDocs(collection(db, 'user_roles'))
+      .then((snap) => {
+        setUserRoles(
+          snap.docs.map((d) => ({
+            uid: d.id,
+            email: (d.data().email as string) || d.id,
+            role: (d.data().role as UserRole) || 'staff',
+          }))
+        );
+      })
+      .catch(console.error);
   }, []);
 
   const metrics = useMemo(() => {
@@ -424,6 +451,67 @@ const AdminFacility = () => {
     }
   };
 
+  const handleSaveLevels = async () => {
+    if (!editingLevels) return;
+    try {
+      setIsSavingLevels(true);
+      await saveLevels(editingLevels);
+      setEditingLevels(null);
+      toast.success('Level configuration saved');
+    } catch (error) {
+      console.error(error);
+      toast.error('Failed to save level configuration');
+    } finally {
+      setIsSavingLevels(false);
+    }
+  };
+
+  const handleToggleRole = async (uid: string, currentRole: UserRole) => {
+    const newRole: UserRole = currentRole === 'admin' ? 'staff' : 'admin';
+    try {
+      setIsUpdatingRole(uid);
+      await setDoc(doc(db, 'user_roles', uid), { role: newRole }, { merge: true });
+      setUserRoles((prev) =>
+        prev.map((u) => (u.uid === uid ? { ...u, role: newRole } : u))
+      );
+      toast.success(`Role updated to ${newRole}`);
+    } catch (error) {
+      console.error(error);
+      toast.error('Failed to update role');
+    } finally {
+      setIsUpdatingRole(null);
+    }
+  };
+
+  const handleRestoreYouth = async (youthId: string) => {
+    try {
+      setIsRestoringYouth(youthId);
+      await youthService.restoreYouth(youthId);
+      setArchivedYouths((prev) => prev.filter((y) => y.id !== youthId));
+      toast.success("Youth profile restored to active list");
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to restore youth profile");
+    } finally {
+      setIsRestoringYouth(null);
+    }
+  };
+
+  const handlePermanentDeleteYouth = async (youth: Youth) => {
+    if (!confirm(`Permanently delete ${youth.firstName} ${youth.lastName}'s profile? All associated data will be lost. This cannot be undone.`)) return;
+    try {
+      setIsDeletingYouth(youth.id);
+      await youthService.delete(youth.id);
+      setArchivedYouths((prev) => prev.filter((y) => y.id !== youth.id));
+      toast.success(`${youth.firstName} ${youth.lastName}'s profile permanently deleted`);
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to permanently delete youth profile");
+    } finally {
+      setIsDeletingYouth(null);
+    }
+  };
+
   const filteredReportHistory = useMemo(() => {
     if (historyView === "all") return facilityReports;
     if (historyView === "archived") return facilityReports.filter((x) => x.archived);
@@ -625,6 +713,163 @@ const AdminFacility = () => {
                           }}
                         >
                           Delete
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Level Configuration</CardTitle>
+            <CardDescription>
+              Configure point thresholds and daily privilege requirements for each level. Changes take effect immediately.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {loadingLevels ? (
+              <p className="text-sm text-muted-foreground">Loading level configuration...</p>
+            ) : (
+              <>
+                <div className="space-y-2 mb-4">
+                  {(editingLevels ?? levelConfig).map((level, idx) => (
+                    <div key={level.docId} className="grid grid-cols-3 gap-3 items-center rounded-md border p-3 bg-white">
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-1">Level Name</p>
+                        <Input
+                          value={level.name}
+                          onChange={(e) => {
+                            const updated = [...(editingLevels ?? levelConfig)];
+                            updated[idx] = { ...updated[idx], name: e.target.value };
+                            setEditingLevels(updated);
+                          }}
+                        />
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-1">Points Required</p>
+                        <Input
+                          type="number"
+                          min={0}
+                          value={level.cumulativePointsRequired === Infinity ? '' : level.cumulativePointsRequired}
+                          placeholder="Max level"
+                          onChange={(e) => {
+                            const val = e.target.value === '' ? Infinity : Number(e.target.value);
+                            const updated = [...(editingLevels ?? levelConfig)];
+                            updated[idx] = { ...updated[idx], cumulativePointsRequired: val };
+                            setEditingLevels(updated);
+                          }}
+                        />
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-1">Daily Pts for Privileges</p>
+                        <Input
+                          type="number"
+                          min={0}
+                          value={level.dailyPointsForPrivileges}
+                          onChange={(e) => {
+                            const updated = [...(editingLevels ?? levelConfig)];
+                            updated[idx] = { ...updated[idx], dailyPointsForPrivileges: Number(e.target.value) };
+                            setEditingLevels(updated);
+                          }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex gap-2">
+                  <Button onClick={handleSaveLevels} disabled={isSavingLevels || !editingLevels}>
+                    {isSavingLevels ? 'Saving...' : 'Save Level Config'}
+                  </Button>
+                  {editingLevels && (
+                    <Button variant="outline" onClick={() => setEditingLevels(null)}>
+                      Cancel
+                    </Button>
+                  )}
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>User Management</CardTitle>
+            <CardDescription>
+              Manage staff roles. Toggle between staff and admin access. Users with no role doc default to staff.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {userRoles.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No user role records found. Users default to staff until a role is assigned.</p>
+            ) : (
+              <div className="space-y-2">
+                {userRoles.map((u) => (
+                  <div key={u.uid} className="flex items-center justify-between rounded-md border p-3 bg-white">
+                    <div>
+                      <p className="text-sm font-medium">{u.email}</p>
+                      <p className="text-xs text-muted-foreground capitalize">{u.role}</p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={isUpdatingRole === u.uid}
+                      onClick={() => handleToggleRole(u.uid, u.role)}
+                    >
+                      {isUpdatingRole === u.uid
+                        ? 'Updating...'
+                        : u.role === 'admin' ? 'Remove Admin' : 'Make Admin'}
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Archived Youth Profiles</CardTitle>
+            <CardDescription>
+              Youth profiles that have been archived by staff. Restore to return them to the active list, or permanently delete to remove all associated data.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {archivedYouths.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No archived youth profiles.</p>
+            ) : (
+              <div className="space-y-2">
+                {archivedYouths.map((youth) => (
+                  <div key={youth.id} className="rounded-md border p-3 bg-white">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="font-semibold text-sm">{youth.lastName}, {youth.firstName}</p>
+                        <p className="text-xs text-muted-foreground">
+                          Level {youth.level} · Age {youth.age ?? "N/A"}
+                          {youth.archivedAt ? ` · Archived ${format(new Date(youth.archivedAt), "MMM d, yyyy")}` : ""}
+                          {youth.archivedBy ? ` by ${youth.archivedBy}` : ""}
+                        </p>
+                      </div>
+                      <div className="flex gap-2 flex-shrink-0">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={isRestoringYouth === youth.id}
+                          onClick={() => handleRestoreYouth(youth.id)}
+                        >
+                          {isRestoringYouth === youth.id ? "Restoring..." : "Restore"}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+                          disabled={isDeletingYouth === youth.id}
+                          onClick={() => handlePermanentDeleteYouth(youth)}
+                        >
+                          {isDeletingYouth === youth.id ? "Deleting..." : "Permanently Delete"}
                         </Button>
                       </div>
                     </div>

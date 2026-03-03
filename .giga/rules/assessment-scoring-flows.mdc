@@ -1,72 +1,46 @@
 ---
-description: Defines rules for assessment scoring, risk evaluation, and placement workflows in a youth treatment facility
+description: Documents all assessment scoring workflows including personality tests, risk calculations, and placement evaluations
 ---
 
 
 # assessment-scoring-flows
 
-Core Assessment Systems:
+Key Assessment Scoring Systems:
 
-## 1. Risk Assessment System
+## Risk Assessment (RiskAssessment.tsx)
 Importance Score: 85
-Location: src/components/assessment/RiskAssessment.tsx
+- HYRNA scoring implementation across 8 domains
+- Domain weightings: prior offending (0.3), family (0.15), education (0.1), peer relations (0.15), substance use (0.1), recreation (0.05), personality (0.1), attitudes (0.05)
+- Risk level thresholds:
+  - Very Low: 0-15%
+  - Low: 16-30% 
+  - Low Medium: 30-44%
+  - Medium: 44-58%
+  - Medium High: 58-72%
+  - High: 72-86%
+  - Very High: >86%
 
-- 8-domain youth risk evaluation framework
-- Risk level calculation using weighted domain scores:
-  * 0-25%: Low Risk
-  * 26-50%: Moderate Risk
-  * 51-75%: High Risk
-  * 76-100%: Very High Risk
-- Auto-generates recommended placement levels (1-4)
-- Domain-specific question weighting for risk profiling
-
-## 2. Real Colors Personality Assessment
+## Real Colors Personality Assessment (ColorAssessment.tsx) 
 Importance Score: 75
-Location: src/components/assessment/RealColorsAssessment.tsx
+- Forced-choice ranking across 6 trait groups
+- Four personality dimensions: Heart, Anchor, Mind, Spark
+- Primary/secondary style determination from cumulative scores
+- Maps personality types to staff interaction guidelines
 
-- Four-color personality model (Gold, Blue, Green, Orange)
-- Trait mapping and scoring for each color profile
-- Staff approach recommendations based on color compatibility
-- Primary/secondary color determination with weighted scoring
-
-## 3. Comprehensive Placement Assessment
-Importance Score: 80
-Location: src/components/assessment/ComprehensivePlacementAssessment.tsx
-
-- 7-area placement evaluation system
-- Domain scoring (0-4) with specialized interpretations
-- Treatment level determination based on composite scores
-- Safety protocol generation from risk factors
-
-## 4. Quick ISP Assessment
+## Individual Service Plan Assessment (QuickISPAssessment.tsx)
 Importance Score: 70
-Location: src/components/assessment/QuickISPAssessment.tsx
+- Treatment goal categorization system
+- Early warning sign tracking
+- Intervention effectiveness scoring
+- Progress tracking with customizable measures
+- Staff approach mapping by personality type
 
-- Rapid service planning with 5 treatment goal types
-- Real-time risk evaluation
-- Support plan generation from behavioral indicators
-- Progress tracking matrix with measurement criteria
-
-## 5. Behavioral Rating System
-Importance Score: 85
-Location: src/components/youth/ConsolidatedScoringTab.tsx
-
-- 0-4 scale scoring across domains:
-  * Peer Interaction
-  * Adult Interaction
-  * Investment Level
-  * Deal with Authority
-- Real-time average calculations
-- Historical trend tracking
-- AI-enhanced behavioral assessment comments
-
-## Integration Points
-
-- Assessment results feed into placement recommendations
-- Risk scores influence treatment level assignments
-- Color profiles guide staff interaction approaches
-- Behavioral ratings impact level progression
-- Assessment scores determine service plan requirements
+## Assessment Integration Rules
+- All assessments feed youth risk calculations
+- Results determine treatment level assignments
+- Historical assessment change tracking
+- Auto-save with domain validation
+- Required reassessment scheduling
 
 $END$
 

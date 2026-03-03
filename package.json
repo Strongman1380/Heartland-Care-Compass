@@ -19,11 +19,12 @@
     "deploy:hosting": "npm run build && firebase deploy --only hosting",
     "deploy:functions": "cd functions && npm install && cd .. && firebase deploy --only functions",
     "deploy:rules": "firebase deploy --only firestore:rules,firestore:indexes",
-    "test": "jest tests/incident-api.test.js",
+    "test": "jest --config jest.config.cjs tests/incident-api.test.js",
+    "test:unit": "jest --config jest.config.cjs --testPathPatterns=\"__tests__\" --no-coverage",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:headed": "playwright test --headed",
-    "test:all": "npm run test && npm run test:e2e"
+    "test:all": "npm run test:unit && npm run test && npm run test:e2e"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.901.0",
@@ -98,6 +99,7 @@
     "@eslint/js": "^9.9.0",
     "@playwright/test": "^1.56.0",
     "@tailwindcss/typography": "^0.5.15",
+    "@types/jest": "^30.0.0",
     "@types/node": "^22.5.5",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
@@ -114,8 +116,10 @@
     "jest": "^30.2.0",
     "playwright": "^1.56.0",
     "postcss": "^8.4.47",
+    "prettier": "^3.8.1",
     "supertest": "^7.1.4",
     "tailwindcss": "^3.4.11",
+    "ts-jest": "^29.4.6",
     "typescript": "^5.5.3",
     "typescript-eslint": "^8.0.1",
     "vite": "^5.4.1"

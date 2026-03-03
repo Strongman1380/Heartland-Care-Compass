@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ChevronDown, ChevronRight, Download, Edit2, FileText, Loader2, Printer, Save, Search, Trash2, Upload, X } from "lucide-react";
+import { ChevronDown, ChevronRight, Download, Edit2, FileText, Loader2, Mic, MicOff, Printer, Save, Search, Trash2, Upload, Users, X } from "lucide-react";
 import { toast } from "sonner";
 import { format, parseISO } from "date-fns";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -23,8 +23,8 @@ interface EnhancedCaseNotesProps {
   onBackToSelection?: () => void;
 }
 
-type CreateMode = "session" | "combined";
-type ParsedNoteType = "session" | "general" | "shift" | "school" | "legacy";
+type CreateMode = "session" | "combined" | "team-meeting";
+type ParsedNoteType = "session" | "general" | "shift" | "school" | "team-meeting" | "legacy";
 
 type SessionFormData = {
   date: string;
@@ -36,6 +36,15 @@ type CombinedFormData = {
   date: string;
   staff: string;
   content: string;
+};
+
+type TeamMeetingFormData = {
+  date: string;
+  staff: string;
+  attendees: string;
+  objectives: string;
+  discussion: string;
+  actionItems: string;
 };
 
 type CombinedClassification = {
@@ -187,6 +196,17 @@ const parseNote = (note: CaseNote): ParsedNote => {
       return { noteType: "school", text: combined || note.summary || "" };
     }
 
+    if (noteType === "team-meeting") {
+      const sections = parsed?.sections || {};
+      const combined = [
+        sections.attendees ? `Attendees: ${sections.attendees}` : "",
+        sections.objectives ? `Objectives: ${sections.objectives}` : "",
+        sections.discussion ? `Discussion: ${sections.discussion}` : "",
+        sections.actionItems ? `Action Items: ${sections.actionItems}` : "",
+      ].filter(Boolean).join("\n\n");
+      return { noteType: "team-meeting", text: combined || note.summary || "" };
+    }
+
     return { noteType: "legacy", text: parsed?.summary || note.summary || note.note };
   } catch {
     return { noteType: "legacy", text: note.note || note.summary || "" };
@@ -198,6 +218,7 @@ const getBadgeForType = (parsed: ParsedNote) => {
   if (parsed.noteType === "shift") return <Badge variant="secondary">Shift</Badge>;
   if (parsed.noteType === "general") return <Badge variant="outline">General</Badge>;
   if (parsed.noteType === "school") return <Badge variant="secondary">School</Badge>;
+  if (parsed.noteType === "team-meeting") return <Badge className="bg-blue-700 text-white hover:bg-blue-800">Team Meeting</Badge>;
   return <Badge variant="outline">Legacy</Badge>;
 };
 
@@ -218,6 +239,23 @@ export const EnhancedCaseNotes = ({ youthId, youth }: EnhancedCaseNotesProps) =>
   const [bulkStaff, setBulkStaff] = useState("");
   const [bulkParsedNotes, setBulkParsedNotes] = useState<{ date: string; content: string }[]>([]);
   const [isBulkImporting, setIsBulkImporting] = useState(false);
+
+  // Team meeting form state
+  const [teamMeetingFormData, setTeamMeetingFormData] = useState<TeamMeetingFormData>({
+    date: format(new Date(), "yyyy-MM-dd"),
+    staff: "",
+    attendees: "",
+    objectives: "",
+    discussion: "",
+    actionItems: "",
+  });
+
+  // Audio recording state
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [isOrganizing, setIsOrganizing] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
 
   const printRef = useRef<HTMLDivElement>(null);
 
@@ -292,6 +330,14 @@ export const EnhancedCaseNotes = ({ youthId, youth }: EnhancedCaseNotesProps) =>
       date: format(new Date(), "yyyy-MM-dd"),
       staff: "",
       content: "",
+    });
+    setTeamMeetingFormData({
+      date: format(new Date(), "yyyy-MM-dd"),
+      staff: "",
+      attendees: "",
+      objectives: "",
+      discussion: "",
+      actionItems: "",
     });
   };
 
@@ -371,12 +417,102 @@ export const EnhancedCaseNotes = ({ youthId, youth }: EnhancedCaseNotesProps) =>
     setActiveTab("history");
   };
 
+  const handleSaveTeamMeeting = async () => {
+    if (!teamMeetingFormData.staff.trim()) { toast.error("Staff name is required."); return; }
+    if (!teamMeetingFormData.discussion.trim()) { toast.error("Please enter at least a discussion summary."); return; }
+    const youthName = `${selectedYouth?.firstName || youth?.firstName || ""} ${selectedYouth?.lastName || youth?.lastName || ""}`.trim();
+    const summary = truncateForSummary(`[Team Meeting] ${teamMeetingFormData.discussion}`);
+    const payload = {
+      youth_id: youthId,
+      date: teamMeetingFormData.date,
+      staff: teamMeetingFormData.staff.trim(),
+      summary,
+      note: JSON.stringify({
+        formatVersion: "v4",
+        noteType: "team-meeting",
+        youthName,
+        sections: {
+          attendees: teamMeetingFormData.attendees.trim(),
+          objectives: teamMeetingFormData.objectives.trim(),
+          discussion: teamMeetingFormData.discussion.trim(),
+          actionItems: teamMeetingFormData.actionItems.trim(),
+        },
+      }),
+    };
+    await createCaseNote(payload);
+    toast.success("Team meeting note saved.");
+    resetForms();
+    setActiveTab("history");
+  };
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioChunksRef.current = [];
+      const mr = new MediaRecorder(stream, { mimeType: MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "audio/mp4" });
+      mr.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
+      mr.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const blob = new Blob(audioChunksRef.current, { type: mr.mimeType });
+        await transcribeAndOrganize(blob, mr.mimeType);
+      };
+      mr.start(1000);
+      mediaRecorderRef.current = mr;
+      setIsRecording(true);
+    } catch {
+      toast.error("Microphone access denied. Please allow microphone access in your browser settings.");
+    }
+  };
+
+  const stopRecording = () => {
+    mediaRecorderRef.current?.stop();
+    setIsRecording(false);
+  };
+
+  const transcribeAndOrganize = async (blob: Blob, mimeType: string) => {
+    const youthName = `${selectedYouth?.firstName || youth?.firstName || ""} ${selectedYouth?.lastName || youth?.lastName || ""}`.trim();
+    try {
+      setIsTranscribing(true);
+      const fd = new FormData();
+      const ext = mimeType.includes("mp4") || mimeType.includes("m4a") ? "m4a" : mimeType.includes("ogg") ? "ogg" : "webm";
+      fd.append("audio", blob, `recording.${ext}`);
+      const transcriptRes = await fetch("/api/ai/transcribe-audio", { method: "POST", body: fd });
+      if (!transcriptRes.ok) throw new Error("Transcription failed");
+      const { transcript } = await transcriptRes.json();
+      setIsTranscribing(false);
+
+      setIsOrganizing(true);
+      const organizeRes = await fetch("/api/ai/organize-meeting-notes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ transcript, youthName }),
+      });
+      if (!organizeRes.ok) throw new Error("Failed to organize notes");
+      const { attendees, objectives, discussion, actionItems } = await organizeRes.json();
+      setTeamMeetingFormData((prev) => ({
+        ...prev,
+        attendees: attendees || prev.attendees,
+        objectives: objectives || prev.objectives,
+        discussion: discussion || prev.discussion,
+        actionItems: actionItems || prev.actionItems,
+      }));
+      toast.success("Recording transcribed and organized into form fields. Review and save.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Audio processing failed.");
+    } finally {
+      setIsTranscribing(false);
+      setIsOrganizing(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       setIsSubmitting(true);
       if (createMode === "session") {
         await handleSaveSession();
+      } else if (createMode === "team-meeting") {
+        await handleSaveTeamMeeting();
       } else {
         await handleSaveCombined();
       }
@@ -836,6 +972,31 @@ export const EnhancedCaseNotes = ({ youthId, youth }: EnhancedCaseNotesProps) =>
     }
 
     const parsed = parseNote(note);
+
+    if (parsed.noteType === "team-meeting") {
+      let sections: Record<string, string> = {};
+      try { sections = JSON.parse(note.note || "{}")?.sections || {}; } catch { /* ignore */ }
+      return (
+        <div className="space-y-3">
+          {sections.attendees && (
+            <div><p className="text-xs font-semibold text-blue-700 uppercase tracking-wide mb-0.5">Attendees</p><p className="text-sm text-gray-700 whitespace-pre-wrap">{sections.attendees}</p></div>
+          )}
+          {sections.objectives && (
+            <div><p className="text-xs font-semibold text-blue-700 uppercase tracking-wide mb-0.5">Meeting Objectives</p><p className="text-sm text-gray-700 whitespace-pre-wrap">{sections.objectives}</p></div>
+          )}
+          {sections.discussion && (
+            <div><p className="text-xs font-semibold text-blue-700 uppercase tracking-wide mb-0.5">Discussion Summary</p><p className="text-sm text-gray-700 whitespace-pre-wrap">{sections.discussion}</p></div>
+          )}
+          {sections.actionItems && (
+            <div><p className="text-xs font-semibold text-blue-700 uppercase tracking-wide mb-0.5">Action Items / Next Steps</p><p className="text-sm text-gray-700 whitespace-pre-wrap">{sections.actionItems}</p></div>
+          )}
+          {!sections.attendees && !sections.discussion && (
+            <p className="text-sm text-gray-700 whitespace-pre-wrap">{parsed.text || note.summary}</p>
+          )}
+        </div>
+      );
+    }
+
     return (
       <div className="space-y-2">
         {parsed.tags && parsed.tags.length > 0 && (
@@ -878,10 +1039,11 @@ export const EnhancedCaseNotes = ({ youthId, youth }: EnhancedCaseNotesProps) =>
             <CardHeader>
               <CardTitle>Create Case Note</CardTitle>
               <CardDescription>
-                Session note is simple skill-building documentation. Combined notes auto-classify and split into the log after Save.
+                Choose a note type. Team Meeting notes can be filled by recording the meeting audio.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              {/* Note type selector */}
               <div className="flex flex-wrap gap-2">
                 <Button
                   type="button"
@@ -897,11 +1059,21 @@ export const EnhancedCaseNotes = ({ youthId, youth }: EnhancedCaseNotesProps) =>
                   onClick={() => setCreateMode("combined")}
                   className={`flex-1 ${createMode === "combined" ? "bg-[#823131] hover:bg-[#6b2828] text-white border-[#823131]" : "border-gray-300 text-gray-700 hover:bg-gray-50"}`}
                 >
-                  General / Shift Notes (AI)
+                  General / Shift (AI)
+                </Button>
+                <Button
+                  type="button"
+                  variant={createMode === "team-meeting" ? "default" : "outline"}
+                  onClick={() => setCreateMode("team-meeting")}
+                  className={`flex-1 ${createMode === "team-meeting" ? "bg-blue-700 hover:bg-blue-800 text-white border-blue-700" : "border-blue-300 text-blue-700 hover:bg-blue-50"}`}
+                >
+                  <Users className="h-4 w-4 mr-1.5" />
+                  Team Meeting
                 </Button>
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-4">
+                {/* Date and Staff — always shown */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Label htmlFor="date">Date</Label>
@@ -909,8 +1081,17 @@ export const EnhancedCaseNotes = ({ youthId, youth }: EnhancedCaseNotesProps) =>
                       id="date"
                       name="date"
                       type="date"
-                      value={createMode === "session" ? sessionFormData.date : combinedFormData.date}
-                      onChange={createMode === "session" ? handleSessionChange : handleCombinedChange}
+                      value={
+                        createMode === "session" ? sessionFormData.date
+                        : createMode === "team-meeting" ? teamMeetingFormData.date
+                        : combinedFormData.date
+                      }
+                      onChange={
+                        createMode === "session" ? handleSessionChange
+                        : createMode === "team-meeting"
+                          ? (e) => setTeamMeetingFormData((p) => ({ ...p, date: e.target.value }))
+                        : handleCombinedChange
+                      }
                       required
                     />
                   </div>
@@ -919,15 +1100,25 @@ export const EnhancedCaseNotes = ({ youthId, youth }: EnhancedCaseNotesProps) =>
                     <Input
                       id="staff"
                       name="staff"
-                      value={createMode === "session" ? sessionFormData.staff : combinedFormData.staff}
-                      onChange={createMode === "session" ? handleSessionChange : handleCombinedChange}
+                      value={
+                        createMode === "session" ? sessionFormData.staff
+                        : createMode === "team-meeting" ? teamMeetingFormData.staff
+                        : combinedFormData.staff
+                      }
+                      onChange={
+                        createMode === "session" ? handleSessionChange
+                        : createMode === "team-meeting"
+                          ? (e) => setTeamMeetingFormData((p) => ({ ...p, staff: e.target.value }))
+                        : handleCombinedChange
+                      }
                       placeholder="Staff name"
                       required
                     />
                   </div>
                 </div>
 
-                {createMode === "session" ? (
+                {/* Session note content */}
+                {createMode === "session" && (
                   <div>
                     <Label htmlFor="content">Session Note (Skill Building)</Label>
                     <Textarea
@@ -940,9 +1131,12 @@ export const EnhancedCaseNotes = ({ youthId, youth }: EnhancedCaseNotesProps) =>
                       required
                     />
                   </div>
-                ) : (
+                )}
+
+                {/* General / Shift content */}
+                {createMode === "combined" && (
                   <div className="space-y-2">
-                    <Label htmlFor="content">General/Shift Notes Input</Label>
+                    <Label htmlFor="content">General / Shift Notes Input</Label>
                     <Textarea
                       id="content"
                       name="content"
@@ -958,8 +1152,94 @@ export const EnhancedCaseNotes = ({ youthId, youth }: EnhancedCaseNotesProps) =>
                   </div>
                 )}
 
-                <Button type="submit" disabled={isSubmitting} className="w-full bg-[#823131] hover:bg-[#6b2828] text-white border-[#823131]">
-                  {isSubmitting ? "Saving..." : createMode === "session" ? "Save Session Note" : "Save and Classify Notes"}
+                {/* Team Meeting fields */}
+                {createMode === "team-meeting" && (
+                  <div className="space-y-4">
+                    {/* Audio recording strip */}
+                    <div className="flex items-center gap-3 rounded-md border border-blue-200 bg-blue-50 p-3">
+                      {!isRecording ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="bg-blue-700 hover:bg-blue-800 text-white"
+                          onClick={startRecording}
+                          disabled={isTranscribing || isOrganizing}
+                        >
+                          <Mic className="h-4 w-4 mr-1.5" />
+                          Record Meeting
+                        </Button>
+                      ) : (
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="bg-red-600 hover:bg-red-700 text-white animate-pulse"
+                          onClick={stopRecording}
+                        >
+                          <MicOff className="h-4 w-4 mr-1.5" />
+                          Stop Recording
+                        </Button>
+                      )}
+                      {(isTranscribing || isOrganizing) && (
+                        <span className="flex items-center gap-1.5 text-xs text-blue-700">
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          {isTranscribing ? "Transcribing audio…" : "Organizing into fields…"}
+                        </span>
+                      )}
+                      {!isRecording && !isTranscribing && !isOrganizing && (
+                        <span className="text-xs text-blue-600">
+                          Record the meeting and AI will fill the fields below automatically.
+                        </span>
+                      )}
+                    </div>
+
+                    <div>
+                      <Label>Attendees</Label>
+                      <Input
+                        value={teamMeetingFormData.attendees}
+                        onChange={(e) => setTeamMeetingFormData((p) => ({ ...p, attendees: e.target.value }))}
+                        placeholder="Names and roles of everyone present"
+                      />
+                    </div>
+                    <div>
+                      <Label>Meeting Objectives / Purpose</Label>
+                      <Textarea
+                        value={teamMeetingFormData.objectives}
+                        onChange={(e) => setTeamMeetingFormData((p) => ({ ...p, objectives: e.target.value }))}
+                        placeholder="Goals or purpose of this meeting"
+                        rows={3}
+                      />
+                    </div>
+                    <div>
+                      <Label>Discussion Summary <span className="text-red-500">*</span></Label>
+                      <Textarea
+                        value={teamMeetingFormData.discussion}
+                        onChange={(e) => setTeamMeetingFormData((p) => ({ ...p, discussion: e.target.value }))}
+                        placeholder="Summary of topics discussed during the meeting"
+                        rows={5}
+                        required
+                      />
+                    </div>
+                    <div>
+                      <Label>Action Items / Next Steps</Label>
+                      <Textarea
+                        value={teamMeetingFormData.actionItems}
+                        onChange={(e) => setTeamMeetingFormData((p) => ({ ...p, actionItems: e.target.value }))}
+                        placeholder="Concrete next steps, who is responsible, and follow-up dates"
+                        rows={4}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <Button
+                  type="submit"
+                  disabled={isSubmitting || isRecording || isTranscribing || isOrganizing}
+                  className={`w-full text-white ${createMode === "team-meeting" ? "bg-blue-700 hover:bg-blue-800" : "bg-[#823131] hover:bg-[#6b2828]"}`}
+                >
+                  {isSubmitting ? "Saving…"
+                    : createMode === "session" ? "Save Session Note"
+                    : createMode === "team-meeting" ? "Save Team Meeting Note"
+                    : "Save and Classify Notes"}
                 </Button>
               </form>
             </CardContent>

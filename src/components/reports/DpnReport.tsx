@@ -33,6 +33,7 @@ export function DpnReport({
   const [ratingsInRange, setRatingsInRange] = useState<DailyRating[]>([]);
   const [aiNarrative, setAiNarrative] = useState<string>("");
   const [aiFieldComments, setAiFieldComments] = useState<DPNFieldComments | null>(null);
+  const [isGeneratingAI, setIsGeneratingAI] = useState(false);
   const [autoExported, setAutoExported] = useState(false);
   const [pointsInRange, setPointsInRange] = useState<BehaviorPoints[]>([]);
   const [notesInRange, setNotesInRange] = useState<ProgressNote[]>([]);
@@ -112,69 +113,81 @@ export function DpnReport({
   useEffect(() => {
     if (periodFrom && periodTo) {
       recalc();
+      setAiNarrative("");
+      setAiFieldComments(null);
+      setAutoExported(false);
     }
   }, [periodFrom, periodTo]);
 
-  // Kick off AI summary after ratings are loaded; include fallback timeout export
+  // Auto-export hidden DPN generation requests without triggering AI
   useEffect(() => {
-    let timeoutId: any;
     const ready = !!periodFrom && !!periodTo && !!printRef.current && ratingsInRange !== undefined;
-    if (!ready || autoExported) return;
+    if (!ready || autoExported || !onAutoExportComplete) return;
 
-    // Start AI generation in background
-    const runAI = async () => {
-      try {
-        const variantToType = variant === 'weekly' ? 'dpnWeekly' : variant === 'biweekly' ? 'dpnBiWeekly' : 'dpnMonthly';
-        const payload = {
-          youth,
-          reportType: variantToType,
-          period: { startDate: new Date(periodFrom).toISOString(), endDate: new Date(periodTo).toISOString() },
-          data: { dailyRatings: ratingsInRange, behaviorPoints: pointsInRange, progressNotes: notesInRange }
-        };
-
-        // Generate both narrative and field comments
-        const [aiText, fieldComments] = await Promise.all([
-          summarizeReport(payload),
-          Promise.resolve(generateDPNFieldComments(payload))
-        ]);
-
-        if (aiText) setAiNarrative(aiText);
-        if (fieldComments) setAiFieldComments(fieldComments);
-      } catch (e) {
-        // AI optional; proceed without blocking
-        console.warn('AI narrative unavailable for DPN; proceeding without it');
-      }
-    };
-
-    runAI();
-
-    // Export after AI completes or after 5s, whichever first
-    const tryExport = async () => {
+    const timerId = window.setTimeout(async () => {
       if (autoExported) return;
       try {
-        // Slight delay to ensure DOM renders AI section if present
-        setTimeout(async () => {
-          if (!printRef.current) return;
-          await exportPDF();
-          setAutoExported(true);
-          onAutoExportComplete && onAutoExportComplete();
-        }, 300);
+        if (!printRef.current) return;
+        await exportPDF();
+        setAutoExported(true);
+        onAutoExportComplete();
       } catch (error) {
         console.error("Error auto-generating DPN PDF:", error);
       }
-    };
+    }, 300);
 
-    // Fallback timer
-    timeoutId = setTimeout(tryExport, 5000);
+    return () => window.clearTimeout(timerId);
+  }, [ratingsInRange, periodFrom, periodTo, autoExported, onAutoExportComplete]);
 
-    // When AI finishes, export early and clear fallback
-    if (aiNarrative) {
-      clearTimeout(timeoutId);
-      tryExport();
+  const handleGenerateAISummary = async () => {
+    if (!periodFrom || !periodTo) return;
+
+    setIsGeneratingAI(true);
+    try {
+      const variantToType = variant === 'weekly' ? 'dpnWeekly' : variant === 'biweekly' ? 'dpnBiWeekly' : 'dpnMonthly';
+      const payload = {
+        youth,
+        reportType: variantToType,
+        period: { startDate: new Date(periodFrom).toISOString(), endDate: new Date(periodTo).toISOString() },
+        data: { dailyRatings: ratingsInRange, behaviorPoints: pointsInRange, progressNotes: notesInRange }
+      };
+
+      const [aiText, fieldComments] = await Promise.all([
+        summarizeReport(payload),
+        Promise.resolve(generateDPNFieldComments(payload))
+      ]);
+
+      if (aiText) setAiNarrative(aiText);
+      if (fieldComments) setAiFieldComments(fieldComments);
+
+      if (aiText || fieldComments) {
+        // Surface the generated content in the editable fields unless the user already entered text.
+        const nextComments = {
+          peer: comments.peer || fieldComments?.peerInteraction || '',
+          adult: comments.adult || fieldComments?.adultInteraction || '',
+          investment: comments.investment || fieldComments?.investmentLevel || '',
+          authority: comments.authority || fieldComments?.dealWithAuthority || '',
+          strengths: comments.strengths || fieldComments?.socialStrengths || '',
+          deficiencies: comments.deficiencies || fieldComments?.socialDeficiencies || '',
+        };
+        setComments(nextComments);
+        saveDpnComments({
+          youth_id: youth.id,
+          periodStart: new Date(periodFrom).toISOString(),
+          periodEnd: new Date(periodTo).toISOString(),
+          variant,
+          ...nextComments,
+        });
+        return;
+      }
+
+      throw new Error('AI did not return any content');
+    } catch (e) {
+      console.warn('AI narrative unavailable for DPN:', e);
+    } finally {
+      setIsGeneratingAI(false);
     }
-
-    return () => clearTimeout(timeoutId);
-  }, [ratingsInRange, pointsInRange, notesInRange, periodFrom, periodTo, aiNarrative, autoExported, variant, youth]);
+  };
 
   const handleSaveComments = () => {
     if (!periodFrom || !periodTo) return;
@@ -267,7 +280,10 @@ export function DpnReport({
             </div>
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
+            <Button variant="outline" onClick={handleGenerateAISummary} disabled={isGeneratingAI}>
+              {isGeneratingAI ? 'Generating AI...' : 'Generate AI Summary'}
+            </Button>
             <Button variant="outline" onClick={handleSaveComments}>Save Comments</Button>
             <Button variant="outline" onClick={exportPDF}>Export PDF</Button>
             <Button variant="outline" onClick={exportDOCX}>Export DOCX</Button>

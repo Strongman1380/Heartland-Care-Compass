@@ -41,7 +41,7 @@ const resolveFirebaseValue = (
   return envValue.trim();
 };
 
-const firebaseConfig = {
+const envFirebaseConfig = {
   apiKey: resolveFirebaseValue(
     'VITE_FIREBASE_API_KEY',
     import.meta.env.VITE_FIREBASE_API_KEY,
@@ -78,6 +78,18 @@ const firebaseConfig = {
     defaultFirebaseConfig.measurementId
   ),
 };
+
+// This app's live youth data is in heartland-boys-home-data. If a stale env config
+// points somewhere else (for example an older Vercel project), force the canonical project.
+const firebaseConfig =
+  envFirebaseConfig.projectId === defaultFirebaseConfig.projectId
+    ? envFirebaseConfig
+    : (() => {
+        console.warn(
+          `[firebase] Ignoring mismatched Firebase project "${envFirebaseConfig.projectId}" and using "${defaultFirebaseConfig.projectId}".`
+        );
+        return defaultFirebaseConfig;
+      })();
 
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);

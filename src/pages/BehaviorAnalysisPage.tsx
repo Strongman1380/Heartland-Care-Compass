@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Header } from "@/components/layout/Header";
 import { BehaviorAnalysis } from "@/components/analysis/BehaviorAnalysis";
 import { YouthSelector } from "@/components/common/YouthSelector";
+import { AwardsSection } from "@/components/common/AwardsSection";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useYouth } from "@/hooks/useSupabase";
 import { type Youth } from "@/integrations/firebase/services";
@@ -51,7 +52,7 @@ const BehaviorAnalysisPage = () => {
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           <div className="md:col-span-1">
-            <YouthSelector onSelectYouth={handleYouthSelect} selectedYouthId={selectedYouthId || undefined} />
+            <YouthSelector onSelectYouth={handleYouthSelect} selectedYouthId={selectedYouthId || undefined} showAwards={false} />
           </div>
 
           <div className="md:col-span-3">
@@ -69,8 +70,11 @@ const BehaviorAnalysisPage = () => {
             ) : selectedYouthId && selectedYouth ? (
               <BehaviorAnalysis youthId={selectedYouthId} youth={selectedYouth} />
             ) : (
-              <div className="p-8 border rounded-lg bg-white text-center">
-                <p className="text-gray-600">Please select a youth to begin behavior analysis</p>
+              <div className="space-y-4">
+                <div className="p-6 border rounded-lg bg-white text-center">
+                  <p className="text-gray-500 text-lg font-medium">Select a youth from the list to begin behavior analysis</p>
+                </div>
+                <AwardsSection />
               </div>
             )}
           </div>

@@ -109,7 +109,6 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
   // AI enhancement state
   const [isEnhancing, setIsEnhancing] = useState<string | null>(null);
   const [isAutoPopulating, setIsAutoPopulating] = useState(false);
-  const [shouldAutoPopulate, setShouldAutoPopulate] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [aiUnavailableNotified, setAiUnavailableNotified] = useState(false);
 
@@ -371,7 +370,7 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
     const daysTracked = monthPoints.length;
     const avgPoints = daysTracked > 0 ? (totalPoints / daysTracked).toFixed(1) : "0";
 
-    let summary = `During this reporting period, ${youth.firstName} is at Level ${youth.level} with ${youth.pointTotal?.toLocaleString() || 0} cumulative points. `;
+    let summary = `During this reporting period, ${youth.firstName} is at Level ${youth.level} with ${youth.pointTotal?.toLocaleString() || 0} cumulative points on record. `;
 
     if (daysTracked > 0) {
       summary += `${daysTracked} days were tracked this month with ${totalPoints.toLocaleString()} total points earned (average: ${avgPoints} points/day). `;
@@ -520,12 +519,10 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
           console.log('Loaded saved report data from localStorage');
         } catch (error) {
           console.error("Error loading saved data:", error);
-          setShouldAutoPopulate(true);
         }
       } else {
-        // No saved data exists — auto-populate with AI from case notes and documentation
-        console.log('No saved data found, auto-populating with AI from case notes');
-        setShouldAutoPopulate(true);
+        // No saved data exists — leave narrative generation as a manual action.
+        console.log('No saved data found; AI population is available manually from the report controls');
       }
     };
 
@@ -909,18 +906,6 @@ Discuss behavioral patterns, compliance, response to redirection, and emphasize 
       setIsAutoPopulating(false);
     }
   };
-
-  // Keep a ref to the latest handleAIPopulateAll to avoid stale closures
-  const handleAIPopulateAllRef = useRef(handleAIPopulateAll);
-  handleAIPopulateAllRef.current = handleAIPopulateAll;
-
-  // Auto-trigger AI population when no saved draft exists
-  useEffect(() => {
-    if (shouldAutoPopulate && youth?.id && !isAutoPopulating) {
-      setShouldAutoPopulate(false);
-      handleAIPopulateAllRef.current(true);
-    }
-  }, [shouldAutoPopulate, youth?.id, isAutoPopulating]);
 
   const handleSave = async () => {
     if (!youth?.id) return;

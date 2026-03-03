@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { PointSummaryInline } from "@/components/common/PointSummaryInline";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Edit, Trash2, Archive, Users } from "lucide-react";
@@ -283,7 +284,7 @@ export const YouthProfilesTable = ({ youths, loading, onYouthSelect, onYouthUpda
                 <TableHead>Name</TableHead>
                 <TableHead>Age</TableHead>
                 <TableHead>Level</TableHead>
-                <TableHead>Points</TableHead>
+                <TableHead>Point Summary</TableHead>
                 <TableHead>Admission Date</TableHead>
                 <TableHead>Length of Stay</TableHead>
                 <TableHead>Actions</TableHead>
@@ -306,7 +307,9 @@ export const YouthProfilesTable = ({ youths, loading, onYouthSelect, onYouthUpda
                   </TableCell>
                   <TableCell>{youth.age || "N/A"}</TableCell>
                   <TableCell>Level {youth.level}</TableCell>
-                  <TableCell>{youth.pointTotal || 0}</TableCell>
+                  <TableCell>
+                    <PointSummaryInline youthId={youth.id} compact />
+                  </TableCell>
                   <TableCell>{formatDate(youth.admissionDate)}</TableCell>
                   <TableCell className="text-blue-600 font-medium">{calculateLengthOfStay(youth.admissionDate)}</TableCell>
                   <TableCell>

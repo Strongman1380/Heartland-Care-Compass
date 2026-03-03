@@ -1,5 +1,5 @@
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Youth } from "@/integrations/firebase/services";
 import { WelcomeSection } from "./WelcomeSection";
@@ -8,7 +8,8 @@ import { Edit, LogOut, ChevronRight, StickyNote } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { QuickNoteDialog } from "@/components/notes/QuickNoteDialog";
 import { Badge } from "@/components/ui/badge";
-import { calculateResidentAwardsForYouths, type ResidentAwards } from "@/utils/residentAwards";
+import { useAwards } from "@/contexts/AwardsContext";
+import { PointSummaryInline } from "@/components/common/PointSummaryInline";
 
 interface YouthSelectionViewProps {
   youths: Youth[];
@@ -30,12 +31,9 @@ export const YouthSelectionView = ({
   formatDate
 }: YouthSelectionViewProps) => {
   const [quickNoteYouth, setQuickNoteYouth] = useState<Youth | null>(null);
-  const [awardData, setAwardData] = useState<ResidentAwards>({
-    residentOfWeek: null,
-    mostImprovedWeek: null,
-    residentOfMonth: null,
-  });
-  const [loadingAwards, setLoadingAwards] = useState(false);
+
+  // Use shared awards context — no per-component recalculation
+  const { awards: awardData, loading: loadingAwards } = useAwards();
 
   // Sort youth alphabetically by last name, then first name
   const sortedYouths = useMemo(() => {
@@ -46,52 +44,25 @@ export const YouthSelectionView = ({
     });
   }, [youths]);
 
-  useEffect(() => {
-    if (!youths.length) {
-      setAwardData({
-        residentOfWeek: null,
-        mostImprovedWeek: null,
-        residentOfMonth: null,
-      });
-      return;
-    }
-
-    let cancelled = false;
-    const loadAwards = async () => {
-      try {
-        setLoadingAwards(true);
-        const calculated = await calculateResidentAwardsForYouths(youths);
-        if (!cancelled) setAwardData(calculated);
-      } catch (error) {
-        console.error("Failed to calculate resident awards for dashboard cards:", error);
-      } finally {
-        if (!cancelled) setLoadingAwards(false);
-      }
-    };
-
-    void loadAwards();
-    return () => {
-      cancelled = true;
-    };
-  }, [youths]);
-
-  const parseTopColors = (rawResult: string | null | undefined) => {
-    const raw = rawResult || "";
-    if (!raw || typeof raw !== "string") return [];
-    return raw
-      .split(/[,/&|\s]+/)
-      .map((value) => value.trim())
-      .filter(Boolean)
-      .map((value) => value.charAt(0).toUpperCase() + value.slice(1).toLowerCase())
-      .filter((value, index, arr) => arr.indexOf(value) === index)
+  const parseTopColors = (rawResult: string | string[] | null | undefined): string[] => {
+    const VALID = new Set(["HEART", "ANCHOR", "MIND", "SPARK"]);
+    const tokens = Array.isArray(rawResult)
+      ? rawResult.map((v) => v.trim().toUpperCase())
+      : typeof rawResult === "string"
+        ? rawResult.split(/[,/&|\s]+/).map((v) => v.trim().toUpperCase())
+        : [];
+    return tokens
+      .filter((v) => VALID.has(v))
+      .filter((v, i, arr) => arr.indexOf(v) === i)
       .slice(0, 2);
   };
 
   const getYouthAwards = (youthId: string) => {
+    if (!awardData) return [];
     const items: string[] = [];
     if (awardData.residentOfWeek?.youthId === youthId) items.push("Resident of the Week");
-    if (awardData.mostImprovedWeek?.youthId === youthId) items.push("Most Improved (Week)");
     if (awardData.residentOfMonth?.youthId === youthId) items.push("Resident of the Month");
+    if (awardData.mostImprovedWeek?.youthId === youthId) items.push("Most Improved Resident");
     return items;
   };
 
@@ -172,7 +143,7 @@ export const YouthSelectionView = ({
                         </h4>
                         <div className="flex items-center gap-2 mt-2 flex-wrap">
                           {/* Age Badge */}
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-gray-100 text-gray-800 border border-gray-300">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-gray-100 dark:bg-slate-700 text-gray-800 dark:text-slate-200 border border-gray-300 dark:border-slate-600">
                             Age: {youth.age || 'N/A'}
                           </span>
 
@@ -205,12 +176,12 @@ export const YouthSelectionView = ({
 
                         <div className="flex items-center gap-2 mt-2 flex-wrap">
                           {parseTopColors(youth.realColorsResult).map((color) => (
-                            <Badge key={`${youth.id}-color-${color}`} variant="secondary" className="bg-white border border-red-200 text-red-800">
+                            <Badge key={`${youth.id}-color-${color}`} variant="secondary" className="bg-white dark:bg-slate-800 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-300">
                               {color}
                             </Badge>
                           ))}
                           {loadingAwards && (
-                            <Badge variant="outline" className="bg-white/80 border-yellow-300 text-yellow-800">
+                            <Badge variant="outline" className="bg-white/80 dark:bg-slate-800/80 border-yellow-300 dark:border-yellow-700 text-yellow-800 dark:text-yellow-300">
                               Calculating awards...
                             </Badge>
                           )}
@@ -220,6 +191,9 @@ export const YouthSelectionView = ({
                                 {award}
                               </Badge>
                             ))}
+                        </div>
+                        <div className="mt-2">
+                          <PointSummaryInline youthId={youth.id} compact />
                         </div>
                       </div>
 
@@ -232,10 +206,10 @@ export const YouthSelectionView = ({
                             e.stopPropagation();
                             setQuickNoteYouth(youth);
                           }}
-                          className="hover:bg-red-50"
+                          className="hover:bg-red-50 dark:hover:bg-red-950"
                           title="Quick Note"
                         >
-                          <StickyNote className="h-4 w-4 text-gray-400 hover:text-red-600" />
+                          <StickyNote className="h-4 w-4 text-gray-400 dark:text-slate-500 hover:text-red-600" />
                         </Button>
                         <Button
                           variant="ghost"

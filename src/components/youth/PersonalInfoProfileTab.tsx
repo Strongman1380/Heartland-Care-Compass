@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Youth } from "@/integrations/firebase/services";
 import { format } from "date-fns";
 import { useYouth } from "@/hooks/useSupabase";
+import { useTodayPoints } from "@/hooks/useTodayPoints";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
@@ -121,6 +122,7 @@ const EditableField = ({ label, value, onSave, type = "text", options }: Editabl
 
 export const PersonalInfoProfileTab = ({ youth, onYouthUpdated }: PersonalInfoProfileTabProps) => {
   const { updateYouth } = useYouth();
+  const { todayPoints } = useTodayPoints(youth.id);
 
   const formatDate = (dateString: string | null) => {
     if (!dateString) return "Not specified";
@@ -247,9 +249,13 @@ export const PersonalInfoProfileTab = ({ youth, onYouthUpdated }: PersonalInfoPr
               type="select"
               options={levelOptions}
             />
+            <div className="flex items-center justify-between py-2 border-b border-red-100">
+              <span className="text-sm font-medium text-red-800">Today's Points</span>
+              <span className="text-sm text-red-700">{todayPoints.toLocaleString()}</span>
+            </div>
             {youth.pointTotal != null && youth.pointTotal !== 0 && (
               <EditableField
-                label="Point Total"
+                label="Lifetime Points"
                 value={youth.pointTotal}
                 onSave={(value) => handleFieldUpdate('pointTotal', value)}
               />

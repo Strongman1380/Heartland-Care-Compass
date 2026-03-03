@@ -545,32 +545,6 @@ ${caseNotesText}`;
     }
   };
 
-  const hasAutoPopulatedRef = useRef(false);
-  const autoPopulateFormRef = useRef(autoPopulateForm);
-  autoPopulateFormRef.current = autoPopulateForm;
-
-  // Auto-trigger AI population on mount only when no saved draft was loaded
-  useEffect(() => {
-    if (hasAutoPopulatedRef.current) return;
-    if (isLoadingDraft) return;
-    if (!youth?.id) return;
-
-    const hasContent = !!(
-      reportData.assessmentSummary ||
-      reportData.treatmentObjectives ||
-      reportData.permanencyPlanning ||
-      reportData.serviceInterventions ||
-      reportData.progressIndicators ||
-      reportData.recommendations
-    );
-
-    hasAutoPopulatedRef.current = true;
-
-    if (!hasContent) {
-      autoPopulateFormRef.current(true);
-    }
-  }, [youth?.id, isLoadingDraft, reportData.assessmentSummary, reportData.treatmentObjectives, reportData.permanencyPlanning, reportData.serviceInterventions, reportData.progressIndicators, reportData.recommendations]);
-
   const enhanceField = async (field: keyof ServicePlanData) => {
     const currentValue = reportData[field];
     if (!currentValue.trim()) {
@@ -732,7 +706,7 @@ ${caseNotesText}`;
       <div className="flex flex-wrap gap-2">
         <Button onClick={() => autoPopulateForm()} disabled={isAutoPopulating} className="bg-[#823131] hover:bg-[#6b2828] text-white border-[#823131]">
           <Sparkles className="w-4 h-4 mr-2" />
-          {isAutoPopulating ? "Loading..." : "Auto-Populate from Youth Data"}
+          {isAutoPopulating ? "Generating..." : "Generate AI Summaries"}
         </Button>
         <Button onClick={handleSave} disabled={isSaving} variant="outline" className="border-gray-300 text-gray-700 hover:bg-gray-50">
           <Save className="w-4 h-4 mr-2" />

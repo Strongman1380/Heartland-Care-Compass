@@ -1,62 +1,57 @@
 ---
-description: Documents behavioral assessment algorithms and scoring systems for youth residential care facilities
+description: Specification for scoring algorithms, risk assessment, and behavioral analysis systems in youth residential care
 ---
 
 
 # behavioral-scoring-algorithms
 
-Core Behavioral Assessment System
-Importance Score: 95
+Core Scoring Components:
 
-1. Domain-Based Scoring Model
-- Four key behavioral domains tracked:
-  * Peer Interaction (0-4 scale)
-  * Adult Interaction (0-4 scale)
-  * Investment Level (0-4 scale)
-  * Deal with Authority (0-4 scale)
-- Real-time average calculations across domains
-- Historical trend analysis with AI-enhanced assessments
+1. Domain-Based Behavioral Rating System
+- Four key assessment domains: peer interaction, adult interaction, investment level, authority handling
+- Scale: 0-4 points per domain with weighted calculations
+- Monthly behavioral assessments with automated averaging
+- AI-enhanced behavioral observation generation
 
-2. Level Progression System
-- 10-level advancement structure
-- Points-based calculations:
-  * Daily point limits (0-105)
-  * Level-specific point thresholds
-  * Custom privilege requirements per level
-- Automatic level promotion/demotion logic
-- Orientation phase handling
-
-3. Risk Assessment Algorithm
-- Eight domain comprehensive evaluation
-- Domain-specific weighted scoring
+2. Risk Assessment Framework
+- Heartland Youth Risk & Needs Assessment (HYRNA) implementation
+- Eight risk domains with weighted scoring (0-4 scale)
 - Risk level thresholds:
-  * Low: 0-25%
-  * Moderate: 26-50%
-  * High: 51-75%
-  * Critical: 76-100%
-- Automatic placement level recommendations (1-4)
+  * Very Low: 0-15%
+  * Low: 16-30%
+  * Low Medium: 30-44%
+  * Medium: 44-58%
+  * Medium High: 58-72%
+  * High: 72-86%
+  * Very High: >86%
 
-4. AI-Enhanced Behavioral Analysis
-- Case note sentiment analysis across domains
+3. Level Progression System
+- Ten primary levels plus orientation stage
+- Point requirements:
+  * Daily minimums for privilege maintenance
+  * Cumulative thresholds for advancement
+  * Rolling average calculations
+- Demotion triggers and grace period rules
+- Subsystem status tracking with reason codes
+
+4. KPI Analytics Engine
+- Sentiment analysis on case notes
+- Engagement scoring across core domains
 - Behavioral pattern recognition
-- Treatment effectiveness scoring
-- Risk prediction modeling
-- Automated insight generation
+- Treatment effectiveness metrics
+- Academic integration scoring
 
-Key Files:
-- src/components/behavior/EnhancedBehaviorCard.tsx
+5. Award Calculation System
+- Weekly/Monthly award determination
+- "Most Improved" selection algorithm
+- Point-based achievement tracking
+- Custom privilege status calculation
+
+Implementation Paths:
+- src/components/youth/ConsolidatedScoringTab.tsx
 - src/utils/levelSystem.ts
+- src/utils/pointCalculations.ts
 - src/utils/kpiCaseNoteAi.ts
-- src/services/aiService.ts
-
-The behavioral scoring system integrates multiple assessment layers:
-- Daily point tracking
-- Domain-based evaluations
-- Risk assessments
-- Level progression
-- AI-enhanced analysis
-
-This creates a comprehensive framework for monitoring and evaluating youth behavior while maintaining compliance with residential care facility requirements.
 
 $END$
 

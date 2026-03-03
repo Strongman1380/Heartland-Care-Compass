@@ -639,8 +639,11 @@ export const CaseNotes = ({ youthId, youth, onYouthChange, onBackToSelection }: 
                             {renderNoteSections(note)}
                           </div>
                           <div className="text-xs text-gray-500 mt-3 flex justify-between">
-                            <span>Created: {note.createdAt ? format(new Date(note.createdAt), 'MMM dd, yyyy \'at\' h:mm a') : 'Unknown'}</span>
+                            <span>Discussed: {note.date ? format(parseISO(note.date + 'T00:00:00'), 'MMM dd, yyyy') : 'Not specified'}</span>
                             <span>ID: {note.id?.substring(0, 8)}...</span>
+                          </div>
+                          <div className="text-xs text-gray-400 mt-1">
+                            Entered In System: {note.createdAt ? format(new Date(note.createdAt), 'MMM dd, yyyy \'at\' h:mm a') : 'Unknown'}
                           </div>
                         </CollapsibleContent>
                       </div>

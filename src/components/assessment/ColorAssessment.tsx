@@ -1,1109 +1,1148 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Youth } from '@/integrations/firebase/services';
+import { Youth } from "@/integrations/firebase/services";
 import { useYouth } from "@/hooks/useSupabase";
-import { User, Palette, Save, Download, Printer } from 'lucide-react';
-import { draftsService } from '@/integrations/firebase/draftsService';
-import { useAuth } from '@/contexts/AuthContext';
-import { buildReportFilename } from '@/utils/reportFilenames';
-import { realColorsAssessmentsService, type ColorAssessmentRow } from '@/integrations/firebase/realColorsAssessmentsService';
+import { useAuth } from "@/contexts/AuthContext";
+import { format } from "date-fns";
+import { Printer, Save, RotateCcw, ClipboardList, Star, BarChart2, FileText, Trash2 } from "lucide-react";
+import {
+  realColorsAssessmentsService,
+  type ColorAssessmentRow,
+  type StyleLabel,
+} from "@/integrations/firebase/realColorsAssessmentsService";
 
-const COLOR_OPTIONS = ["Gold", "Blue", "Green", "Orange"] as const;
-type ColorType = typeof COLOR_OPTIONS[number];
+// ─────────────────────────────────────────────────
+// Constants & Data
+// ─────────────────────────────────────────────────
 
-type QuestionOption = {
-  value: ColorType;
-  label: string;
+type StyleKey = "heart" | "anchor" | "mind" | "spark";
+
+const STYLE_META: Record<
+  StyleKey,
+  { label: StyleLabel; color: string; coreNeed: string; strength: string; challenge: string; staffTip: string }
+> = {
+  heart: {
+    label: "HEART",
+    color: "#0D6E6E",
+    coreNeed: "To feel authentic and genuinely cared for.",
+    strength: "Builds trust quickly; natural peacemaker.",
+    challenge: "Avoids conflict; may suppress own needs.",
+    staffTip:
+      "Validate feelings before redirecting. Frame skills as protecting relationships.",
+  },
+  anchor: {
+    label: "ANCHOR",
+    color: "#5A3E85",
+    coreNeed: "Stability, order, and being in control.",
+    strength: "Reliable, thorough, strong follow-through.",
+    challenge: "Can be rigid or guilt-driven; resists change.",
+    staffTip:
+      "Give structure and clear expectations. Connect skills to rules and doing the right thing.",
+  },
+  mind: {
+    label: "MIND",
+    color: "#2D4F7C",
+    coreNeed: "To be seen as competent and knowledgeable.",
+    strength: "Problem-solver; calm under pressure.",
+    challenge: "Can appear emotionally distant or detached.",
+    staffTip:
+      "Explain the why behind rules. Use logical reasoning; avoid emotional appeals.",
+  },
+  spark: {
+    label: "SPARK",
+    color: "#A63020",
+    coreNeed: "Freedom, action, and visible results.",
+    strength: "High energy; thrives with hands-on challenges.",
+    challenge: "Impulsive; clashes with authority; bored by routine.",
+    staffTip:
+      "Build in movement and variety. Keep teaching brief and action-oriented. Roleplay works well.",
+  },
 };
 
-type AssessmentQuestion = {
-  id: string;
-  prompt: string;
-  options: QuestionOption[];
+const STYLE_KEYS: StyleKey[] = ["heart", "anchor", "mind", "spark"];
+
+// Neutral labels used on youth-facing assessment to prevent gaming
+const NEUTRAL_LABEL: Record<StyleKey, string> = {
+  heart: "A",
+  anchor: "B",
+  mind: "C",
+  spark: "D",
 };
 
-const COLOR_ASSESSMENT_QUESTIONS: AssessmentQuestion[] = [
+const ASSESSMENT_ROWS: Array<Record<StyleKey, string>> = [
   {
-    id: "q1",
-    prompt: "What motivates you most in a daily routine?",
-    options: [
-      { value: "Gold", label: "Structure, clear expectations, and responsibility" },
-      { value: "Blue", label: "Connection, meaning, and helping others" },
-      { value: "Green", label: "Understanding, strategy, and solving problems" },
-      { value: "Orange", label: "Action, variety, and hands-on challenges" },
-    ],
+    heart: "Caring and kind. Puts others' feelings first.",
+    anchor: "Organized and prepared. Likes having a clear plan.",
+    mind: "Logical and curious. Likes figuring things out.",
+    spark: "Bold and energetic. Loves action and new things.",
   },
   {
-    id: "q2",
-    prompt: "When conflict happens, your first instinct is to...",
-    options: [
-      { value: "Gold", label: "Follow rules/process and restore order" },
-      { value: "Blue", label: "Talk it through and protect relationships" },
-      { value: "Green", label: "Analyze what caused it and find a logical fix" },
-      { value: "Orange", label: "Address it quickly and move forward" },
-    ],
+    heart: "Great listener. People share their problems with me.",
+    anchor: "Reliable and consistent. Follows through on commitments.",
+    mind: "Thinks carefully before deciding. Analyzes situations.",
+    spark: "Hands-on and active. Prefers doing over just talking.",
   },
   {
-    id: "q3",
-    prompt: "In school or programming groups, you naturally...",
-    options: [
-      { value: "Gold", label: "Keep everyone organized and on schedule" },
-      { value: "Blue", label: "Support people emotionally and encourage teamwork" },
-      { value: "Green", label: "Handle complex thinking and technical details" },
-      { value: "Orange", label: "Take initiative and keep energy high" },
-    ],
+    heart: "Avoids conflict. Wants everyone to get along.",
+    anchor: "Feels better when things are orderly and neat.",
+    mind: "Likes working things out independently. Values logic.",
+    spark: "Gets bored with routine. Needs variety.",
   },
   {
-    id: "q4",
-    prompt: "You usually make decisions by...",
-    options: [
-      { value: "Gold", label: "Considering responsibility and proven steps" },
-      { value: "Blue", label: "Considering impact on people and values" },
-      { value: "Green", label: "Considering evidence and logic" },
-      { value: "Orange", label: "Considering immediate opportunity and momentum" },
-    ],
+    heart: "Feelings and relationships are the most important things.",
+    anchor: "Believes in doing things the right way and on time.",
+    mind: "Trusts facts and reasoning over emotions.",
+    spark: "Lives in the moment. Moves fast and takes risks.",
   },
   {
-    id: "q5",
-    prompt: "The environment you do best in is...",
-    options: [
-      { value: "Gold", label: "Predictable, organized, and accountable" },
-      { value: "Blue", label: "Supportive, collaborative, and personal" },
-      { value: "Green", label: "Independent, thoughtful, and intellectually challenging" },
-      { value: "Orange", label: "Flexible, active, and fast-paced" },
-    ],
+    heart: "Motivated by connection and making others feel valued.",
+    anchor: "Motivated by completing tasks and meeting responsibilities.",
+    mind: "Motivated by learning and understanding how things work.",
+    spark: "Motivated by freedom, excitement, and new challenges.",
   },
   {
-    id: "q6",
-    prompt: "When you are stressed, you tend to...",
-    options: [
-      { value: "Gold", label: "Get stricter with structure and expectations" },
-      { value: "Blue", label: "Become sensitive to others' reactions" },
-      { value: "Green", label: "Withdraw to think and process alone" },
-      { value: "Orange", label: "Act quickly or become restless" },
-    ],
-  },
-  {
-    id: "q7",
-    prompt: "Others often describe your strength as...",
-    options: [
-      { value: "Gold", label: "Reliable and dependable" },
-      { value: "Blue", label: "Empathetic and caring" },
-      { value: "Green", label: "Insightful and analytical" },
-      { value: "Orange", label: "Bold and adaptable" },
-    ],
-  },
-  {
-    id: "q8",
-    prompt: "Your preferred way to learn is...",
-    options: [
-      { value: "Gold", label: "Step-by-step examples and clear instructions" },
-      { value: "Blue", label: "Discussion and real-life personal connection" },
-      { value: "Green", label: "Independent research and deeper concepts" },
-      { value: "Orange", label: "Hands-on practice and trial-and-error" },
-    ],
-  },
-  {
-    id: "q9",
-    prompt: "A successful day feels like...",
-    options: [
-      { value: "Gold", label: "I met my goals and stayed responsible" },
-      { value: "Blue", label: "I built trust and meaningful interactions" },
-      { value: "Green", label: "I solved difficult problems and learned something new" },
-      { value: "Orange", label: "I took action and made progress quickly" },
-    ],
-  },
-  {
-    id: "q10",
-    prompt: "What kind of support helps you most?",
-    options: [
-      { value: "Gold", label: "Clear expectations and consistent accountability" },
-      { value: "Blue", label: "Encouragement, affirmation, and relationship support" },
-      { value: "Green", label: "Space to think with rational feedback" },
-      { value: "Orange", label: "Direct coaching with practical next steps" },
-    ],
+    heart: "Shows care through empathy and being present.",
+    anchor: "Shows care through dependability and keeping promises.",
+    mind: "Shows care through solving problems and sharing knowledge.",
+    spark: "Shows care through actions, humor, and spontaneity.",
   },
 ];
 
-const COLOR_INSIGHT_TEMPLATES: Record<ColorType, { summary: string; supports: string }> = {
-  Gold: {
-    summary: "Gold traits suggest responsibility, loyalty, and preference for structure.",
-    supports: "Use clear routines, explicit expectations, and recognition for reliability.",
-  },
-  Blue: {
-    summary: "Blue traits suggest empathy, relationship-focus, and strong personal values.",
-    supports: "Use relational check-ins, encouragement, and collaborative goal setting.",
-  },
-  Green: {
-    summary: "Green traits suggest analytical thinking, independence, and problem solving.",
-    supports: "Use logic-based explanations, autonomy, and structured reflection time.",
-  },
-  Orange: {
-    summary: "Orange traits suggest adaptability, action-orientation, and practical learning.",
-    supports: "Use hands-on activities, short milestones, and immediate feedback loops.",
-  },
-};
-
-interface ColorAssessmentProps {
-  selectedYouth?: Youth;
-  onSaved?: () => void;
-}
-
-export const ColorAssessment = ({ selectedYouth, onSaved }: ColorAssessmentProps) => {
-  const [primaryColor, setPrimaryColor] = useState<string>("");
-  const [secondaryColor, setSecondaryColor] = useState<string>("");
-  const [insights, setInsights] = useState("");
-  const [comments, setComments] = useState("");
-  const [observations, setObservations] = useState("");
-  const [questionResponses, setQuestionResponses] = useState<Record<string, ColorType | "">>(() =>
-    Object.fromEntries(COLOR_ASSESSMENT_QUESTIONS.map((q) => [q.id, ""]))
-  );
-  const [completedByType, setCompletedByType] = useState<'staff' | 'youth'>('staff');
-  const [completedBy, setCompletedBy] = useState("");
-  const [youthSelection, setYouthSelection] = useState<'existing' | 'new'>('existing');
-  const [selectedYouthId, setSelectedYouthId] = useState<string>("");
-  const [newYouthName, setNewYouthName] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [autoSaveTimer, setAutoSaveTimer] = useState<NodeJS.Timeout | null>(null);
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const [isAutoSaving, setIsAutoSaving] = useState(false);
-  const [assessments, setAssessments] = useState<ColorAssessmentRow[]>([]);
-  const [isLoadingAssessments, setIsLoadingAssessments] = useState(false);
-  const [editingAssessmentId, setEditingAssessmentId] = useState<string | null>(null);
-  const [lastSavedAt, setLastSavedAt] = useState<string>("");
-  const { toast } = useToast();
-  const { user } = useAuth();
-  const { youths, loadYouths, createYouth, updateYouth } = useYouth();
-  const userId = (user as any)?.uid || (user as any)?.id || null;
-  const answeredCount = Object.values(questionResponses).filter(Boolean).length;
-  const allQuestionsAnswered = answeredCount === COLOR_ASSESSMENT_QUESTIONS.length;
-
-  useEffect(() => {
-    loadYouths();
-    if (selectedYouth) {
-      setSelectedYouthId(selectedYouth.id);
-      setYouthSelection('existing');
-    }
-
-    // Load draft data on component mount
-    loadDraft();
-  }, [selectedYouth, loadYouths]);
-
-  useEffect(() => {
-    const loadLatestAssessment = async () => {
-      const youthId = selectedYouth?.id || selectedYouthId;
-      if (!youthId) return;
-
-      try {
-        const latest = await realColorsAssessmentsService.getLatestByYouthId(youthId);
-        if (!latest) return;
-        setPrimaryColor(latest.primary_color || "");
-        setSecondaryColor(latest.secondary_color || "");
-        setInsights(latest.insights || "");
-        setComments(latest.comments || "");
-        setObservations(latest.observations || "");
-        setCompletedByType(latest.completed_by_type || "staff");
-        setCompletedBy(latest.completed_by_name || "");
-        setEditingAssessmentId(latest.id);
-        setLastSavedAt(latest.updated_at || latest.created_at || "");
-      } catch (error) {
-        console.warn("Failed to load latest color assessment:", error);
-      }
-    };
-
-    void loadLatestAssessment();
-  }, [selectedYouth?.id, selectedYouthId]);
-
-  useEffect(() => {
-    const youthId = selectedYouth?.id || selectedYouthId;
-    if (!youthId) return;
-
-    const loadHistory = async () => {
-      setIsLoadingAssessments(true);
-      try {
-        const rows = await realColorsAssessmentsService.getByYouthId(youthId, 20);
-        setAssessments(rows);
-      } catch (error) {
-        console.warn("Failed to load color assessment history:", error);
-      } finally {
-        setIsLoadingAssessments(false);
-      }
-    };
-
-    void loadHistory();
-  }, [selectedYouth?.id, selectedYouthId]);
-
-  useEffect(() => {
-    if (completedBy.trim()) return;
-    const display = (user as any)?.displayName || (user as any)?.email || "";
-    if (display) setCompletedBy(display);
-  }, [user, completedBy]);
-
-  // Cleanup autosave timer on unmount
-  useEffect(() => {
-    return () => {
-      if (autoSaveTimer) {
-        clearTimeout(autoSaveTimer);
-      }
-    };
-  }, [autoSaveTimer]);
-
-  const resetForm = () => {
-    setPrimaryColor("");
-    setSecondaryColor("");
-    setInsights("");
-    setComments("");
-    setObservations("");
-    setQuestionResponses(Object.fromEntries(COLOR_ASSESSMENT_QUESTIONS.map((q) => [q.id, ""])));
-    setCompletedByType("staff");
-    setCompletedBy("");
-    setNewYouthName("");
-    setEditingAssessmentId(null);
-    setLastSavedAt("");
-    setHasUnsavedChanges(false);
-
-    // Clear draft from localStorage
-    clearDraft();
-  };
-
-  const calculateResultsFromResponses = (responses: Record<string, ColorType | "">) => {
-    const scores: Record<ColorType, number> = { Gold: 0, Blue: 0, Green: 0, Orange: 0 };
-    Object.values(responses).forEach((value) => {
-      if (value) scores[value] += 1;
-    });
-    const ranked = Object.entries(scores)
-      .sort((a, b) => b[1] - a[1]) as [ColorType, number][];
-    const primary = ranked[0][1] > 0 ? ranked[0][0] : "";
-    const secondary = ranked[1][1] > 0 ? ranked[1][0] : "";
-    return { scores, primary, secondary };
-  };
-
-  const buildInsightsText = (
-    primary: ColorType,
-    secondary: ColorType | "",
-    scores: Record<ColorType, number>
-  ) => {
-    const primaryTemplate = COLOR_INSIGHT_TEMPLATES[primary];
-    const secondaryTemplate = secondary ? COLOR_INSIGHT_TEMPLATES[secondary] : null;
-    const scoreLine = `Score breakdown: Gold ${scores.Gold}, Blue ${scores.Blue}, Green ${scores.Green}, Orange ${scores.Orange}.`;
-    const secondaryLine = secondary
-      ? `Secondary color influence: ${secondary}. ${secondaryTemplate?.summary || ""}`
-      : "Secondary color influence: Not strongly expressed.";
-
-    return [
-      `Primary color identified: ${primary}. ${primaryTemplate.summary}`,
-      secondaryLine,
-      `Recommended support approach: ${primaryTemplate.supports}`,
-      scoreLine,
-    ].join("\n\n");
-  };
-
-  const applyCalculatedResults = () => {
-    if (!allQuestionsAnswered) {
-      toast({
-        title: "Incomplete Assessment",
-        description: `Please answer all ${COLOR_ASSESSMENT_QUESTIONS.length} questions.`,
-        variant: "destructive",
-      });
-      return null;
-    }
-
-    const { scores, primary, secondary } = calculateResultsFromResponses(questionResponses);
-    if (!primary) {
-      toast({
-        title: "Unable to Calculate",
-        description: "Please review responses and try again.",
-        variant: "destructive",
-      });
-      return null;
-    }
-
-    const generatedInsights = buildInsightsText(primary as ColorType, secondary as ColorType | "", scores);
-    setPrimaryColor(primary);
-    setSecondaryColor(secondary || "");
-    setInsights(generatedInsights);
-    setHasUnsavedChanges(true);
-    return { primary, secondary, generatedInsights };
-  };
-
-  // Auto-save functionality
-  const triggerAutoSave = () => {
-    // Clear existing timer
-    if (autoSaveTimer) {
-      clearTimeout(autoSaveTimer);
-    }
-
-    // Set new timer for 10 seconds after user stops typing
-    const timer = setTimeout(() => {
-      autoSave();
-    }, 10000);
-
-    setAutoSaveTimer(timer);
-  };
-
-  const autoSave = async () => {
-    if (!hasUnsavedChanges || isAutoSaving) return;
-
-    // Don't auto-save if required fields are empty
-    if (!primaryColor) return;
-
-    try {
-      setIsAutoSaving(true);
-
-      // Save to localStorage as draft
-      const draftData = {
-        questionResponses,
-        primaryColor,
-        secondaryColor,
-        insights,
-        comments,
-        observations,
-        completedByType,
-        completedBy,
-        youthSelection,
-        selectedYouthId,
-        newYouthName,
-        timestamp: Date.now()
-      };
-
-      const draftKey = getDraftKey();
-      try { await draftsService.save(selectedYouth?.id || selectedYouthId || null, 'real_colors_assessment', userId, draftData) } catch {}
-      localStorage.setItem(draftKey, JSON.stringify(draftData));
-
-      setHasUnsavedChanges(false);
-
-      // Show subtle success indicator
-      toast({
-        title: "Draft auto-saved",
-        description: "Your progress has been saved",
-        duration: 2000
-      });
-    } catch (error) {
-      console.error("Auto-save failed:", error);
-      // Log more details for debugging
-      if (error instanceof Error) {
-        console.error('Error details:', {
-          message: error.message,
-          name: error.name,
-          stack: error.stack
-        })
-      }
-      toast({
-        title: "Auto-save Failed",
-        description: error instanceof Error ? error.message : "Failed to save assessment. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsAutoSaving(false);
-    }
-  };
-
-  const getDraftKey = () => {
-    const youthId = selectedYouth?.id || selectedYouthId || 'new';
-    return `real-colors-draft-${youthId}`;
-  };
-
-  const loadDraft = async () => {
-    try {
-      try {
-        const remote = await draftsService.get(selectedYouth?.id || selectedYouthId || null, 'real_colors_assessment', userId)
-        if (remote?.data) {
-          const parsed: any = remote.data
-          setQuestionResponses(parsed.questionResponses || Object.fromEntries(COLOR_ASSESSMENT_QUESTIONS.map((q) => [q.id, ""])));
-          setPrimaryColor(parsed.primaryColor || "");
-          setSecondaryColor(parsed.secondaryColor || "");
-          setInsights(parsed.insights || "");
-          setComments(parsed.comments || "");
-          setObservations(parsed.observations || "");
-          setCompletedByType(parsed.completedByType || "staff");
-          setCompletedBy(parsed.completedBy || "");
-          if (!selectedYouth) {
-            setYouthSelection(parsed.youthSelection || 'existing');
-            setSelectedYouthId(parsed.selectedYouthId || "");
-            setNewYouthName(parsed.newYouthName || "");
-          }
-          setHasUnsavedChanges(true);
-          return;
-        }
-      } catch {}
-      const draftKey = getDraftKey();
-      const draftData = localStorage.getItem(draftKey);
-
-      if (draftData) {
-        const parsed = JSON.parse(draftData);
-
-        // Only load draft if it's less than 24 hours old
-        const dayInMs = 24 * 60 * 60 * 1000;
-        if (parsed.timestamp && (Date.now() - parsed.timestamp < dayInMs)) {
-          setPrimaryColor(parsed.primaryColor || "");
-          setQuestionResponses(parsed.questionResponses || Object.fromEntries(COLOR_ASSESSMENT_QUESTIONS.map((q) => [q.id, ""])));
-          setSecondaryColor(parsed.secondaryColor || "");
-          setInsights(parsed.insights || "");
-          setComments(parsed.comments || "");
-          setObservations(parsed.observations || "");
-          setCompletedByType(parsed.completedByType || "staff");
-          setCompletedBy(parsed.completedBy || "");
-
-          if (!selectedYouth) {
-            setYouthSelection(parsed.youthSelection || 'existing');
-            setSelectedYouthId(parsed.selectedYouthId || "");
-            setNewYouthName(parsed.newYouthName || "");
-          }
-
-          setHasUnsavedChanges(true);
-
-          toast({
-            title: "Draft loaded",
-            description: "Your previous work has been restored",
-            duration: 2000
-          });
-        }
-      }
-    } catch (error) {
-      console.error("Failed to load draft:", error);
-    }
-  };
-
-  const clearDraft = () => {
-    const draftKey = getDraftKey();
-    try { void draftsService.delete(selectedYouth?.id || selectedYouthId || null, 'real_colors_assessment', userId) } catch {}
-    localStorage.removeItem(draftKey);
-  };
-
-  // Form change handlers that trigger autosave
-  const handleFormChange = (setter: (value: any) => void, value: any) => {
-    setter(value);
-    setHasUnsavedChanges(true);
-    triggerAutoSave();
-  };
-
-  const handleQuestionResponseChange = (questionId: string, value: ColorType) => {
-    setQuestionResponses((prev) => ({ ...prev, [questionId]: value }));
-    setHasUnsavedChanges(true);
-    triggerAutoSave();
-  };
-
-  const handlePrintAssessment = () => {
-    window.print();
-  };
-
-  const handleExportPdf = async () => {
-    try {
-      const { exportHTMLToPDF } = await import('@/utils/export');
-
-      // Use selectedYouth if provided, otherwise use form selection
-      let currentYouth;
-      if (selectedYouth) {
-        currentYouth = selectedYouth;
-      } else if (youthSelection === 'existing') {
-        currentYouth = youths.find(y => y.id === selectedYouthId);
-      } else {
-        currentYouth = { firstName: newYouthName.split(' ')[0], lastName: newYouthName.split(' ').slice(1).join(' ') };
-      }
-
-      if (!currentYouth) {
-        toast({
-          title: "Error",
-          description: "Please select a youth before exporting",
-          variant: "destructive"
-        });
-        return;
-      }
-
-      const exportData = {
-        youth: currentYouth,
-        assessment: {
-          primaryColor,
-          secondaryColor,
-          insights,
-          comments,
-          observations,
-          completedBy,
-          assessmentDate: new Date().toLocaleDateString()
-        },
-        exportDate: new Date().toLocaleDateString()
-      };
-
-      const html = generateRealColorsHTML(exportData);
-      const filename = `${buildReportFilename(currentYouth, "Color Assessment")}.pdf`;
-
-      await exportHTMLToPDF(html, filename);
-      toast({
-        title: "Success",
-        description: "Color assessment exported successfully!"
-      });
-    } catch (error) {
-      console.error("Error exporting color assessment:", error);
-      toast({
-        title: "Error",
-        description: "Failed to export color assessment",
-        variant: "destructive"
-      });
-    }
-  };
-
-  const generateRealColorsHTML = (data: any) => {
-    return `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <meta charset="utf-8">
-          <title>Color Assessment Report - Heartland Boys Home</title>
-          <style>
-            body { font-family: Arial, sans-serif; margin: 20px; line-height: 1.6; color: #333; }
-            .header {
-              text-align: center;
-              margin-bottom: 30px;
-              border-bottom: 3px solid #b91c1c;
-              padding-bottom: 20px;
-              background: linear-gradient(135deg, #b91c1c 0%, #dc2626 50%, #d97706 100%);
-              color: white;
-              padding: 20px;
-              border-radius: 8px 8px 0 0;
-            }
-            .logo { height: 60px; margin-bottom: 15px; }
-            .youth-info { background-color: #fef2f2; padding: 15px; border-radius: 5px; margin-bottom: 20px; border-left: 4px solid #dc2626; }
-            .color-section { margin-bottom: 30px; padding: 20px; border: 2px solid #ddd; border-radius: 5px; }
-            .color-title { font-weight: bold; font-size: 18px; margin-bottom: 15px; }
-            .gold { border-color: #f59e0b; background-color: #fffbeb; }
-            .blue { border-color: #3b82f6; background-color: #eff6ff; }
-            .green { border-color: #10b981; background-color: #ecfdf5; }
-            .orange { border-color: #f97316; background-color: #fff7ed; }
-            .traits { display: flex; flex-wrap: wrap; gap: 5px; margin: 10px 0; }
-            .trait { background-color: #e5e7eb; padding: 3px 8px; border-radius: 12px; font-size: 12px; }
-            .field { margin-bottom: 15px; }
-            .field-label { font-weight: bold; color: #555; }
-            .field-value { margin-top: 5px; }
-            .characteristics { margin-top: 15px; }
-            .characteristic { margin-bottom: 8px; }
-            @media print { body { margin: 0; } }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <img src="${import.meta.env.BASE_URL}files/BoysHomeLogo.png" alt="Heartland Boys Home Logo" class="logo" crossorigin="anonymous" />
-            <h1>Heartland Boys Home</h1>
-            <h2>Color Assessment Report</h2>
-            <p>Generated on ${data.exportDate}</p>
-          </div>
-
-          <div class="youth-info">
-            <h3>Youth Information</h3>
-            <p><strong>Name:</strong> ${data.youth.firstName} ${data.youth.lastName}</p>
-            <p><strong>Assessment Date:</strong> ${data.assessment.assessmentDate}</p>
-            <p><strong>Completed By:</strong> ${data.assessment.completedBy}</p>
-          </div>
-
-          <div class="color-section">
-            <div class="color-title">Assessment Result</div>
-            <div class="field"><div class="field-label">Primary Color:</div><div class="field-value">${data.assessment.primaryColor || "Not set"}</div></div>
-            <div class="field"><div class="field-label">Secondary Color:</div><div class="field-value">${data.assessment.secondaryColor || "Not set"}</div></div>
-          </div>
-
-          ${data.assessment.insights ? `
-            <div class="field">
-              <div class="field-label">Assessment Insights:</div>
-              <div class="field-value">${data.assessment.insights}</div>
-            </div>
-          ` : ''}
-
-          ${data.assessment.comments ? `
-            <div class="field">
-              <div class="field-label">Comments:</div>
-              <div class="field-value">${data.assessment.comments}</div>
-            </div>
-          ` : ''}
-
-          ${data.assessment.observations ? `
-            <div class="field">
-              <div class="field-label">Observations:</div>
-              <div class="field-value">${data.assessment.observations}</div>
-            </div>
-          ` : ''}
-        </body>
-      </html>
-    `;
-  };
-
-  const handleSubmit = async () => {
-    const calculated = applyCalculatedResults();
-    if (!calculated) {
-      toast({
-        title: "Validation Error",
-        description: "Complete the assessment questions to generate results.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Only validate youth selection if no selectedYouth is provided
-    if (!selectedYouth) {
-      if (youthSelection === 'existing' && !selectedYouthId) {
-        toast({
-          title: "Validation Error", 
-          description: "Please select a youth",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      if (youthSelection === 'new' && !newYouthName.trim()) {
-        toast({
-          title: "Validation Error",
-          description: "Please enter youth name for new assessment",
-          variant: "destructive",
-        });
-        return;
-      }
-    }
-
-    setLoading(true);
-    try {
-      let youthId: string;
-
-      // Use selectedYouth if provided, otherwise use the form selection
-      if (selectedYouth) {
-        youthId = selectedYouth.id;
-      } else if (youthSelection === 'existing') {
-        youthId = selectedYouthId;
-      } else {
-        // Create new youth
-        const [firstName, ...lastNameParts] = newYouthName.trim().split(' ');
-        const lastName = lastNameParts.join(' ');
-
-        const newYouth = {
-          firstName,
-          lastName: lastName || '',
-          age: 0,
-          level: 0,
-          pointTotal: 0,
-        };
-
-        const createdYouth = await createYouth(newYouth);
-        youthId = createdYouth.id;
-        await loadYouths(); // Refresh the list
-      }
-
-      const resolvedPrimary = calculated.primary;
-      const resolvedSecondary = calculated.secondary;
-      const resolvedInsights = calculated.generatedInsights;
-
-      // Keep compatibility field on youth record
-      const realColorsResult = resolvedSecondary && resolvedSecondary !== 'none'
-        ? `${resolvedPrimary}/${resolvedSecondary}`
-        : resolvedPrimary;
-      
-      // Save result string on youth (updatedAt handled by hook/service)
-      await updateYouth(youthId, {
-        realColorsResult: realColorsResult
-      });
-
-      const savedAssessment = await realColorsAssessmentsService.save({
-        id: editingAssessmentId || undefined,
-        youth_id: youthId,
-        primary_color: resolvedPrimary as "Gold" | "Blue" | "Green" | "Orange",
-        secondary_color: resolvedSecondary === 'none' ? null : (resolvedSecondary as "Gold" | "Blue" | "Green" | "Orange" | null),
-        real_colors_result: realColorsResult,
-        insights: resolvedInsights || null,
-        comments: comments || null,
-        observations: observations || null,
-        completed_by_type: completedByType,
-        completed_by_name: completedBy || null,
-      });
-
-      setEditingAssessmentId(savedAssessment.id);
-      setLastSavedAt(savedAssessment.updated_at || savedAssessment.created_at || "");
-      setHasUnsavedChanges(false);
-      clearDraft();
-
-      try {
-        const rows = await realColorsAssessmentsService.getByYouthId(youthId, 20);
-        setAssessments(rows);
-      } catch {}
-
-      toast({
-        title: "Success",
-        description: "Assessment completed and saved. Results and insights are now available below.",
-      });
-      onSaved?.();
-
-    } catch (error) {
-      console.error('Error saving color assessment:', error);
-      
-      // Enhanced error logging for debugging
-      if (error && typeof error === 'object' && 'message' in error) {
-        const supabaseError = error as any;
-        console.error('Detailed color assessment save error:', {
-          message: supabaseError.message,
-          details: supabaseError.details,
-          hint: supabaseError.hint,
-          code: supabaseError.code,
-          selectedYouthId: selectedYouth?.id || selectedYouthId,
-          primaryColor,
-          secondaryColor,
-          timestamp: new Date().toISOString()
-        });
-      }
-      
-      toast({
-        title: "Error",
-        description: `Failed to save color assessment: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadAssessmentForEditing = (assessment: ColorAssessmentRow) => {
-    setQuestionResponses(Object.fromEntries(COLOR_ASSESSMENT_QUESTIONS.map((q) => [q.id, ""])));
-    setPrimaryColor(assessment.primary_color || "");
-    setSecondaryColor(assessment.secondary_color || "");
-    setInsights(assessment.insights || "");
-    setComments(assessment.comments || "");
-    setObservations(assessment.observations || "");
-    setCompletedByType(assessment.completed_by_type || "staff");
-    setCompletedBy(assessment.completed_by_name || "");
-    setEditingAssessmentId(assessment.id);
-    setLastSavedAt(assessment.updated_at || assessment.created_at || "");
-    setHasUnsavedChanges(false);
-  };
-
+type RowRankings = Record<StyleKey, number | null>;
+
+const emptyRow = (): RowRankings => ({ heart: null, anchor: null, mind: null, spark: null });
+
+const emptyRankings = (): Record<number, RowRankings> =>
+  Object.fromEntries(Array.from({ length: 6 }, (_, i) => [i, emptyRow()]));
+
+// ─────────────────────────────────────────────────
+// Sub-components
+// ─────────────────────────────────────────────────
+
+const ScoreBar = ({
+  styleKey,
+  score,
+  max = 24,
+}: {
+  styleKey: StyleKey;
+  score: number;
+  max?: number;
+}) => {
+  const meta = STYLE_META[styleKey];
+  const pct = Math.round((score / max) * 100);
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Palette className="h-5 w-5" />
-            Color Assessment
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {/* Youth Selection - Only show when no selectedYouth is provided */}
-          {!selectedYouth && (
-            <div className="space-y-4">
-              <Label className="text-base font-medium">Youth Selection</Label>
-              <div className="flex gap-4">
-                <label className="flex items-center space-x-2">
-                  <input
-                    type="radio"
-                    checked={youthSelection === 'existing'}
-                    onChange={() => handleFormChange(setYouthSelection, 'existing')}
-                    className="form-radio"
-                  />
-                  <span>Existing Youth</span>
-                </label>
-                <label className="flex items-center space-x-2">
-                  <input
-                    type="radio"
-                    checked={youthSelection === 'new'}
-                    onChange={() => handleFormChange(setYouthSelection, 'new')}
-                    className="form-radio"
-                  />
-                  <span>New Youth</span>
-                </label>
-              </div>
-
-              {youthSelection === 'existing' ? (
-                <Select value={selectedYouthId} onValueChange={(value) => handleFormChange(setSelectedYouthId, value)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a youth" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {youths.map((youth) => (
-                      <SelectItem key={youth.id} value={youth.id}>
-                        {youth.firstName} {youth.lastName}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              ) : (
-                <Input
-                  placeholder="Enter youth name"
-                  value={newYouthName}
-                  onChange={(e) => handleFormChange(setNewYouthName, e.target.value)}
-                />
-              )}
-            </div>
-          )}
-
-          {/* Show current youth info when selectedYouth is provided */}
-          {selectedYouth && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-3">
-              <div className="flex items-center gap-2 text-blue-800">
-                <User className="h-4 w-4" />
-                <span className="font-medium">Assessment for: {selectedYouth.firstName} {selectedYouth.lastName}</span>
-              </div>
-              {lastSavedAt && (
-                <p className="text-xs text-blue-700">Last saved: {new Date(lastSavedAt).toLocaleString()}</p>
-              )}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-medium text-blue-900">Saved assessments</p>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={resetForm}
-                    className="h-8 border-blue-300 text-blue-800 hover:bg-blue-100"
-                  >
-                    New Assessment
-                  </Button>
-                </div>
-                {isLoadingAssessments ? (
-                  <p className="text-xs text-blue-700">Loading assessments...</p>
-                ) : assessments.length === 0 ? (
-                  <p className="text-xs text-blue-700">No previous assessments saved for this youth yet.</p>
-                ) : (
-                  <div className="space-y-2 max-h-40 overflow-auto pr-1">
-                    {assessments.map((assessment) => (
-                      <button
-                        key={assessment.id}
-                        type="button"
-                        onClick={() => loadAssessmentForEditing(assessment)}
-                        className={`w-full text-left text-xs rounded-md border px-3 py-2 transition-colors ${
-                          editingAssessmentId === assessment.id
-                            ? "border-blue-400 bg-blue-100 text-blue-900"
-                            : "border-blue-200 bg-white text-blue-800 hover:bg-blue-50"
-                        }`}
-                      >
-                        <span className="font-semibold">{assessment.real_colors_result}</span>
-                        <span className="ml-2 opacity-80">
-                          {new Date(assessment.created_at).toLocaleDateString()}
-                        </span>
-                        {assessment.completed_by_name ? (
-                          <span className="ml-2 opacity-70">by {assessment.completed_by_name}</span>
-                        ) : null}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Questionnaire */}
-          <div className="space-y-4 border rounded-lg p-4 bg-gray-50/50">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-base font-semibold">Personality Assessment Questions</p>
-                <p className="text-sm text-gray-600">
-                  Answer all questions to calculate primary and secondary colors.
-                </p>
-              </div>
-              <div className="text-sm font-medium text-gray-700">
-                {answeredCount}/{COLOR_ASSESSMENT_QUESTIONS.length} answered
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              {COLOR_ASSESSMENT_QUESTIONS.map((question, index) => (
-                <div key={question.id} className="rounded-md border bg-white p-3 space-y-2">
-                  <Label className="text-sm font-medium">
-                    {index + 1}. {question.prompt}
-                  </Label>
-                  <Select
-                    value={questionResponses[question.id] || ""}
-                    onValueChange={(value) => handleQuestionResponseChange(question.id, value as ColorType)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Choose the option that best fits" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {question.options.map((opt) => (
-                        <SelectItem key={`${question.id}-${opt.value}`} value={opt.value}>
-                          {opt.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              ))}
-            </div>
-
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full sm:w-auto"
-              onClick={applyCalculatedResults}
-              disabled={!allQuestionsAnswered}
-            >
-              Generate Results & Insights
-            </Button>
-          </div>
-
-          {(primaryColor || insights) && (
-            <div className="border rounded-lg p-4 bg-emerald-50/40 border-emerald-200 space-y-2">
-              <p className="font-semibold text-emerald-900">Assessment Results</p>
-              <p className="text-sm text-emerald-900">
-                Primary: <span className="font-semibold">{primaryColor || "Not calculated"}</span>
-                {"  |  "}
-                Secondary: <span className="font-semibold">{secondaryColor || "Not calculated"}</span>
-              </p>
-            </div>
-          )}
-
-          {/* Primary Color */}
-          <div className="space-y-2">
-            <Label className="text-base font-medium">Primary Color *</Label>
-            <Select value={primaryColor} onValueChange={(value) => handleFormChange(setPrimaryColor, value)} disabled>
-              <SelectTrigger>
-                <SelectValue placeholder="Select primary color" />
-              </SelectTrigger>
-              <SelectContent>
-                {COLOR_OPTIONS.map((color) => (
-                  <SelectItem key={color} value={color}>
-                    <div className="flex items-center gap-2">
-                      <div className={`w-4 h-4 rounded-full ${
-                        color === 'Gold' ? 'bg-yellow-400' :
-                        color === 'Blue' ? 'bg-blue-400' :
-                        color === 'Green' ? 'bg-green-400' : 'bg-orange-400'
-                      }`} />
-                      {color}
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Secondary Color */}
-          <div className="space-y-2">
-            <Label className="text-base font-medium">Secondary Color</Label>
-            <Select value={secondaryColor} onValueChange={(value) => handleFormChange(setSecondaryColor, value)} disabled>
-              <SelectTrigger>
-                <SelectValue placeholder="Select secondary color (optional)" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">None</SelectItem>
-                {COLOR_OPTIONS
-                  .filter(color => color !== primaryColor)
-                  .map((color) => (
-                  <SelectItem key={color} value={color}>
-                    <div className="flex items-center gap-2">
-                      <div className={`w-4 h-4 rounded-full ${
-                        color === 'Gold' ? 'bg-yellow-400' :
-                        color === 'Blue' ? 'bg-blue-400' :
-                        color === 'Green' ? 'bg-green-400' : 'bg-orange-400'
-                      }`} />
-                      {color}
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Assessment Details */}
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="insights">Insights</Label>
-              <Textarea
-                id="insights"
-                placeholder="Key insights from the assessment..."
-                value={insights}
-                onChange={(e) => handleFormChange(setInsights, e.target.value)}
-                rows={3}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="comments">Comments</Label>
-              <Textarea
-                id="comments"
-                placeholder="Additional comments..."
-                value={comments}
-                onChange={(e) => handleFormChange(setComments, e.target.value)}
-                rows={3}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="observations">Observations</Label>
-              <Textarea
-                id="observations"
-                placeholder="Behavioral observations during assessment..."
-                value={observations}
-                onChange={(e) => handleFormChange(setObservations, e.target.value)}
-                rows={3}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="completedBy">Completed By</Label>
-              <Input
-                id="completedBy"
-                placeholder={completedByType === "youth" ? "Youth name" : "Staff member name"}
-                value={completedBy}
-                onChange={(e) => handleFormChange(setCompletedBy, e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="completedByType">Completed By Type</Label>
-              <Select value={completedByType} onValueChange={(value) => handleFormChange(setCompletedByType, value as 'staff' | 'youth')}>
-                <SelectTrigger id="completedByType">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="staff">Staff</SelectItem>
-                  <SelectItem value="youth">Youth</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          {/* Auto-save status */}
-          {hasUnsavedChanges && (
-            <div className="flex items-center gap-2 text-sm text-amber-600 bg-amber-50 p-2 rounded-md border border-amber-200">
-              {isAutoSaving ? (
-                <>
-                  <div className="animate-spin h-3 w-3 border border-amber-600 border-t-transparent rounded-full" />
-                  <span>Auto-saving...</span>
-                </>
-              ) : (
-                <>
-                  <div className="h-2 w-2 bg-amber-500 rounded-full" />
-                  <span>Unsaved changes (auto-saves in 10 seconds)</span>
-                </>
-              )}
-            </div>
-          )}
-
-          {/* Action Buttons */}
-          <div className="flex gap-2 flex-col sm:flex-row">
-            <Button
-              variant="outline"
-              onClick={handlePrintAssessment}
-              className="flex-1 border-gray-300 text-gray-700 hover:bg-gray-50"
-            >
-              <Printer className="h-4 w-4 mr-2" />
-              Print
-            </Button>
-            <Button
-              variant="outline"
-              onClick={handleExportPdf}
-              className="flex-1 border-gray-300 text-gray-700 hover:bg-gray-50"
-            >
-              <Download className="h-4 w-4 mr-2" />
-              Export PDF
-            </Button>
-            <Button
-              onClick={handleSubmit}
-              disabled={loading}
-              className="flex-1 bg-[#823131] hover:bg-[#6b2828] text-white border-[#823131]"
-            >
-              <Save className="h-4 w-4 mr-2" />
-              {loading ? 'Saving...' : 'Save Assessment'}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+    <div className="flex items-center gap-3">
+      <span
+        className="text-xs font-bold w-14 shrink-0"
+        style={{ color: meta.color }}
+      >
+        {meta.label}
+      </span>
+      <div className="flex-1 bg-gray-100 rounded-full h-4 overflow-hidden">
+        <div
+          className="h-4 rounded-full transition-all duration-500"
+          style={{ width: `${pct}%`, backgroundColor: meta.color }}
+        />
+      </div>
+      <span className="text-sm font-bold w-8 text-right">{score}</span>
     </div>
   );
 };
+
+const StyleResultCard = ({
+  styleKey,
+  rank,
+  score,
+}: {
+  styleKey: StyleKey;
+  rank: 1 | 2 | 3 | 4;
+  score: number;
+}) => {
+  const meta = STYLE_META[styleKey];
+  return (
+    <div
+      className="rounded-xl p-4 text-white"
+      style={{ backgroundColor: meta.color }}
+    >
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-lg font-bold">{meta.label}</span>
+        <div className="flex items-center gap-1">
+          {rank === 1 && <Star className="h-5 w-5 fill-yellow-300 text-yellow-300" />}
+          <Badge
+            className="text-white border-white/40"
+            style={{ backgroundColor: `${meta.color}cc` }}
+          >
+            {rank === 1 ? "Primary" : rank === 2 ? "Secondary" : `#${rank}`}
+          </Badge>
+        </div>
+      </div>
+      <p className="text-xs text-white/80 mb-3">Score: {score} / 24</p>
+      <div className="space-y-2 text-sm">
+        <p>
+          <span className="font-semibold">Core need:</span> {meta.coreNeed}
+        </p>
+        <p>
+          <span className="font-semibold">Strength:</span> {meta.strength}
+        </p>
+        <p>
+          <span className="font-semibold">Challenge:</span> {meta.challenge}
+        </p>
+        <p className="bg-white/20 rounded-lg p-2 text-xs mt-2">
+          <span className="font-semibold">Staff tip:</span> {meta.staffTip}
+        </p>
+      </div>
+    </div>
+  );
+};
+
+// ─────────────────────────────────────────────────
+// Main Component
+// ─────────────────────────────────────────────────
+
+interface ColorAssessmentProps {
+  selectedYouth?: Youth;
+  onSaved?: (updated?: Youth) => void;
+}
+
+export const ColorAssessment = ({ selectedYouth, onSaved }: ColorAssessmentProps) => {
+  const { updateYouth } = useYouth();
+  const { user, isAdmin } = useAuth();
+  const { toast } = useToast();
+  const printRef = useRef<HTMLDivElement>(null);
+
+  // ── State ──
+  const [activeTab, setActiveTab] = useState<string>("assessment");
+  const [entryMode, setEntryMode] = useState<"interactive" | "totals">("interactive");
+
+  // Interactive row-by-row rankings
+  const [rankings, setRankings] = useState<Record<number, RowRankings>>(emptyRankings());
+
+  // Staff-totals-only entry
+  const [totals, setTotals] = useState<Record<StyleKey, string>>({
+    heart: "",
+    anchor: "",
+    mind: "",
+    spark: "",
+  });
+
+  // Metadata
+  const [staffName, setStaffName] = useState(user?.displayName || user?.email || "");
+  const [assessmentDate, setAssessmentDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [observations, setObservations] = useState("");
+  const [nextReviewDate, setNextReviewDate] = useState("");
+
+  // Saved result
+  const [savedResult, setSavedResult] = useState<ColorAssessmentRow | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [deletingAssessmentId, setDeletingAssessmentId] = useState<string | null>(null);
+  const [historyList, setHistoryList] = useState<ColorAssessmentRow[]>([]);
+
+  // ── Load existing ──
+  useEffect(() => {
+    if (!selectedYouth?.id) return;
+    realColorsAssessmentsService.getByYouthId(selectedYouth.id, 5).then((rows) => {
+      setHistoryList(rows);
+      if (rows.length > 0) {
+        setSavedResult(rows[0]);
+        setActiveTab("results");
+      }
+    });
+  }, [selectedYouth?.id]);
+
+  // ── Live scores from rankings ──
+  const liveScores = useMemo<Record<StyleKey, number>>(() => {
+    const s = { heart: 0, anchor: 0, mind: 0, spark: 0 };
+    for (let i = 0; i < 6; i++) {
+      STYLE_KEYS.forEach((k) => {
+        s[k] += rankings[i]?.[k] ?? 0;
+      });
+    }
+    return s;
+  }, [rankings]);
+
+  // ── Row validation ──
+  const rowErrors = useMemo<(string | null)[]>(() => {
+    return Array.from({ length: 6 }, (_, i) => {
+      const vals = STYLE_KEYS.map((k) => rankings[i]?.[k]).filter((v) => v !== null) as number[];
+      if (vals.length === 0) return null;
+      const hasDup = vals.length !== new Set(vals).size;
+      return hasDup ? "Each number 1–4 must be used exactly once per row." : null;
+    });
+  }, [rankings]);
+
+  const rowComplete = (i: number) =>
+    STYLE_KEYS.every((k) => rankings[i]?.[k] !== null);
+
+  const allComplete = useMemo(
+    () =>
+      Array.from({ length: 6 }, (_, i) => i).every(rowComplete) &&
+      rowErrors.every((e) => !e),
+    [rankings, rowErrors]
+  );
+
+  // ── Compute sorted styles ──
+  const sortedStyles = (scoreMap: Record<StyleKey, number>): [StyleKey, number][] =>
+    (Object.entries(scoreMap) as [StyleKey, number][]).sort((a, b) => b[1] - a[1]);
+
+  // ── Save handler ──
+  const handleSave = async (scoreMap: Record<StyleKey, number>, rawRankings?: Record<number, RowRankings>) => {
+    if (!selectedYouth?.id) {
+      toast({ title: "No youth selected", variant: "destructive" });
+      return;
+    }
+    setIsSaving(true);
+    try {
+      const sorted = sortedStyles(scoreMap);
+      const primaryKey = sorted[0][0];
+      const secondaryKey = sorted[1][0];
+      const resultStr = `${STYLE_META[primaryKey].label}/${STYLE_META[secondaryKey].label}`;
+
+      // Flatten rankings into keyed record
+      const flatRankings: Record<string, number> | null = rawRankings
+        ? Object.fromEntries(
+            Array.from({ length: 6 }, (_, i) =>
+              STYLE_KEYS.map((k) => [`r${i + 1}_${k}`, rawRankings[i]?.[k] ?? 0])
+            ).flat()
+          )
+        : null;
+
+      const row = await realColorsAssessmentsService.save({
+        youth_id: selectedYouth.id,
+        primary_color: STYLE_META[primaryKey].label,
+        secondary_color: STYLE_META[secondaryKey].label,
+        real_colors_result: resultStr,
+        heart_score: scoreMap.heart,
+        anchor_score: scoreMap.anchor,
+        mind_score: scoreMap.mind,
+        spark_score: scoreMap.spark,
+        rankings: flatRankings,
+        assessment_date: assessmentDate,
+        observations: observations || null,
+        staff_observations: observations || null,
+        next_review_date: nextReviewDate || null,
+        completed_by_type: "staff",
+        completed_by_name: staffName || user?.email || null,
+      });
+
+      await updateYouth(selectedYouth.id, { realColorsResult: resultStr });
+
+      setSavedResult(row);
+      setHistoryList((prev) => [row, ...prev.filter((r) => r.id !== row.id)]);
+      setActiveTab("results");
+      toast({
+        title: "Assessment Saved",
+        description: `Primary style: ${STYLE_META[primaryKey].label} · Secondary: ${STYLE_META[secondaryKey].label}`,
+      });
+      if (onSaved) onSaved();
+    } catch (err) {
+      console.error(err);
+      toast({ title: "Save failed", description: "Please try again.", variant: "destructive" });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleSubmitInteractive = () => {
+    if (!allComplete) return;
+    handleSave(liveScores, rankings);
+  };
+
+  const handleSubmitTotals = () => {
+    const scoreMap: Record<StyleKey, number> = {
+      heart: Math.max(6, Math.min(24, parseInt(totals.heart) || 6)),
+      anchor: Math.max(6, Math.min(24, parseInt(totals.anchor) || 6)),
+      mind: Math.max(6, Math.min(24, parseInt(totals.mind) || 6)),
+      spark: Math.max(6, Math.min(24, parseInt(totals.spark) || 6)),
+    };
+    handleSave(scoreMap, undefined);
+  };
+
+  const handleReset = () => {
+    setRankings(emptyRankings());
+    setTotals({ heart: "", anchor: "", mind: "", spark: "" });
+    setObservations("");
+    setNextReviewDate("");
+    setActiveTab("assessment");
+  };
+
+  const handlePrintResults = () => window.print();
+
+  const handleDeleteAssessment = async (assessmentId: string) => {
+    if (!selectedYouth?.id || !isAdmin) return;
+
+    const target = historyList.find((row) => row.id === assessmentId);
+    if (!target) return;
+
+    const label = target.assessment_date || target.created_at?.slice(0, 10) || "this assessment";
+    if (!window.confirm(`Delete the Personal Style Profile from ${label}? This cannot be undone.`)) {
+      return;
+    }
+
+    setDeletingAssessmentId(assessmentId);
+    try {
+      await realColorsAssessmentsService.delete(assessmentId);
+
+      const wasLatest = historyList[0]?.id === assessmentId;
+      const remainingHistory = historyList.filter((row) => row.id !== assessmentId);
+      const nextSelected = savedResult?.id === assessmentId
+        ? remainingHistory[0] ?? null
+        : savedResult;
+
+      setHistoryList(remainingHistory);
+      setSavedResult(nextSelected);
+
+      if (wasLatest) {
+        try {
+          const updatedYouth = await updateYouth(selectedYouth.id, {
+            realColorsResult: remainingHistory[0]?.real_colors_result ?? null,
+          });
+          if (onSaved) onSaved(updatedYouth);
+        } catch (syncErr) {
+          console.error("Failed to sync youth real colors result after deletion:", syncErr);
+          if (onSaved) onSaved();
+        }
+      } else if (onSaved) {
+        onSaved();
+      }
+
+      toast({
+        title: "Assessment Deleted",
+        description: "The Personal Style Profile entry has been removed from history.",
+      });
+    } catch (err) {
+      console.error(err);
+      toast({
+        title: "Delete failed",
+        description: "The assessment could not be removed. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setDeletingAssessmentId(null);
+    }
+  };
+
+  const handlePrintBlankForm = () => {
+    const youthName = `${selectedYouth?.firstName ?? ""} ${selectedYouth?.lastName ?? ""}`.trim();
+    const rows = ASSESSMENT_ROWS.map((row, idx) => `
+      <tr style="background:${idx % 2 === 0 ? "#fff" : "#f9f9f9"}">
+        <td style="border:1px solid #000;padding:6px 8px;text-align:center;font-weight:bold">${idx + 1}</td>
+        ${STYLE_KEYS.map((k) => `
+          <td style="border:1px solid #000;padding:6px 8px">
+            <div style="display:flex;align-items:flex-start;gap:6px">
+              <span style="display:inline-block;border:1px solid #000;width:20px;height:20px;flex-shrink:0;margin-top:2px"></span>
+              <span style="line-height:1.3;font-size:10pt">${row[k]}</span>
+            </div>
+          </td>
+        `).join("")}
+      </tr>
+    `).join("");
+
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>Personal Style Profile — ${youthName}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, sans-serif; font-size: 10pt; color: #000; background: #fff; padding: 0.5in; }
+    h1 { font-size: 14pt; font-weight: bold; text-align: center; }
+    h2 { font-size: 12pt; font-weight: bold; text-align: center; margin-top: 2px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border: 1px solid #000; padding: 6px 8px; }
+    @page { size: letter; margin: 0.5in; }
+    @media print { body { padding: 0; } }
+  </style>
+</head>
+<body>
+  <h1>Heartland Boys Home</h1>
+  <h2>Personal Style Profile</h2>
+  <hr style="margin:8px 0 12px;border-top:2px solid #000"/>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:14px;font-size:9pt">
+    <div><strong>Youth Name:</strong> <span style="display:inline-block;border-bottom:1px solid #000;width:160px">${youthName}</span></div>
+    <div><strong>Date:</strong> <span style="display:inline-block;border-bottom:1px solid #000;width:120px"></span></div>
+    <div><strong>Staff:</strong> <span style="display:inline-block;border-bottom:1px solid #000;width:120px"></span></div>
+  </div>
+
+  <div style="border:1px solid #555;border-radius:4px;padding:8px;margin-bottom:14px;background:#f5f5f5;font-size:9pt">
+    <strong>Instructions:</strong> Read each row. Rank all four descriptions using the numbers <strong>1–4</strong>.
+    You must use each number exactly once per row.<br/>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-top:6px;font-weight:600">
+      <span>4 = Most like me</span>
+      <span>3 = A lot like me</span>
+      <span>2 = A little like me</span>
+      <span>1 = Least like me</span>
+    </div>
+  </div>
+
+  <table style="margin-bottom:14px">
+    <thead>
+      <tr>
+        <th style="background:#1C2B4A;color:#fff;width:32px;text-align:center">#</th>
+        <th style="background:#1C2B4A;color:#fff;text-align:center">A</th>
+        <th style="background:#1C2B4A;color:#fff;text-align:center">B</th>
+        <th style="background:#1C2B4A;color:#fff;text-align:center">C</th>
+        <th style="background:#1C2B4A;color:#fff;text-align:center">D</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${rows}
+      <tr style="background:#e8e8e8">
+        <td style="border:1px solid #000;padding:6px 8px;text-align:center;font-weight:bold;font-size:9pt">Total</td>
+        ${STYLE_KEYS.map(() => `<td style="border:1px solid #000;padding:10px 12px;text-align:center"><div style="display:inline-block;border:2px solid #000;width:48px;height:26px"></div></td>`).join("")}
+      </tr>
+    </tbody>
+  </table>
+
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;font-size:9pt;margin-bottom:12px">
+    <div>
+      <strong>Youth Level:</strong> <span style="display:inline-block;border-bottom:1px solid #000;width:64px;margin-right:12px"></span>
+      <strong>Next Review:</strong> <span style="display:inline-block;border-bottom:1px solid #000;width:96px"></span>
+    </div>
+    <div style="text-align:right">
+      <strong>Primary Style:</strong> <span style="display:inline-block;border-bottom:1px solid #000;width:96px;margin-right:12px"></span>
+      <strong>Secondary:</strong> <span style="display:inline-block;border-bottom:1px solid #000;width:80px"></span>
+    </div>
+  </div>
+
+  <div style="font-size:9pt">
+    <strong>Staff Observations:</strong>
+    <div style="border-bottom:1px solid #000;height:22px;margin-top:6px"></div>
+    <div style="border-bottom:1px solid #000;height:22px;margin-top:6px"></div>
+    <div style="border-bottom:1px solid #000;height:22px;margin-top:6px"></div>
+  </div>
+</body>
+</html>`;
+
+    const win = window.open("", "_blank", "width=850,height=1100");
+    if (!win) {
+      toast({ title: "Pop-up blocked", description: "Allow pop-ups for this site and try again.", variant: "destructive" });
+      return;
+    }
+    win.document.write(html);
+    win.document.close();
+    win.onload = () => { win.focus(); win.print(); };
+  };
+
+  // ── Derive display scores from savedResult ──
+  const displayScores = useMemo<Record<StyleKey, number> | null>(() => {
+    if (!savedResult) return null;
+    const h = savedResult.heart_score ?? 0;
+    const a = savedResult.anchor_score ?? 0;
+    const m = savedResult.mind_score ?? 0;
+    const s = savedResult.spark_score ?? 0;
+    if (h + a + m + s === 0) return null;
+    return { heart: h, anchor: a, mind: m, spark: s };
+  }, [savedResult]);
+
+  // ─────────────────────────────────────────────────
+  // Render
+  // ─────────────────────────────────────────────────
+
+  if (!selectedYouth) {
+    return (
+      <Card>
+        <CardContent className="py-12 text-center text-gray-500">
+          Select a youth to view or complete the Personal Style Profile.
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Print styles */}
+      <style dangerouslySetInnerHTML={{
+        __html: `
+          @media print {
+            body > *:not(.psp-print-target) { display: none !important; }
+            .psp-print-hide { display: none !important; }
+            .psp-print-target {
+              display: block !important;
+              position: static !important;
+              margin: 0 !important;
+              padding: 0.4in !important;
+              font-size: 10pt !important;
+              font-family: Arial, sans-serif !important;
+              color: black !important;
+              background: white !important;
+            }
+            @page { size: letter; margin: 0.5in; }
+          }
+        `
+      }} />
+
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="psp-print-hide grid w-full grid-cols-1 sm:grid-cols-3 bg-white border border-gray-200 shadow-sm h-auto gap-1">
+          <TabsTrigger value="assessment" className="flex items-center justify-center gap-1.5 whitespace-normal px-3 py-2 data-[state=active]:bg-[#1C2B4A] data-[state=active]:text-white">
+            <ClipboardList className="h-4 w-4" /> Assessment
+          </TabsTrigger>
+          <TabsTrigger value="results" className="flex items-center justify-center gap-1.5 whitespace-normal px-3 py-2 data-[state=active]:bg-[#1C2B4A] data-[state=active]:text-white">
+            <BarChart2 className="h-4 w-4" /> Results
+          </TabsTrigger>
+          <TabsTrigger value="print-form" className="flex items-center justify-center gap-1.5 whitespace-normal px-3 py-2 data-[state=active]:bg-[#1C2B4A] data-[state=active]:text-white">
+            <FileText className="h-4 w-4" /> Print Blank Form
+          </TabsTrigger>
+        </TabsList>
+
+        {/* ── Assessment Tab ── */}
+        <TabsContent value="assessment" className="space-y-4">
+          <Card className="border-2" style={{ borderColor: "#1C2B4A20" }}>
+            <CardHeader style={{ backgroundColor: "#1C2B4A" }} className="rounded-t-lg">
+              <CardTitle className="text-white text-lg">
+                Personal Style Profile — {selectedYouth.firstName} {selectedYouth.lastName}
+              </CardTitle>
+              <p className="text-white/70 text-sm">
+                Rank all four descriptions in each row using 1–4. Use each number exactly once per row.
+                <br />
+                <span className="font-semibold text-yellow-300">4 = Most like me &nbsp; 3 = A lot like me &nbsp; 2 = A little like me &nbsp; 1 = Least like me</span>
+              </p>
+            </CardHeader>
+            <CardContent className="pt-4">
+
+              {/* Entry mode toggle */}
+              <div className="flex flex-col sm:flex-row gap-2 mb-4">
+                <Button
+                  size="sm"
+                  variant={entryMode === "interactive" ? "default" : "outline"}
+                  onClick={() => setEntryMode("interactive")}
+                  className="w-full sm:w-auto whitespace-normal text-left sm:text-center"
+                  style={entryMode === "interactive" ? { backgroundColor: "#1C2B4A" } : {}}
+                >
+                  Row-by-Row Entry
+                </Button>
+                <Button
+                  size="sm"
+                  variant={entryMode === "totals" ? "default" : "outline"}
+                  onClick={() => setEntryMode("totals")}
+                  className="w-full sm:w-auto whitespace-normal text-left sm:text-center"
+                  style={entryMode === "totals" ? { backgroundColor: "#1C2B4A" } : {}}
+                >
+                  Enter Totals Directly (paper form already scored)
+                </Button>
+              </div>
+
+              {entryMode === "interactive" ? (
+                <>
+                  {/* Column headers — neutral labels so youth cannot predict results */}
+                  <div className="hidden md:grid grid-cols-5 gap-2 mb-2 text-center text-xs font-bold">
+                    <div className="text-gray-500">Row</div>
+                    {STYLE_KEYS.map((k) => (
+                      <div key={k} className="text-gray-600">
+                        {NEUTRAL_LABEL[k]}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Rows */}
+                  {ASSESSMENT_ROWS.map((row, rowIdx) => (
+                    <div key={rowIdx} className="mb-4 rounded-xl border border-slate-200 bg-white p-3 md:p-0 md:border-0 md:bg-transparent">
+                      <div className="md:hidden flex items-center gap-2 mb-3">
+                        <span
+                          className="text-sm font-bold w-8 h-8 rounded-full flex items-center justify-center text-white shrink-0"
+                          style={{ backgroundColor: "#1C2B4A" }}
+                        >
+                          {rowIdx + 1}
+                        </span>
+                        <span className="text-sm font-semibold text-slate-700">Row {rowIdx + 1}</span>
+                      </div>
+
+                      <div className="md:hidden grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {STYLE_KEYS.map((styleKey) => (
+                          <div key={styleKey} className="rounded-lg border border-slate-200 p-3 bg-slate-50/70 space-y-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-xs font-bold text-slate-500">Choice {NEUTRAL_LABEL[styleKey]}</span>
+                              <span
+                                className="text-[11px] font-semibold"
+                                style={{ color: STYLE_META[styleKey].color }}
+                              >
+                                {STYLE_META[styleKey].label}
+                              </span>
+                            </div>
+                            <p className="text-sm text-gray-700 leading-snug">
+                              {row[styleKey]}
+                            </p>
+                            <select
+                              value={rankings[rowIdx]?.[styleKey] ?? ""}
+                              onChange={(e) => {
+                                const val = e.target.value ? parseInt(e.target.value) : null;
+                                setRankings((prev) => ({
+                                  ...prev,
+                                  [rowIdx]: { ...prev[rowIdx], [styleKey]: val },
+                                }));
+                              }}
+                              className="w-full border border-gray-300 rounded px-2 py-2 text-sm bg-white focus:outline-none focus:ring-2"
+                            >
+                              <option value="">Select 1-4</option>
+                              {[4, 3, 2, 1].map((n) => (
+                                <option key={n} value={n}>
+                                  {n}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="hidden md:grid grid-cols-5 gap-2 items-start">
+                        <div className="flex items-center justify-center pt-2">
+                          <span
+                            className="text-sm font-bold w-7 h-7 rounded-full flex items-center justify-center text-white"
+                            style={{ backgroundColor: "#1C2B4A" }}
+                          >
+                            {rowIdx + 1}
+                          </span>
+                        </div>
+                        {STYLE_KEYS.map((styleKey) => (
+                          <div key={styleKey} className="space-y-1">
+                            <p className="text-xs text-gray-600 leading-tight min-h-[3em]">
+                              {row[styleKey]}
+                            </p>
+                            <select
+                              value={rankings[rowIdx]?.[styleKey] ?? ""}
+                              onChange={(e) => {
+                                const val = e.target.value ? parseInt(e.target.value) : null;
+                                setRankings((prev) => ({
+                                  ...prev,
+                                  [rowIdx]: { ...prev[rowIdx], [styleKey]: val },
+                                }));
+                              }}
+                              className="w-full border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2"
+                            >
+                              <option value="">—</option>
+                              {[4, 3, 2, 1].map((n) => (
+                                <option key={n} value={n}>
+                                  {n}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Row validation */}
+                      {rowErrors[rowIdx] && (
+                        <p className="text-red-600 text-xs mt-3 md:mt-1 md:col-span-5 md:pl-10">
+                          ⚠ {rowErrors[rowIdx]}
+                        </p>
+                      )}
+                      {rowComplete(rowIdx) && !rowErrors[rowIdx] && (
+                        <p className="text-green-600 text-xs mt-3 md:mt-1 md:pl-10">✓ Row complete</p>
+                      )}
+                    </div>
+                  ))}
+
+                  {/* Running totals intentionally hidden — displaying live per-style scores
+                      would allow youth to adjust rankings to target a desired result. */}
+                </>
+              ) : (
+                /* Totals entry */
+                <div className="space-y-4">
+                  <p className="text-sm text-gray-600">
+                    Enter the column totals from the completed paper form. Each score should be between 6 and 24.
+                  </p>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    {STYLE_KEYS.map((k) => (
+                      <div key={k}>
+                        <Label style={{ color: STYLE_META[k].color }} className="font-bold">
+                          {STYLE_META[k].label} Score
+                        </Label>
+                        <Input
+                          type="number"
+                          min={6}
+                          max={24}
+                          value={totals[k]}
+                          onChange={(e) =>
+                            setTotals((prev) => ({ ...prev, [k]: e.target.value }))
+                          }
+                          placeholder="6–24"
+                          className="mt-1"
+                          style={{ borderColor: STYLE_META[k].color + "80" }}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  {/* Preview bar */}
+                  {STYLE_KEYS.some((k) => parseInt(totals[k]) > 0) && (
+                    <div className="p-3 bg-gray-50 rounded-lg space-y-2">
+                      {STYLE_KEYS.map((k) => (
+                        <ScoreBar key={k} styleKey={k} score={parseInt(totals[k]) || 0} />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Metadata fields */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6 border-t pt-4">
+                <div>
+                  <Label>Staff Name</Label>
+                  <Input
+                    value={staffName}
+                    onChange={(e) => setStaffName(e.target.value)}
+                    placeholder="Completing staff name"
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label>Date of Assessment</Label>
+                  <Input
+                    type="date"
+                    value={assessmentDate}
+                    onChange={(e) => setAssessmentDate(e.target.value)}
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label>Date of Next Review</Label>
+                  <Input
+                    type="date"
+                    value={nextReviewDate}
+                    onChange={(e) => setNextReviewDate(e.target.value)}
+                    className="mt-1"
+                  />
+                </div>
+              </div>
+              <div className="mt-4">
+                <Label>Staff Observations</Label>
+                <Textarea
+                  value={observations}
+                  onChange={(e) => setObservations(e.target.value)}
+                  placeholder="Notes on how the youth engaged with the assessment, notable responses, relevant context..."
+                  rows={3}
+                  className="mt-1"
+                />
+              </div>
+
+              {/* Actions */}
+              <div className="flex flex-col sm:flex-row gap-2 mt-4">
+                {entryMode === "interactive" ? (
+                  <Button
+                    onClick={handleSubmitInteractive}
+                    disabled={!allComplete || isSaving}
+                    style={{ backgroundColor: "#1C2B4A" }}
+                    className="text-white w-full sm:w-auto"
+                  >
+                    <Save className="h-4 w-4 mr-2" />
+                    {isSaving ? "Saving..." : "Save Assessment"}
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={handleSubmitTotals}
+                    disabled={
+                      STYLE_KEYS.some((k) => !totals[k] || parseInt(totals[k]) < 6) || isSaving
+                    }
+                    style={{ backgroundColor: "#1C2B4A" }}
+                    className="text-white w-full sm:w-auto"
+                  >
+                    <Save className="h-4 w-4 mr-2" />
+                    {isSaving ? "Saving..." : "Save Assessment"}
+                  </Button>
+                )}
+                <Button variant="outline" onClick={handleReset} className="w-full sm:w-auto">
+                  <RotateCcw className="h-4 w-4 mr-2" /> Reset
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ── Results Tab ── */}
+        <TabsContent value="results" className="space-y-4">
+          {savedResult && displayScores ? (
+            <>
+              {/* Printable results */}
+              <div ref={printRef} className="psp-print-target space-y-6">
+                {/* Header */}
+                <div
+                  className="rounded-xl p-5 text-white"
+                  style={{ backgroundColor: "#1C2B4A" }}
+                >
+                  <h2 className="text-xl font-bold">Personal Style Profile Results</h2>
+                  <p className="text-white/70 text-sm">Heartland Boys Home</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mt-3 text-sm">
+                    <div>
+                      <span className="text-white/60">Youth: </span>
+                      <span className="font-semibold">
+                        {selectedYouth.firstName} {selectedYouth.lastName}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-white/60">Date: </span>
+                      <span>{savedResult.assessment_date || savedResult.created_at?.slice(0, 10)}</span>
+                    </div>
+                    <div>
+                      <span className="text-white/60">Primary Style: </span>
+                      <span className="font-bold text-yellow-300">{savedResult.primary_color}</span>
+                    </div>
+                    <div>
+                      <span className="text-white/60">Secondary Style: </span>
+                      <span className="font-semibold">{savedResult.secondary_color}</span>
+                    </div>
+                    {savedResult.completed_by_name && (
+                      <div>
+                        <span className="text-white/60">Completed by: </span>
+                        <span>{savedResult.completed_by_name}</span>
+                      </div>
+                    )}
+                    {savedResult.next_review_date && (
+                      <div>
+                        <span className="text-white/60">Next Review: </span>
+                        <span>{savedResult.next_review_date}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Score bars */}
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-bold text-gray-700 uppercase">Score Breakdown</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {sortedStyles(displayScores).map(([k, score]) => (
+                      <ScoreBar key={k} styleKey={k} score={score} />
+                    ))}
+                  </CardContent>
+                </Card>
+
+                {/* Style cards */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {sortedStyles(displayScores).map(([k, score], idx) => (
+                    <StyleResultCard
+                      key={k}
+                      styleKey={k}
+                      rank={(idx + 1) as 1 | 2 | 3 | 4}
+                      score={score}
+                    />
+                  ))}
+                </div>
+
+                {/* Staff observations */}
+                {savedResult.staff_observations && (
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-bold text-gray-700 uppercase">Staff Observations</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-sm text-gray-700 whitespace-pre-wrap">
+                        {savedResult.staff_observations}
+                      </p>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+
+              {/* Action buttons (hidden on print) */}
+              <div className="flex flex-col sm:flex-row gap-2 psp-print-hide">
+                <Button
+                  onClick={handlePrintResults}
+                  variant="outline"
+                  className="flex items-center justify-center gap-2 w-full sm:w-auto"
+                >
+                  <Printer className="h-4 w-4" /> Print Results
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setActiveTab("assessment")}
+                  className="w-full sm:w-auto"
+                >
+                  <RotateCcw className="h-4 w-4 mr-2" /> Retake Assessment
+                </Button>
+              </div>
+
+              {/* History */}
+              {historyList.length > 0 && (historyList.length > 1 || isAdmin) && (
+                <Card className="psp-print-hide">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-bold text-gray-700 uppercase">Assessment History</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2">
+                      {historyList.map((r) => (
+                        <div
+                          key={r.id}
+                          className="w-full flex flex-col sm:flex-row items-stretch sm:items-center gap-3 text-sm p-3 rounded border border-gray-100 hover:bg-gray-50"
+                        >
+                          <button
+                            type="button"
+                            className="flex-1 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3 text-left"
+                            onClick={() => setSavedResult(r)}
+                          >
+                            <span className="font-medium sm:font-normal">
+                              {r.assessment_date || r.created_at?.slice(0, 10)}
+                            </span>
+                            <span className="font-semibold">
+                              {r.primary_color} / {r.secondary_color}
+                            </span>
+                            <span className="text-gray-400 text-xs">
+                              {r.completed_by_name}
+                            </span>
+                          </button>
+                          {isAdmin && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50 w-full sm:w-auto"
+                              onClick={() => handleDeleteAssessment(r.id)}
+                              disabled={deletingAssessmentId === r.id}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </>
+          ) : (
+            <Card>
+              <CardContent className="py-12 text-center text-gray-500">
+                <p>No assessment results yet.</p>
+                <Button
+                  className="mt-4"
+                  onClick={() => setActiveTab("assessment")}
+                  style={{ backgroundColor: "#1C2B4A" }}
+                >
+                  Take Assessment
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
+        {/* ── Print Blank Form Tab ── */}
+        <TabsContent value="print-form">
+          <Button
+            onClick={handlePrintBlankForm}
+            className="mb-4 flex items-center justify-center gap-2 w-full sm:w-auto"
+            style={{ backgroundColor: "#1C2B4A" }}
+          >
+            <Printer className="h-4 w-4" /> Print Blank Form
+          </Button>
+          <BlankPrintForm youthName={`${selectedYouth.firstName} ${selectedYouth.lastName}`} />
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+};
+
+// ─────────────────────────────────────────────────
+// Blank Printable Form
+// ─────────────────────────────────────────────────
+
+const BlankPrintForm = ({ youthName }: { youthName: string }) => (
+  <div className="psp-print-target bg-white text-black p-8 font-sans text-sm border border-gray-200 rounded-lg">
+    {/* Header */}
+    <div className="text-center mb-5 border-b-2 border-gray-800 pb-3">
+      <p className="text-lg font-bold">Heartland Boys Home</p>
+      <p className="text-base font-bold mt-0.5">Personal Style Profile</p>
+    </div>
+
+    {/* Name / Date / Staff row */}
+    <div className="grid grid-cols-3 gap-6 mb-5 text-xs">
+      <div>
+        <span className="font-bold">Youth Name: </span>
+        <span className="inline-block border-b border-black w-40">{youthName || ""}</span>
+      </div>
+      <div>
+        <span className="font-bold">Date: </span>
+        <span className="inline-block border-b border-black w-32" />
+      </div>
+      <div>
+        <span className="font-bold">Staff: </span>
+        <span className="inline-block border-b border-black w-32" />
+      </div>
+    </div>
+
+    {/* Instructions */}
+    <div className="border border-gray-700 rounded p-2 mb-4 text-xs bg-gray-50">
+      <p className="font-bold mb-1">Instructions:</p>
+      <p>
+        Read each row. Rank all four descriptions using the numbers <strong>1–4</strong>. You must use each number
+        exactly once per row.
+      </p>
+      <div className="grid grid-cols-4 mt-1 gap-2 font-semibold">
+        <span>4 = Most like me</span>
+        <span>3 = A lot like me</span>
+        <span>2 = A little like me</span>
+        <span>1 = Least like me</span>
+      </div>
+    </div>
+
+    {/* Column headers */}
+    <table className="w-full border border-black border-collapse text-xs mb-4">
+      <thead>
+        <tr style={{ backgroundColor: "#1C2B4A" }}>
+          <th className="border border-black px-2 py-1 text-white text-center w-8">#</th>
+          {STYLE_KEYS.map((k) => (
+            <th
+              key={k}
+              className="border border-black px-2 py-2 text-white text-center font-bold"
+            >
+              {NEUTRAL_LABEL[k]}
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {ASSESSMENT_ROWS.map((row, idx) => (
+          <tr key={idx} className={idx % 2 === 0 ? "bg-white" : "bg-gray-50"}>
+            <td className="border border-black px-2 py-2 text-center font-bold">{idx + 1}</td>
+            {STYLE_KEYS.map((k) => (
+              <td key={k} className="border border-black px-2 py-2">
+                <div className="flex items-start gap-2">
+                  <span className="inline-block border border-black w-6 h-6 shrink-0 mt-0.5" />
+                  <span className="leading-tight">{row[k]}</span>
+                </div>
+              </td>
+            ))}
+          </tr>
+        ))}
+        {/* Totals row */}
+        <tr style={{ backgroundColor: "#1C2B4A20" }}>
+          <td className="border border-black px-2 py-2 text-center font-bold text-xs">Total</td>
+          {STYLE_KEYS.map((k) => (
+            <td key={k} className="border border-black px-3 py-3 text-center">
+              <div className="inline-block border-2 border-black w-12 h-7" />
+            </td>
+          ))}
+        </tr>
+      </tbody>
+    </table>
+
+    {/* Signature / review */}
+    <div className="grid grid-cols-2 gap-6 mt-4 text-xs">
+      <div>
+        <span className="font-bold">Youth Level: </span>
+        <span className="inline-block border-b border-black w-20 mr-4" />
+        <span className="font-bold">Next Review: </span>
+        <span className="inline-block border-b border-black w-28" />
+      </div>
+      <div className="text-right">
+        <span className="font-bold">Primary Style: </span>
+        <span className="inline-block border-b border-black w-28 mr-4" />
+        <span className="font-bold">Secondary: </span>
+        <span className="inline-block border-b border-black w-24" />
+      </div>
+    </div>
+
+    <div className="mt-4">
+      <p className="font-bold text-xs mb-1">Staff Observations:</p>
+      {[0, 1, 2].map((i) => (
+        <div key={i} className="border-b border-black h-6 w-full mb-1" />
+      ))}
+    </div>
+  </div>
+);

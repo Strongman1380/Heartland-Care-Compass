@@ -270,7 +270,6 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
   const [isSaving, setIsSaving] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
-  const [shouldAutoPopulate, setShouldAutoPopulate] = useState(false);
   const autoSaveTimerRef = useRef<number | null>(null);
   const pendingYouthIdRef = useRef<string | null>(null);
   const pendingReportTypeRef = useRef<string>('court_report');
@@ -597,7 +596,7 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
 
         // Current level as behavioral indicator
         if (youth.level && youth.pointTotal) {
-          behaviorParts.push(`Current Level: ${youth.level} (${youth.pointTotal.toLocaleString()} total points)`);
+          behaviorParts.push(`Current Level: ${youth.level} (${youth.pointTotal.toLocaleString()} cumulative points)`);
         }
 
         if (behaviorParts.length > 0) {
@@ -696,10 +695,9 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
         currentPlacement: placementParts.join('\n'),
       }));
 
-      // No saved data — populate with base data and auto-trigger AI population
+      // No saved data — populate with base data only. AI remains manual.
       if (!loaded) {
         setReportData(prev => ({ ...prev, ...getBaseDataIfEmpty(prev) }));
-        setShouldAutoPopulate(true);
       }
     })();
   }, [youth, user?.uid]);
@@ -1103,18 +1101,6 @@ Write a professional summary suitable for a court report focusing on future plan
       setIsSaving(false);
     }
   };
-
-  // Keep a ref to the latest handleAutoPopulate to avoid stale closures
-  const handleAutoPopulateRef = useRef(handleAutoPopulate);
-  handleAutoPopulateRef.current = handleAutoPopulate;
-
-  // Auto-trigger AI population when no saved draft exists
-  useEffect(() => {
-    if (shouldAutoPopulate && youth?.id && !isSaving) {
-      setShouldAutoPopulate(false);
-      handleAutoPopulateRef.current(true);
-    }
-  }, [shouldAutoPopulate, youth?.id, isSaving]);
 
   const handleReset = async () => {
     if (!youth) {

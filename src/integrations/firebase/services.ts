@@ -42,10 +42,42 @@ export const youthService = {
   async getAll(): Promise<Youth[]> {
     const q = query(collection(db, 'youth'), orderBy('createdAt', 'desc'))
     const snapshot = await getDocs(q)
-    // Filter out discharged youth from the active list
+    // Filter out discharged and archived youth from the active list
     return snapshot.docs
       .map(d => docToData<Youth>(d))
-      .filter(y => y.status !== 'discharged')
+      .filter(y => y.status !== 'discharged' && !y.archivedAt)
+  },
+
+  async getArchived(): Promise<Youth[]> {
+    const q = query(collection(db, 'youth'), orderBy('createdAt', 'desc'))
+    const snapshot = await getDocs(q)
+    return snapshot.docs
+      .map(d => docToData<Youth>(d))
+      .filter(y => !!y.archivedAt)
+  },
+
+  async getAllIncludingArchived(): Promise<Youth[]> {
+    const q = query(collection(db, 'youth'), orderBy('createdAt', 'desc'))
+    const snapshot = await getDocs(q)
+    return snapshot.docs.map(d => docToData<Youth>(d))
+  },
+
+  async archiveYouth(id: string, archivedBy: string): Promise<void> {
+    const ref = doc(db, 'youth', id)
+    await updateDoc(ref, {
+      archivedAt: new Date().toISOString(),
+      archivedBy,
+      updatedAt: new Date().toISOString(),
+    } as Record<string, unknown>)
+  },
+
+  async restoreYouth(id: string): Promise<void> {
+    const ref = doc(db, 'youth', id)
+    await updateDoc(ref, {
+      archivedAt: null,
+      archivedBy: null,
+      updatedAt: new Date().toISOString(),
+    } as Record<string, unknown>)
   },
 
   async getById(id: string): Promise<Youth | null> {
@@ -377,6 +409,57 @@ export const supabaseUtils = {
     }
   }
 }
+
+// ============================================================================
+// Level Event Service
+// Logs level-up and demotion events to the `level_events` Firestore collection
+// so the Dashboard can show a recent-level-changes feed.
+// ============================================================================
+
+export interface LevelEvent {
+  id: string;
+  youthId: string;
+  youthName: string;
+  fromLevel: number;
+  toLevel: number;
+  direction: 'level_up' | 'demotion' | 'manual';
+  changedBy: string;
+  timestamp: string;
+}
+
+export const levelEventService = {
+  async logLevelChange(
+    youthId: string,
+    youthName: string,
+    fromLevel: number,
+    toLevel: number,
+    direction: LevelEvent['direction'],
+    changedBy: string
+  ): Promise<void> {
+    const id = uuidv4();
+    const ref = doc(db, 'level_events', id);
+    await setDoc(ref, {
+      id,
+      youthId,
+      youthName,
+      fromLevel,
+      toLevel,
+      direction,
+      changedBy,
+      timestamp: new Date().toISOString(),
+    });
+  },
+
+  async getRecent(limit = 10): Promise<LevelEvent[]> {
+    const q = query(
+      collection(db, 'level_events'),
+      orderBy('timestamp', 'desc'),
+      firestoreLimit(limit)
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map((d) => docToData<LevelEvent>(d));
+  },
+};
 
 // Export types for use in components
 export type {

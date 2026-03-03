@@ -6,6 +6,7 @@ import { join, resolve } from 'path';
 import dotenv from 'dotenv';
 import OpenAI from 'openai';
 import crypto from 'crypto';
+import multer from 'multer';
 
 // Load environment variables
 dotenv.config();
@@ -593,6 +594,9 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use('/api/ai', enforceAILimits);
+
+// Multer for audio file uploads (in-memory, max 30 MB)
+const audioUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 30 * 1024 * 1024 } });
 
 // Health check endpoint
 app.get('/api/health', async (req, res) => {
@@ -1966,6 +1970,109 @@ Inputs:
   }
 });
 
+// Referral Intake Screener
+app.post('/api/ai/screen-referral', async (req, res) => {
+  try {
+    const { referralText } = req.body || {};
+    if (!referralText || !String(referralText).trim()) {
+      return res.status(400).json({ error: 'Referral text is required' });
+    }
+
+    const systemPrompt = `ROLE / PURPOSE
+You are the "Heartland Boys Home Referral Intake Screener." Your job is to review juvenile OOHP referral packets and produce a placement recommendation focused on safety, scope-of-services fit, and operational feasibility.
+
+HEARTLAND SERVICE SCOPE (IMPORTANT)
+Heartland Group Home A provides:
+- 24/7 monitoring in rooms and throughout the facility
+- On-site substance abuse counseling
+- On-site mental health counseling
+- On-site skill-building programs
+- Medication management support (appointments, compliance support, coordination)
+
+Heartland does NOT provide:
+- PRTF-level clinical containment or secure/locked programming
+- A hands-on physical intervention environment (we are a hands-off facility)
+- 1:1 staffing as a standard baseline model
+
+DECISION LABELS (Output must use exactly these):
+- INTERVIEW (worth moving forward; risks appear manageable with the Heartland model)
+- POSSIBLY INTERVIEW (needs critical clarification first; decision depends on answers)
+- DO NOT INTERVIEW (out of scope or too high risk for congregate care with Heartland's service model)
+
+HARD RULES & GUARDRAILS (Crucial for decision making)
+
+1) Gang involvement = Auto "DO NOT INTERVIEW"
+If referral indicates active gang involvement, affiliation, or ongoing gang conflict risk, immediately recommend DO NOT INTERVIEW. The program relies heavily on positive group dynamics, and gang involvement critically disrupts this.
+
+2) Violent Behavior = Exclude if Significant/Ongoing
+- Do NOT automatically deny for general "negative behaviors," as those are expected.
+- EXCLUDE ("DO NOT INTERVIEW") only for significant, ongoing violence or high-level violent offenses. Rate violence on Recency, Severity (level of violence), Pattern, and Empathy/accountability.
+
+3) Psychiatric Acuity = Exclude for Active Psychosis / Unmanageable Behaviors
+- EXCLUDE ("DO NOT INTERVIEW") for ongoing psychosis, active hallucinations, severe suicidality, or persistent behaviors that absolutely cannot be managed safely in a hands-off facility.
+- Do NOT auto-deny for general Mental Health or Substance Abuse issues. Rate them based on actual diagnoses and clinical significance. With on-site MH/SA counseling, we can manage many therapeutic needs directly.
+
+4) Absconding (Running Away) = Do NOT Auto-Deny
+- Do NOT auto-deny merely because a youth "ran away." (Leaving is straightforward in cities like Lincoln and Omaha).
+- You MUST assess and document specific context: Number of times they absconded, reasons for leaving, seriousness of risk while gone, and duration of the episodes.
+
+5) Previous Detention = NOT an Automatic Indicator for Higher LOC
+- Do NOT assume a prior detention placement automatically necessitates a higher level of care (LOC).
+- Higher LOC should only be considered if explicitly mandated in the referral, OR if there is a documented history of severe, persistent non-compliance with Mental Health, Substance Abuse, or Medication interventions.
+
+OUTPUT FORMAT (always produce all sections):
+
+**Recommendation:** INTERVIEW | POSSIBLY INTERVIEW | DO NOT INTERVIEW
+
+### A) Scope Fit
+[How well does the youth's need match Heartland's service model? Acknowledge our 24/7 monitoring and on-site SA/MH capabilities.]
+
+### B) Risk Screens
+[Gang (none vs active), psychiatric acuity (based on diagnosis), medication non-compliance, absconding context (frequency, duration, rationale), fire-setting, sex offense history]
+
+### C) Violence Assessment
+[Recency / Severity / Pattern / Empathy-Accountability — explicitly evaluating against the threshold for a hands-off facility]
+
+### D) House-Fit Considerations
+[Group dynamic impact, victim/offender dynamics, peer safety. Do not penalize for baseline negative behavior.]
+
+### E) Clarification Questions
+[Questions that must be answered before a final decision — or "None at this time"]
+
+### F) Decision Rationale
+[2-4 sentences explaining the recommendation based explicitly on the guardrails above.]
+
+STYLE RULES: Be direct and operational. No moralizing. No clinical diagnosing beyond what is in the documents. Never invent facts.`;
+
+    const result = await aiCompletion({
+      req,
+      endpoint: 'screen-referral',
+      tier: 'standard',
+      systemPrompt,
+      userPrompt: String(referralText).trim(),
+      maxTokens: 1200,
+      temperature: 0.2,
+      json: false,
+    });
+
+    if (result.unavailable) {
+      return res.status(503).json({ error: 'OpenAI not configured', fallback: true, requestId: result.requestId });
+    }
+
+    res.json({
+      screening: result.content || '',
+      usage: result.usage,
+      requestId: result.requestId,
+      cached: result.cached,
+    });
+  } catch (error) {
+    console.error('Screen referral error:', error);
+    logAIUsage(false, 0, error);
+    const mapped = mapOpenAIError(error);
+    res.status(mapped.status).json({ error: mapped.message, code: mapped.code, retryable: mapped.retryable, fallback: true });
+  }
+});
+
 // API Routes - All other data operations are handled by Supabase client in the frontend
 app.all('/api/*', (req, res) => {
   res.json({
@@ -1973,6 +2080,61 @@ app.all('/api/*', (req, res) => {
     supabaseUrl: process.env.VITE_SUPABASE_URL || 'Supabase URL not configured',
     timestamp: new Date().toISOString()
   });
+});
+
+// ── Audio Transcription (Whisper) ────────────────────────────────────────────
+app.post('/api/ai/transcribe-audio', audioUpload.single('audio'), async (req, res) => {
+  if (!openai) return res.status(503).json({ error: 'AI service not configured' });
+  if (!req.file) return res.status(400).json({ error: 'No audio file provided' });
+
+  try {
+    const ext = req.file.mimetype.includes('mp4') || req.file.mimetype.includes('m4a') ? 'm4a'
+      : req.file.mimetype.includes('ogg') ? 'ogg'
+      : 'webm';
+    const file = new File([req.file.buffer], `recording.${ext}`, { type: req.file.mimetype });
+    const transcription = await openai.audio.transcriptions.create({ file, model: 'whisper-1' });
+    res.json({ transcript: transcription.text });
+  } catch (err) {
+    console.error('Whisper transcription error:', err);
+    res.status(500).json({ error: 'Transcription failed', details: err?.message });
+  }
+});
+
+// ── Organize Meeting Transcript into Structured Fields ────────────────────────
+app.post('/api/ai/organize-meeting-notes', async (req, res) => {
+  if (!openai) return res.status(503).json({ error: 'AI service not configured' });
+  const { transcript, youthName } = req.body;
+  if (!transcript?.trim()) return res.status(400).json({ error: 'No transcript provided' });
+
+  try {
+    const completion = await openai.chat.completions.create({
+      model: selectModel('standard'),
+      response_format: { type: 'json_object' },
+      messages: [
+        {
+          role: 'system',
+          content: `You organize Family Team Meeting transcripts into structured clinical documentation for a youth residential program. Return a JSON object with exactly these four keys: "attendees" (comma-separated list of names and roles mentioned), "objectives" (bullet points of stated meeting goals or purpose), "discussion" (clear paragraph summary of what was discussed), "actionItems" (numbered list of concrete next steps, responsibilities, or follow-ups). Be concise and professional. Do not use markdown formatting characters like ** or #. Plain prose only.`,
+        },
+        {
+          role: 'user',
+          content: `Youth: ${youthName || 'Unknown'}\n\nMeeting transcript:\n${transcript.trim()}`,
+        },
+      ],
+      max_tokens: 1200,
+    });
+
+    const raw = completion.choices[0]?.message?.content || '{}';
+    const parsed = JSON.parse(raw);
+    res.json({
+      attendees: parsed.attendees || '',
+      objectives: parsed.objectives || '',
+      discussion: parsed.discussion || '',
+      actionItems: parsed.actionItems || '',
+    });
+  } catch (err) {
+    console.error('Organize meeting notes error:', err);
+    res.status(500).json({ error: 'Failed to organize notes', details: err?.message });
+  }
 });
 
 // Serve static files from the dist directory

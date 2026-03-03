@@ -1,6 +1,8 @@
 
 // Application types for the local storage version
 
+export type UserRole = 'staff' | 'admin';
+
 export type ProfessionalType =
   | 'caseworker'
   | 'probationOfficer'

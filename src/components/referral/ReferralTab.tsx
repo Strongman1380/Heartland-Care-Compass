@@ -469,6 +469,11 @@ const STATUS_LABELS: Record<string, string> = {
   interviewed_no: "Interviewed - No",
   already_found_placement: "Already Found Placement",
   denied: "Denied",
+  contacted_po: "Logged PO Contact",
+  contacted_caseworker: "Logged Caseworker Contact",
+  requested_more_info: "Requested More Info",
+  waitlisted: "Waitlisted",
+  accepted: "Accepted/Admitted",
   // legacy values
   new: "New",
   reviewed: "Reviewed",
@@ -482,6 +487,11 @@ const STATUS_COLORS: Record<string, string> = {
   interviewed_no: "bg-orange-100 text-orange-800 border-orange-300",
   already_found_placement: "bg-slate-100 text-slate-800 border-slate-300",
   denied: "bg-red-100 text-red-800 border-red-300",
+  contacted_po: "bg-indigo-100 text-indigo-800 border-indigo-300",
+  contacted_caseworker: "bg-indigo-100 text-indigo-800 border-indigo-300",
+  requested_more_info: "bg-cyan-100 text-cyan-800 border-cyan-300",
+  waitlisted: "bg-amber-100 text-amber-800 border-amber-300",
+  accepted: "bg-emerald-100 text-emerald-800 border-emerald-300",
   new: "bg-gray-100 text-gray-800 border-gray-300",
   reviewed: "bg-purple-100 text-purple-800 border-purple-300",
   actioned: "bg-teal-100 text-teal-800 border-teal-300",
@@ -1300,7 +1310,12 @@ export const ReferralTab = () => {
                         <SelectItem value="interview_scheduled">Interview Scheduled</SelectItem>
                         <SelectItem value="interviewed_yes">Interviewed - Yes</SelectItem>
                         <SelectItem value="interviewed_no">Interviewed - No</SelectItem>
+                        <SelectItem value="contacted_po">Logged PO Contact</SelectItem>
+                        <SelectItem value="contacted_caseworker">Logged Caseworker Contact</SelectItem>
+                        <SelectItem value="requested_more_info">Requested More Info</SelectItem>
                         <SelectItem value="already_found_placement">Already Found Placement</SelectItem>
+                        <SelectItem value="waitlisted">Waitlisted</SelectItem>
+                        <SelectItem value="accepted">Accepted / Admitted</SelectItem>
                         <SelectItem value="denied">Denied</SelectItem>
                       </SelectContent>
                     </Select>
@@ -1487,7 +1502,12 @@ export const ReferralTab = () => {
                     <SelectItem value="interview_scheduled">Interview Scheduled</SelectItem>
                     <SelectItem value="interviewed_yes">Interviewed - Yes</SelectItem>
                     <SelectItem value="interviewed_no">Interviewed - No</SelectItem>
+                    <SelectItem value="contacted_po">Logged PO Contact</SelectItem>
+                    <SelectItem value="contacted_caseworker">Logged Caseworker Contact</SelectItem>
+                    <SelectItem value="requested_more_info">Requested More Info</SelectItem>
                     <SelectItem value="already_found_placement">Already Found Placement</SelectItem>
+                    <SelectItem value="waitlisted">Waitlisted</SelectItem>
+                    <SelectItem value="accepted">Accepted / Admitted</SelectItem>
                     <SelectItem value="denied">Denied</SelectItem>
                   </SelectContent>
                 </Select>
@@ -1545,7 +1565,12 @@ export const ReferralTab = () => {
                             <SelectItem value="interview_scheduled">Interview Scheduled</SelectItem>
                             <SelectItem value="interviewed_yes">Interviewed - Yes</SelectItem>
                             <SelectItem value="interviewed_no">Interviewed - No</SelectItem>
+                            <SelectItem value="contacted_po">Logged PO Contact</SelectItem>
+                            <SelectItem value="contacted_caseworker">Logged Caseworker Contact</SelectItem>
+                            <SelectItem value="requested_more_info">Requested More Info</SelectItem>
                             <SelectItem value="already_found_placement">Already Found Placement</SelectItem>
+                            <SelectItem value="waitlisted">Waitlisted</SelectItem>
+                            <SelectItem value="accepted">Accepted / Admitted</SelectItem>
                             <SelectItem value="denied">Denied</SelectItem>
                           </SelectContent>
                         </Select>
@@ -1642,7 +1667,12 @@ export const ReferralTab = () => {
                             <SelectItem value="interview_scheduled">Interview Scheduled</SelectItem>
                             <SelectItem value="interviewed_yes">Interviewed - Yes</SelectItem>
                             <SelectItem value="interviewed_no">Interviewed - No</SelectItem>
+                            <SelectItem value="contacted_po">Logged PO Contact</SelectItem>
+                            <SelectItem value="contacted_caseworker">Logged Caseworker Contact</SelectItem>
+                            <SelectItem value="requested_more_info">Requested More Info</SelectItem>
                             <SelectItem value="already_found_placement">Already Found Placement</SelectItem>
+                            <SelectItem value="waitlisted">Waitlisted</SelectItem>
+                            <SelectItem value="accepted">Accepted / Admitted</SelectItem>
                             <SelectItem value="denied">Denied</SelectItem>
                           </SelectContent>
                         </Select>
@@ -1827,7 +1857,12 @@ export const ReferralTab = () => {
                             <SelectItem value="interview_scheduled">Interview Scheduled</SelectItem>
                             <SelectItem value="interviewed_yes">Interviewed - Yes</SelectItem>
                             <SelectItem value="interviewed_no">Interviewed - No</SelectItem>
+                            <SelectItem value="contacted_po">Logged PO Contact</SelectItem>
+                            <SelectItem value="contacted_caseworker">Logged Caseworker Contact</SelectItem>
+                            <SelectItem value="requested_more_info">Requested More Info</SelectItem>
                             <SelectItem value="already_found_placement">Already Found Placement</SelectItem>
+                            <SelectItem value="waitlisted">Waitlisted</SelectItem>
+                            <SelectItem value="accepted">Accepted / Admitted</SelectItem>
                             <SelectItem value="denied">Denied</SelectItem>
                           </SelectContent>
                         </Select>

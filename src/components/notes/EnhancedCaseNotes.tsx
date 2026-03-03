@@ -1047,25 +1047,37 @@ export const EnhancedCaseNotes = ({ youthId, youth }: EnhancedCaseNotesProps) =>
               <div className="flex flex-wrap gap-2">
                 <Button
                   type="button"
-                  variant={createMode === "session" ? "default" : "outline"}
+                  variant="outline"
                   onClick={() => setCreateMode("session")}
-                  className={`flex-1 ${createMode === "session" ? "bg-[#823131] hover:bg-[#6b2828] text-white border-[#823131]" : "border-gray-300 text-gray-700 hover:bg-gray-50"}`}
+                  className={`flex-1 transition-colors ${
+                    createMode === "session" 
+                      ? "bg-[#823131] hover:bg-[#6b2828] text-white border-[#823131] shadow-md font-medium" 
+                      : "bg-white border-slate-300 text-slate-700 hover:bg-slate-50 hover:text-slate-900"
+                  }`}
                 >
                   Session Note
                 </Button>
                 <Button
                   type="button"
-                  variant={createMode === "combined" ? "default" : "outline"}
+                  variant="outline"
                   onClick={() => setCreateMode("combined")}
-                  className={`flex-1 ${createMode === "combined" ? "bg-[#823131] hover:bg-[#6b2828] text-white border-[#823131]" : "border-gray-300 text-gray-700 hover:bg-gray-50"}`}
+                  className={`flex-1 transition-colors ${
+                    createMode === "combined" 
+                      ? "bg-[#823131] hover:bg-[#6b2828] text-white border-[#823131] shadow-md font-medium" 
+                      : "bg-white border-slate-300 text-slate-700 hover:bg-slate-50 hover:text-slate-900"
+                  }`}
                 >
                   General / Shift (AI)
                 </Button>
                 <Button
                   type="button"
-                  variant={createMode === "team-meeting" ? "default" : "outline"}
+                  variant="outline"
                   onClick={() => setCreateMode("team-meeting")}
-                  className={`flex-1 ${createMode === "team-meeting" ? "bg-blue-700 hover:bg-blue-800 text-white border-blue-700" : "border-blue-300 text-blue-700 hover:bg-blue-50"}`}
+                  className={`flex-1 transition-colors ${
+                    createMode === "team-meeting" 
+                      ? "bg-blue-600 hover:bg-blue-700 text-white border-blue-600 shadow-md font-medium" 
+                      : "bg-white border-blue-200 text-blue-700 hover:bg-blue-50 hover:text-blue-800"
+                  }`}
                 >
                   <Users className="h-4 w-4 mr-1.5" />
                   Team Meeting
@@ -1161,7 +1173,8 @@ export const EnhancedCaseNotes = ({ youthId, youth }: EnhancedCaseNotesProps) =>
                         <Button
                           type="button"
                           size="sm"
-                          className="bg-blue-700 hover:bg-blue-800 text-white"
+                          variant="default"
+                          className="bg-blue-600 hover:bg-blue-700 text-white font-medium"
                           onClick={startRecording}
                           disabled={isTranscribing || isOrganizing}
                         >
@@ -1172,7 +1185,8 @@ export const EnhancedCaseNotes = ({ youthId, youth }: EnhancedCaseNotesProps) =>
                         <Button
                           type="button"
                           size="sm"
-                          className="bg-red-600 hover:bg-red-700 text-white animate-pulse"
+                          variant="destructive"
+                          className="bg-red-600 hover:bg-red-700 text-white font-medium animate-pulse"
                           onClick={stopRecording}
                         >
                           <MicOff className="h-4 w-4 mr-1.5" />
@@ -1233,8 +1247,13 @@ export const EnhancedCaseNotes = ({ youthId, youth }: EnhancedCaseNotesProps) =>
 
                 <Button
                   type="submit"
+                  variant="outline"
                   disabled={isSubmitting || isRecording || isTranscribing || isOrganizing}
-                  className={`w-full text-white ${createMode === "team-meeting" ? "bg-blue-700 hover:bg-blue-800" : "bg-[#823131] hover:bg-[#6b2828]"}`}
+                  className={`w-full text-white font-medium border-0 transition-colors ${
+                    createMode === "team-meeting" 
+                      ? "bg-blue-600 hover:bg-blue-700" 
+                      : "bg-[#823131] hover:bg-[#6b2828]"
+                  }`}
                 >
                   {isSubmitting ? "Saving…"
                     : createMode === "session" ? "Save Session Note"
@@ -1293,9 +1312,10 @@ export const EnhancedCaseNotes = ({ youthId, youth }: EnhancedCaseNotesProps) =>
                 </Button>
                 <Button
                   type="button"
+                  variant="outline"
                   onClick={handleBulkImport}
                   disabled={bulkParsedNotes.length === 0 || isBulkImporting || !bulkStaff.trim()}
-                  className="bg-[#823131] hover:bg-[#6b2828] text-white border-[#823131]"
+                  className="bg-[#823131] hover:bg-[#6b2828] text-white border-0 font-medium"
                 >
                   {isBulkImporting ? (
                     <>

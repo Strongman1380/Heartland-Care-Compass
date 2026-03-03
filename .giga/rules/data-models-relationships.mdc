@@ -1,61 +1,89 @@
 ---
-description: Guidelines for documenting data models and relationships in youth facility management systems
+description: Specification for analyzing data models and relationships in youth behavioral health management systems
 ---
 
 
 # data-models-relationships
 
-## Core Data Models
+Key Data Models and Relationships:
 
-### Youth Profile Schema
-- Hierarchical behavioral rating system across 4 domains:
-  - Peer interaction
-  - Adult interaction 
-  - Investment level
-  - Authority handling
-- Treatment progression tracking with 10 levels + orientation
-- Medical profile with structured medication/allergy tracking
-- Professional contact relationship mapping
-- Behavioral incident classification system
+1. Youth Profile Model
+Importance Score: 95
+- Core profile entity with specialized behavioral health attributes
+- Relationships:
+  * One-to-many with DailyPerformanceNotes 
+  * One-to-many with BehaviorIncidents
+  * One-to-many with AcademicRecords
+  * One-to-many with BehavioralAssessment
+  * Many-to-many with TreatmentGoals
+  * One-to-one with MedicalProfile
+- Domain-specific fields:
+  * Treatment level (1-6)
+  * Current restrictions
+  * Behavioral point totals
+  * Active interventions
+  * Guardian relationships
 
-### Assessment Models
-- HYRNA risk assessment with 8 weighted domains
-- Real Colors personality matrix (Heart, Anchor, Mind, Spark)
-- Individual Service Plan (ISP) framework
-- Treatment goal hierarchy with categorized objectives
+2. Daily Performance Notes Schema
+Importance Score: 90
+- Structured behavioral tracking across 4 domains
+- Relationships:
+  * Many-to-one with Youth
+  * One-to-many with BehaviorIncidents
+  * One-to-many with StaffAnnotations
+- Behavioral metrics:
+  * Peer interaction rating (1-4)
+  * Adult interaction rating (1-4)
+  * Investment level (1-4)
+  * Authority response (1-4)
 
-### Progress Tracking Schema
-- Point-based privilege system
-- Academic performance metrics
-- Behavioral incident severity classification
-- Color assessment status tracking
-- Professional relationship management
+3. Medical Profile Schema 
+Importance Score: 85
+- Healthcare-specific youth data model
+- Relationships:
+  * One-to-one with Youth
+  * One-to-many with Medications
+  * One-to-many with MedicalAlerts
+- Clinical tracking:
+  * Current medications
+  * Dosage schedules
+  * Allergies/restrictions
+  * Medical conditions
+  * Treatment authorizations
 
-## Key Relationships
+4. TreatmentGoals Model
+Importance Score: 80
+- Treatment planning and goal tracking
+- Relationships:
+  * Many-to-many with Youth
+  * One-to-many with Interventions
+  * Many-to-many with BehavioralMetrics
+- Focus categories:
+  * Behavioral objectives
+  * Social skill development
+  * Academic goals
+  * Family integration
+  * Life skills mastery
 
-### Youth to Assessments
-- One-to-many relationship between youth and behavioral assessments
-- Assessments drive treatment level assignments
-- Risk scores map to program level recommendations
-- Personality assessments influence staff interaction guidelines
+5. Behavioral Assessment Schema
+Importance Score: 75
+- Point-based behavior tracking system
+- Relationships:
+  * Many-to-one with Youth
+  * One-to-many with BehaviorIncidents
+  * One-to-many with StaffNotes
+- Assessment metrics:
+  * Daily point totals
+  * Rolling averages
+  * Level progression data
+  * Restriction tracking
 
-### Youth to Progress Data
-- Daily behavioral ratings link to monthly averages
-- Point totals determine level progression
-- Incident records associate with behavioral trends
-- Academic scores integrate with behavioral assessments
-
-### Professional Relationships
-- Role-based associations (legal, medical, educational)
-- Unique professional type constraints
-- Contact management hierarchies
-- Treatment team assignments
-
-File Paths:
-src/models/youth-profile.ts
-src/models/assessment-types.ts
-src/models/progress-tracking.ts
-src/types/relationships.ts
+Core Entity Relationships:
+- Youth as central entity
+- Treatment goals linked to behavioral metrics
+- Medical profiles with medication tracking
+- Daily notes connected to incidents
+- Assessment data tied to interventions
 
 $END$
 

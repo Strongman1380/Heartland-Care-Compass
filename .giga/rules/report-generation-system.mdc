@@ -1,5 +1,5 @@
 ---
-description: Specification for AI-enhanced report generation system including DPN reports, court reports, progress evaluations and clinical documentation.
+description: Technical specification for AI-enhanced report generation system including DPN reports, court reports, progress evaluations, and clinical documentation.
 ---
 
 
@@ -7,51 +7,50 @@ description: Specification for AI-enhanced report generation system including DP
 
 Core Report Generation Components:
 
-1. Daily Progress Notes (DPN)
-Importance Score: 90
-- AI-enhanced narrative generation system for daily behavioral observations
-- Auto-calculation of rating metrics across peer/adult interactions and investment levels 
-- Period-specific data aggregation for weekly/biweekly/monthly summaries
-- Clinical formatting rules enforcement
+1. Daily Progress Notes (DPN) Generator
+Importance Score: 95
+- AI-enhanced narrative generation from behavioral data points (must be reviewed and signed off by qualified clinical staff prior to inclusion in official records)
+- Multi-domain analysis across peer/adult interactions, investment, authority
+- Real-time performance rating integration 
+- Custom clinical terminology mapping
+- Automated intervention recommendations based on behavioral patterns (requires clinician validation of any suggested interventions)
+- Human oversight, accountability, and versioned audit/log entries documenting reviewer identity and decision rationale are mandated for compliance with clinical and legal standards
 
-2. Service Plan Reports
-Importance Score: 85
-- 60-day compliance cycle tracking with automated scheduling
-- AI-assisted content generation using historical case notes
-- Multi-source data aggregation (behavior points, ratings, school scores)
-- Professional clinical documentation standards enforcement
-- Auto-population from behavioral metrics and assessment data
+2. Clinical Service Plan Reports
+Importance Score: 90
+- 60-day compliance cycle tracking
+- Treatment objective monitoring with progress indicators
+- Multi-source data aggregation (behavior, academics, incidents)
+- AI-assisted clinical narrative synthesis
+- Professional documentation standards enforcement
 
 3. Progress Evaluation Reports
-Importance Score: 80
-- Rating normalization between 0-4 and 0-5 scale systems
-- Multi-source scoring aggregation (daily ratings, weekly evaluations)
-- Clinical assessment formatting with specialized sections
-- Treatment goal progress tracking with 5-level measurement scale
+Importance Score: 85
+- Weekly/monthly progress calculations
+- Domain-specific rating aggregation
+- Behavioral trend analysis with AI insights
+- Pass schedule integration
+- Treatment milestone tracking
 
-4. Court Documentation System
-Importance Score: 75
-- Specialized legal documentation formatting
-- Integration of behavioral metrics and incident reports
-- Risk assessment inclusion with HYRNA scoring
-- Treatment compliance documentation
-- Discharge timeline projections
+4. Court Report Generation
+Importance Score: 85
+- Legal documentation standards compliance
+- Treatment progress summarization
+- Incident history compilation
+- Behavioral improvement metrics
+- Placement recommendation logic (AI-suggested only: must undergo human professional review and advisory until legally reviewed and signed off)
+- Professional/legal review required
+- Human accountability for final placement recommendations
+- Attorney or legal staff involvement required for sign-off before submission to finalize court documentation
 
-Key Report Generation Features:
+Key Business Logic Patterns:
+- Clinical terminology standardization
+- Treatment progress metrics calculation
 - AI-enhanced narrative generation
-- Clinical documentation standards
-- Multi-source data aggregation
-- Compliance period tracking
-- Professional formatting rules
-- Treatment goal progression
-- Legal documentation requirements
+- Professional documentation compliance
+- Multi-domain behavioral analysis
 
-Business Rules:
-- Reports must follow clinical documentation standards
-- AI narratives require staff review/approval
-- 60-day service plan update requirements
-- Court documentation must include risk assessments
-- Progress evaluations require multiple data sources
+The system implements specialized logic for youth treatment documentation with emphasis on clinical standards, behavioral analysis, and AI-assisted narrative generation.
 
 $END$
 

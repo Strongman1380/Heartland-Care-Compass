@@ -1575,9 +1575,7 @@ export const ReferralTab = () => {
 
   const handleSendCheckNeedEmail = async (
     item: ReferralHistoryItem,
-    mailtoTo: string,
-    bodyCheck: string,
-    subjectCheck: string,
+    toEmail: string,
     poFirstName: string
   ) => {
     const rowKey = referralRowKey(item);
@@ -1588,14 +1586,34 @@ export const ReferralTab = () => {
         item.referralName || "the youth",
         item.probationOfficer || ""
       );
-      const responseUrl = `https://heartland-care-compass.vercel.app/po-response/${token}`;
-      const responseLinks = `\n\nPlease click one of the links below to update us on placement status:\n\nStill needs placement: ${responseUrl}?r=still_needed\nNo longer needed: ${responseUrl}?r=not_needed\nAlready placed elsewhere: ${responseUrl}?r=already_placed`;
-      const updatedBody = encodeURIComponent(
-        decodeURIComponent(bodyCheck) + responseLinks
+      const base = "https://heartland-care-compass.vercel.app/po-response/" + token;
+      await emailjs.send(
+        import.meta.env.VITE_EMAILJS_SERVICE_ID,
+        import.meta.env.VITE_EMAILJS_CHECK_NEED_TEMPLATE_ID,
+        {
+          to_email: toEmail || inferredPoEmail,
+          po_first_name: poFirstName || "there",
+          youth_name: item.referralName || "the youth",
+          still_needed_url: base + "?r=still_needed",
+          not_needed_url: base + "?r=not_needed",
+          already_placed_url: base + "?r=already_placed",
+        },
+        import.meta.env.VITE_EMAILJS_PUBLIC_KEY
       );
-      window.location.href = `mailto:${mailtoTo}?subject=${subjectCheck}&importance=high&X-Priority=1&body=${updatedBody}`;
+      // Log in PO contact log
+      const { v4: uuidv4 } = await import("uuid");
+      const newEntry: POContactEntry = {
+        id: uuidv4(),
+        date: format(new Date(), "yyyy-MM-dd"),
+        notes: "Check Need email sent to PO with placement response links",
+        followUpDate: "",
+      };
+      const updatedLog = [...(item.poContactLog || []), newEntry];
+      await referralNotesService.update(toReferralLookup(item), { po_contact_log: updatedLog });
+      setHistory((prev) => prev.map((h) => sameReferral(h, item) ? { ...h, poContactLog: updatedLog } : h));
+      toast.success("Check Need email sent with response buttons");
     } catch (err) {
-      toast.error("Failed to generate response link — please try again");
+      toast.error("Failed to send email — check EmailJS config and VITE_EMAILJS_CHECK_NEED_TEMPLATE_ID");
       console.error(err);
     } finally {
       setSendingCheckNeedId(null);
@@ -2399,7 +2417,7 @@ export const ReferralTab = () => {
                           <Mail className="h-3 w-3" /> Quick Emails:
                         </span>
                         <button
-                          onClick={() => handleSendCheckNeedEmail(item, mailtoTo, encodeURIComponent(decodeURIComponent(bodyCheck)), subjectCheck, poFirstName)}
+                          onClick={() => handleSendCheckNeedEmail(item, inferredPoEmail, poFirstName)}
                           disabled={sendingCheckNeedId === rowKey}
                           className="text-xs bg-blue-50 text-blue-700 hover:bg-blue-100 px-2 py-1 rounded border border-blue-200 transition-colors disabled:opacity-50 inline-flex items-center gap-1"
                         >

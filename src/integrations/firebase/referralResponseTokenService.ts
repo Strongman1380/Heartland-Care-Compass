@@ -57,24 +57,28 @@ export const referralResponseTokenService = {
     const tokenDoc = await this.get(token);
     if (!tokenDoc) throw new Error("Response token not found");
 
+    if (tokenDoc.respondedAt) {
+      throw new Error("This response link has already been used");
+    }
+
+    if (new Date(tokenDoc.expiresAt) <= new Date()) {
+      throw new Error("This response link has expired");
+    }
+
     const now = new Date().toISOString();
     await updateDoc(doc(db, COLLECTION, token), {
       respondedAt: now,
       response,
     });
 
-    // Append to referral po_contact_log
-    const existing = await referralNotesService.update(tokenDoc.referralId, {});
-    const currentLog = existing.po_contact_log || [];
+    // Atomically append to referral po_contact_log
     const newEntry = {
       id: uuidv4(),
       date: format(new Date(), "yyyy-MM-dd"),
       notes: `PO Response (via link): ${RESPONSE_LABELS[response]}`,
       followUpDate: "",
     };
-    await referralNotesService.update(tokenDoc.referralId, {
-      po_contact_log: [...currentLog, newEntry],
-    });
+    await referralNotesService.atomicAppendPoContactLog(tokenDoc.referralId, newEntry);
   },
 };
 

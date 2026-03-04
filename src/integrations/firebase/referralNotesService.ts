@@ -10,6 +10,7 @@ import {
   updateDoc,
   deleteDoc,
   where,
+  arrayUnion,
   limit as firestoreLimit,
   type DocumentReference,
 } from "firebase/firestore";
@@ -135,6 +136,14 @@ export const referralNotesService = {
     const snap = await getDoc(ref);
     if (!snap.exists()) throw new Error(`Referral note not found after update`);
     return mapReferralDoc(snap);
+  },
+
+  async atomicAppendPoContactLog(target: string | ReferralLookup, entry: POContactEntry): Promise<void> {
+    const ref = await this.resolveRef(target);
+    await updateDoc(ref, {
+      po_contact_log: arrayUnion(entry),
+      updated_at: new Date().toISOString(),
+    });
   },
 
   async delete(target: string | ReferralLookup): Promise<void> {

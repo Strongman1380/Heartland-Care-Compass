@@ -33,7 +33,6 @@ import {
 import { format, isValid } from "date-fns";
 import { toast } from "sonner";
 import { referralNotesService, type ReferralNoteRow, type POContactEntry } from "@/integrations/firebase/referralNotesService";
-import { referralResponseTokenService } from "@/integrations/firebase/referralResponseTokenService";
 import { screenReferralIntake } from "@/services/aiService";
 
 interface ParsedReferral {
@@ -774,7 +773,6 @@ export const ReferralTab = () => {
   const [poLogFollowUp, setPoLogFollowUp] = useState("");
   const [savingPoContactId, setSavingPoContactId] = useState<string | null>(null);
   const [sendingEmailId, setSendingEmailId] = useState<string | null>(null);
-  const [sendingCheckNeedId, setSendingCheckNeedId] = useState<string | null>(null);
 
   // AI Screening state
   const [newReferralScreening, setNewReferralScreening] = useState<string>("");
@@ -1573,53 +1571,6 @@ export const ReferralTab = () => {
     }
   };
 
-  const handleSendCheckNeedEmail = async (
-    item: ReferralHistoryItem,
-    toEmail: string,
-    poFirstName: string
-  ) => {
-    const rowKey = referralRowKey(item);
-    setSendingCheckNeedId(rowKey);
-    try {
-      const token = await referralResponseTokenService.create(
-        item.id || item.createdAt,
-        item.referralName || "the youth",
-        item.probationOfficer || ""
-      );
-      const base = "https://heartland-care-compass.vercel.app/po-response/" + token;
-      await emailjs.send(
-        import.meta.env.VITE_EMAILJS_SERVICE_ID,
-        import.meta.env.VITE_EMAILJS_CHECK_NEED_TEMPLATE_ID,
-        {
-          to_email: toEmail || inferredPoEmail,
-          po_first_name: poFirstName || "there",
-          youth_name: item.referralName || "the youth",
-          still_needed_url: base + "?r=still_needed",
-          not_needed_url: base + "?r=not_needed",
-          already_placed_url: base + "?r=already_placed",
-        },
-        import.meta.env.VITE_EMAILJS_PUBLIC_KEY
-      );
-      // Log in PO contact log
-      const { v4: uuidv4 } = await import("uuid");
-      const newEntry: POContactEntry = {
-        id: uuidv4(),
-        date: format(new Date(), "yyyy-MM-dd"),
-        notes: "Check Need email sent to PO with placement response links",
-        followUpDate: "",
-      };
-      const updatedLog = [...(item.poContactLog || []), newEntry];
-      await referralNotesService.update(toReferralLookup(item), { po_contact_log: updatedLog });
-      setHistory((prev) => prev.map((h) => sameReferral(h, item) ? { ...h, poContactLog: updatedLog } : h));
-      toast.success("Check Need email sent with response buttons");
-    } catch (err) {
-      toast.error("Failed to send email — check EmailJS config and VITE_EMAILJS_CHECK_NEED_TEMPLATE_ID");
-      console.error(err);
-    } finally {
-      setSendingCheckNeedId(null);
-    }
-  };
-
   const kpis = useMemo(() => {
     const active = history.filter((h) => !h.archived);
     const total = active.length;
@@ -2160,8 +2111,8 @@ export const ReferralTab = () => {
                       ? encodeURIComponent(inferredPoEmail)
                       : encodeURIComponent(friendlyPoName);
                     
-                    const subjectCheck = encodeURIComponent(`Status of ${item.referralName || "the youth"} referral`);
-                    const bodyCheck = encodeURIComponent(`Hi ${poFirstName},\n\nIs placement still needed for ${item.referralName || "the youth"}? If yes, please let us know where and when they are currently placed, so we can potentially set up an interview with your permission and move forward with the next steps. If not, just reply “no longer needed.”\n\nThank you,\nHeartland Admissions\nadmissions@heartlandboyshomenebraska.org`);
+                    const subjectCheck = encodeURIComponent(`Referral Follow-Up: ${item.referralName || 'the youth'}`);
+                    const bodyCheck = encodeURIComponent(`Hi ${poFirstName},\n\nWe apologize if you have already heard regarding an answer for this referral. If you have not yet heard, please know that as we have improved our referral process we are working to get everything perfectly documented and to ensure timely services for ${item.referralName || 'the youth'}.\n\nIf you have any questions or need to provide an update, please do not hesitate to reply to this email.\n\nThank you,\nHeartland Admissions\nadmissions@heartlandboyshomenebraska.org`);
                     const priorityHeaders = `&importance=high&X-Priority=1`;
                     const hrefCheck = `mailto:${mailtoTo}?subject=${subjectCheck}${priorityHeaders}&body=${bodyCheck}`;
 
@@ -2416,15 +2367,12 @@ export const ReferralTab = () => {
                         <span className="text-xs font-semibold text-gray-500 mr-1 flex items-center gap-1">
                           <Mail className="h-3 w-3" /> Quick Emails:
                         </span>
-                        <button
-                          onClick={() => handleSendCheckNeedEmail(item, inferredPoEmail, poFirstName)}
-                          disabled={sendingCheckNeedId === rowKey}
-                          className="text-xs bg-blue-50 text-blue-700 hover:bg-blue-100 px-2 py-1 rounded border border-blue-200 transition-colors disabled:opacity-50 inline-flex items-center gap-1"
+                        <a
+                          href={hrefCheck}
+                          className="text-xs bg-blue-50 text-blue-700 hover:bg-blue-100 px-2 py-1 rounded border border-blue-200 transition-colors"
                         >
-                          {sendingCheckNeedId === rowKey ? (
-                            <><Loader2 className="h-3 w-3 animate-spin" />Sending…</>
-                          ) : "Check Need"}
-                        </button>
+                          Check Need
+                        </a>
                         <button
                           onClick={() => sendAndLogEmail(item, "accept", inferredPoEmail, poFirstName)}
                           disabled={sendingEmailId === rowKey + "accept"}

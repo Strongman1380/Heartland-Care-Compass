@@ -999,12 +999,37 @@ export const ReferralTab = () => {
     }
   };
 
+  const handleQuickPriorityUpdate = async (item: ReferralHistoryItem, newPriority: string) => {
+    const rowKey = referralRowKey(item);
+    try {
+      setUpdatingStatusId(rowKey); // We can reuse this loading state
+      await referralNotesService.update(toReferralLookup(item), { priority: newPriority });
+      setHistory((prev) => prev.map((h) => sameReferral(h, item) ? { ...h, priority: newPriority } : h));
+      toast.success(`Priority updated to ${newPriority}`);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "Failed to update priority";
+      toast.error(msg);
+    } finally {
+      setUpdatingStatusId(null);
+    }
+  };
+
   const handleQuickStatusUpdate = async (item: ReferralHistoryItem, newStatus: string) => {
     const rowKey = referralRowKey(item);
     try {
       setUpdatingStatusId(rowKey);
-      await referralNotesService.update(toReferralLookup(item), { status: newStatus });
-      setHistory((prev) => prev.map((h) => sameReferral(h, item) ? { ...h, status: newStatus } : h));
+      const shouldArchive = ["denied", "interviewed_no", "already_found_placement"].includes(newStatus) && !item.archived;
+      const updateData: any = { status: newStatus };
+      if (shouldArchive) {
+        updateData.archived = true;
+        updateData.archivedAt = new Date().toISOString();
+        updateData.archiveReason = `Automatically archived by status: ${STATUS_LABELS[newStatus] || newStatus}`;
+      }
+      await referralNotesService.update(toReferralLookup(item), updateData);
+      setHistory((prev) => prev.map((h) => sameReferral(h, item) ? { ...h, ...updateData } : h));
+      if (shouldArchive) {
+        toast.success(`Automatically archived referral based on status update.`);
+      }
     } catch (error) {
       const msg = error instanceof Error ? error.message : "Failed to update status";
       toast.error(msg);
@@ -1651,15 +1676,33 @@ export const ReferralTab = () => {
                         </p>
                       )}
 
-                      {/* Quick status update */}
-                      <div className="mt-2 flex items-center gap-2 flex-wrap">
-                        <span className="text-xs text-gray-500 shrink-0">Status:</span>
+                      {/* Quick Info (DOB, Worker, etc.) */}
+                      {(() => {
+                        if (!item.parsedData) return null;
+                        const dob = item.parsedData.demographics?.["Date of Birth"] || item.parsedData.demographics?.["DOB"] || item.parsedData.demographics?.["dob"] || "";
+                        const age = item.parsedData.demographics?.["Age"] || item.parsedData.demographics?.["age"] || "";
+                        const worker = inferCaseWorker(item.parsedData);
+                        const charges = item.parsedData.legal?.["Current Charges"] || item.parsedData.legal?.["Charges"] || "";
+                        if (!dob && !age && !worker && !charges) return null;
+                        return (
+                          <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 mb-1 text-xs text-slate-600 bg-slate-50 p-2 rounded-md border border-slate-100">
+                            {dob && <div><span className="font-medium text-slate-700">DOB:</span> {dob}</div>}
+                            {age && <div><span className="font-medium text-slate-700">Age:</span> {age}</div>}
+                            {worker && <div><span className="font-medium text-slate-700">Worker:</span> {worker}</div>}
+                            {charges && <div className="w-full truncate" title={String(charges)}><span className="font-medium text-slate-700">Charges:</span> {charges}</div>}
+                          </div>
+                        );
+                      })()}
+
+                      {/* Quick updates */}
+                      <div className="mt-2 flex items-center gap-2 flex-wrap bg-slate-50/50 p-2 rounded-md border border-slate-100">
+                        <span className="text-xs text-gray-600 font-medium shrink-0">Status:</span>
                         <Select
                           value={item.status || "pending_interview"}
                           onValueChange={(val) => handleQuickStatusUpdate(item, val)}
                           disabled={updatingStatusId === rowKey}
                         >
-                          <SelectTrigger className="h-7 text-xs w-[160px]">
+                          <SelectTrigger className="h-7 text-xs w-[160px] bg-white">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -1674,6 +1717,22 @@ export const ReferralTab = () => {
                             <SelectItem value="waitlisted">Waitlisted</SelectItem>
                             <SelectItem value="accepted">Accepted / Admitted</SelectItem>
                             <SelectItem value="denied">Denied</SelectItem>
+                          </SelectContent>
+                        </Select>
+
+                        <span className="text-xs text-gray-600 font-medium shrink-0 ml-1">Priority:</span>
+                        <Select
+                          value={item.priority || "routine"}
+                          onValueChange={(val) => handleQuickPriorityUpdate(item, val)}
+                          disabled={updatingStatusId === rowKey}
+                        >
+                          <SelectTrigger className="h-7 text-xs w-[110px] bg-white">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="urgent">Urgent</SelectItem>
+                            <SelectItem value="high">High</SelectItem>
+                            <SelectItem value="routine">Routine</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>

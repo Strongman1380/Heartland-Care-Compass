@@ -33,6 +33,7 @@ import {
 import { format, isValid } from "date-fns";
 import { toast } from "sonner";
 import { referralNotesService, type ReferralNoteRow, type POContactEntry } from "@/integrations/firebase/referralNotesService";
+import { referralResponseTokenService } from "@/integrations/firebase/referralResponseTokenService";
 import { screenReferralIntake } from "@/services/aiService";
 
 interface ParsedReferral {
@@ -70,6 +71,8 @@ interface ReferralHistoryItem {
   poContactLog: POContactEntry[];
   screeningResult: string;
   interviewScheduledDate: string;
+  interviewTime: string;
+  interviewPlace: string;
 }
 
 interface ParsedEntry {
@@ -721,6 +724,8 @@ const toHistoryItem = (row: ReferralNoteRow): ReferralHistoryItem => {
     poContactLog: row.po_contact_log || [],
     screeningResult: row.screening_result || "",
     interviewScheduledDate: row.interview_scheduled_date || "",
+    interviewTime: (row as any).interview_time || "",
+    interviewPlace: (row as any).interview_place || "",
   };
 };
 
@@ -769,6 +774,7 @@ export const ReferralTab = () => {
   const [poLogFollowUp, setPoLogFollowUp] = useState("");
   const [savingPoContactId, setSavingPoContactId] = useState<string | null>(null);
   const [sendingEmailId, setSendingEmailId] = useState<string | null>(null);
+  const [sendingCheckNeedId, setSendingCheckNeedId] = useState<string | null>(null);
 
   // AI Screening state
   const [newReferralScreening, setNewReferralScreening] = useState<string>("");
@@ -1464,6 +1470,24 @@ export const ReferralTab = () => {
     }
   };
 
+  const handleSetInterviewTime = async (item: ReferralHistoryItem, time: string) => {
+    try {
+      await referralNotesService.update(toReferralLookup(item), { interview_time: time || null });
+      setHistory((prev) => prev.map((h) => sameReferral(h, item) ? { ...h, interviewTime: time } : h));
+    } catch (error) {
+      toast.error("Failed to save interview time");
+    }
+  };
+
+  const handleSetInterviewPlace = async (item: ReferralHistoryItem, place: string) => {
+    try {
+      await referralNotesService.update(toReferralLookup(item), { interview_place: place || null });
+      setHistory((prev) => prev.map((h) => sameReferral(h, item) ? { ...h, interviewPlace: place } : h));
+    } catch (error) {
+      toast.error("Failed to save interview place");
+    }
+  };
+
   const handleAddPoContact = async (item: ReferralHistoryItem) => {
     if (!poLogDate.trim()) {
       toast.error("Contact date is required");
@@ -1496,50 +1520,85 @@ export const ReferralTab = () => {
 
   const sendAndLogEmail = async (
     item: ReferralHistoryItem,
-    emailType: "accept" | "deny",
+    emailType: "accept" | "deny" | "interview",
     toEmail: string,
-    poFirstName: string
+    poFirstName: string,
+    extraParams?: Record<string, string>
   ) => {
     const rowKey = referralRowKey(item);
     const loadingKey = rowKey + emailType;
     setSendingEmailId(loadingKey);
-    const isAccept = emailType === "accept";
-    const templateId = isAccept
-      ? import.meta.env.VITE_EMAILJS_ACCEPT_TEMPLATE_ID
-      : import.meta.env.VITE_EMAILJS_DENY_TEMPLATE_ID;
+    const templateIds: Record<string, string> = {
+      accept: import.meta.env.VITE_EMAILJS_ACCEPT_TEMPLATE_ID,
+      deny: import.meta.env.VITE_EMAILJS_DENY_TEMPLATE_ID,
+      interview: import.meta.env.VITE_EMAILJS_INTERVIEW_TEMPLATE_ID,
+    };
+    const labels: Record<string, string> = {
+      accept: "Acceptance",
+      deny: "Denial",
+      interview: "Interview scheduling",
+    };
     try {
       await emailjs.send(
         import.meta.env.VITE_EMAILJS_SERVICE_ID,
-        templateId,
+        templateIds[emailType],
         {
           to_email: toEmail,
           po_first_name: poFirstName,
           youth_name: item.referralName || "the youth",
           date: format(new Date(), "MMMM d, yyyy"),
+          ...extraParams,
         },
         import.meta.env.VITE_EMAILJS_PUBLIC_KEY
       );
       const { v4: uuidv4 } = await import("uuid");
-      const logNote = isAccept
-        ? `Acceptance email auto-sent to PO (${toEmail || "unknown email"})`
-        : `Denial email auto-sent to PO (${toEmail || "unknown email"})`;
+      const logNote = `${labels[emailType]} email auto-sent to PO (${toEmail || "unknown email"})`;
       const newEntry: POContactEntry = {
         id: uuidv4(),
         date: format(new Date(), "yyyy-MM-dd"),
         notes: logNote,
-        followUpDate: "",
+        followUpDate: emailType === "interview" && item.interviewScheduledDate ? item.interviewScheduledDate : "",
       };
       const updatedLog = [...(item.poContactLog || []), newEntry];
       await referralNotesService.update(toReferralLookup(item), { po_contact_log: updatedLog });
       setHistory((prev) =>
         prev.map((h) => (sameReferral(h, item) ? { ...h, poContactLog: updatedLog } : h))
       );
-      toast.success(`${isAccept ? "Acceptance" : "Denial"} email sent and logged in PO contact log`);
+      toast.success(`${labels[emailType]} email sent and logged in PO contact log`);
     } catch (err) {
       toast.error("Failed to send email — check EmailJS configuration in .env");
       console.error(err);
     } finally {
       setSendingEmailId(null);
+    }
+  };
+
+  const handleSendCheckNeedEmail = async (
+    item: ReferralHistoryItem,
+    mailtoTo: string,
+    bodyCheck: string,
+    subjectCheck: string,
+    poFirstName: string
+  ) => {
+    const rowKey = referralRowKey(item);
+    setSendingCheckNeedId(rowKey);
+    try {
+      const token = await referralResponseTokenService.create(
+        item.id || item.createdAt,
+        item.referralName || "the youth",
+        item.probationOfficer || ""
+      );
+      const responseUrl = `https://heartland-care-compass.vercel.app/po-response/${token}`;
+      const responseLinks = `\n\nPlease click one of the links below to update us on placement status:\n\nStill needs placement: ${responseUrl}?r=still_needed\nNo longer needed: ${responseUrl}?r=not_needed\nAlready placed elsewhere: ${responseUrl}?r=already_placed`;
+      const updatedBody = encodeURIComponent(
+        decodeURIComponent(bodyCheck) + responseLinks
+      );
+      window.location.href = `mailto:${mailtoTo}?subject=${subjectCheck}&importance=high&X-Priority=1&body=${updatedBody}`;
+    } catch (err) {
+      toast.error("Failed to generate response link — please try again");
+      console.error(err);
+    } finally {
+      setSendingCheckNeedId(null);
     }
   };
 
@@ -2197,7 +2256,7 @@ export const ReferralTab = () => {
                         )}
                       </div>
 
-                      {/* Interview Scheduled Date */}
+                      {/* Interview Scheduled Date / Time / Place */}
                       <div className="mt-2 flex items-center gap-2 flex-wrap">
                         <span className="text-xs text-gray-600 font-medium shrink-0">Interview Date:</span>
                         <input
@@ -2205,6 +2264,22 @@ export const ReferralTab = () => {
                           value={item.interviewScheduledDate || ""}
                           onChange={(e) => handleSetInterviewDate(item, e.target.value)}
                           className="h-7 rounded-md border border-gray-300 px-2 text-xs text-gray-800 focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white"
+                        />
+                        <span className="text-xs text-gray-600 font-medium shrink-0">Time:</span>
+                        <input
+                          type="time"
+                          value={item.interviewTime || ""}
+                          onChange={(e) => handleSetInterviewTime(item, e.target.value)}
+                          className="h-7 rounded-md border border-gray-300 px-2 text-xs text-gray-800 focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white"
+                        />
+                        <span className="text-xs text-gray-600 font-medium shrink-0">Place:</span>
+                        <input
+                          type="text"
+                          placeholder="Location..."
+                          value={item.interviewPlace || ""}
+                          onBlur={(e) => handleSetInterviewPlace(item, e.target.value)}
+                          onChange={(e) => setHistory((prev) => prev.map((h) => sameReferral(h, item) ? { ...h, interviewPlace: e.target.value } : h))}
+                          className="h-7 w-40 rounded-md border border-gray-300 px-2 text-xs text-gray-800 focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white"
                         />
                         {item.interviewScheduledDate && (
                           <button
@@ -2323,12 +2398,15 @@ export const ReferralTab = () => {
                         <span className="text-xs font-semibold text-gray-500 mr-1 flex items-center gap-1">
                           <Mail className="h-3 w-3" /> Quick Emails:
                         </span>
-                        <a
-                          href={hrefCheck}
-                          className="text-xs bg-blue-50 text-blue-700 hover:bg-blue-100 px-2 py-1 rounded border border-blue-200 transition-colors"
+                        <button
+                          onClick={() => handleSendCheckNeedEmail(item, mailtoTo, encodeURIComponent(decodeURIComponent(bodyCheck)), subjectCheck, poFirstName)}
+                          disabled={sendingCheckNeedId === rowKey}
+                          className="text-xs bg-blue-50 text-blue-700 hover:bg-blue-100 px-2 py-1 rounded border border-blue-200 transition-colors disabled:opacity-50 inline-flex items-center gap-1"
                         >
-                          Check Need
-                        </a>
+                          {sendingCheckNeedId === rowKey ? (
+                            <><Loader2 className="h-3 w-3 animate-spin" />Sending…</>
+                          ) : "Check Need"}
+                        </button>
                         <button
                           onClick={() => sendAndLogEmail(item, "accept", inferredPoEmail, poFirstName)}
                           disabled={sendingEmailId === rowKey + "accept"}
@@ -2347,6 +2425,23 @@ export const ReferralTab = () => {
                             <><Loader2 className="h-3 w-3 animate-spin" />Sending...</>
                           ) : "Deny"}
                         </button>
+                        {item.interviewScheduledDate && (
+                          <button
+                            onClick={() => sendAndLogEmail(item, "interview", inferredPoEmail, poFirstName, {
+                              interview_date: format(new Date(item.interviewScheduledDate + "T00:00:00"), "MMMM d, yyyy"),
+                              interview_time: item.interviewTime
+                                ? new Date(`2000-01-01T${item.interviewTime}`).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })
+                                : "TBD",
+                              interview_place: item.interviewPlace || "TBD",
+                            })}
+                            disabled={sendingEmailId === rowKey + "interview"}
+                            className="text-xs bg-purple-50 text-purple-700 hover:bg-purple-100 px-2 py-1 rounded border border-purple-200 transition-colors disabled:opacity-50 inline-flex items-center gap-1"
+                          >
+                            {sendingEmailId === rowKey + "interview" ? (
+                              <><Loader2 className="h-3 w-3 animate-spin" />Sending...</>
+                            ) : "Interview"}
+                          </button>
+                        )}
                       </div>
 
                       <div className="mt-2 flex flex-wrap gap-2 border-t pt-2">

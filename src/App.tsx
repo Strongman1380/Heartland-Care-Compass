@@ -32,6 +32,7 @@ import Referrals from "./pages/Referrals";
 import ShiftScores from "./pages/ShiftScores";
 import AdminFacility from "./pages/AdminFacility";
 import AdminForms from "./pages/AdminForms";
+import PoResponsePage from "./pages/PoResponsePage";
 
 const queryClient = new QueryClient();
 
@@ -53,6 +54,7 @@ const App = () => {
         <AwardsProvider>
         <Routes>
           <Route path="/auth" element={<Auth />} />
+          <Route path="/po-response/:token" element={<PoResponsePage />} />
           <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
           <Route path="/progress-notes" element={<ProtectedRoute><ProgressNotesPage /></ProtectedRoute>} />
           <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />

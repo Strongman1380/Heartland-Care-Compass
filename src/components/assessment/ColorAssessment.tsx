@@ -119,6 +119,19 @@ type RowRankings = Record<StyleKey, number | null>;
 
 const emptyRow = (): RowRankings => ({ heart: null, anchor: null, mind: null, spark: null });
 
+const escapeHtml = (value: string): string =>
+  value.replace(/[&<>"'/]/g, (char) => {
+    const entities: Record<string, string> = {
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      "\"": "&quot;",
+      "'": "&#39;",
+      "/": "&#x2F;",
+    };
+    return entities[char] ?? char;
+  });
+
 const emptyRankings = (): Record<number, RowRankings> =>
   Object.fromEntries(Array.from({ length: 6 }, (_, i) => [i, emptyRow()]));
 
@@ -430,6 +443,7 @@ export const ColorAssessment = ({ selectedYouth, onSaved }: ColorAssessmentProps
 
   const handlePrintBlankForm = () => {
     const youthName = `${selectedYouth?.firstName ?? ""} ${selectedYouth?.lastName ?? ""}`.trim();
+    const escapedYouthName = escapeHtml(youthName);
     const rows = ASSESSMENT_ROWS.map((row, idx) => `
       <tr style="background:${idx % 2 === 0 ? "#fff" : "#f9f9f9"}">
         <td style="border:1px solid #000;padding:6px 8px;text-align:center;font-weight:bold">${idx + 1}</td>
@@ -448,7 +462,7 @@ export const ColorAssessment = ({ selectedYouth, onSaved }: ColorAssessmentProps
 <html>
 <head>
   <meta charset="utf-8"/>
-  <title>Personal Style Profile — ${youthName}</title>
+  <title>Personal Style Profile — ${escapedYouthName}</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: Arial, sans-serif; font-size: 10pt; color: #000; background: #fff; padding: 0.5in; }
@@ -466,7 +480,7 @@ export const ColorAssessment = ({ selectedYouth, onSaved }: ColorAssessmentProps
   <hr style="margin:8px 0 12px;border-top:2px solid #000"/>
 
   <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:14px;font-size:9pt">
-    <div><strong>Youth Name:</strong> <span style="display:inline-block;border-bottom:1px solid #000;width:160px">${youthName}</span></div>
+    <div><strong>Youth Name:</strong> <span style="display:inline-block;border-bottom:1px solid #000;width:160px">${escapedYouthName}</span></div>
     <div><strong>Date:</strong> <span style="display:inline-block;border-bottom:1px solid #000;width:120px"></span></div>
     <div><strong>Staff:</strong> <span style="display:inline-block;border-bottom:1px solid #000;width:120px"></span></div>
   </div>

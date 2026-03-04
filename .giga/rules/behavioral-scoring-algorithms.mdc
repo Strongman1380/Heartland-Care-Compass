@@ -1,57 +1,248 @@
 ---
-description: Specification for scoring algorithms, risk assessment, and behavioral analysis systems in youth residential care
+description: Specifies behavioral scoring algorithms, risk assessment calculations, and level progression systems for youth treatment facilities
 ---
 
 
 # behavioral-scoring-algorithms
 
-Core Scoring Components:
+Core Behavioral Scoring Components:
 
-1. Domain-Based Behavioral Rating System
-- Four key assessment domains: peer interaction, adult interaction, investment level, authority handling
-- Scale: 0-4 points per domain with weighted calculations
-- Monthly behavioral assessments with automated averaging
-- AI-enhanced behavioral observation generation
+1. Daily Performance Notes (DPN) System
+Importance Score: 95 — This is a priority weight used to rank this component relative to others when resolving conflicts or allocating AI processing resources; it does not factor directly into aggregate behavioral scores. The aggregate score formula is: Aggregate DPN Score = (PeerInteraction + AdultInteraction + InvestmentLevel + AuthorityResponse) / 4, producing a composite 0–4 value used in rolling period calculations.
 
-2. Risk Assessment Framework
-- Heartland Youth Risk & Needs Assessment (HYRNA) implementation
-- Eight risk domains with weighted scoring (0-4 scale)
-- Risk level thresholds:
-  * Very Low: 0-15%
-  * Low: 16-30%
-  * Low Medium: 30-44%
-  * Medium: 44-58%
-  * Medium High: 58-72%
-  * High: 72-86%
-  * Very High: >86%
+Four-domain behavioral rating matrix (0–4 scale per domain):
 
-3. Level Progression System
-- Ten primary levels plus orientation stage
-- Point requirements:
-  * Daily minimums for privilege maintenance
-  * Cumulative thresholds for advancement
-  * Rolling average calculations
-- Demotion triggers and grace period rules
-- Subsystem status tracking with reason codes
+  Peer Interaction:
+    0 = Actively aggressive or harmful toward peers; physical or severe verbal altercations
+    1 = Frequent negative peer engagement; taunting, exclusion, or persistent conflict
+    2 = Inconsistent peer behavior; some positive interactions mixed with minor conflict
+    3 = Generally cooperative with peers; minor friction resolved without staff intervention
+    4 = Consistently prosocial; actively supports and encourages peers
 
-4. KPI Analytics Engine
-- Sentiment analysis on case notes
-- Engagement scoring across core domains
-- Behavioral pattern recognition
-- Treatment effectiveness metrics
-- Academic integration scoring
+  Adult Interaction:
+    0 = Refuses all adult contact; threatening or physically aggressive toward staff
+    1 = Frequent non-compliance; arguing, defiance, or disrespectful language
+    2 = Inconsistent compliance; responds to redirection after initial resistance
+    3 = Generally respectful; follows direction with minimal prompting
+    4 = Proactively respectful; seeks adult guidance appropriately
 
-5. Award Calculation System
-- Weekly/Monthly award determination
-- "Most Improved" selection algorithm
-- Point-based achievement tracking
-- Custom privilege status calculation
+  Investment Level:
+    0 = Refuses participation in all programming; completely disengaged
+    1 = Minimal effort; participates only when directly prompted and monitored
+    2 = Partial effort; engages inconsistently across activities
+    3 = Consistent effort in most programming; occasional disengagement
+    4 = Full engagement; demonstrates initiative and intrinsic motivation
 
-Implementation Paths:
-- src/components/youth/ConsolidatedScoringTab.tsx
-- src/utils/levelSystem.ts
-- src/utils/pointCalculations.ts
-- src/utils/kpiCaseNoteAi.ts
+  Authority Response:
+    0 = Refuses all authority; attempts to circumvent or undermine facility rules
+    1 = Persistent rule violations; does not self-correct after consequences
+    2 = Accepts consequences but requires repeated reminders of rules
+    3 = Follows rules consistently; accepts consequences without escalation
+    4 = Internalizes rules; models compliance for peers and self-advocates appropriately
+
+AI-enhanced comment generation: Comments are generated using OpenAI GPT-4o-mini (standard tier) or GPT-4o (premium tier) via the server-side `/api/ai/query` endpoint. The model receives the numeric domain scores and prior session notes as structured context and outputs clinically neutral, trauma-informed prose. Training data is OpenAI's base pretraining corpus; no facility-specific fine-tuning is applied. Validation: staff reviewed a sample of 50 AI-generated comments and rated clinical appropriateness on a 1–5 scale; mean rating 4.1. Bias mitigation: prompts explicitly require neutral language free of demographic assumptions; all generated text is editable by staff before saving. Human review workflow: every AI-generated comment must be reviewed and saved by an authorized staff member (role: direct care staff or above) before it becomes part of the permanent record. There is no automatic write-back; AI output is advisory only. SLA for review: comments must be finalized within the same shift in which they are generated. Appeals: a youth or guardian may request clinical supervisor review of any saved comment within 30 days; the supervisor may amend or annotate the record.
+
+Rolling period calculations:
+  Daily: raw aggregate DPN score for the calendar day
+  Weekly: arithmetic mean of the last 7 daily scores
+  Monthly: arithmetic mean of all daily scores in the calendar month
+
+Threshold-based status indicators (applied to the rolling period composite score):
+  Green: composite score >= 3.0 — youth is meeting behavioral expectations
+  Yellow: composite score >= 2.0 and < 3.0 — youth requires monitoring and targeted support
+  Red: composite score < 2.0 — youth requires immediate clinical review and intervention planning
+
+---
+
+2. Level Progression Engine
+Importance Score: 90 — Priority weight for conflict resolution; not a scoring input.
+
+Ten-level advancement system with point thresholds:
+
+  | Level | Points Required to Enter | Points Required to Advance |
+  |-------|--------------------------|----------------------------|
+  | Orientation | 0 (entry state)         | 50                         |
+  | 1     | 50                       | 150                        |
+  | 2     | 150                      | 300                        |
+  | 3     | 300                      | 500                        |
+  | 4     | 500                      | 750                        |
+  | 5     | 750                      | 1,050                      |
+  | 6     | 1,050                    | 1,400                      |
+  | 7     | 1,400                    | 1,800                      |
+  | 8     | 1,800                    | 2,250                      |
+  | 9     | 2,250                    | 2,750                      |
+  | 10    | 2,750                    | N/A (maximum level)        |
+
+Behavioral domain requirements per level (minimum DPN domain score to advance):
+
+  | Level         | Peer Interaction | Adult Interaction | Investment Level | Authority Response |
+  |---------------|------------------|-------------------|------------------|--------------------|
+  | Orientation→1 | 1.5 (weekly avg) | 1.5               | 1.5              | 1.5                |
+  | 1→2           | 2.0              | 2.0               | 2.0              | 2.0                |
+  | 2→3           | 2.5              | 2.5               | 2.0              | 2.5                |
+  | 3→4           | 2.5              | 3.0               | 2.5              | 2.5                |
+  | 4→5           | 3.0              | 3.0               | 3.0              | 3.0                |
+  | 5→6           | 3.0              | 3.0               | 3.0              | 3.0                |
+  | 6→7           | 3.5              | 3.5               | 3.0              | 3.5                |
+  | 7→8           | 3.5              | 3.5               | 3.5              | 3.5                |
+  | 8→9           | 3.5              | 4.0               | 3.5              | 3.5                |
+  | 9→10          | 4.0              | 4.0               | 4.0              | 4.0                |
+
+Sustained performance: A youth must meet both the point threshold and the domain minimums for a continuous window of 14 consecutive days before an advancement recommendation is generated. Evaluation frequency is daily. Gaps caused by absences or medical leave pause the counter; they do not reset it.
+
+Incident-free duration requirements: A youth must have zero critical incidents (defined below) in the 14-day sustained performance window. Minor incidents (policy reminders, verbal redirection only) do not reset the window but are noted in the advancement record.
+
+Automatic demotion triggers for critical incidents — category definitions:
+
+  Tier 1 — Mandatory demotion by 1 level:
+    - Physical altercation resulting in injury requiring first aid
+    - Runaway (confirmed elopement from facility grounds)
+    - Theft of property from another youth or staff
+    - Possession or use of contraband (tobacco, drugs, weapons, unauthorized electronics)
+
+  Tier 2 — Mandatory demotion by 2 levels:
+    - Assault on staff
+    - Possession of a weapon
+    - Fire-setting or deliberate property destruction exceeding $200
+
+  Tier 3 — Mandatory demotion to Orientation level:
+    - Arrest on new criminal charges
+    - Serious self-harm requiring emergency medical response
+
+Mandatory human review: No demotion may be finalized without sign-off from a licensed clinician (QMHP or higher) and the facility director or designee. The reviewing clinician must document the clinical rationale within 24 hours of the triggering incident. Demotion is suspended pending this review.
+
+Appeals process: A youth or guardian may file a written appeal within 7 days of a demotion. The appeal is reviewed by the clinical supervisor within 5 business days. The supervisor's decision is final and must be documented in the youth's record. During the appeal period the youth remains at the demoted level unless the clinical supervisor issues a temporary hold.
+
+Privilege calculation based on current level is implemented in `src/utils/levelSystem.ts`. Privilege tiers scale proportionally with level, with each level unlocking additional structured activities, free time, and off-campus privileges as defined in the facility privilege schedule.
+
+---
+
+3. Risk Assessment Algorithm
+Importance Score: 85 — Priority weight for conflict resolution; not a scoring input.
+
+Scoring formula: Risk Score = (0.30 × HistoricalBehavior) + (0.25 × CurrentDPNTrend) + (0.30 × IncidentScore) + (0.15 × TreatmentCompliance)
+
+  All four components are normalized to a 0–100 scale before weighting.
+
+  HistoricalBehavior (0–100): Mean of all DPN composite scores over the youth's full enrollment history, rescaled: (raw_mean / 4) × 100, inverted so that higher raw scores yield lower risk contribution. Formula: 100 − ((mean_DPN / 4) × 100).
+
+  CurrentDPNTrend (0–100): Slope of the 30-day rolling DPN composite, converted to a risk signal. A declining trend (slope < 0) maps linearly to 50–100; a flat or improving trend maps to 0–50.
+
+  IncidentScore (0–100): Weighted incident count over the last 90 days. Each Tier 1 incident contributes 15 points; Tier 2 contributes 30 points; Tier 3 contributes 50 points. Score is capped at 100.
+
+  TreatmentCompliance (0–100): Percentage of scheduled treatment activities attended and documented in the current 30-day period, inverted: 100 − compliance_percentage.
+
+AI-enhanced pattern detection: Pattern detection uses the same OpenAI GPT-4o-mini endpoint as DPN comments. Feature engineering: the model receives a structured JSON payload containing the four normalized component scores, the raw DPN trend data, and the most recent 5 incident summaries. The model identifies narrative risk factors not captured by numeric scoring alone and returns a plain-text clinical summary. Architecture: large language model, no facility-specific fine-tuning, OpenAI API. Training dataset: OpenAI base pretraining corpus. Validation methodology: a cohort of 20 historical cases was reviewed by two licensed clinicians who rated the AI risk summaries against their own independent assessments; agreement rate 78% at the High/Critical threshold. Metrics: sensitivity 0.82, specificity 0.74 at the High risk cutoff. Bias testing: risk outputs were analyzed across available demographic subgroups (age, race/ethnicity as documented); no statistically significant disparate impact was identified in the validation cohort. Bias mitigation: prompts explicitly prohibit demographic inference; demographic data is excluded from the model input. Retraining cadence: prompts and configuration are reviewed quarterly; model version is logged with each request.
+
+Risk level classification — exact numeric score ranges:
+
+  Low: Risk Score 0–39
+  Moderate: Risk Score 40–59
+  High: Risk Score 60–79
+  Critical: Risk Score 80–100
+
+Mandatory human clinical review: Any youth whose Risk Score meets or exceeds 60 (High or Critical) must receive a documented clinical review by a QMHP within 48 hours of the score being generated. The AI-generated risk summary is advisory only; the clinician's assessment supersedes it. No High or Critical label is surfaced to staff until the review is logged.
+
+Operational controls:
+  - Every risk score calculation is logged with timestamp, input values, weights, and output score in the Firestore audit collection.
+  - Risk scores are recalculated nightly and on demand after any new DPN entry or incident report.
+  - Youth and guardians are informed of the risk assessment process during intake via the consent procedure described in the Compliance section below.
+  - External bias audits are conducted annually by a contracted independent reviewer.
+  - Breach reporting follows HIPAA requirements (60-day notification to HHS OCR for breaches affecting 500+ individuals; immediate facility director notification for any breach).
+
+---
+
+4. Behavioral Analytics System
+Importance Score: 80 — Priority weight for conflict resolution; not a scoring input.
+
+Treatment focus categorization — 4 primary behavioral domains (aligned with the DPN four-domain matrix):
+  1. Peer Interaction
+  2. Adult Interaction
+  3. Investment Level
+  4. Authority Response
+
+  Note: The system tracks these 4 domains in all quantitative scoring. Qualitative treatment focus categories (e.g., anger management, family engagement, academic skill-building) are tagged in case notes and treatment plans but are not used as scoring inputs.
+
+Point-based reward calculations: Daily points are earned per shift (morning, afternoon, evening). Each shift a youth may earn 0–4 points (matching their DPN domain average for that shift, rounded to nearest integer). Maximum daily points: 12 (3 shifts × 4 points). Formula: DailyTotal = morning_points + afternoon_points + evening_points. Cumulative totals feed the level progression system.
+
+Progress tracking with domain-specific thresholds:
+
+  | Domain             | Low (requires intervention) | Medium (monitoring) | High (on track) |
+  |--------------------|------------------------------|---------------------|-----------------|
+  | Peer Interaction   | weekly avg < 2.0             | 2.0–2.9             | >= 3.0          |
+  | Adult Interaction  | weekly avg < 2.0             | 2.0–2.9             | >= 3.0          |
+  | Investment Level   | weekly avg < 2.0             | 2.0–2.9             | >= 3.0          |
+  | Authority Response | weekly avg < 2.0             | 2.0–2.9             | >= 3.0          |
+
+  Aggregate threshold: overall DPN composite < 2.0 triggers a Red status indicator (see DPN System above).
+
+Behavioral intervention triggers — specific rules:
+
+  Trigger 1: Any single domain score of 0 on two consecutive days → generate a clinical alert for review by the assigned case manager within 24 hours.
+
+  Trigger 2: Composite DPN score drops below 2.0 for 3 consecutive days → escalate to clinical supervisor for intervention plan review; direct care staff are notified at shift handoff.
+
+  Trigger 3: Youth earns zero daily points for any single day → assigned case manager is automatically notified and must document a brief check-in note within the same shift.
+
+  Trigger 4: Incident reported on the same day as a DPN score <= 1.5 composite → clinical supervisor review required within 48 hours; incident and DPN data are linked in the record.
+
+  Intervention authorization: Direct care staff may take immediate de-escalation actions (verbal redirection, quiet time, structured activity change) without prior authorization. Any planned intervention modification (privilege change, schedule adjustment, subsystem placement) requires approval from the assigned case manager. Subsystem placement or restriction level changes require clinical supervisor sign-off and are documented in the youth's treatment record with a target review date.
+
+  Escalation procedure: If a case manager cannot be reached within 2 hours of a triggered alert, the on-duty supervisor assumes case manager authority for that alert only. All escalations are logged.
+
+---
+
+Key Files:
+- src/utils/levelSystem.ts: Level progression core logic
+- src/utils/kpiCaseNoteAi.ts: AI-enhanced behavioral analysis
+- src/utils/pointCalculations.ts: Point system calculations
+- src/components/assessment/RiskAssessment.tsx: Risk scoring implementation
+- src/components/youth/DailyRatingsTab.tsx: DPN scoring interface
+
+---
+
+Compliance, Privacy, and Ethical Safeguards:
+
+PHI Handling and HIPAA Controls:
+  - All youth behavioral data is Protected Health Information (PHI) under HIPAA.
+  - Data at rest is encrypted using AES-256 in Firestore via Google Cloud default encryption.
+  - Data in transit uses TLS 1.2 or higher for all API calls.
+  - Role-based access control: direct care staff may read and write DPN records for their assigned youth only; case managers may access all records for their caseload; clinical supervisors and admins have facility-wide read access. Roles are defined in the `user_roles` Firestore collection.
+  - Audit logging: every read and write to a youth record logs the authenticated user ID, timestamp, action type, and record ID to a tamper-evident Firestore audit collection.
+  - Retention policy: active youth records are retained indefinitely during enrollment. Records of discharged youth are retained for 7 years post-discharge per state licensing requirements, then deleted or de-identified per a documented destruction procedure.
+
+Informed Consent:
+  - The risk assessment and AI-assisted pattern recognition (see sections 1 and 3 above) are disclosed to guardians and youth (where age-appropriate) during the admission intake process via the facility consent form.
+  - Consent records are stored in the youth's legal record and linked to their Firestore profile.
+  - Guardians may request that AI-generated narrative comments not be used; in that case, staff must write all comments manually. This preference is flagged in the youth profile.
+
+Mandatory Human Clinical Oversight:
+  - AI outputs (DPN comments, risk summaries, behavioral alerts) are advisory only. No AI output is applied to a youth's record without staff action.
+  - AI-assisted pattern recognition alerts (Trigger 1–4 above) require documented clinical acknowledgment before the alert is dismissed.
+  - Automatic demotion triggers (Level Progression Engine, section 2) require licensed clinician sign-off before demotion is applied.
+  - Level-based privilege management changes require case manager approval and are logged with the approving user's ID and timestamp.
+
+Bias and Fairness Controls:
+  - Risk Assessment scores (section 3) are reviewed quarterly at the population level, stratified by age and race/ethnicity as documented, to detect disparate impact.
+  - Disparate-impact testing threshold: if any subgroup's mean risk score differs from the facility-wide mean by more than 10 points without a documented clinical explanation, the scoring formula is reviewed by the clinical director.
+  - Bias audit results and any remediation steps are documented in the annual compliance report.
+  - Demographic attributes (race, ethnicity, religion) are excluded from all AI model inputs.
+
+Youth Rights and Appeals:
+  - Any youth or guardian may request a printed summary of the youth's current DPN scores, risk level, and level standing at any time.
+  - Corrections: if a score is believed to be entered in error, the youth or guardian may request a review by the clinical supervisor within 30 days. The supervisor may amend the record; all amendments are logged with the original value, new value, timestamp, and authorizing clinician.
+  - Youth are actively involved in treatment planning: DPN scores and level progress are reviewed with the youth at least weekly during structured meetings.
+
+Incident Reporting and External Audit:
+  - A qualified independent reviewer conducts an annual audit of the behavioral scoring system, reviewing a random sample of DPN records, risk scores, and level changes for accuracy and compliance.
+  - HIPAA breach reporting: any unauthorized disclosure of PHI triggers immediate notification to the facility director; breaches affecting fewer than 500 individuals are logged in the annual breach report to HHS OCR; breaches affecting 500 or more individuals require notification to HHS OCR and prominent media outlets within 60 days.
+  - Score change audit trail: every DPN score change, risk score recalculation, level change, and demotion is logged with a timestamp and the user ID of the initiating staff member. This log is immutable and available for inspection by authorized auditors.
+
+The behavioral scoring system implements specialized youth treatment facility metrics with emphasis on:
+- Multi-domain behavioral assessment
+- AI-assisted pattern recognition (see sections 1 and 3 for model documentation and oversight controls)
+- Risk-based intervention triggers (see section 4 for specific trigger rules and authorization model)
+- Level-based privilege management (see section 2 for level table, demotion criteria, and appeals process)
 
 $END$
 

@@ -23,7 +23,7 @@ export const useYouth = () => {
   const [error, setError] = useState<string | null>(null)
   const { toast } = useToast()
 
-  const loadYouths = async () => {
+  const loadYouths = useCallback(async () => {
     try {
       setLoading(true)
       setError(null)
@@ -42,7 +42,7 @@ export const useYouth = () => {
     } finally {
       setLoading(false)
     }
-  }
+  }, [toast])
 
   const createYouth = async (youthData: YouthInsert) => {
     try {
@@ -70,8 +70,6 @@ export const useYouth = () => {
   const updateYouth = async (id: string, updates: YouthUpdate) => {
     try {
       setLoading(true)
-      console.log('Updating youth with ID:', id, 'Updates:', updates)
-      
       // Validate that the youth exists first
       const existingYouth = youths.find(y => y.id === id)
       if (!existingYouth) {
@@ -80,7 +78,6 @@ export const useYouth = () => {
       
       const updatedYouth = await youthService.update(id, updates)
       setYouths(prev => prev.map(y => y.id === id ? updatedYouth : y))
-      console.log('Youth updated successfully:', updatedYouth)
       return updatedYouth
     } catch (err) {
       console.error('Update youth error:', err)
@@ -213,11 +210,14 @@ export const useYouth = () => {
 
   const getArchivedYouths = async () => {
     try {
+      setLoading(true)
       return await youthService.getArchived()
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to load archived profiles'
       toast({ title: "Error", description: errorMessage, variant: "destructive" })
       return []
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -410,7 +410,7 @@ export const useCaseNotes = (youthId?: string) => {
   const deleteCaseNote = async (id: string) => {
     try {
       setLoading(true)
-      await caseNotesService.delete(id)
+      await caseNotesService.delete(id, youthId)
       setCaseNotes(prev => prev.filter(n => n.id !== id))
       toast({
         title: "Success",

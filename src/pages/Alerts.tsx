@@ -42,6 +42,12 @@ type AlertTemplate = {
   icon: any;
 };
 
+const mapAlertType = (level?: string): Alert["type"] =>
+  level === 'urgent' ? 'urgent' : level === 'warning' ? 'warning' : 'info';
+
+const mapAlertPriority = (level?: string): Alert["priority"] =>
+  level === 'urgent' ? 'high' : 'medium';
+
 const ALERT_TEMPLATES: AlertTemplate[] = [
   {
     id: "behavior-incident",
@@ -162,15 +168,15 @@ const Alerts = () => {
         const remote = await alertsService.list();
         const mapped = remote.map(r => ({
           id: r.id,
-          type: (r.level === 'urgent' ? 'urgent' : r.level === 'warning' ? 'warning' : 'info') as any,
+          type: mapAlertType(r.level),
           title: r.title,
           description: r.body || '',
           timestamp: 'Now',
-          priority: (r.level === 'urgent' ? 'high' : 'medium') as any,
+          priority: mapAlertPriority(r.level),
           createdAt: new Date(r.created_at),
           resolved: r.status === 'closed',
           category: 'System'
-        })) as Alert[]
+        }))
         setAlerts(mapped)
       } catch {}
     })();
@@ -179,7 +185,7 @@ const Alerts = () => {
     if ('Notification' in window) {
       setNotificationsEnabled(Notification.permission === 'granted');
     }
-  }, []);
+  }, [loadYouths]);
 
   const requestNotificationPermission = async () => {
     if ('Notification' in window) {
@@ -238,15 +244,15 @@ const Alerts = () => {
     const remote = await alertsService.list();
     const mapped = remote.map(r => ({
       id: r.id,
-      type: (r.level === 'urgent' ? 'urgent' : r.level === 'warning' ? 'warning' : 'info') as any,
+      type: mapAlertType(r.level),
       title: r.title,
       description: r.body || '',
       timestamp: 'Now',
-      priority: (r.level === 'urgent' ? 'high' : 'medium') as any,
+      priority: mapAlertPriority(r.level),
       createdAt: new Date(r.created_at),
       resolved: r.status === 'closed',
       category: 'System'
-    })) as Alert[]
+    }))
     setAlerts(mapped)
 
     // Send push notification if enabled
@@ -268,7 +274,15 @@ const Alerts = () => {
       alert.id === alertId ? { ...alert, resolved: true } : alert
     );
     setAlerts(updatedAlerts);
-    try { await alertsService.save({ id: alertId as any, title: (alerts.find(a=>a.id===alertId)?.title)||'', body: (alerts.find(a=>a.id===alertId)?.description)||'', level: (alerts.find(a=>a.id===alertId)?.type)||'info', status: 'closed' }) } catch {}
+    try {
+      await alertsService.save({
+        id: alertId,
+        title: (alerts.find(a => a.id === alertId)?.title) || '',
+        body: (alerts.find(a => a.id === alertId)?.description) || '',
+        level: (alerts.find(a => a.id === alertId)?.type) || 'info',
+        status: 'closed'
+      })
+    } catch {}
     toast.success('Alert resolved');
   };
 

@@ -133,7 +133,7 @@ export const YouthProfile = ({ youth, onBack, onYouthUpdated }: YouthProfileProp
 
   const handlePrintProfile = () => {
     try {
-      printYouthProfile(youth as any);
+      printYouthProfile(youth);
     } catch (error) {
       console.error("Error printing profile:", error);
       toast.error("Failed to open print dialog. Please allow popups.");

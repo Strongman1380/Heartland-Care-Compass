@@ -6,6 +6,8 @@ interface PointSummaryInlineProps {
   compact?: boolean;
 }
 
+const parseUtcDate = (date: string) => new Date(`${date}T00:00:00Z`);
+
 export const PointSummaryInline = ({ youthId, compact = false }: PointSummaryInlineProps) => {
   const { todayEntry, latestEntry, todayTotal, weekTotal, monthTotal, lifetimeTotal, loading } =
     useBehaviorPointSummary(youthId);
@@ -16,8 +18,8 @@ export const PointSummaryInline = ({ youthId, compact = false }: PointSummaryInl
 
   const latestLabel =
     latestEntry?.date && latestEntry.date !== todayEntry?.date
-      ? `${typeof latestEntry.totalPoints === "number" ? latestEntry.totalPoints.toLocaleString() : "status"} on ${format(
-          new Date(`${latestEntry.date}T00:00:00`),
+      ? `${typeof latestEntry.totalPoints === "number" ? latestEntry.totalPoints.toLocaleString() : "N/A"} on ${format(
+          parseUtcDate(latestEntry.date),
           "MMM d"
         )}`
       : null;

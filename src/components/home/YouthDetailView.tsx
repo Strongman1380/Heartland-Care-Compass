@@ -171,7 +171,7 @@ export const YouthDetailView = ({
         </TabsContent>
 
         <TabsContent value="evaluations">
-          <ProgressEvaluationReport youth={selectedYouth as any} />
+          <ProgressEvaluationReport youth={selectedYouth} />
         </TabsContent>
 
         <TabsContent value="reports">

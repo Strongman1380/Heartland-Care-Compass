@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ChevronDown, ChevronRight, Download, Edit2, FileText, Loader2, Mic, MicOff, Printer, Save, Search, Trash2, Upload, Users, X } from "lucide-react";
+import { ArrowRightLeft, ChevronDown, ChevronRight, Download, Edit2, FileText, Loader2, Mic, MicOff, Printer, Save, Search, Trash2, Upload, Users, X } from "lucide-react";
 import { toast } from "sonner";
 import { format, parseISO } from "date-fns";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -96,9 +96,32 @@ const safeFormatDate = (dateString?: string | null, displayFormat = "MMM dd, yyy
 const truncateForSummary = (text: string, max = 100): string =>
   text.length > max ? `${text.slice(0, max)}...` : text;
 
+/**
+ * Insert newlines before inline date markers so they act as entry boundaries.
+ * Uses [^\S\n]+ (non-newline whitespace) so existing blank-line separators are preserved.
+ */
+const preInsertDateNewlines = (text: string): string =>
+  text
+    // YYYY-MM-DD: appearing mid-line (not preceded by a newline)
+    .replace(/([^\n])[^\S\n]*(\d{4}-\d{2}-\d{2}[^\S\n]*[:\-–])/g, "$1\n$2")
+    // M/D/YYYY: or M-D-YYYY: appearing mid-line
+    .replace(/([^\n])[^\S\n]*(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}[^\S\n]*[:\-–])/g, "$1\n$2")
+    // Month-name formats like "January 15, 2026 -" appearing mid-line
+    .replace(
+      /([^\n])[^\S\n]*((?:January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[^\S\n]+\d{1,2},?[^\S\n]+\d{2,4}[^\S\n]*[:\-–])/gi,
+      "$1\n$2"
+    );
+
 const splitCombinedEntries = (raw: string): string[] => {
-  const normalized = raw.replace(/\r\n/g, "\n").trim();
+  const normalized = preInsertDateNewlines(raw.replace(/\r\n/g, "\n").trim());
   if (!normalized) return [];
+
+  // If text has date markers, split on them directly
+  const byDateMarker = normalized
+    .split(/(?=^\d{4}-\d{2}-\d{2}\s*[:\-–]|^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}\s*[:\-–])/m)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  if (byDateMarker.length > 1) return byDateMarker;
 
   const byParagraph = normalized
     .split(/\n\s*\n/g)
@@ -113,6 +136,15 @@ const splitCombinedEntries = (raw: string): string[] => {
     .filter(Boolean);
 
   return byBullets.length > 1 ? byBullets : [normalized];
+};
+
+const createRequestTimeout = (timeoutMs = 45000) => {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+  return {
+    controller,
+    cleanup: () => window.clearTimeout(timeoutId),
+  };
 };
 
 const keywordHits = (text: string, keywords: string[]): number =>
@@ -446,21 +478,42 @@ export const EnhancedCaseNotes = ({ youthId, youth }: EnhancedCaseNotesProps) =>
   };
 
   const startRecording = async () => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      toast.error("This browser does not support microphone recording.");
+      return;
+    }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       audioChunksRef.current = [];
       const mr = new MediaRecorder(stream, { mimeType: MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "audio/mp4" });
       mr.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
       mr.onstop = async () => {
-        stream.getTracks().forEach((t) => t.stop());
-        const blob = new Blob(audioChunksRef.current, { type: mr.mimeType });
-        await transcribeAndOrganize(blob, mr.mimeType);
+        try {
+          const blob = new Blob(audioChunksRef.current, { type: mr.mimeType });
+          await transcribeAndOrganize(blob, mr.mimeType);
+        } catch (error) {
+          console.error("Audio processing failed after recording stopped:", error);
+          toast.error("Audio processing failed.");
+        } finally {
+          stream.getTracks().forEach((t) => t.stop());
+        }
       };
       mr.start(1000);
       mediaRecorderRef.current = mr;
       setIsRecording(true);
-    } catch {
-      toast.error("Microphone access denied. Please allow microphone access in your browser settings.");
+    } catch (error) {
+      const errorName = error instanceof DOMException ? error.name : "";
+      if (errorName === "NotAllowedError" || errorName === "PermissionDeniedError") {
+        toast.error("Microphone access was denied. Please allow microphone access in your browser settings.");
+      } else if (errorName === "NotFoundError" || errorName === "DevicesNotFoundError") {
+        toast.error("No microphone was found. Connect an audio input and try again.");
+      } else if (errorName === "NotReadableError") {
+        toast.error("The microphone is busy or unavailable. Close other audio apps and try again.");
+      } else if (errorName === "SecurityError") {
+        toast.error("Recording is blocked by browser security settings.");
+      } else {
+        toast.error("Unable to start recording. Check microphone permissions and try again.");
+      }
     }
   };
 
@@ -474,18 +527,29 @@ export const EnhancedCaseNotes = ({ youthId, youth }: EnhancedCaseNotesProps) =>
     try {
       setIsTranscribing(true);
       const fd = new FormData();
-      const ext = mimeType.includes("mp4") || mimeType.includes("m4a") ? "m4a" : mimeType.includes("ogg") ? "ogg" : "webm";
+      const ext = mimeType.includes("mp4") || mimeType.includes("m4a") ? "m4a" : "webm";
       fd.append("audio", blob, `recording.${ext}`);
-      const transcriptRes = await fetch("/api/ai/transcribe-audio", { method: "POST", body: fd });
+      const transcriptRequest = createRequestTimeout();
+      const transcriptRes = await fetch("/api/ai/transcribe-audio", {
+        method: "POST",
+        body: fd,
+        signal: transcriptRequest.controller.signal,
+      }).finally(() => {
+        transcriptRequest.cleanup();
+      });
       if (!transcriptRes.ok) throw new Error("Transcription failed");
       const { transcript } = await transcriptRes.json();
       setIsTranscribing(false);
 
       setIsOrganizing(true);
+      const organizeRequest = createRequestTimeout();
       const organizeRes = await fetch("/api/ai/organize-meeting-notes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ transcript, youthName }),
+        signal: organizeRequest.controller.signal,
+      }).finally(() => {
+        organizeRequest.cleanup();
       });
       if (!organizeRes.ok) throw new Error("Failed to organize notes");
       const { attendees, objectives, discussion, actionItems } = await organizeRes.json();
@@ -498,7 +562,11 @@ export const EnhancedCaseNotes = ({ youthId, youth }: EnhancedCaseNotesProps) =>
       }));
       toast.success("Recording transcribed and organized into form fields. Review and save.");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Audio processing failed.");
+      if (err instanceof DOMException && err.name === "AbortError") {
+        toast.error("Audio processing timed out. Please try again.");
+      } else {
+        toast.error(err instanceof Error ? err.message : "Audio processing failed.");
+      }
     } finally {
       setIsTranscribing(false);
       setIsOrganizing(false);
@@ -541,12 +609,15 @@ export const EnhancedCaseNotes = ({ youthId, youth }: EnhancedCaseNotesProps) =>
 
   // Try to parse any date string into yyyy-MM-dd
   const parseDateToISO = (raw: string): string => {
-    // Try short date first (M-D-YY, M/D/YY, etc.)
-    const short = parseShortDate(raw);
+    const trimmed = raw.trim();
+    // ISO format already — return as-is (must check BEFORE parseShortDate which misreads YYYY-MM-DD as M-D-Y)
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+    // Short date: M/D/YY, M-D-YY, M/D/YYYY, M-D-YYYY
+    const short = parseShortDate(trimmed);
     if (short) return format(short, "yyyy-MM-dd");
-    // Fall back to native Date parsing
+    // Fall back to native Date parsing (handles "March 2, 2026" etc.)
     try {
-      const d = new Date(raw);
+      const d = new Date(trimmed);
       if (!isNaN(d.getTime())) return format(d, "yyyy-MM-dd");
     } catch { /* ignore */ }
     return format(new Date(), "yyyy-MM-dd");
@@ -606,7 +677,9 @@ export const EnhancedCaseNotes = ({ youthId, youth }: EnhancedCaseNotesProps) =>
   const parseBulkNotes = (text: string): { date: string; content: string }[] => {
     if (!text.trim()) return [];
 
-    const normalized = text.replace(/\r\n/g, "\n").trim();
+    // Pre-process: insert newlines before inline date markers so they act as entry boundaries.
+    // This handles AI-generated text where all dates appear on a single line.
+    const normalized = preInsertDateNewlines(text.replace(/\r\n/g, "\n").trim());
 
     // Detect JSON input
     if (normalized.startsWith("{") || normalized.startsWith("[")) {
@@ -976,6 +1049,7 @@ export const EnhancedCaseNotes = ({ youthId, youth }: EnhancedCaseNotesProps) =>
     if (parsed.noteType === "team-meeting") {
       let sections: Record<string, string> = {};
       try { sections = JSON.parse(note.note || "{}")?.sections || {}; } catch { /* ignore */ }
+      const hasAnySectionContent = Object.values(sections).some((value) => typeof value === "string" && value.trim().length > 0);
       return (
         <div className="space-y-3">
           {sections.attendees && (
@@ -990,7 +1064,7 @@ export const EnhancedCaseNotes = ({ youthId, youth }: EnhancedCaseNotesProps) =>
           {sections.actionItems && (
             <div><p className="text-xs font-semibold text-blue-700 uppercase tracking-wide mb-0.5">Action Items / Next Steps</p><p className="text-sm text-gray-700 whitespace-pre-wrap">{sections.actionItems}</p></div>
           )}
-          {!sections.attendees && !sections.discussion && (
+          {!hasAnySectionContent && (
             <p className="text-sm text-gray-700 whitespace-pre-wrap">{parsed.text || note.summary}</p>
           )}
         </div>
@@ -1016,6 +1090,13 @@ export const EnhancedCaseNotes = ({ youthId, youth }: EnhancedCaseNotesProps) =>
     );
   };
 
+  const sortedYouths = useMemo(() => {
+    return [...youths].sort((a, b) => {
+      const last = a.lastName.localeCompare(b.lastName);
+      return last !== 0 ? last : a.firstName.localeCompare(b.firstName);
+    });
+  }, [youths]);
+
   return (
     <div className="space-y-6" ref={printRef}>
       <div className="flex justify-between items-center">
@@ -1026,6 +1107,71 @@ export const EnhancedCaseNotes = ({ youthId, youth }: EnhancedCaseNotesProps) =>
           </p>
         </div>
       </div>
+
+      {/* Horizontal youth switcher */}
+      {sortedYouths.length > 0 && onYouthChange && (
+        <div className="rounded-2xl border border-red-100 bg-white/95 shadow-sm">
+          <div className="border-b border-red-100 px-4 py-3 sm:px-5">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <div className="flex items-center gap-2 text-sm font-semibold text-red-800">
+                  <ArrowRightLeft className="h-4 w-4" />
+                  Quick Switch Youth
+                </div>
+                <p className="mt-0.5 text-xs text-slate-500">Switch directly to another youth without backing out.</p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge className="bg-red-50 text-red-700 border border-red-200 hover:bg-red-50">
+                  Current: {(selectedYouth?.lastName || youth?.lastName)}, {(selectedYouth?.firstName || youth?.firstName)}
+                </Badge>
+                <Badge variant="outline" className="border-yellow-300 text-yellow-800 bg-yellow-50">
+                  Level {selectedYouth?.level ?? youth?.level}
+                </Badge>
+              </div>
+            </div>
+          </div>
+          <div className="px-4 py-3 sm:px-5">
+            <div className="flex gap-3 overflow-x-auto pb-1">
+              {sortedYouths.map((y) => {
+                const isCurrent = y.id === youthId;
+                return (
+                  <button
+                    key={y.id}
+                    type="button"
+                    onClick={() => !isCurrent && onYouthChange(y.id)}
+                    className={`min-w-[200px] shrink-0 rounded-xl border p-3 text-left transition-all ${
+                      isCurrent
+                        ? "border-red-300 bg-red-50 shadow-sm"
+                        : "border-slate-200 bg-white hover:border-red-200 hover:bg-red-50/50"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="font-semibold text-slate-900 truncate">
+                          {y.lastName}, {y.firstName}
+                        </div>
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          <span className="inline-flex items-center rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs text-slate-700">
+                            Age {y.age || "N/A"}
+                          </span>
+                          <span className="inline-flex items-center rounded-md border border-red-200 bg-red-50 px-2 py-0.5 text-xs text-red-700">
+                            Level {y.level}
+                          </span>
+                        </div>
+                      </div>
+                      {isCurrent && (
+                        <span className="rounded-full bg-red-700 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+                          Open
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "create" | "history" | "bulk-import")}>
         <TabsList className="grid w-full grid-cols-3">
@@ -1047,11 +1193,10 @@ export const EnhancedCaseNotes = ({ youthId, youth }: EnhancedCaseNotesProps) =>
               <div className="flex flex-wrap gap-2">
                 <Button
                   type="button"
-                  variant="outline"
                   onClick={() => setCreateMode("session")}
-                  className={`flex-1 transition-colors ${
-                    createMode === "session" 
-                      ? "bg-[#823131] hover:bg-[#6b2828] text-white border-[#823131] shadow-md font-medium" 
+                  className={`flex-1 border transition-colors ${
+                    createMode === "session"
+                      ? "bg-[#823131] hover:bg-[#6b2828] text-white border-[#823131] shadow-md font-medium"
                       : "bg-white border-slate-300 text-slate-700 hover:bg-slate-50 hover:text-slate-900"
                   }`}
                 >
@@ -1059,11 +1204,10 @@ export const EnhancedCaseNotes = ({ youthId, youth }: EnhancedCaseNotesProps) =>
                 </Button>
                 <Button
                   type="button"
-                  variant="outline"
                   onClick={() => setCreateMode("combined")}
-                  className={`flex-1 transition-colors ${
-                    createMode === "combined" 
-                      ? "bg-[#823131] hover:bg-[#6b2828] text-white border-[#823131] shadow-md font-medium" 
+                  className={`flex-1 border transition-colors ${
+                    createMode === "combined"
+                      ? "bg-[#823131] hover:bg-[#6b2828] text-white border-[#823131] shadow-md font-medium"
                       : "bg-white border-slate-300 text-slate-700 hover:bg-slate-50 hover:text-slate-900"
                   }`}
                 >
@@ -1071,11 +1215,10 @@ export const EnhancedCaseNotes = ({ youthId, youth }: EnhancedCaseNotesProps) =>
                 </Button>
                 <Button
                   type="button"
-                  variant="outline"
                   onClick={() => setCreateMode("team-meeting")}
-                  className={`flex-1 transition-colors ${
-                    createMode === "team-meeting" 
-                      ? "bg-blue-600 hover:bg-blue-700 text-white border-blue-600 shadow-md font-medium" 
+                  className={`flex-1 border transition-colors ${
+                    createMode === "team-meeting"
+                      ? "bg-blue-600 hover:bg-blue-700 text-white border-blue-600 shadow-md font-medium"
                       : "bg-white border-blue-200 text-blue-700 hover:bg-blue-50 hover:text-blue-800"
                   }`}
                 >
@@ -1173,7 +1316,6 @@ export const EnhancedCaseNotes = ({ youthId, youth }: EnhancedCaseNotesProps) =>
                         <Button
                           type="button"
                           size="sm"
-                          variant="default"
                           className="bg-blue-600 hover:bg-blue-700 text-white font-medium"
                           onClick={startRecording}
                           disabled={isTranscribing || isOrganizing}
@@ -1247,11 +1389,10 @@ export const EnhancedCaseNotes = ({ youthId, youth }: EnhancedCaseNotesProps) =>
 
                 <Button
                   type="submit"
-                  variant="outline"
                   disabled={isSubmitting || isRecording || isTranscribing || isOrganizing}
                   className={`w-full text-white font-medium border-0 transition-colors ${
-                    createMode === "team-meeting" 
-                      ? "bg-blue-600 hover:bg-blue-700" 
+                    createMode === "team-meeting"
+                      ? "bg-blue-600 hover:bg-blue-700"
                       : "bg-[#823131] hover:bg-[#6b2828]"
                   }`}
                 >
@@ -1290,10 +1431,11 @@ export const EnhancedCaseNotes = ({ youthId, youth }: EnhancedCaseNotesProps) =>
                   id="bulk-text"
                   value={bulkText}
                   onChange={(e) => {
-                    setBulkText(e.target.value);
-                    setBulkParsedNotes([]);
+                    const val = e.target.value;
+                    setBulkText(val);
+                    setBulkParsedNotes(val.trim() ? parseBulkNotes(val) : []);
                   }}
-                  placeholder={`Example:\n\n1/15/2026: Youth participated in group therapy session. Showed good engagement with peers and was able to identify two coping strategies.\n\n1/16/2026: Youth had a difficult morning but recovered well after one-on-one with staff. Completed all chores and attended school without incident.\n\n1/17/2026: Family visit went well. Youth was calm and engaged with mother for the full hour.`}
+                  placeholder={`Paste notes here — auto-detected formats:\n\n2026-03-02: Note text for this date. 2026-03-01: Note text for previous date.\n\nMarch 2, 2026 -\nNote text here.\n\nMarch 1, 2026 -\nNote text here.\n\n1/15/2026: Each date becomes its own case note.`}
                   rows={14}
                   className="font-mono text-sm"
                 />

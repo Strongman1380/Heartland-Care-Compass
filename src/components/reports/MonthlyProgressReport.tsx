@@ -72,6 +72,12 @@ interface MonthlyReportData {
 }
 
 export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => {
+  const toValidDate = (value?: string | Date | null) => {
+    if (!value) return null;
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  };
+
   const [selectedMonth, setSelectedMonth] = useState<string>(format(new Date(), "yyyy-MM"));
   const [activeTab, setActiveTab] = useState<string>("youth-info");
   const [reportData, setReportData] = useState<MonthlyReportData>({
@@ -143,17 +149,12 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
   // Auto-populate form with youth data
   const autoPopulateForm = async () => {
     if (!youth?.id) {
-      console.log('No youth ID provided');
       return;
     }
-
-    console.log('Auto-populating form for youth:', youth.firstName, youth.lastName, 'ID:', youth.id);
 
     try {
       // Fetch ALL case notes for this youth
       const progressNotes = await fetchAllProgressNotes(youth.id);
-
-      console.log('Fetched case notes:', progressNotes.length);
 
       // Use all notes (most recent first) for richer auto-population
       const monthProgressNotes = [...progressNotes].sort((a, b) => {
@@ -196,18 +197,20 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
       // Calculate age
       let age = "";
       if (youth.dob) {
-        const dob = new Date(youth.dob as any);
-        const today = new Date();
-        age = Math.floor(differenceInDays(today, dob) / 365.25).toString();
+        const dob = toValidDate(youth.dob);
+        if (dob) {
+          const today = new Date();
+          age = Math.floor(differenceInDays(today, dob) / 365.25).toString();
+        }
       }
 
       // Map youth data to form fields
       const autoPopulatedData = {
         fullLegalName: `${youth.firstName} ${youth.lastName}`,
         preferredName: youth.firstName,
-        dateOfBirth: youth.dob ? format(new Date(youth.dob as any), "yyyy-MM-dd") : "",
+        dateOfBirth: toValidDate(youth.dob) ? format(toValidDate(youth.dob)!, "yyyy-MM-dd") : "",
         age,
-        dateOfAdmission: youth.admissionDate ? format(new Date(youth.admissionDate as any), "yyyy-MM-dd") : "",
+        dateOfAdmission: toValidDate(youth.admissionDate) ? format(toValidDate(youth.admissionDate)!, "yyyy-MM-dd") : "",
         lengthOfStay,
         currentPlacement: "Heartland Boys Home",
         probationOfficer: findProfessional(youth, 'probationOfficer')?.name || "",
@@ -237,13 +240,14 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
         ];
 
         Object.entries(autoPopulatedData).forEach(([key, value]) => {
+          const typedKey = key as keyof MonthlyReportData;
           if (alwaysUpdateFields.includes(key)) {
             if (value) {
-              updates[key as keyof typeof reportData] = value as any;
+              updates[typedKey] = value;
             }
           } else {
-            if (!prev[key as keyof typeof reportData] && value) {
-              updates[key as keyof typeof reportData] = value as any;
+            if (!prev[typedKey] && value) {
+              updates[typedKey] = value;
             }
           }
         });
@@ -501,7 +505,6 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
         if (draft?.data) {
           const savedData = draft.data as MonthlyReportData;
           setReportData(prev => ({ ...prev, ...savedData }));
-          console.log('Loaded saved report data from Firebase');
           return;
         }
       } catch (error) {
@@ -516,13 +519,9 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
         try {
           const savedData = JSON.parse(saved) as MonthlyReportData;
           setReportData(prev => ({ ...prev, ...savedData }));
-          console.log('Loaded saved report data from localStorage');
         } catch (error) {
           console.error("Error loading saved data:", error);
         }
-      } else {
-        // No saved data exists — leave narrative generation as a manual action.
-        console.log('No saved data found; AI population is available manually from the report controls');
       }
     };
 
@@ -740,8 +739,6 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
         })
         .slice(0, 30);
 
-      console.log(`AI populate: ${periodReports.length} reports in period, ${historicalReports.length} historical reports`);
-
       // First, run basic auto-populate to get demographic data
       await autoPopulateForm();
 
@@ -879,7 +876,7 @@ Discuss behavioral patterns, compliance, response to redirection, and emphasize 
           });
 
           if (response.success && response.data?.answer) {
-            updates[field as keyof MonthlyReportData] = response.data.answer as any;
+            updates[field as keyof MonthlyReportData] = response.data.answer;
           }
         } catch (error) {
           console.error(`Error generating ${field}:`, error);

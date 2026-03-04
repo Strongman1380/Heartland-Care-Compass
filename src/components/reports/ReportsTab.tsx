@@ -41,11 +41,11 @@ export const ReportsTab = ({ youth }: ReportsTabProps) => {
         </TabsContent>
 
         <TabsContent value="monthly-progress">
-          <MonthlyProgressReport youth={youth as any} />
+          <MonthlyProgressReport youth={youth} />
         </TabsContent>
 
         <TabsContent value="court-report">
-          <CourtReport youth={youth as any} />
+          <CourtReport youth={youth} />
         </TabsContent>
       </Tabs>
     </div>

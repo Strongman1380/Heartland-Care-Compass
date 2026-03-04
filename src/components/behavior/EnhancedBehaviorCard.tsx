@@ -67,16 +67,6 @@ export const EnhancedBehaviorCard = ({
       const newPointsTotal = pointsInCurrentLevel + dailyPoints;
       setPointsInCurrentLevel(newPointsTotal);
 
-      // Save behavior entry (you can implement actual saving to Supabase here)
-      console.log("Saving behavior entry:", {
-        youthId,
-        date,
-        dailyPoints,
-        comments,
-        hasPrivileges,
-        newPointsTotal
-      });
-
       toast.success("Behavior card saved successfully!");
       
       // Reset form
@@ -90,49 +80,49 @@ export const EnhancedBehaviorCard = ({
     }
   };
 
-  const handleLevelUp = () => {
+  const handleLevelUp = async () => {
     const result = processLevelUp(currentLevelIndex, pointsInCurrentLevel);
     if (result) {
       try {
-        updateYouth(youthId, { level: result.newLevelIndex });
+        await updateYouth(youthId, { level: result.newLevelIndex });
         setCurrentLevelIndex(result.newLevelIndex);
         setPointsInCurrentLevel(result.pointsInNewLevel);
         const newLevel = getCurrentLevel(result.newLevelIndex);
         toast.success(`Congratulations! Advanced to ${newLevel.name}!`);
-        levelEventService.logLevelChange(
+        await levelEventService.logLevelChange(
           youthId,
           youthName ?? youthId,
           currentLevelIndex,
           result.newLevelIndex,
           'level_up',
-          user?.email ?? 'unknown'
-        ).catch(console.error);
+          user?.uid ?? 'unknown'
+        );
       } catch (error) {
-        console.error("Error updating level:", error);
+        console.error("Error updating level or logging level-up event:", error);
         toast.error("Failed to update level");
       }
     }
   };
 
-  const handleLevelDemotion = () => {
+  const handleLevelDemotion = async () => {
     const result = processLevelDemotion(currentLevelIndex);
     if (result) {
       try {
-        updateYouth(youthId, { level: result.newLevelIndex });
+        await updateYouth(youthId, { level: result.newLevelIndex });
         setCurrentLevelIndex(result.newLevelIndex);
         setPointsInCurrentLevel(result.pointsInNewLevel);
         const newLevel = getCurrentLevel(result.newLevelIndex);
         toast.error(`Demoted to ${newLevel.name}`);
-        levelEventService.logLevelChange(
+        await levelEventService.logLevelChange(
           youthId,
           youthName ?? youthId,
           currentLevelIndex,
           result.newLevelIndex,
           'demotion',
-          user?.email ?? 'unknown'
-        ).catch(console.error);
+          user?.uid ?? 'unknown'
+        );
       } catch (error) {
-        console.error("Error updating level:", error);
+        console.error("Error updating level or logging demotion event:", error);
         toast.error("Failed to update level in database");
       }
     }

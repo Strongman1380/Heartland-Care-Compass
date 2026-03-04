@@ -122,7 +122,7 @@ const EditableField = ({ label, value, onSave, type = "text", options }: Editabl
 
 export const PersonalInfoProfileTab = ({ youth, onYouthUpdated }: PersonalInfoProfileTabProps) => {
   const { updateYouth } = useYouth();
-  const { todayPoints } = useTodayPoints(youth.id);
+  const { todayPoints, loading: todayPointsLoading } = useTodayPoints(youth.id);
 
   const formatDate = (dateString: string | null) => {
     if (!dateString) return "Not specified";
@@ -251,7 +251,7 @@ export const PersonalInfoProfileTab = ({ youth, onYouthUpdated }: PersonalInfoPr
             />
             <div className="flex items-center justify-between py-2 border-b border-red-100">
               <span className="text-sm font-medium text-red-800">Today's Points</span>
-              <span className="text-sm text-red-700">{todayPoints.toLocaleString()}</span>
+              <span className="text-sm text-red-700">{todayPointsLoading ? "Loading..." : (todayPoints ?? 0).toLocaleString()}</span>
             </div>
             {youth.pointTotal != null && youth.pointTotal !== 0 && (
               <EditableField

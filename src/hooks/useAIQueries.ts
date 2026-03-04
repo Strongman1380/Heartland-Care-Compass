@@ -12,6 +12,14 @@ import {
 
 const STALE_TIME = 5 * 60 * 1000; // 5 minutes
 
+const safeKey = (value: unknown) => {
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+};
+
 // ---------------------------------------------------------------------------
 // Youth Insights
 // ---------------------------------------------------------------------------
@@ -39,7 +47,7 @@ export function useBehaviorTrends(
   timeframe?: number
 ) {
   return useQuery({
-    queryKey: ['ai', 'behavior-trends', youthId, timeframe ?? null],
+    queryKey: ['ai', 'behavior-trends', youthId, timeframe ?? null, safeKey(behaviorData)],
     queryFn: () => analyzeBehaviorTrends(youthId!, behaviorData, timeframe),
     enabled: !!youthId && behaviorData.length > 0,
     staleTime: STALE_TIME,
@@ -57,7 +65,7 @@ export function useRiskAssessment(
   historicalData?: any
 ) {
   return useQuery({
-    queryKey: ['ai', 'risk-assessment', youthId, assessmentData ?? null],
+    queryKey: ['ai', 'risk-assessment', youthId, safeKey(assessmentData ?? null), safeKey(historicalData ?? null)],
     queryFn: () => assessRisk(youthId!, assessmentData, historicalData),
     enabled: !!youthId && !!assessmentData,
     staleTime: STALE_TIME,

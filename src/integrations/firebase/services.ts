@@ -95,19 +95,15 @@ export const youthService = {
   },
 
   async update(id: string, updates: YouthUpdate): Promise<Youth> {
-    console.log('Attempting to update youth:', { id, updates })
     const ref = doc(db, 'youth', id)
     const updatedData = { ...updates, updatedAt: new Date().toISOString() }
     await updateDoc(ref, updatedData as Record<string, unknown>)
     const updated = await getDoc(ref)
     if (!updated.exists()) throw new Error('Youth not found after update')
-    console.log('Youth updated successfully')
     return docToData<Youth>(updated)
   },
 
   async delete(id: string): Promise<void> {
-    console.log('Attempting to delete youth:', id)
-
     // Delete subcollection data first
     const subcollections = ['behavior_points', 'case_notes', 'daily_ratings', 'progress_notes', 'court_reports', 'report_drafts']
     for (const sub of subcollections) {
@@ -116,7 +112,6 @@ export const youthService = {
         const batch = writeBatch(db)
         subSnap.docs.forEach(d => batch.delete(d.ref))
         if (subSnap.docs.length > 0) await batch.commit()
-        console.log(`Deleted ${sub}`)
       } catch (err) {
         console.warn(`Error deleting ${sub}:`, err)
       }
@@ -124,7 +119,6 @@ export const youthService = {
 
     // Delete the youth document
     await deleteDoc(doc(db, 'youth', id))
-    console.log('Youth profile deleted successfully')
   },
 
   async discharge(id: string, data: {
@@ -133,7 +127,6 @@ export const youthService = {
     dischargeNotes?: string
     dischargedBy?: string
   }): Promise<void> {
-    console.log('Discharging youth:', id, data)
     const ref = doc(db, 'youth', id)
     await updateDoc(ref, {
       status: 'discharged',
@@ -144,7 +137,6 @@ export const youthService = {
       dischargedBy: data.dischargedBy || null,
       updatedAt: new Date().toISOString(),
     } as Record<string, unknown>)
-    console.log('Youth discharged successfully')
   },
 
   async searchByName(searchTerm: string): Promise<Youth[]> {
@@ -265,7 +257,13 @@ export const caseNotesService = {
     return docToData<CaseNotes>(updated)
   },
 
-  async delete(id: string): Promise<void> {
+  async delete(id: string, youthId?: string): Promise<void> {
+    // Direct path delete when youthId is known — avoids needing a collection-group index
+    if (youthId) {
+      await deleteDoc(doc(db, 'youth', youthId, 'case_notes', id))
+      return
+    }
+    // Fallback: collection group scan (requires composite index in Firestore)
     const q = query(collectionGroup(db, 'case_notes'), where('id', '==', id))
     const snapshot = await getDocs(q)
     const batch = writeBatch(db)

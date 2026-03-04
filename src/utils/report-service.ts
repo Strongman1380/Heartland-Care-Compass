@@ -27,7 +27,17 @@ const fetchDailyRatingsAPI = async (youthId: string): Promise<DailyRating[]> => 
 };
 
 export interface ReportOptions {
-  reportType: "comprehensive" | "summary" | "progress" | "progressMonthly" | "court" | "dpnWeekly" | "dpnBiWeekly" | "dpnMonthly";
+  reportType:
+    | "comprehensive"
+    | "summary"
+    | "progress"
+    | "progressMonthly"
+    | "court"
+    | "dpnWeekly"
+    | "dpnBiWeekly"
+    | "dpnMonthly"
+    | "evalWeekly"
+    | "evalMonthly";
   period: "allTime" | "last7" | "last30" | "last90" | "custom";
   customStartDate?: string;
   customEndDate?: string;
@@ -110,8 +120,8 @@ export const generateReportHTML = async (youth: Youth, options: ReportOptions): 
       <h3 style="font-size:12pt; margin:0 0 6pt;">Youth Information</h3>
       <div style="display:flex; gap:24pt; flex-wrap:wrap; font-size:11pt;">
         <div><strong>Name:</strong> ${esc(youth.firstName)} ${esc(youth.lastName)}</div>
-        <div><strong>Date of Birth:</strong> ${fmt(youth.dob as any)}</div>
-        <div><strong>Admission Date:</strong> ${fmt(youth.admissionDate as any)}</div>
+        <div><strong>Date of Birth:</strong> ${fmt(youth.dob)}</div>
+        <div><strong>Admission Date:</strong> ${fmt(youth.admissionDate)}</div>
         <div><strong>Current Level:</strong> ${esc(youth.level)}</div>
       </div>
     </div>`;
@@ -166,10 +176,10 @@ export const generateReportHTML = async (youth: Youth, options: ReportOptions): 
       const dateB = b.date ? new Date(b.date).getTime() : 0;
       return dateB - dateA;
     })).slice(0, 50).map(n => `
-      <li>${fmt(n.date as any)} - ${esc(n.category || 'General')}: ${esc(n.note || 'No note')}</li>`).join('');
+      <li>${fmt(n.date)} - ${esc(n.category || 'General')}: ${esc(n.note || 'No note')}</li>`).join('');
     return `
       <div style="margin:12pt 0;">
-        <h3 style="font-size:12pt; margin:0 0 6pt;">Progress Notes (${(data.progressNotes as any[]).length} entries - Showing last 50)</h3>
+        <h3 style="font-size:12pt; margin:0 0 6pt;">Progress Notes (${data.progressNotes.length} entries - Showing last 50)</h3>
         <ul style="margin:0 0 0 16pt; font-size:11pt;">${items}</ul>
       </div>`;
   };

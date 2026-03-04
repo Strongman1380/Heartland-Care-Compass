@@ -628,10 +628,10 @@ export const KpiDashboard = ({ youthId, youth }: KpiDashboardProps) => {
                   </div>
                 ) : null;
               })()}
-              {youth.pointTotal != null && (
+              {todayPoints != null && (
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Today's Points</span>
-                  <span className="font-medium">{todayPoints.toLocaleString()}</span>
+                  <span className="font-medium">{(todayPoints ?? 0).toLocaleString()}</span>
                 </div>
               )}
               {youth.pointTotal != null && (

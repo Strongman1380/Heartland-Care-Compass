@@ -40,3 +40,6 @@ preview.log
 preview-watch.log
 .vercel
 .env*.local
+
+# Claude Code local settings (contain machine-specific paths)
+.claude/settings.json

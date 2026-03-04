@@ -10,13 +10,15 @@ import { Input } from "@/components/ui/input";
 
 import { ReportOptions } from "@/utils/report-service";
 
+type ReportTypeOption = ReportOptions["reportType"];
+
 interface ReportGenerationFormProps {
   onGenerateReport: (options: ReportOptions) => void;
   isGenerating: boolean;
 }
 
 export const ReportGenerationForm = ({ onGenerateReport, isGenerating }: ReportGenerationFormProps) => {
-  const [selectedReportType, setSelectedReportType] = useState<string>("progressMonthly");
+  const [selectedReportType, setSelectedReportType] = useState<ReportTypeOption>("progressMonthly");
   const [selectedPeriod, setSelectedPeriod] = useState<string>("last30");
   const [customStartDate, setCustomStartDate] = useState<string>("");
   const [customEndDate, setCustomEndDate] = useState<string>("");
@@ -33,7 +35,7 @@ export const ReportGenerationForm = ({ onGenerateReport, isGenerating }: ReportG
   // Check if selected report type should auto-export to PDF
   const isDPNReport = selectedReportType.startsWith('dpn') || selectedReportType === 'court';
   const isEvalReport = selectedReportType.startsWith('eval');
-  const shouldAutoExportPDF = isDPNReport;
+  const shouldAutoExportPDF = isDPNReport || isEvalReport;
 
   // Handle report type change and auto-set PDF format for DPN/eval reports
   const handleReportTypeChange = (value: string) => {
@@ -186,12 +188,19 @@ export const ReportGenerationForm = ({ onGenerateReport, isGenerating }: ReportG
                     <span className="text-sm font-medium text-blue-800">PDF (.pdf)</span>
                   </div>
                   <p className="text-xs text-blue-600 mt-1">
-                    {selectedReportType === 'court' ? 'Court reports' : 'DPN reports'} automatically export as PDF
+                    {selectedReportType === 'court' ? 'Court reports' : isEvalReport ? 'Evaluation reports' : 'DPN reports'} automatically export as PDF
                   </p>
                 </div>
               </div>
             ) : (
-              <Select value={outputFormat} onValueChange={(v) => setOutputFormat(v as any)}>
+              <Select
+                value={outputFormat}
+                onValueChange={(value) => {
+                  if (value === "text" || value === "pdf" || value === "docx") {
+                    setOutputFormat(value);
+                  }
+                }}
+              >
                 <SelectTrigger className="max-w-xs">
                   <SelectValue />
                 </SelectTrigger>
@@ -208,7 +217,7 @@ export const ReportGenerationForm = ({ onGenerateReport, isGenerating }: ReportG
             className="w-full bg-[#823131] hover:bg-[#6b2828] text-white border-[#823131]"
             onClick={() => {
               const options: ReportOptions = {
-                reportType: selectedReportType as any,
+                reportType: selectedReportType,
                 period: selectedPeriod as "allTime" | "last7" | "last30" | "last90" | "custom",
                 customStartDate,
                 customEndDate,

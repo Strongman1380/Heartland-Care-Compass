@@ -117,7 +117,7 @@ export function DpnReport({
       setAiFieldComments(null);
       setAutoExported(false);
     }
-  }, [periodFrom, periodTo]);
+  }, [periodFrom, periodTo, youth?.id]);
 
   // Auto-export hidden DPN generation requests without triggering AI
   useEffect(() => {

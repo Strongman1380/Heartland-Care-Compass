@@ -74,7 +74,7 @@ const FacilityIncidentPrintView = React.forwardRef<HTMLDivElement, Props>(
     const signatureDate = report.signatureDate?.trim() || report.reportDate?.trim() || ''
 
     // Normalize legacy 'Fighting' → 'Physical Altercation' from older reports
-    const normalizedTypes = report.incidentTypes?.map(t => t === 'Fighting' as any ? 'Physical Altercation' : t) || []
+    const normalizedTypes = report.incidentTypes?.map((t) => t === 'Fighting' ? 'Physical Altercation' : t) || []
     const isCheckedType = (t: FacilityIncidentType) => normalizedTypes.includes(t)
     const isCheckedNotif = (t: NotificationType) => report.notifications?.includes(t)
     const isCheckedDoc = (t: DocumentationType) => report.documentation?.includes(t)
@@ -167,8 +167,8 @@ const FacilityIncidentPrintView = React.forwardRef<HTMLDivElement, Props>(
             <strong>Incident Types:</strong>
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 10px' }}>
-            {selectedIncidentTypes.length > 0 ? selectedIncidentTypes.map((t) => (
-              <span key={t} style={{ textDecoration: 'underline', fontWeight: 'bold' }}>
+            {selectedIncidentTypes.length > 0 ? selectedIncidentTypes.map((t, index) => (
+              <span key={`incident-${t}-${index}`} style={{ textDecoration: 'underline', fontWeight: 'bold' }}>
                 {t}
               </span>
             )) : (
@@ -269,8 +269,8 @@ const FacilityIncidentPrintView = React.forwardRef<HTMLDivElement, Props>(
         <div style={{ marginBottom: '16px', fontSize: '11px', breakInside: 'avoid' }}>
           <div style={{ marginBottom: '4px' }}>Notifications:</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 10px' }}>
-            {selectedNotifications.length > 0 ? selectedNotifications.map((t) => (
-              <span key={t} style={{ textDecoration: 'underline', fontWeight: 'bold' }}>
+            {selectedNotifications.length > 0 ? selectedNotifications.map((t, index) => (
+              <span key={`notification-${t}-${index}`} style={{ textDecoration: 'underline', fontWeight: 'bold' }}>
                 {t}
               </span>
             )) : (

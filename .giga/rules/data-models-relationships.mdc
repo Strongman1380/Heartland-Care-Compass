@@ -30,14 +30,34 @@ Importance Score: 90
 - Relationships:
   * Many-to-one with Youth
   * One-to-many with BehaviorIncidents
-  * One-to-many with StaffAnnotations
+  * One-to-many with StaffNotes
 - Behavioral metrics:
   * Peer interaction rating (1-4)
   * Adult interaction rating (1-4)
   * Investment level (1-4)
   * Authority response (1-4)
 
-3. Medical Profile Schema 
+3. StaffNotes Schema
+- Staff-authored annotations attached to a DailyPerformanceNote or BehavioralAssessment record
+- Fields:
+  * id (string, unique): auto-generated UUID
+  * parentType (string): "DailyPerformanceNote" or "BehavioralAssessment" — identifies which entity this note annotates
+  * parentId (string): foreign key referencing the parent record id
+  * youthId (string): foreign key referencing the Youth record
+  * authorId (string): foreign key referencing the Staff/User record
+  * authorRole (string): role of the author at time of writing (e.g., "direct_care", "case_manager", "clinical_supervisor")
+  * content (string, required, max 2000 characters): free-text annotation body
+  * createdAt (ISO 8601 timestamp): set at creation, immutable
+  * updatedAt (ISO 8601 timestamp): updated on every edit
+  * isAmendment (boolean): true if this note corrects a prior entry; default false
+  * amendedNoteId (string, nullable): id of the note being corrected, populated when isAmendment is true
+- Relationships:
+  * Many-to-one with DailyPerformanceNotes (via parentId when parentType = "DailyPerformanceNote")
+  * Many-to-one with BehavioralAssessment (via parentId when parentType = "BehavioralAssessment")
+  * Many-to-one with Youth (via youthId)
+  * Many-to-one with Staff/User (via authorId)
+
+4. Medical Profile Schema
 Importance Score: 85
 - Healthcare-specific youth data model
 - Relationships:
@@ -51,7 +71,7 @@ Importance Score: 85
   * Medical conditions
   * Treatment authorizations
 
-4. TreatmentGoals Model
+5. TreatmentGoals Model
 Importance Score: 80
 - Treatment planning and goal tracking
 - Relationships:
@@ -65,7 +85,7 @@ Importance Score: 80
   * Family integration
   * Life skills mastery
 
-5. Behavioral Assessment Schema
+6. Behavioral Assessment Schema
 Importance Score: 75
 - Point-based behavior tracking system
 - Relationships:
@@ -84,6 +104,7 @@ Core Entity Relationships:
 - Medical profiles with medication tracking
 - Daily notes connected to incidents
 - Assessment data tied to interventions
+- StaffNotes attached to both DailyPerformanceNotes and BehavioralAssessment records (see StaffNotes Schema above for full field definitions and relationship cardinality)
 
 $END$
 

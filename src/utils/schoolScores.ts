@@ -182,9 +182,6 @@ export const getYouthStats = async (youthId: string): Promise<YouthScoreStats | 
         trend = 'declining'
       }
 
-      console.log(`[Trend] ${youthId}: Recent ${windowSize} scores avg=${recentAverage.toFixed(2)}, Previous ${windowSize} scores avg=${previousAverage.toFixed(2)}, Diff=${diff.toFixed(2)}, Trend=${trend}`)
-    } else {
-      console.log(`[Trend] ${youthId}: Insufficient data for trend (${scores.length} scores, need at least ${windowSize * 2})`)
     }
   } else if (scores.length >= 2) {
     // For very limited data, use simple comparison of most recent vs oldest
@@ -205,7 +202,6 @@ export const getYouthStats = async (youthId: string): Promise<YouthScoreStats | 
     recentAverage = mostRecent
     previousAverage = oldest
     
-    console.log(`[Trend] ${youthId}: Limited data - Most recent=${mostRecent}, Oldest=${oldest}, Diff=${diff.toFixed(2)}, Trend=${trend}`)
   }
 
   return {

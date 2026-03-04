@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
 import type { ReactNode } from 'react';
 import { calculateResidentAwardsForYouths, type AwardsDateRange, type ResidentAwards } from '@/utils/residentAwards';
 import { useYouth } from '@/hooks/useSupabase';
@@ -18,10 +18,11 @@ export const AwardsProvider = ({ children }: { children: ReactNode }) => {
   const [awards, setAwards] = useState<ResidentAwards | null>(null);
   const [loading, setLoading] = useState(false);
   const [dateRange, setDateRange] = useState<AwardsDateRange | null>(null);
+  const cancelRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     loadYouths();
-  }, []);
+  }, [loadYouths]);
 
   const calculate = useCallback((currentYouths: typeof youths, range: AwardsDateRange | null) => {
     if (currentYouths.length === 0) {
@@ -43,8 +44,14 @@ export const AwardsProvider = ({ children }: { children: ReactNode }) => {
   }, [youths, dateRange, calculate]);
 
   const refresh = useCallback(() => {
-    calculate(youths, dateRange);
+    cancelRef.current?.();
+    const cancel = calculate(youths, dateRange);
+    cancelRef.current = cancel;
   }, [youths, dateRange, calculate]);
+
+  useEffect(() => () => {
+    cancelRef.current?.();
+  }, []);
 
   return (
     <AwardsContext.Provider value={{ awards, loading, refresh, dateRange, setDateRange }}>

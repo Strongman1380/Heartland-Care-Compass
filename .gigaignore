@@ -25,18 +25,7 @@ check-school-data.js
 check-localStorage.html
 check-localstorage-data.html
 
-# SQL migration files (schema, not logic)
-COMPLETE_DATABASE_SCHEMA.sql
-QUICK_FIX_school_incidents.sql
-add_restriction_subsystem_fields.sql
-check_youth_columns.sql
-create_academic_tables.sql
-create_school_incidents_tables.sql
-fix_youth_rls_policies.sql
-minimal_academic_tables.sql
-minimal_school_incidents_tables.sql
-test_youth_deletion.sql
-migrations/
+# SQL migration files — tracked so Giga AI can read schema history
 
 # Static sample/export data
 sample-data/

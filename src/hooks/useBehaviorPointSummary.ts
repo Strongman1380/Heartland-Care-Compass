@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { endOfMonth, format, startOfMonth, subDays } from "date-fns";
 import { useBehaviorPoints } from "@/hooks/useSupabase";
 
@@ -6,12 +6,19 @@ const toIso = (value: Date) => format(value, "yyyy-MM-dd");
 
 export const useBehaviorPointSummary = (youthId?: string) => {
   const { behaviorPoints, loading, error } = useBehaviorPoints(youthId);
+  const [clockTick, setClockTick] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timerId = window.setInterval(() => setClockTick(Date.now()), 60_000);
+    return () => window.clearInterval(timerId);
+  }, []);
 
   const summary = useMemo(() => {
-    const todayIso = toIso(new Date());
-    const rollingSevenDayStart = toIso(subDays(new Date(), 6));
-    const monthStart = toIso(startOfMonth(new Date()));
-    const monthEnd = toIso(endOfMonth(new Date()));
+    const currentDate = new Date(clockTick);
+    const todayIso = toIso(currentDate);
+    const rollingSevenDayStart = toIso(subDays(currentDate, 6));
+    const monthStart = toIso(startOfMonth(currentDate));
+    const monthEnd = toIso(endOfMonth(currentDate));
 
     const sortedHistory = [...behaviorPoints].sort((a, b) =>
       String(b.date || "").localeCompare(String(a.date || ""))
@@ -38,7 +45,7 @@ export const useBehaviorPointSummary = (youthId?: string) => {
       lifetimeTotal,
       history: sortedHistory,
     };
-  }, [behaviorPoints]);
+  }, [behaviorPoints, clockTick]);
 
   return {
     ...summary,

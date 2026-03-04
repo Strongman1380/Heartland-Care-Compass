@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import emailjs from "@emailjs/browser";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -14,19 +15,25 @@ import {
   ChevronDown,
   ChevronUp,
   ClipboardPaste,
+  Copy,
   Eye,
   Home,
   Loader2,
+  Mail,
   Pill,
+  Plus,
+  Printer,
   RotateCcw,
   Save,
   Scale,
   Shield,
+  Sparkles,
   User,
 } from "lucide-react";
 import { format, isValid } from "date-fns";
 import { toast } from "sonner";
-import { referralNotesService, type ReferralNoteRow } from "@/integrations/firebase/referralNotesService";
+import { referralNotesService, type ReferralNoteRow, type POContactEntry } from "@/integrations/firebase/referralNotesService";
+import { screenReferralIntake } from "@/services/aiService";
 
 interface ParsedReferral {
   demographics: Record<string, string>;
@@ -59,6 +66,10 @@ interface ReferralHistoryItem {
   archiveReasonDetail: string;
   parsedData: ParsedReferral | null;
   rawText: string;
+  staffRecommendation: "yes" | "maybe" | "no" | null;
+  poContactLog: POContactEntry[];
+  screeningResult: string;
+  interviewScheduledDate: string;
 }
 
 interface ParsedEntry {
@@ -600,6 +611,69 @@ const extractProbationOfficer = (item: ReferralHistoryItem): string[] => {
   return dedup([...fromFields.map((x) => titleCase(x)), ...rawResults].filter(Boolean));
 };
 
+const extractFirstEmail = (item: ReferralHistoryItem): string => {
+  const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+  
+  // 1) Target parsed fields that likely contain the PO's email.
+  const emailFields = extractFromParsedData(
+    item.parsedData,
+    (key) => key.includes("email") || key.includes("e-mail") || key.includes("contact")
+  );
+  
+  for (const field of emailFields) {
+    const matches = field.match(emailRegex);
+    if (matches) {
+      for (const match of matches) {
+        const email = match.toLowerCase();
+        if (!email.includes("heartlandboyshome")) return email;
+      }
+    }
+  }
+
+  // 2) Target ALL parsed fields just in case it was dumped into an odd key.
+  if (item.parsedData) {
+    for (const section of Object.values(item.parsedData)) {
+      if (typeof section === "object" && section !== null) {
+        for (const val of Object.values(section)) {
+          if (typeof val === "string") {
+            const matches = val.match(emailRegex);
+            if (matches) {
+              for (const match of matches) {
+                const email = match.toLowerCase();
+                if (!email.includes("heartlandboyshome")) return email;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // 3) Check referral source line explicitly
+  if (item.referralSource) {
+    const matches = item.referralSource.match(emailRegex);
+    if (matches) {
+      for (const match of matches) {
+        const email = match.toLowerCase();
+        if (!email.includes("heartlandboyshome")) return email;
+      }
+    }
+  }
+
+  // 4) Fallback to the raw text document
+  if (item.rawText) {
+    const matches = item.rawText.match(emailRegex);
+    if (matches) {
+      for (const match of matches) {
+        const email = match.toLowerCase();
+        if (!email.includes("heartlandboyshome")) return email;
+      }
+    }
+  }
+  
+  return "";
+};
+
 const tallyTop = (values: string[], limit = 6): { name: string; count: number }[] => {
   const map = new Map<string, number>();
   values
@@ -643,6 +717,10 @@ const toHistoryItem = (row: ReferralNoteRow): ReferralHistoryItem => {
     archiveReasonDetail: row.archive_reason_detail || "",
     parsedData: referralData as ParsedReferral | null,
     rawText: row.raw_text || "",
+    staffRecommendation: row.staff_recommendation ?? null,
+    poContactLog: row.po_contact_log || [],
+    screeningResult: row.screening_result || "",
+    interviewScheduledDate: row.interview_scheduled_date || "",
   };
 };
 
@@ -664,6 +742,7 @@ export const ReferralTab = () => {
   const [historyFilter, setHistoryFilter] = useState("all");
   const [archiveView, setArchiveView] = useState("active");
   const [historySearch, setHistorySearch] = useState("");
+  const [poContactFilter, setPoContactFilter] = useState(false);
   const [history, setHistory] = useState<ReferralHistoryItem[]>([]);
 
   const [visibleCount, setVisibleCount] = useState(15);
@@ -683,7 +762,197 @@ export const ReferralTab = () => {
   const [bulkPriority, setBulkPriority] = useState("no_change");
   const [isBulkApplying, setIsBulkApplying] = useState(false);
 
+  const [savingRecommendationId, setSavingRecommendationId] = useState<string | null>(null);
+  const [expandedPoLogId, setExpandedPoLogId] = useState<string | null>(null);
+  const [poLogDate, setPoLogDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [poLogNotes, setPoLogNotes] = useState("");
+  const [poLogFollowUp, setPoLogFollowUp] = useState("");
+  const [savingPoContactId, setSavingPoContactId] = useState<string | null>(null);
+  const [sendingEmailId, setSendingEmailId] = useState<string | null>(null);
+
+  // AI Screening state
+  const [newReferralScreening, setNewReferralScreening] = useState<string>("");
+  const [isScreeningNew, setIsScreeningNew] = useState(false);
+  const [aiScreeningResults, setAiScreeningResults] = useState<Record<string, string>>({});
+  const [aiScreeningLoading, setAiScreeningLoading] = useState<Set<string>>(new Set());
+
   const parseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // AI Screening handler
+  const handleAIScreen = async (text: string, itemKey?: string) => {
+    if (!text.trim()) {
+      toast.error("No referral text to screen");
+      return;
+    }
+    if (itemKey) {
+      setAiScreeningLoading((prev) => new Set(prev).add(itemKey));
+    } else {
+      setIsScreeningNew(true);
+    }
+    try {
+      const result = await screenReferralIntake(text);
+      if (result.error) {
+        toast.error("AI screening failed: " + result.error);
+        return;
+      }
+      const screeningText = result.data?.screening || "";
+      if (itemKey) {
+        setAiScreeningResults((prev) => ({ ...prev, [itemKey]: screeningText }));
+        const item = history.find((h) => referralRowKey(h) === itemKey);
+        if (item) {
+          await referralNotesService.update(toReferralLookup(item), { screening_result: screeningText });
+          setHistory((prev) => prev.map((h) => referralRowKey(h) === itemKey ? { ...h, screeningResult: screeningText } : h));
+        }
+        toast.success("AI screening complete");
+        // Auto-expand the referral to show results
+        setExpandedReferralId(itemKey);
+      } else {
+        setNewReferralScreening(screeningText);
+        toast.success("AI screening complete");
+      }
+    } catch {
+      toast.error("AI screening failed. Please try again.");
+    } finally {
+      if (itemKey) {
+        setAiScreeningLoading((prev) => {
+          const next = new Set(prev);
+          next.delete(itemKey);
+          return next;
+        });
+      } else {
+        setIsScreeningNew(false);
+      }
+    }
+  };
+
+  // Parse AI screening JSON and render structured result
+  const renderAIScreening = (screeningJson: string) => {
+    if (!screeningJson) return null;
+    let data: any = null;
+    try {
+      const clean = screeningJson.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
+      data = JSON.parse(clean);
+    } catch {
+      // Fallback: render as plain text
+      return <div className="text-sm text-gray-800 whitespace-pre-wrap font-mono">{screeningJson}</div>;
+    }
+
+    const rec: string = data.recommendation || "";
+    const recStyle: Record<string, string> = {
+      INTERVIEW: "bg-green-100 text-green-800 border-green-400",
+      INTERVIEW_WITH_CONDITIONS: "bg-yellow-100 text-yellow-800 border-yellow-400",
+      DECLINE: "bg-red-100 text-red-800 border-red-400",
+    };
+    const screenStyle: Record<string, string> = {
+      PASS: "bg-green-50 text-green-700 border-green-200",
+      CONDITIONAL: "bg-yellow-50 text-yellow-700 border-yellow-200",
+      FAIL: "bg-red-50 text-red-700 border-red-200",
+    };
+    const fitStyle: Record<string, string> = {
+      STRONG: "bg-green-50 text-green-700 border-green-200",
+      MIXED: "bg-yellow-50 text-yellow-700 border-yellow-200",
+      POOR: "bg-red-50 text-red-700 border-red-200",
+    };
+
+    const profile = data.youth_profile || {};
+    const profileParts = [profile.name, profile.age && `Age ${profile.age}`, profile.gender, profile.county].filter(Boolean);
+
+    return (
+      <div className="space-y-3 text-sm">
+        {/* Header row */}
+        <div className="flex flex-wrap gap-2 items-center">
+          <span className={`px-3 py-1 rounded-full text-sm font-bold border ${recStyle[rec] || "bg-gray-100 text-gray-800 border-gray-300"}`}>
+            {rec.replace(/_/g, " ") || "No Recommendation"}
+          </span>
+          {data.screen_status && (
+            <span className={`px-2 py-0.5 rounded text-xs font-medium border ${screenStyle[data.screen_status] || "bg-gray-100 border-gray-200 text-gray-700"}`}>
+              Screen: {data.screen_status}
+            </span>
+          )}
+          {data.fit_rating && (
+            <span className={`px-2 py-0.5 rounded text-xs font-medium border ${fitStyle[data.fit_rating] || "bg-gray-100 border-gray-200 text-gray-700"}`}>
+              Fit: {data.fit_rating}
+            </span>
+          )}
+          {profileParts.length > 0 && (
+            <span className="text-xs text-gray-500 italic">{profileParts.join(" · ")}</span>
+          )}
+        </div>
+
+        {/* Rationale */}
+        {Array.isArray(data.rationale_bullets) && data.rationale_bullets.length > 0 && (
+          <div>
+            <p className="text-xs font-semibold text-gray-700 mb-1">Rationale</p>
+            <ul className="space-y-1">
+              {data.rationale_bullets.map((b: string, i: number) => (
+                <li key={i} className="text-xs text-gray-700 flex gap-1.5"><span className="shrink-0 text-gray-400">•</span><span>{b}</span></li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* Conditions (only for INTERVIEW_WITH_CONDITIONS) */}
+        {Array.isArray(data.conditions) && data.conditions.length > 0 && (
+          <div className="rounded-md bg-yellow-50 border border-yellow-200 p-2.5">
+            <p className="text-xs font-semibold text-yellow-800 mb-1">Conditions Required</p>
+            <ul className="space-y-1">
+              {data.conditions.map((c: string, i: number) => (
+                <li key={i} className="text-xs text-yellow-800 flex gap-1.5"><span className="shrink-0">→</span><span>{c}</span></li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* Questions for referral source */}
+        {Array.isArray(data.questions_for_referral_source) && data.questions_for_referral_source.length > 0 && (
+          <div className="rounded-md bg-blue-50 border border-blue-200 p-2.5">
+            <p className="text-xs font-semibold text-blue-800 mb-1">Follow-up Questions for Referral Source</p>
+            <ol className="space-y-1 list-none">
+              {data.questions_for_referral_source.map((q: string, i: number) => (
+                <li key={i} className="text-xs text-blue-900 flex gap-1.5"><span className="shrink-0 font-medium text-blue-600">{i + 1}.</span><span>{q}</span></li>
+              ))}
+            </ol>
+          </div>
+        )}
+
+        {/* Missing info */}
+        {Array.isArray(data.missing_info) && data.missing_info.length > 0 && (
+          <div>
+            <p className="text-xs font-semibold text-orange-700 mb-1">Missing / Not Documented</p>
+            <div className="flex flex-wrap gap-1">
+              {data.missing_info.map((m: string, i: number) => (
+                <span key={i} className="text-xs bg-orange-50 text-orange-700 border border-orange-200 px-2 py-0.5 rounded">{m}</span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Barriers */}
+        {Array.isArray(data.barriers) && data.barriers.length > 0 && (
+          <div>
+            <p className="text-xs font-semibold text-red-700 mb-1">Barriers</p>
+            <ul className="space-y-1">
+              {data.barriers.map((b: string, i: number) => (
+                <li key={i} className="text-xs text-red-800 flex gap-1.5"><span className="shrink-0 text-red-400">•</span><span>{b}</span></li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* Strengths */}
+        {Array.isArray(data.strengths) && data.strengths.length > 0 && (
+          <div>
+            <p className="text-xs font-semibold text-green-700 mb-1">Strengths</p>
+            <ul className="space-y-1">
+              {data.strengths.map((s: string, i: number) => (
+                <li key={i} className="text-xs text-green-800 flex gap-1.5"><span className="shrink-0 text-green-500">✓</span><span>{s}</span></li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   const loadReferralHistory = async () => {
     try {
@@ -821,6 +1090,7 @@ export const ReferralTab = () => {
         toast.success(`Saved ${saved} referral notes`);
         await loadReferralHistory();
         handleReset();
+        setNewReferralScreening("");
         setReferralSource("");
         setReferralName("");
         setStaffName("");
@@ -873,6 +1143,7 @@ export const ReferralTab = () => {
       toast.success("Referral note saved successfully");
       await loadReferralHistory();
       handleReset();
+      setNewReferralScreening("");
       setReferralSource("");
       setReferralName("");
       setStaffName("");
@@ -1046,6 +1317,7 @@ export const ReferralTab = () => {
     if (archiveView === "active" && item.archived) return false;
     if (archiveView === "archived" && !item.archived) return false;
     if (historyFilter !== "all" && item.status !== historyFilter) return false;
+    if (poContactFilter && item.poContactLog && item.poContactLog.length > 0) return false;
     if (!historySearch.trim()) return true;
     const haystack = `${item.referralName} ${item.summary} ${item.staff} ${item.priority} ${item.referralSource}`.toLowerCase();
     return haystack.includes(historySearch.toLowerCase().trim());
@@ -1164,6 +1436,110 @@ export const ReferralTab = () => {
       toast.error(msg);
     } finally {
       setIsBulkApplying(false);
+    }
+  };
+
+  const handleStaffRecommendation = async (item: ReferralHistoryItem, recommendation: "yes" | "maybe" | "no") => {
+    const rowKey = referralRowKey(item);
+    try {
+      setSavingRecommendationId(rowKey);
+      await referralNotesService.update(toReferralLookup(item), { staff_recommendation: recommendation });
+      setHistory((prev) => prev.map((h) => sameReferral(h, item) ? { ...h, staffRecommendation: recommendation } : h));
+      toast.success(`Recommendation saved: ${recommendation}`);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "Failed to save recommendation";
+      toast.error(msg);
+    } finally {
+      setSavingRecommendationId(null);
+    }
+  };
+
+  const handleSetInterviewDate = async (item: ReferralHistoryItem, date: string) => {
+    try {
+      await referralNotesService.update(toReferralLookup(item), { interview_scheduled_date: date || null });
+      setHistory((prev) => prev.map((h) => sameReferral(h, item) ? { ...h, interviewScheduledDate: date } : h));
+      toast.success(date ? `Interview date saved: ${format(new Date(date + "T00:00:00"), "MMM d, yyyy")}` : "Interview date cleared");
+    } catch (error) {
+      toast.error("Failed to save interview date");
+    }
+  };
+
+  const handleAddPoContact = async (item: ReferralHistoryItem) => {
+    if (!poLogDate.trim()) {
+      toast.error("Contact date is required");
+      return;
+    }
+    const rowKey = referralRowKey(item);
+    try {
+      setSavingPoContactId(rowKey);
+      const { v4: uuidv4 } = await import("uuid");
+      const newEntry: POContactEntry = {
+        id: uuidv4(),
+        date: poLogDate,
+        notes: poLogNotes.trim(),
+        followUpDate: poLogFollowUp.trim(),
+      };
+      const updatedLog = [...(item.poContactLog || []), newEntry];
+      await referralNotesService.update(toReferralLookup(item), { po_contact_log: updatedLog });
+      setHistory((prev) => prev.map((h) => sameReferral(h, item) ? { ...h, poContactLog: updatedLog } : h));
+      setPoLogDate(format(new Date(), "yyyy-MM-dd"));
+      setPoLogNotes("");
+      setPoLogFollowUp("");
+      toast.success("PO contact logged");
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "Failed to log PO contact";
+      toast.error(msg);
+    } finally {
+      setSavingPoContactId(null);
+    }
+  };
+
+  const sendAndLogEmail = async (
+    item: ReferralHistoryItem,
+    emailType: "accept" | "deny",
+    toEmail: string,
+    poFirstName: string
+  ) => {
+    const rowKey = referralRowKey(item);
+    const loadingKey = rowKey + emailType;
+    setSendingEmailId(loadingKey);
+    const isAccept = emailType === "accept";
+    const templateId = isAccept
+      ? import.meta.env.VITE_EMAILJS_ACCEPT_TEMPLATE_ID
+      : import.meta.env.VITE_EMAILJS_DENY_TEMPLATE_ID;
+    try {
+      await emailjs.send(
+        import.meta.env.VITE_EMAILJS_SERVICE_ID,
+        templateId,
+        {
+          to_email: toEmail,
+          po_first_name: poFirstName,
+          youth_name: item.referralName || "the youth",
+          date: format(new Date(), "MMMM d, yyyy"),
+        },
+        import.meta.env.VITE_EMAILJS_PUBLIC_KEY
+      );
+      const { v4: uuidv4 } = await import("uuid");
+      const logNote = isAccept
+        ? `Acceptance email auto-sent to PO (${toEmail || "unknown email"})`
+        : `Denial email auto-sent to PO (${toEmail || "unknown email"})`;
+      const newEntry: POContactEntry = {
+        id: uuidv4(),
+        date: format(new Date(), "yyyy-MM-dd"),
+        notes: logNote,
+        followUpDate: "",
+      };
+      const updatedLog = [...(item.poContactLog || []), newEntry];
+      await referralNotesService.update(toReferralLookup(item), { po_contact_log: updatedLog });
+      setHistory((prev) =>
+        prev.map((h) => (sameReferral(h, item) ? { ...h, poContactLog: updatedLog } : h))
+      );
+      toast.success(`${isAccept ? "Acceptance" : "Denial"} email sent and logged in PO contact log`);
+    } catch (err) {
+      toast.error("Failed to send email — check EmailJS configuration in .env");
+      console.error(err);
+    } finally {
+      setSendingEmailId(null);
     }
   };
 
@@ -1377,12 +1753,33 @@ export const ReferralTab = () => {
                 <Button onClick={handleParse} disabled={!rawText.trim() || isParsing} className="flex-1">
                   {isParsing ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Parsing...</> : "Parse Referral"}
                 </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => handleAIScreen(rawText)}
+                  disabled={!rawText.trim() || isScreeningNew}
+                  className="border-purple-300 text-purple-700 hover:bg-purple-50"
+                >
+                  {isScreeningNew ? <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" />Screening...</> : <><Sparkles className="h-4 w-4 mr-1.5" />AI Screen</>}
+                </Button>
                 {(rawText || parsed) && (
-                  <Button variant="outline" onClick={handleReset}><RotateCcw className="h-4 w-4 mr-1" />Reset</Button>
+                  <Button variant="outline" onClick={() => { handleReset(); setNewReferralScreening(""); }}><RotateCcw className="h-4 w-4 mr-1" />Reset</Button>
                 )}
               </div>
             </CardContent>
           </Card>
+
+          {newReferralScreening && (
+            <Card className="border-purple-200 bg-purple-50/40">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2 text-purple-800">
+                  <Sparkles className="h-4 w-4" />AI Screening Result
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {renderAIScreening(newReferralScreening)}
+              </CardContent>
+            </Card>
+          )}
 
           {parsed && (
             <Card>
@@ -1544,7 +1941,18 @@ export const ReferralTab = () => {
                     <SelectItem value="all">All</SelectItem>
                   </SelectContent>
                 </Select>
-                <Input value={historySearch} onChange={(e) => setHistorySearch(e.target.value)} placeholder="Search referral, source, staff" />
+                <div className="flex gap-2">
+                  <Input value={historySearch} onChange={(e) => setHistorySearch(e.target.value)} placeholder="Search referral, source, staff" className="flex-1" />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPoContactFilter((v) => !v)}
+                    className={`shrink-0 whitespace-nowrap ${poContactFilter ? "bg-amber-50 border-amber-400 text-amber-800 font-semibold" : "border-slate-300 text-slate-600"}`}
+                  >
+                    {poContactFilter ? "No PO Contact ✓" : "No PO Contact"}
+                  </Button>
+                </div>
               </div>
               <p className="text-xs text-muted-foreground mb-3">
                 Bulk actions support archive, edit, and delete only. Interview report and view details are single-referral actions.
@@ -1646,6 +2054,48 @@ export const ReferralTab = () => {
                     const formattedDate = isValid(createdDate) ? format(createdDate, "MMM d, yyyy") : "-";
                     const rowKey = referralRowKey(item);
                     const isExpanded = expandedReferralId === rowKey;
+                    
+                    const extractedPOs = extractProbationOfficer(item);
+                    const rawPOName = extractedPOs.length > 0 ? extractedPOs[0] : "";
+                    const friendlyPoName = rawPOName.split(/[,\(0-9]/)[0].trim() || "Worker";
+                    const poFirstName = friendlyPoName.split(" ")[0] || "Worker";
+
+                    // Generate firstname.lastname@nejudicial.gov from PO name
+                    // Handles "Last, First ..." and "First Last" formats
+                    const inferredPoEmail = (() => {
+                      const clean = rawPOName.trim();
+                      if (!clean) return "";
+                      if (clean.includes(",")) {
+                        const [last, rest] = clean.split(",");
+                        const first = (rest || "").trim().split(/[\s\(]/)[0];
+                        if (first && last.trim()) {
+                          return `${first.toLowerCase()}.${last.trim().toLowerCase()}@nejudicial.gov`;
+                        }
+                      } else {
+                        const parts = clean.split(/\s+/);
+                        if (parts.length >= 2) {
+                          return `${parts[0].toLowerCase()}.${parts[parts.length - 1].toLowerCase()}@nejudicial.gov`;
+                        }
+                      }
+                      return "";
+                    })();
+                    const mailtoTo = inferredPoEmail
+                      ? encodeURIComponent(inferredPoEmail)
+                      : encodeURIComponent(friendlyPoName);
+                    
+                    const subjectCheck = encodeURIComponent(`Status of ${item.referralName || "the youth"} referral`);
+                    const bodyCheck = encodeURIComponent(`Hi ${poFirstName},\n\nIs placement still needed for ${item.referralName || "the youth"}? If yes, please let us know where and when they are currently placed, so we can potentially set up an interview with your permission and move forward with the next steps. If not, just reply “no longer needed.”\n\nThank you,\nHeartland Admissions\nadmissions@heartlandboyshomenebraska.org`);
+                    const priorityHeaders = `&importance=high&X-Priority=1`;
+                    const hrefCheck = `mailto:${mailtoTo}?subject=${subjectCheck}${priorityHeaders}&body=${bodyCheck}`;
+
+                    const subjectDeny = encodeURIComponent(`Referral Update for ${item.referralName || "the youth"}`);
+                    const bodyDeny = encodeURIComponent(`Hi ${poFirstName},\n\nThanks for the referral for ${item.referralName || "the youth"}. We’re not able to accept at this time due to [reason].\n\nThank you,\nHeartland Admissions\nadmissions@heartlandboyshomenebraska.org`);
+                    const hrefDeny = `mailto:${mailtoTo}?subject=${subjectDeny}&body=${bodyDeny}`;
+
+                    const subjectAccept = encodeURIComponent(`Placement Accepted for ${item.referralName || "the youth"}`);
+                    const bodyAccept = encodeURIComponent(`Hi ${poFirstName},\n\nWe can accept ${item.referralName || "the youth"}. What intake date/time are you aiming for, and who is transporting?\n\nThank you,\nHeartland Admissions\nadmissions@heartlandboyshomenebraska.org`);
+                    const hrefAccept = `mailto:${mailtoTo}?subject=${subjectAccept}&body=${bodyAccept}`;
+
                     return (
                     <div key={rowKey} className="rounded-md border p-3">
                       <div className="flex items-center justify-between mb-1 gap-2 flex-wrap">
@@ -1663,7 +2113,32 @@ export const ReferralTab = () => {
                             {STATUS_LABELS[item.status] || item.status}
                           </span>
                           <Badge variant="secondary">{item.priority}</Badge>
+                          {item.staffRecommendation === "yes" && <Badge className="bg-green-100 text-green-800 border-green-300">Staff: Yes</Badge>}
+                          {item.staffRecommendation === "maybe" && <Badge className="bg-yellow-100 text-yellow-800 border-yellow-300">Staff: Maybe</Badge>}
+                          {item.staffRecommendation === "no" && <Badge className="bg-red-100 text-red-800 border-red-300">Staff: No</Badge>}
+                          {item.interviewScheduledDate && (
+                            <Badge className="bg-blue-100 text-blue-800 border-blue-300">
+                              Interview: {format(new Date(item.interviewScheduledDate + "T00:00:00"), "MMM d, yyyy")}
+                            </Badge>
+                          )}
                           {item.archived && <Badge variant="outline">archived</Badge>}
+                          {(() => {
+                            const sr = item.screeningResult || aiScreeningResults[rowKey] || "";
+                            if (!sr) return null;
+                            try {
+                              const clean = sr.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
+                              const parsed = JSON.parse(clean);
+                              const rec = parsed.recommendation || "";
+                              const styles: Record<string, string> = {
+                                INTERVIEW: "bg-green-100 text-green-800 border-green-300",
+                                INTERVIEW_WITH_CONDITIONS: "bg-yellow-100 text-yellow-800 border-yellow-300",
+                                DECLINE: "bg-red-100 text-red-800 border-red-300",
+                              };
+                              return <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium border ${styles[rec] || "bg-purple-100 text-purple-800 border-purple-300"}`}><Sparkles className="h-3 w-3" />{rec.replace(/_/g, " ") || "AI Screened"}</span>;
+                            } catch {
+                              return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium border bg-purple-100 text-purple-800 border-purple-300"><Sparkles className="h-3 w-3" />AI Screened</span>;
+                            }
+                          })()}
                         </div>
                       </div>
                       <p className="text-sm font-semibold text-foreground">{item.referralName}</p>
@@ -1693,6 +2168,113 @@ export const ReferralTab = () => {
                           </div>
                         );
                       })()}
+
+                      {/* Staff Recommendation */}
+                      <div className="mt-2 flex items-center gap-2 flex-wrap">
+                        <span className="text-xs text-gray-600 font-medium shrink-0">Staff Rec:</span>
+                        {(["yes", "maybe", "no"] as const).map((rec) => (
+                          <button
+                            key={rec}
+                            onClick={() => handleStaffRecommendation(item, rec)}
+                            disabled={savingRecommendationId === rowKey}
+                            className={`px-2.5 py-0.5 rounded text-xs font-medium border transition-colors ${
+                              item.staffRecommendation === rec
+                                ? rec === "yes"
+                                  ? "bg-green-600 text-white border-green-600"
+                                  : rec === "maybe"
+                                  ? "bg-yellow-500 text-white border-yellow-500"
+                                  : "bg-red-600 text-white border-red-600"
+                                : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50"
+                            }`}
+                          >
+                            {savingRecommendationId === rowKey ? "..." : rec.charAt(0).toUpperCase() + rec.slice(1)}
+                          </button>
+                        ))}
+                        {item.poContactLog.length > 0 && (
+                          <span className="text-xs text-indigo-700 ml-2">
+                            PO last contacted: {format(new Date(item.poContactLog[item.poContactLog.length - 1].date), "MMM d, yyyy")}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Interview Scheduled Date */}
+                      <div className="mt-2 flex items-center gap-2 flex-wrap">
+                        <span className="text-xs text-gray-600 font-medium shrink-0">Interview Date:</span>
+                        <input
+                          type="date"
+                          value={item.interviewScheduledDate || ""}
+                          onChange={(e) => handleSetInterviewDate(item, e.target.value)}
+                          className="h-7 rounded-md border border-gray-300 px-2 text-xs text-gray-800 focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white"
+                        />
+                        {item.interviewScheduledDate && (
+                          <button
+                            onClick={() => handleSetInterviewDate(item, "")}
+                            className="text-xs text-gray-400 hover:text-red-500 transition-colors"
+                            title="Clear date"
+                          >
+                            ✕
+                          </button>
+                        )}
+                      </div>
+
+                      {/* PO Contact Log */}
+                      <div className="mt-1">
+                        <button
+                          onClick={() => setExpandedPoLogId(expandedPoLogId === rowKey ? null : rowKey)}
+                          className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors shadow-sm"
+                          style={{ backgroundColor: '#4338ca', color: '#ffffff' }}
+                        >
+                          <Mail className="h-3 w-3" />
+                          PO Contact Log ({item.poContactLog.length})
+                          {expandedPoLogId === rowKey ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                        </button>
+                        {expandedPoLogId === rowKey && (
+                          <div className="mt-2 space-y-2 rounded-md border border-indigo-100 bg-indigo-50 p-3">
+                            {item.poContactLog.length > 0 && (
+                              <div className="space-y-1 mb-3">
+                                {item.poContactLog.map((entry) => (
+                                  <div key={entry.id} className="text-xs bg-white rounded border border-indigo-100 p-2">
+                                    <div className="flex gap-3 flex-wrap">
+                                      <span className="font-medium text-indigo-800">{format(new Date(entry.date), "MMM d, yyyy")}</span>
+                                      {entry.followUpDate && <span className="text-indigo-600">Follow-up: {format(new Date(entry.followUpDate), "MMM d, yyyy")}</span>}
+                                    </div>
+                                    {entry.notes && <p className="text-gray-700 mt-0.5">{entry.notes}</p>}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            <div className="space-y-2">
+                              <p className="text-xs font-medium text-indigo-800">Log new contact</p>
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <label className="text-xs text-gray-600">Date</label>
+                                  <Input type="date" value={poLogDate} onChange={(e) => setPoLogDate(e.target.value)} className="h-7 text-xs" />
+                                </div>
+                                <div>
+                                  <label className="text-xs text-gray-600">Follow-up Date</label>
+                                  <Input type="date" value={poLogFollowUp} onChange={(e) => setPoLogFollowUp(e.target.value)} className="h-7 text-xs" />
+                                </div>
+                              </div>
+                              <Textarea
+                                value={poLogNotes}
+                                onChange={(e) => setPoLogNotes(e.target.value)}
+                                placeholder="Contact notes..."
+                                rows={2}
+                                className="text-xs"
+                              />
+                              <Button
+                                size="sm"
+                                onClick={() => handleAddPoContact(item)}
+                                disabled={savingPoContactId === rowKey}
+                                className="border-0"
+                                style={{ backgroundColor: '#4338ca', color: '#ffffff' }}
+                              >
+                                {savingPoContactId === rowKey ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <><Plus className="h-3.5 w-3.5 mr-1" />Log Contact</>}
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
 
                       {/* Quick updates */}
                       <div className="mt-2 flex items-center gap-2 flex-wrap bg-slate-50/50 p-2 rounded-md border border-slate-100">
@@ -1737,7 +2319,37 @@ export const ReferralTab = () => {
                         </Select>
                       </div>
 
-                      <div className="mt-2 flex flex-wrap gap-2">
+                      <div className="mt-3 flex flex-wrap items-center gap-2 border-t pt-2">
+                        <span className="text-xs font-semibold text-gray-500 mr-1 flex items-center gap-1">
+                          <Mail className="h-3 w-3" /> Quick Emails:
+                        </span>
+                        <a
+                          href={hrefCheck}
+                          className="text-xs bg-blue-50 text-blue-700 hover:bg-blue-100 px-2 py-1 rounded border border-blue-200 transition-colors"
+                        >
+                          Check Need
+                        </a>
+                        <button
+                          onClick={() => sendAndLogEmail(item, "accept", inferredPoEmail, poFirstName)}
+                          disabled={sendingEmailId === rowKey + "accept"}
+                          className="text-xs bg-green-50 text-green-700 hover:bg-green-100 px-2 py-1 rounded border border-green-200 transition-colors disabled:opacity-50 inline-flex items-center gap-1"
+                        >
+                          {sendingEmailId === rowKey + "accept" ? (
+                            <><Loader2 className="h-3 w-3 animate-spin" />Sending...</>
+                          ) : "Accept"}
+                        </button>
+                        <button
+                          onClick={() => sendAndLogEmail(item, "deny", inferredPoEmail, poFirstName)}
+                          disabled={sendingEmailId === rowKey + "deny"}
+                          className="text-xs bg-red-50 text-red-700 hover:bg-red-100 px-2 py-1 rounded border border-red-200 transition-colors disabled:opacity-50 inline-flex items-center gap-1"
+                        >
+                          {sendingEmailId === rowKey + "deny" ? (
+                            <><Loader2 className="h-3 w-3 animate-spin" />Sending...</>
+                          ) : "Deny"}
+                        </button>
+                      </div>
+
+                      <div className="mt-2 flex flex-wrap gap-2 border-t pt-2">
                         <Button
                           size="sm"
                           variant="outline"
@@ -1748,6 +2360,18 @@ export const ReferralTab = () => {
                           {isExpanded ? <ChevronUp className="h-3.5 w-3.5 ml-1" /> : <ChevronDown className="h-3.5 w-3.5 ml-1" />}
                         </Button>
                         <Button size="sm" variant="outline" onClick={() => openInterviewEditor(item)}>Interview Report</Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="border-purple-300 text-purple-700 hover:bg-purple-50"
+                          onClick={() => handleAIScreen(item.rawText || JSON.stringify(item.parsedData || {}), rowKey)}
+                          disabled={aiScreeningLoading.has(rowKey)}
+                        >
+                          {aiScreeningLoading.has(rowKey)
+                            ? <><Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />Screening...</>
+                            : <><Sparkles className="h-3.5 w-3.5 mr-1" />{(item.screeningResult || aiScreeningResults[rowKey]) ? "Re-screen" : "AI Screen"}</>
+                          }
+                        </Button>
                         {!item.archived && (
                           <Button
                             size="sm"
@@ -1835,6 +2459,26 @@ export const ReferralTab = () => {
                             </div>
                           ) : (
                             <p className="text-sm text-muted-foreground">No detailed referral data available for this entry.</p>
+                          )}
+
+                          {/* AI Screening Result */}
+                          {(item.screeningResult || aiScreeningResults[rowKey]) && (
+                            <div className="rounded-md border border-purple-200 bg-purple-50/50 p-3">
+                              <div className="flex items-center justify-between mb-2">
+                                <span className="text-sm font-semibold text-purple-800 flex items-center gap-1.5">
+                                  <Sparkles className="h-4 w-4" />AI Screening Result
+                                </span>
+                                <button
+                                  onClick={() => handleAIScreen(item.rawText || JSON.stringify(item.parsedData || {}), rowKey)}
+                                  disabled={aiScreeningLoading.has(rowKey)}
+                                  className="text-xs text-purple-600 hover:text-purple-800 flex items-center gap-1"
+                                >
+                                  {aiScreeningLoading.has(rowKey) ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCcw className="h-3 w-3" />}
+                                  Re-run
+                                </button>
+                              </div>
+                              {renderAIScreening(item.screeningResult || aiScreeningResults[rowKey])}
+                            </div>
                           )}
 
                           {item.interviewReport.trim() && (
@@ -1933,6 +2577,36 @@ export const ReferralTab = () => {
                         <Button variant="outline" onClick={() => setEditingInterviewTarget(null)}>Cancel</Button>
                       </div>
                     </div>
+                    {(interviewReport.trim() || directorSummary.trim()) && (
+                      <div className="flex gap-2 pt-2 border-t">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            const text = [
+                              editingInterviewTarget ? `Referral: ${editingInterviewTarget.referralName}` : "",
+                              interviewReport.trim() ? `\nInterview Report:\n${interviewReport.trim()}` : "",
+                              directorSummary.trim() ? `\nDirector Summary:\n${directorSummary.trim()}` : "",
+                            ].filter(Boolean).join("\n");
+                            navigator.clipboard.writeText(text).then(() => toast.success("Copied to clipboard"));
+                          }}
+                        >
+                          <Copy className="h-3.5 w-3.5 mr-1" />Copy Report
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            const name = editingInterviewTarget?.referralName || "Referral";
+                            const html = `<html><head><title>Interview Report — ${name}</title><style>body{font-family:sans-serif;padding:2rem;max-width:800px;margin:auto}h2{margin-top:1.5rem}pre{white-space:pre-wrap;font-family:inherit}</style></head><body><h1>Interview Report</h1><p><strong>Referral:</strong> ${name}</p>${interviewReport.trim() ? `<h2>Interview Report</h2><pre>${interviewReport.trim()}</pre>` : ""}${directorSummary.trim() ? `<h2>Director Summary</h2><pre>${directorSummary.trim()}</pre>` : ""}</body></html>`;
+                            const win = window.open("", "_blank");
+                            if (win) { win.document.write(html); win.document.close(); win.print(); }
+                          }}
+                        >
+                          <Printer className="h-3.5 w-3.5 mr-1" />Print / PDF
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 </DialogContent>
               </Dialog>

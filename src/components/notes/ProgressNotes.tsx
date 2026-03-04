@@ -358,7 +358,7 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
           // Find the note to determine which collection it belongs to
           const note = notes.find(n => n.id === id);
           if (note?.category === 'Case Note') {
-            await caseNotesService.delete(id);
+            await caseNotesService.delete(id, youthId);
           } else {
             await notesService.delete(id);
           }

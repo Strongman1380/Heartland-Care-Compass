@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,9 +7,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, TrendingUp, TrendingDown, Users, History, Shield, Ban, X, CreditCard, RotateCcw } from "lucide-react";
+import { AlertCircle, TrendingUp, TrendingDown, Users, History, Shield, Ban, X, CreditCard, RotateCcw, CalendarDays, Upload } from "lucide-react";
 import { useBehaviorPoints, useYouth } from "@/hooks/useSupabase";
 import { useBehaviorPointSummary } from "@/hooks/useBehaviorPointSummary";
+import { caseNotesService } from "@/integrations/firebase/services";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
@@ -33,6 +34,10 @@ const levelsData = [
   { name: "Level 9", level: 9 },
   { name: "Level 10", level: 10 },
 ];
+
+type CsvRow = { date: string; points: number; notes: string; valid: boolean; error?: string };
+type NotesCsvRow = { studentName: string; date: string; notes: string; valid: boolean; error?: string };
+type CsvMode = "points" | "notes" | "narrative";
 
 interface SubsystemHistoryEntry {
   status: 'on' | 'off';
@@ -69,6 +74,20 @@ export const BehaviorCard = ({ youthId, youth, onYouthUpdated }: BehaviorCardPro
   const [subsystemHistory] = useState<SubsystemHistoryEntry[]>([
     { status: 'off', date: new Date().toLocaleString(), recordedBy: 'System' }
   ]);
+
+  // Past-date point entry
+  const [pastDate, setPastDate] = useState(() => format(new Date(), "yyyy-MM-dd"));
+  const [pastPoints, setPastPoints] = useState("");
+  const [pastNotes, setPastNotes] = useState("");
+  const [isSavingPast, setIsSavingPast] = useState(false);
+
+  // CSV import
+  const [csvText, setCsvText] = useState("");
+  const [csvPreview, setCsvPreview] = useState<CsvRow[]>([]);
+  const [notesCsvPreview, setNotesCsvPreview] = useState<NotesCsvRow[]>([]);
+  const [csvMode, setCsvMode] = useState<CsvMode>("points");
+  const [isImporting, setIsImporting] = useState(false);
+  const csvFileRef = useRef<HTMLInputElement>(null);
 
   // Handle case where youth is null or undefined
   if (!youth) {
@@ -205,6 +224,299 @@ export const BehaviorCard = ({ youthId, youth, onYouthUpdated }: BehaviorCardPro
     } finally {
       setIsUpdatingPoints(false);
     }
+  };
+
+  // Past-date and CSV helpers
+
+  /** RFC 4180-compliant CSV line splitter — handles quoted fields with commas inside. */
+  const parseCsvLine = (line: string): string[] => {
+    const fields: string[] = [];
+    let i = 0;
+    while (i <= line.length) {
+      if (i === line.length) { fields.push(""); break; }
+      if (line[i] === '"') {
+        i++;
+        let field = "";
+        while (i < line.length) {
+          if (line[i] === '"' && line[i + 1] === '"') { field += '"'; i += 2; }
+          else if (line[i] === '"') { i++; break; }
+          else { field += line[i++]; }
+        }
+        fields.push(field.trim());
+        if (line[i] === ',') i++;
+      } else {
+        const end = line.indexOf(',', i);
+        if (end === -1) { fields.push(line.slice(i).trim()); break; }
+        fields.push(line.slice(i, end).trim());
+        i = end + 1;
+      }
+    }
+    return fields;
+  };
+
+  /** Normalize a date string to YYYY-MM-DD, returning { date, error } */
+  const normalizeDate = (raw: string): { date: string; error: string } => {
+    const todayIso = new Date().toISOString().split("T")[0];
+    let date = "";
+    let error = "";
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+      date = raw;
+    } else if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(raw)) {
+      const [m, d, y] = raw.split("/");
+      date = `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+    } else {
+      return { date: "", error: `Invalid date "${raw}"` };
+    }
+    const [year, month, day] = date.split("-").map(Number);
+    const parsed = new Date(Date.UTC(year, month - 1, day));
+    if (
+      parsed.getUTCFullYear() !== year ||
+      parsed.getUTCMonth() !== month - 1 ||
+      parsed.getUTCDate() !== day ||
+      parsed.toISOString().slice(0, 10) !== date
+    ) {
+      return { date: "", error: `Invalid calendar date "${raw}"` };
+    }
+    if (date > todayIso) {
+      return { date: "", error: `Future date not allowed "${raw}"` };
+    }
+    return { date, error };
+  };
+
+  const parseCSV = (text: string): CsvRow[] => {
+    const lines = text.trim().split("\n").filter((l) => l.trim());
+    if (lines.length === 0) return [];
+    const firstLineLower = lines[0].toLowerCase();
+    const dataLines =
+      firstLineLower.includes("date") || firstLineLower.includes("point")
+        ? lines.slice(1)
+        : lines;
+    return dataLines.map((line) => {
+      const [dateRaw = "", pointsRaw = "", notesRaw = ""] = parseCsvLine(line);
+      const { date, error: dateError } = normalizeDate(dateRaw);
+      const pts = parseInt(pointsRaw, 10);
+      const ptsInvalid = isNaN(pts) || pts < 0;
+      const valid = !dateError && !ptsInvalid;
+      const error = dateError || (ptsInvalid ? `Invalid points "${pointsRaw}"` : "");
+      return { date, points: isNaN(pts) ? 0 : pts, notes: notesRaw, valid, error };
+    });
+  };
+
+  const parseNotesCsv = (text: string): NotesCsvRow[] => {
+    const lines = text.trim().split("\n").filter((l) => l.trim());
+    if (lines.length === 0) return [];
+    // Skip header row
+    const dataLines = lines[0].toLowerCase().includes("date") ? lines.slice(1) : lines;
+    return dataLines.map((line) => {
+      const parts = parseCsvLine(line);
+      // Support both Student_Name,Date,Notes and Date,Notes (name may be absent if pre-selected)
+      let studentName = "", dateRaw = "", notesRaw = "";
+      if (parts.length >= 3) {
+        [studentName, dateRaw, notesRaw] = parts;
+      } else if (parts.length === 2) {
+        [dateRaw, notesRaw] = parts;
+      } else {
+        return { studentName: "", date: "", notes: "", valid: false, error: "Too few columns" };
+      }
+      const { date, error: dateError } = normalizeDate(dateRaw);
+      const valid = !dateError && notesRaw.trim().length > 0;
+      const error = dateError || (notesRaw.trim().length === 0 ? "Notes column is empty" : "");
+      return { studentName: studentName.trim(), date, notes: notesRaw.trim(), valid, error };
+    });
+  };
+
+  /**
+   * Parse a date-prefixed narrative block like:
+   *   "2026-03-02: Chance earned daily averages of 2.5..."
+   * Each entry starts with YYYY-MM-DD: and runs until the next date marker.
+   */
+  const parseNarrativeText = (text: string): NotesCsvRow[] => {
+    // Pre-insert newlines before inline date markers so single-line AI output splits correctly
+    const preprocessed = text
+      .replace(/\r\n/g, "\n")
+      .replace(/([^\n])\s+(\d{4}-\d{2}-\d{2}:)/g, "$1\n$2")
+      .trim();
+    // Split on every occurrence of a leading date marker
+    const entries = preprocessed
+      .split(/(?=\b\d{4}-\d{2}-\d{2}:)/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    return entries.map((entry) => {
+      const match = entry.match(/^(\d{4}-\d{2}-\d{2}):\s*([\s\S]*)/);
+      if (!match) return { studentName: "", date: "", notes: "", valid: false, error: "Could not parse entry" };
+      const dateRaw = match[1];
+      const notes = match[2].trim();
+      const { date, error: dateError } = normalizeDate(dateRaw);
+      const valid = !dateError && notes.length > 0;
+      const error = dateError || (notes.length === 0 ? "Empty note body" : "");
+      return { studentName: "", date, notes, valid, error };
+    });
+  };
+
+  /** Detect format from input and parse accordingly, updating state. */
+  const parseCsvInput = (text: string) => {
+    setCsvText(text);
+    const firstLine = (text.trim().split("\n")[0] || "").trim();
+    const firstLineLower = firstLine.toLowerCase();
+
+    // Narrative: first token matches YYYY-MM-DD:
+    if (/^\d{4}-\d{2}-\d{2}:/.test(firstLine)) {
+      setCsvMode("narrative");
+      setNotesCsvPreview(parseNarrativeText(text));
+      setCsvPreview([]);
+      return;
+    }
+
+    // Notes CSV: header contains student/name + note
+    if ((firstLineLower.includes("student") || firstLineLower.includes("name")) && firstLineLower.includes("note")) {
+      setCsvMode("notes");
+      setNotesCsvPreview(parseNotesCsv(text));
+      setCsvPreview([]);
+      return;
+    }
+
+    // Default: points CSV
+    setCsvMode("points");
+    setCsvPreview(parseCSV(text));
+    setNotesCsvPreview([]);
+  };
+
+  const recalcLifetimeFromPatch = async (patches: { date: string; points: number }[]) => {
+    const patchMap = new Map(patches.map((p) => [p.date, p.points]));
+    const base = new Map(behaviorPoints.map((e) => [e.date ?? "", e.totalPoints ?? 0]));
+    patchMap.forEach((pts, dt) => base.set(dt, pts));
+    const total = Array.from(base.values()).reduce((s, p) => s + p, 0);
+    await updateYouth(youthId, { pointTotal: total });
+  };
+
+  const handleSavePastDate = async () => {
+    const pts = parseInt(pastPoints, 10);
+    if (!pastDate) { toast.error("Select a date"); return; }
+    if (isNaN(pts) || pts < 0) { toast.error("Enter a valid non-negative number"); return; }
+    setIsSavingPast(true);
+    try {
+      const existing = behaviorPoints.find((e) => e.date === pastDate);
+      await saveBehaviorPoints({
+        youth_id: youthId,
+        date: pastDate,
+        morningPoints: existing?.morningPoints ?? null,
+        afternoonPoints: existing?.afternoonPoints ?? null,
+        eveningPoints: existing?.eveningPoints ?? null,
+        totalPoints: pts,
+        comments: pastNotes || existing?.comments || null,
+        createdAt: existing?.createdAt || new Date().toISOString(),
+      });
+      await recalcLifetimeFromPatch([{ date: pastDate, points: pts }]);
+      toast.success(`Points saved for ${format(new Date(`${pastDate}T00:00:00`), "MMM d, yyyy")}`);
+      onYouthUpdated?.();
+      setPastPoints("");
+      setPastNotes("");
+    } catch {
+      toast.error("Failed to save points");
+    } finally {
+      setIsSavingPast(false);
+    }
+  };
+
+  const handleBulkImport = async () => {
+    if (csvMode === "notes" || csvMode === "narrative") {
+      const valid = notesCsvPreview.filter((r) => r.valid);
+      if (valid.length === 0) { toast.error("No valid rows to import"); return; }
+      setIsImporting(true);
+      let saved = 0, failed = 0;
+      const youthName = youth
+        ? `${youth.firstName || ""} ${youth.lastName || ""}`.trim() || null
+        : null;
+      try {
+        for (const row of valid) {
+          try {
+            await caseNotesService.create({
+              youth_id: youthId,
+              date: row.date,
+              summary: row.notes.slice(0, 80),
+              note: row.notes,
+              // Notes CSV uses student name from column; narrative uses the selected youth's name
+              staff: row.studentName || youthName || null,
+              createdAt: new Date().toISOString(),
+            });
+            saved++;
+          } catch {
+            failed++;
+          }
+        }
+        toast.success(`Imported ${saved} note${saved === 1 ? "" : "s"}${failed > 0 ? `, ${failed} failed` : ""}`);
+        setCsvText("");
+        setCsvPreview([]);
+        setNotesCsvPreview([]);
+        if (csvFileRef.current) csvFileRef.current.value = "";
+      } finally {
+        setIsImporting(false);
+      }
+      return;
+    }
+
+    // Points mode
+    const valid = csvPreview.filter((r) => r.valid);
+    if (valid.length === 0) { toast.error("No valid rows to import"); return; }
+    setIsImporting(true);
+    let saved = 0, failed = 0;
+    try {
+      const existingByDate = new Map(
+        behaviorPoints.map((entry) => [
+          entry.date ?? "",
+          {
+            morningPoints: entry.morningPoints ?? null,
+            afternoonPoints: entry.afternoonPoints ?? null,
+            eveningPoints: entry.eveningPoints ?? null,
+            comments: entry.comments ?? null,
+            createdAt: entry.createdAt || new Date().toISOString(),
+          },
+        ])
+      );
+      for (const row of valid) {
+        try {
+          const existing = existingByDate.get(row.date);
+          await saveBehaviorPoints({
+            youth_id: youthId,
+            date: row.date,
+            morningPoints: existing?.morningPoints ?? null,
+            afternoonPoints: existing?.afternoonPoints ?? null,
+            eveningPoints: existing?.eveningPoints ?? null,
+            totalPoints: row.points,
+            comments: row.notes || existing?.comments || null,
+            createdAt: existing?.createdAt || new Date().toISOString(),
+          });
+          existingByDate.set(row.date, {
+            morningPoints: existing?.morningPoints ?? null,
+            afternoonPoints: existing?.afternoonPoints ?? null,
+            eveningPoints: existing?.eveningPoints ?? null,
+            comments: row.notes || existing?.comments || null,
+            createdAt: existing?.createdAt || new Date().toISOString(),
+          });
+          saved++;
+        } catch {
+          failed++;
+        }
+      }
+      await recalcLifetimeFromPatch(valid.map((r) => ({ date: r.date, points: r.points })));
+      toast.success(`Imported ${saved} entr${saved === 1 ? "y" : "ies"}${failed > 0 ? `, ${failed} failed` : ""}`);
+      onYouthUpdated?.();
+      setCsvText("");
+      setCsvPreview([]);
+      if (csvFileRef.current) csvFileRef.current.value = "";
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      parseCsvInput(ev.target?.result as string);
+    };
+    reader.readAsText(file);
   };
 
   // Restriction management
@@ -392,6 +704,165 @@ export const BehaviorCard = ({ youthId, youth, onYouthUpdated }: BehaviorCardPro
             </div>
 
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Enter Points for a Specific Date */}
+      <Card>
+        <CardHeader className="bg-indigo-50">
+          <CardTitle className="flex items-center gap-2">
+            <CalendarDays size={18} />
+            Enter Points for a Specific Date
+          </CardTitle>
+          <CardDescription>Record or override points for any date, including past dates.</CardDescription>
+        </CardHeader>
+        <CardContent className="pt-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="space-y-1">
+              <Label>Date</Label>
+              <Input
+                type="date"
+                max={todayIso}
+                value={pastDate}
+                onChange={(e) => setPastDate(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>Total Points</Label>
+              <Input
+                type="number"
+                min="0"
+                placeholder="e.g. 2100"
+                value={pastPoints}
+                onChange={(e) => setPastPoints(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter" && !isSavingPast) { e.preventDefault(); handleSavePastDate(); } }}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>Notes (optional)</Label>
+              <Input
+                placeholder="Optional note..."
+                value={pastNotes}
+                onChange={(e) => setPastNotes(e.target.value)}
+              />
+            </div>
+          </div>
+          <Button
+            onClick={handleSavePastDate}
+            disabled={isSavingPast || !pastDate || !pastPoints}
+            className="mt-4 bg-indigo-700 hover:bg-indigo-600 text-white"
+          >
+            {isSavingPast ? "Saving..." : "Save Entry"}
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Bulk CSV Import */}
+      <Card>
+        <CardHeader className="bg-sky-50">
+          <CardTitle className="flex items-center gap-2">
+            <Upload size={18} />
+            Bulk CSV Import
+          </CardTitle>
+          <CardDescription>
+            Auto-detects three formats. <strong>Points CSV:</strong>{" "}
+            <code className="text-xs bg-gray-100 px-1 rounded">date,points,notes</code>.{" "}
+            <strong>Notes CSV:</strong>{" "}
+            <code className="text-xs bg-gray-100 px-1 rounded">Student_Name,Date,Notes</code>.{" "}
+            <strong>Narrative:</strong> paste date-prefixed text —{" "}
+            <code className="text-xs bg-gray-100 px-1 rounded">2026-03-02: note text... 2026-03-01: note text...</code>.
+            Each entry becomes its own case note.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="pt-6 space-y-4">
+          <div className="flex items-center gap-3">
+            <input
+              ref={csvFileRef}
+              type="file"
+              accept=".csv,.txt"
+              className="hidden"
+              onChange={handleFileUpload}
+            />
+            <Button
+              variant="outline"
+              onClick={() => csvFileRef.current?.click()}
+              className="flex items-center gap-2"
+            >
+              <Upload size={14} />
+              Choose CSV File
+            </Button>
+            <span className="text-xs text-gray-500">or paste below</span>
+          </div>
+          <Textarea
+            rows={5}
+            placeholder={"Points CSV:  date,points,notes\n2026-01-15,2100\n\nNotes CSV:  Student_Name,Date,Notes\nChance Thaller,2026-03-02,\"Note text here\"\n\nNarrative (paste directly):\n2026-03-02: Chance was noted for wandering at school.\n2026-03-01: Repeated profanity and property damage."}
+            value={csvText}
+            onChange={(e) => parseCsvInput(e.target.value)}
+            className="font-mono text-sm"
+          />
+          {(csvMode === "notes" || csvMode === "narrative") && notesCsvPreview.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-sky-700">
+                {csvMode === "narrative" ? "Narrative format detected" : "Notes CSV format detected"} —{" "}
+                {notesCsvPreview.filter((r) => r.valid).length} valid / {notesCsvPreview.length} total entries
+              </p>
+              <div className="max-h-48 overflow-y-auto border rounded-lg divide-y text-sm">
+                {notesCsvPreview.map((row, i) => (
+                  <div key={i} className={`px-3 py-2 ${row.valid ? "bg-white" : "bg-red-50"}`}>
+                    <div className="flex items-center gap-3 mb-0.5">
+                      <span className={`text-xs font-mono font-bold ${row.valid ? "text-green-600" : "text-red-600"}`}>
+                        {row.valid ? "✓" : "✗"}
+                      </span>
+                      <span className="font-mono text-xs text-gray-600">{row.date || "—"}</span>
+                      {row.studentName && <span className="text-xs text-gray-500">{row.studentName}</span>}
+                      {row.error && <span className="text-red-600 text-xs ml-auto">{row.error}</span>}
+                    </div>
+                    {row.notes && <p className="text-xs text-gray-700 pl-6 truncate" title={row.notes}>{row.notes}</p>}
+                  </div>
+                ))}
+              </div>
+              <Button
+                onClick={handleBulkImport}
+                disabled={isImporting || notesCsvPreview.filter((r) => r.valid).length === 0}
+                className="bg-sky-700 hover:bg-sky-600 text-white"
+              >
+                {isImporting
+                  ? "Importing..."
+                  : `Import ${notesCsvPreview.filter((r) => r.valid).length} Note${notesCsvPreview.filter((r) => r.valid).length === 1 ? "" : "s"} as Case Notes`}
+              </Button>
+            </div>
+          )}
+          {csvMode === "points" && csvPreview.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-gray-700">
+                Points format — {csvPreview.filter((r) => r.valid).length} valid / {csvPreview.length} total rows
+              </p>
+              <div className="max-h-48 overflow-y-auto border rounded-lg divide-y text-sm">
+                {csvPreview.map((row, i) => (
+                  <div key={i} className={`flex items-center justify-between px-3 py-2 ${row.valid ? "bg-white" : "bg-red-50"}`}>
+                    <div className="flex items-center gap-3">
+                      <span className={`text-xs font-mono font-bold ${row.valid ? "text-green-600" : "text-red-600"}`}>
+                        {row.valid ? "✓" : "✗"}
+                      </span>
+                      <span className="font-mono text-xs text-gray-600">{row.date || "—"}</span>
+                      {row.valid && <span className="font-medium">{row.points.toLocaleString()} pts</span>}
+                      {row.notes && <span className="text-gray-400 text-xs">{row.notes}</span>}
+                    </div>
+                    {row.error && <span className="text-red-600 text-xs">{row.error}</span>}
+                  </div>
+                ))}
+              </div>
+              <Button
+                onClick={handleBulkImport}
+                disabled={isImporting || csvPreview.filter((r) => r.valid).length === 0}
+                className="bg-sky-700 hover:bg-sky-600 text-white"
+              >
+                {isImporting
+                  ? "Importing..."
+                  : `Import ${csvPreview.filter((r) => r.valid).length} Point Entr${csvPreview.filter((r) => r.valid).length === 1 ? "y" : "ies"}`}
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
 

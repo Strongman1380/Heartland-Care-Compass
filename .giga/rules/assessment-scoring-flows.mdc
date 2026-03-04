@@ -1,46 +1,56 @@
 ---
-description: Documents all assessment scoring workflows including personality tests, risk calculations, and placement evaluations
+description: Business logic documentation for assessment workflow scoring systems including Real Colors, risk level calculations, placement assessments, and quick ISP evaluations.
 ---
 
 
 # assessment-scoring-flows
 
-Key Assessment Scoring Systems:
+## Core Assessment Systems
 
-## Risk Assessment (RiskAssessment.tsx)
+1. Real Colors Personality Assessment
+File: src/components/assessment/ColorAssessment.tsx
 Importance Score: 85
-- HYRNA scoring implementation across 8 domains
-- Domain weightings: prior offending (0.3), family (0.15), education (0.1), peer relations (0.15), substance use (0.1), recreation (0.05), personality (0.1), attitudes (0.05)
-- Risk level thresholds:
-  - Very Low: 0-15%
-  - Low: 16-30% 
-  - Low Medium: 30-44%
-  - Medium: 44-58%
-  - Medium High: 58-72%
-  - High: 72-86%
-  - Very High: >86%
+- Four-quadrant personality profiling (HEART, ANCHOR, MIND, SPARK)
+- Custom weighted scoring matrix across 6 trait categories
+- Neutral labeling system (A,B,C,D) to prevent assessment gaming
+- Domain-specific metadata per style (needs, strengths, challenges)
 
-## Real Colors Personality Assessment (ColorAssessment.tsx) 
+2. HYRNA Risk Assessment 
+File: src/components/assessment/RiskAssessment.tsx
+Importance Score: 90
+- Eight-domain risk calculation engine for youth needs assessment
+- Custom risk thresholds and domain weights
+- Auto-adjustment of program levels based on risk profiles
+- Intervention matching based on domain risk scores
+
+3. Quick ISP Assessment
+File: src/components/assessment/QuickISPAssessment.tsx
 Importance Score: 75
-- Forced-choice ranking across 6 trait groups
-- Four personality dimensions: Heart, Anchor, Mind, Spark
-- Primary/secondary style determination from cumulative scores
-- Maps personality types to staff interaction guidelines
+- Rapid service plan generation system
+- Treatment team composition tracking
+- Risk-based intervention mapping
+- Early warning signs detection
+- Staff approach recommendations
 
-## Individual Service Plan Assessment (QuickISPAssessment.tsx)
-Importance Score: 70
-- Treatment goal categorization system
-- Early warning sign tracking
-- Intervention effectiveness scoring
-- Progress tracking with customizable measures
-- Staff approach mapping by personality type
+## Assessment Workflows
 
-## Assessment Integration Rules
-- All assessments feed youth risk calculations
-- Results determine treatment level assignments
-- Historical assessment change tracking
-- Auto-save with domain validation
-- Required reassessment scheduling
+1. Placement Assessment Flow
+- Initial risk screening
+- Personality style determination
+- Program level calculation
+- Treatment focus identification
+
+2. Progress Monitoring
+- Weekly risk level recalculation
+- Treatment progress scoring
+- Goal achievement tracking
+- Intervention effectiveness ratings
+
+3. Treatment Planning
+- Service need prioritization
+- Resource allocation scoring
+- Staff approach matching
+- Progress milestone tracking
 
 $END$
 

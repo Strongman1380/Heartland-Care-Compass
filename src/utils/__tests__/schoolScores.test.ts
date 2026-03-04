@@ -28,7 +28,9 @@ const mockRow = (date: string, score: number) => ({
   updated_at: date,
 });
 
-beforeEach(() => jest.clearAllMocks());
+beforeEach(() => {
+  jest.clearAllMocks();
+});
 
 describe('getYouthStats — trend detection', () => {
   it('returns null when there are no scores', async () => {

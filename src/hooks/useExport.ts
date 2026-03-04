@@ -41,7 +41,7 @@ export function useExport(): UseExportResult {
         await exportElementToDocx(element, filename);
       } else if (format === 'print') {
         if (!youth) throw new Error('youth is required for print export');
-        printYouthProfile(youth as any);
+        printYouthProfile(youth);
       }
     } finally {
       setExporting(false);

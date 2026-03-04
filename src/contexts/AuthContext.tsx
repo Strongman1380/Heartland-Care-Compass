@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import {
   onAuthStateChanged,
@@ -26,18 +26,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [role, setRole] = useState<UserRole | null>(null);
   const [loading, setLoading] = useState(true);
+  const currentUidRef = useRef<string | null>(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser);
       if (firebaseUser) {
+        currentUidRef.current = firebaseUser.uid;
+        const currentUid = firebaseUser.uid;
         try {
           const roleDoc = await getDoc(doc(db, 'user_roles', firebaseUser.uid));
-          setRole(roleDoc.exists() ? (roleDoc.data().role as UserRole) : 'staff');
+          if (currentUidRef.current === currentUid) {
+            setRole(roleDoc.exists() ? (roleDoc.data().role as UserRole) : 'staff');
+          }
         } catch {
-          setRole('staff');
+          if (currentUidRef.current === currentUid) {
+            setRole('staff');
+          }
         }
       } else {
+        currentUidRef.current = null;
         setRole(null);
       }
       setLoading(false);

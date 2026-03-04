@@ -42,8 +42,8 @@ export default function SchoolIncidentForm({ incident, onSave, onCancel }: Schoo
   const [reportedByName, setReportedByName] = useState(incident?.reported_by?.name || '');
   const [reportedByRole, setReportedByRole] = useState(incident?.reported_by?.role || '');
   const [location, setLocation] = useState(incident?.location || '');
-  const [incidentType, setIncidentType] = useState(incident?.incident_type || 'Disruption');
-  const [severity, setSeverity] = useState(incident?.severity || 'Medium');
+  const [incidentType, setIncidentType] = useState<SchoolIncidentFormData['incident_type']>(incident?.incident_type || 'Disruption');
+  const [severity, setSeverity] = useState<SchoolIncidentFormData['severity']>(incident?.severity || 'Medium');
   
   // People Involved
   const [involvedResidents, setInvolvedResidents] = useState<InvolvedResident[]>(
@@ -149,8 +149,8 @@ export default function SchoolIncidentForm({ incident, onSave, onCancel }: Schoo
         role: reportedByRole
       },
       location,
-      incident_type: incidentType as any,
-      severity: severity as any,
+      incident_type: incidentType,
+      severity: severity,
       involved_residents: involvedResidents,
       witnesses,
       summary,
@@ -433,7 +433,11 @@ export default function SchoolIncidentForm({ incident, onSave, onCancel }: Schoo
                         <Label>Role</Label>
                         <Select
                           value={witness.role}
-                          onValueChange={(value) => updateWitness(index, 'role', value as any)}
+                          onValueChange={(value) => {
+                            if (value === 'peer' || value === 'staff' || value === 'teacher' || value === 'other') {
+                              updateWitness(index, 'role', value);
+                            }
+                          }}
                         >
                           <SelectTrigger>
                             <SelectValue />

@@ -116,8 +116,6 @@ const SchoolScores: React.FC = () => {
         // Ensure we have an array before iterating
         const scoresArray = Array.isArray(allScoresInRange) ? allScoresInRange : []
 
-        console.log('Fetched scores from Supabase:', scoresArray)
-
         const statsMap = new Map<string, YouthScoreStats>()
         const updated: GridValue = {}
 
@@ -148,12 +146,6 @@ const SchoolScores: React.FC = () => {
         setGrid(updated)
         setYouthStats(statsMap)
 
-        console.log('School scores loaded from Supabase:', {
-          youthCount: sortedYouths.length,
-          dateRange: `${startDate} to ${endDate}`,
-          scoresInRange: scoresArray.length,
-          gridData: updated
-        })
       } catch (error) {
         console.error('Error loading scores:', error)
       }
@@ -175,7 +167,6 @@ const SchoolScores: React.FC = () => {
             const stats = await getYouthStats(youthId)
             if (stats) {
               setYouthStats(prev => new Map(prev).set(youthId, stats))
-              console.log(`[AutoSave] Updated stats for ${youthId}:`, stats)
             }
           } catch (statsError) {
             console.error('Failed to update stats after auto-save:', statsError)
@@ -256,13 +247,11 @@ const SchoolScores: React.FC = () => {
 
   const refreshTrends = async () => {
     try {
-      console.log('Refreshing trends for all students...')
       const statsMap = new Map<string, YouthScoreStats>()
       for (const y of sortedYouths) {
         const stats = await getYouthStats(y.id)
         if (stats) {
           statsMap.set(y.id, stats)
-          console.log(`Refreshed trends for ${y.firstName}:`, stats)
         }
       }
       setYouthStats(statsMap)

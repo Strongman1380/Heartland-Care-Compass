@@ -1,7 +1,7 @@
 {
   "permissions": {
     "allow": [
-      "Read(//Users/brandonhinrichs/Local Repositories/Web Applications/Heartland-Care-Compass-main/**)",
+      "Read(**)",
       "Bash(cat jest.config.*)",
       "Bash(npx jest --config jest.config.ts --testPathPattern=\"__tests__\" --no-coverage)",
       "Bash(npx jest --config jest.config.ts --testPathPatterns=\"__tests__\" --no-coverage)",

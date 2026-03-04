@@ -16,6 +16,12 @@ export type AutoAlert = {
   resolved: boolean;
 };
 
+const mapAlertType = (level?: string): AutoAlert["type"] =>
+  level === 'urgent' ? 'urgent' : level === 'warning' ? 'warning' : 'info';
+
+const mapAlertPriority = (level?: string): AutoAlert["priority"] =>
+  level === 'urgent' ? 'high' : 'medium';
+
 class AlertService {
   private notificationsEnabled = false;
 
@@ -37,7 +43,6 @@ class AlertService {
     // Persist to Supabase
     try {
       await alertsService.save({
-        id: undefined as any,
         title: newAlert.title,
         body: newAlert.description,
         level: newAlert.type,
@@ -218,10 +223,10 @@ class AlertService {
       const rows = await alertsService.list();
       return rows.map(r => ({
         id: r.id,
-        type: (r.level === 'urgent' ? 'urgent' : r.level === 'warning' ? 'warning' : 'info') as any,
+        type: mapAlertType(r.level),
         title: r.title,
         description: r.body || '',
-        priority: (r.level === 'urgent' ? 'high' : 'medium') as any,
+        priority: mapAlertPriority(r.level),
         category: 'System',
         createdAt: new Date(r.created_at),
         resolved: r.status === 'closed'

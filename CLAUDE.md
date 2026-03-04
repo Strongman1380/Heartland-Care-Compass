@@ -13,51 +13,52 @@
 - Explain your OBSERVATIONS clearly, then provide REASONING to identify the exact issue. Add console logs when needed to gather more information.
 
 
-Youth Behavioral Management System
+The system implements a comprehensive youth residential care management platform with several interconnected business-critical components:
 
-Core Business Domains:
+Scores in parentheses (e.g., 85/100) are implementation-completeness ratings — they reflect how fully each subsystem is built out, not runtime quality or confidence.
 
-1. Behavioral Assessment Engine
-- Four-domain evaluation framework tracking peer interaction, adult interaction, investment level, and authority handling
-- Automated scoring system with AI-enhanced comment generation
-- Custom behavioral pattern recognition across multiple timeframes
-- Level progression system (10 levels + orientation) with point-based advancement
+Core Clinical Assessment Systems:
 
-2. Clinical Documentation System
-- Trauma-informed case note structure with AI-assisted categorization
-- Custom DPN (Daily Progress Note) workflow with automated scoring
-- Treatment plan management with goal hierarchies
-- Multi-source progress tracking integrating behavioral and academic metrics
+1. Daily Performance Notes (DPN) Engine (85/100 — completeness)
 
-3. Risk Assessment Framework
-- HYRNA (Heartland Youth Risk & Needs Assessment) implementation
-- Eight-domain risk evaluation with weighted scoring algorithm
-- Automated risk level classification system
-- Treatment recommendation engine based on assessment results
+   - Real-time behavioral rating across peer/adult interaction, investment, authority domains
+   - AI-enhanced clinical narrative generation
+   - Multi-period averaging with domain-specific thresholds
 
-4. Academic Integration Platform
-- Custom Thursday-to-Wednesday academic week calculations
-- Real-time grade distribution analysis with behavioral correlation
-- Multi-dimensional student evaluation incorporating IEP status
-- Academic-behavioral trend analysis with AI-powered insights
+2. Clinical Service Planning (95/100 — completeness)
 
-5. Incident Management System
-- Specialized facility incident workflow with severity classification
-- Role-based documentation requirements
-- Automated notification chains based on incident type
-- Clinical data protection with healthcare-specific encryption
+   - 60-day compliance cycle management
+   - Multi-source data aggregation (behavior, daily ratings, academic)
+   - Treatment objective tracking with AI-assisted narrative generation
+   - Professional clinical documentation standards enforcement
 
-Key Integration Points:
-- Cross-system risk assessment synthesis
-- Behavioral-academic correlation engine
-- Treatment plan automation
-- Clinical reporting pipeline
+3. Risk Assessment Framework (90/100 — completeness)
 
-Critical File Paths:
-/src/utils/levelSystem.ts - Core level progression logic
-/src/lib/aiClient.ts - AI-powered behavioral analysis
-/src/utils/kpiCaseNoteAi.ts - Clinical note processing
-/src/services/aiService.ts - Treatment recommendation engine
+   - HYRNA (Heartland Youth Risk & Needs Assessment) scoring implementation across 8 domains
+   - Risk level determination with percentage-based thresholds (low < 30%, moderate 30–60%, high > 60%)
+   - Intervention targeting with domain-specific recommendations
+   - Automated program level adjustments
+
+Behavioral Management Components:
+1. Incident Management (85/100)
+- Facility-specific incident categorization and workflow
+- Subject/role classification system
+- Severity assessment with notification requirements
+- PDF report generation with clinical formatting
+
+2. Level Progression System (85/100)
+- 10-level youth advancement framework
+- Point-based privilege management
+- Custom behavioral intervention tracking
+- Real-time calculation with historical analysis
+
+3. Academic Integration (85/100)
+- Custom academic week structure (Thursday-Wednesday)
+- Performance bands with domain-specific thresholds
+- Program-wide analytics with 30-day rolling averages
+- AI-powered progress analysis
+
+The system architecture emphasizes clinical compliance, behavioral health tracking, and youth development monitoring through integrated assessment and tracking components. Core logic resides in specialized services handling complex domain rules for youth care facilities.
 
 $END$
 

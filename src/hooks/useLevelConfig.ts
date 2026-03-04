@@ -65,7 +65,7 @@ export function useLevelConfig(): UseLevelConfigResult {
   }, [load]);
 
   const save = useCallback(async (entries: LevelConfigEntry[]) => {
-    await Promise.all(
+    const results = await Promise.allSettled(
       entries.map((entry) =>
         setDoc(doc(db, 'level_config', entry.docId), {
           name: entry.name,
@@ -75,7 +75,14 @@ export function useLevelConfig(): UseLevelConfigResult {
         })
       )
     );
-    setLevels([...entries]);
+    const successfulEntries = entries.filter((_, index) => results[index]?.status === 'fulfilled');
+    const failedWrites = results.filter((result) => result.status === 'rejected');
+    if (failedWrites.length > 0) {
+      console.error('Failed to save one or more level configuration entries:', failedWrites);
+    }
+    if (successfulEntries.length > 0) {
+      setLevels([...successfulEntries]);
+    }
   }, []);
 
   return { levels, loading, save, refresh: load };

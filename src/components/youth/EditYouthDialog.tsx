@@ -155,7 +155,7 @@ export const EditYouthDialog = ({ youth, open, onClose, onSuccess }: EditYouthDi
         
         // Education Information - parse from educationInfo string if available
         currentSchool: youth.currentSchool || "",
-        grade: youth.grade || (youth as any).currentGrade || "",
+        grade: youth.grade || youth.currentGrade || "",
         hasIEP: youth.hasIEP || false,
         academicStrengths: youth.academicStrengths || "",
         academicChallenges: youth.academicChallenges || "",

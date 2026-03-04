@@ -25,18 +25,17 @@ export const YouthDashboard = ({ youthId }: YouthDashboardProps) => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { todayPoints } = useTodayPoints(youthId);
+  const safeTodayPoints = todayPoints ?? 0;
 
   useEffect(() => {
     const fetchYouthData = async () => {
       try {
-        console.log("Fetching youth data for ID:", youthId);
         setIsLoading(true);
         setError(null);
 
         const youthData = await youthService.getById(youthId);
 
         if (youthData) {
-          console.log("Found youth data:", youthData);
           setYouth(youthData);
         } else {
           setError("Youth profile not found");
@@ -94,7 +93,7 @@ export const YouthDashboard = ({ youthId }: YouthDashboardProps) => {
           <div className="flex flex-col md:flex-row md:items-center justify-between mb-4">
             <div>
               <h2 className="text-2xl font-bold text-primary">{youth.firstName} {youth.lastName}</h2>
-              <p className="text-muted-foreground">Age: {youth.age} • Level {youth.level} • Today's Points: {todayPoints.toLocaleString()}</p>
+              <p className="text-muted-foreground">Age: {youth.age} • Level {youth.level} • Today's Points: {safeTodayPoints.toLocaleString()}</p>
               {(youth.subsystemActive || (youth.restrictionLevel != null && youth.restrictionLevel > 0) || youth.lastIncidentDate || youth.estimatedStay) && (
                 <div className="flex flex-wrap items-center gap-2 mt-2">
                   {youth.subsystemActive && (
@@ -152,52 +151,31 @@ export const YouthDashboard = ({ youthId }: YouthDashboardProps) => {
         </TabsList>
 
         <TabsContent value="profile">
-          {(() => {
-            console.log("Rendering YouthProfile tab");
-            return <YouthProfile youth={youth} />;
-          })()}
+          <YouthProfile youth={youth} />
         </TabsContent>
         
         <TabsContent value="behavior">
-          {(() => {
-            console.log("Rendering BehaviorCard tab");
-            return <BehaviorCard youthId={youth.id} youth={youth} />;
-          })()}
+          <BehaviorCard youthId={youth.id} youth={youth} />
         </TabsContent>
         
         <TabsContent value="notes">
-          {(() => {
-            console.log("Rendering ProgressNotes tab");
-            return <ProgressNotes youthId={youth.id} youth={youth} />;
-          })()}
+          <ProgressNotes youthId={youth.id} youth={youth} />
         </TabsContent>
         
         <TabsContent value="analysis">
-          {(() => {
-            console.log("Rendering BehaviorAnalysis tab");
-            return <BehaviorAnalysis youthId={youth.id} youth={youth} />;
-          })()}
+          <BehaviorAnalysis youthId={youth.id} youth={youth} />
         </TabsContent>
         
         <TabsContent value="kpi">
-          {(() => {
-            console.log("Rendering KpiDashboard tab");
-            return <KpiDashboard youthId={youth.id} youth={youth} />;
-          })()}
+          <KpiDashboard youthId={youth.id} youth={youth} />
         </TabsContent>
         
         <TabsContent value="evaluations">
-          {(() => {
-            console.log("Rendering Evaluations tab");
-            return <ProgressEvaluationReport youth={youth as any} />;
-          })()}
+          <ProgressEvaluationReport youth={youth} />
         </TabsContent>
 
         <TabsContent value="reports">
-          {(() => {
-            console.log("Rendering ReportCenter tab");
-            return <ReportCenter youthId={youth.id} youth={youth} />;
-          })()}
+          <ReportCenter youthId={youth.id} youth={youth} />
         </TabsContent>
       </Tabs>
     </div>

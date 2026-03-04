@@ -16,6 +16,16 @@ import { getScoresByYouth } from "@/utils/schoolScores";
 import { fetchBehaviorPoints, fetchDailyRatings, fetchAllProgressNotes } from "@/utils/local-storage-utils";
 import { buildReportFilename } from "@/utils/reportFilenames";
 
+const escapeHtml = (value: string) =>
+  value.replace(/[&<>]/g, (char) => {
+    const entities: Record<string, string> = {
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+    };
+    return entities[char] ?? char;
+  });
+
 interface ReportCenterProps {
   youthId: string;
   youth: any;
@@ -43,13 +53,13 @@ export const ReportCenter = ({ youthId, youth }: ReportCenterProps) => {
         setIsGenerating(false);
         return;
       }
-      if (['dpnWeekly','dpnBiWeekly','dpnMonthly'].includes(options.reportType as any)) {
+      if (options.reportType === 'dpnWeekly' || options.reportType === 'dpnBiWeekly' || options.reportType === 'dpnMonthly') {
         setDpnVariant(options.reportType === 'dpnWeekly' ? 'weekly' : options.reportType === 'dpnBiWeekly' ? 'biweekly' : 'monthly');
         setIsGenerating(false);
         return;
       }
-      if (['evalWeekly','evalMonthly'].includes(options.reportType as any)) {
-        const variantMap: Record<string, EvalReportType> = {
+      if (options.reportType === 'evalWeekly' || options.reportType === 'evalMonthly') {
+        const variantMap: Record<'evalWeekly' | 'evalMonthly', EvalReportType> = {
           evalWeekly: 'weekly', evalMonthly: 'monthly',
         };
         setEvalVariant(variantMap[options.reportType]);
@@ -58,8 +68,9 @@ export const ReportCenter = ({ youthId, youth }: ReportCenterProps) => {
       }
 
       // Normalize monthly progress to progress content with a monthly title
-      const effectiveType = options.reportType === 'progressMonthly' ? 'progress' : options.reportType;
-      const effectiveOptions = { ...options, reportType: effectiveType as any } as ReportOptions;
+      const effectiveType: ReportOptions["reportType"] =
+        options.reportType === 'progressMonthly' ? 'progress' : options.reportType;
+      const effectiveOptions: ReportOptions = { ...options, reportType: effectiveType };
       const reportTypeLabel = options.reportType === "progressMonthly"
         ? "Monthly Progress Report"
         : options.reportType
@@ -89,7 +100,7 @@ export const ReportCenter = ({ youthId, youth }: ReportCenterProps) => {
           const [allPoints, allNotes, allRatings, allSchoolScores] = await Promise.all([
             getBehaviorPointsByYouth(youth.id).catch(() => fetchBehaviorPoints(youth.id)),
             fetchAllProgressNotes(youth.id),
-            getDailyRatingsByYouth(youth.id).catch(() => fetchDailyRatings(youth.id) as any),
+            getDailyRatingsByYouth(youth.id).catch(() => fetchDailyRatings(youth.id)),
             getScoresByYouth(youth.id).catch((error) => {
               console.warn('Failed to load school scores for AI report generation:', error);
               return [];
@@ -109,7 +120,7 @@ export const ReportCenter = ({ youthId, youth }: ReportCenterProps) => {
             data,
           });
           if (aiText) {
-            const aiSection = `\n<div style="margin:12pt 0;">\n  <h3 style="font-size:12pt; margin:0 0 6pt;">AI-Assisted Narrative</h3>\n  <div style="font-size:11pt; white-space:pre-wrap;">${aiText.replace(/[&<>]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;'} as any)[c])}</div>\n</div>`;
+            const aiSection = `\n<div style="margin:12pt 0;">\n  <h3 style="font-size:12pt; margin:0 0 6pt;">AI-Assisted Narrative</h3>\n  <div style="font-size:11pt; white-space:pre-wrap;">${escapeHtml(aiText)}</div>\n</div>`;
             styledHTML = styledHTML.replace('</div>', `${aiSection}</div>`);
           }
         }
@@ -191,6 +202,10 @@ export const ReportCenter = ({ youthId, youth }: ReportCenterProps) => {
             key={`${youth?.id || 'eval'}-${evalVariant}`}
             youth={youth}
             variant={evalVariant}
+            onAutoExportComplete={() => {
+              setEvalVariant(null);
+              setFormKey(k => k + 1);
+            }}
           />
         </div>
       )}

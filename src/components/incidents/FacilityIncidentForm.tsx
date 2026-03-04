@@ -102,7 +102,7 @@ export default function FacilityIncidentForm({ incident, onSave, onCancel }: Pro
   // Incident types
   const [incidentTypes, setIncidentTypes] = useState<FacilityIncidentType[]>(
     // Normalize legacy 'Fighting' → 'Physical Altercation' from older reports
-    (incident?.incidentTypes ?? []).map(t => t === 'Fighting' as any ? 'Physical Altercation' as FacilityIncidentType : t)
+    (incident?.incidentTypes ?? []).map((t) => t === 'Fighting' ? 'Physical Altercation' : t)
   )
   const [otherIncidentType, setOtherIncidentType] = useState(incident?.otherIncidentType ?? '')
 

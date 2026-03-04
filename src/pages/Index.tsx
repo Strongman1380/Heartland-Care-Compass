@@ -12,7 +12,7 @@ import { toast } from "sonner";
 const Index = () => {
   const [selectedYouth, setSelectedYouth] = useState<Youth | null>(null);
   const [activeTab, setActiveTab] = useState("profile");
-  const [editingYouth, setEditingYouth] = useState<any | null>(null);
+  const [editingYouth, setEditingYouth] = useState<Youth | null>(null);
   const [dischargeDialogOpen, setDischargeDialogOpen] = useState(false);
   const [youthToDischarge, setYouthToDischarge] = useState<Youth | null>(null);
   const { toast: uiToast } = useToast();
@@ -21,14 +21,14 @@ const Index = () => {
 
   useEffect(() => {
     loadYouths();
-  }, []);
+  }, [loadYouths]);
 
   // Refresh selected youth data when youths are updated
   useEffect(() => {
     if (selectedYouth && youths.length > 0) {
       const updatedYouth = youths.find(y => y.id === selectedYouth.id);
       if (updatedYouth) {
-        setSelectedYouth(updatedYouth as any);
+        setSelectedYouth(updatedYouth);
       }
     }
   }, [youths, selectedYouth?.id]);

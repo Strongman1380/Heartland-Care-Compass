@@ -57,6 +57,7 @@ const extractNoteText = (note: any): string => {
 interface ProgressEvaluationReportProps {
   youth: Youth;
   variant?: EvalReportType;
+  onAutoExportComplete?: () => void;
 }
 
 interface ReportData {
@@ -102,11 +103,13 @@ const ratingLabel = (r: number) => {
 export const ProgressEvaluationReport = ({
   youth,
   variant = "weekly",
+  onAutoExportComplete,
 }: ProgressEvaluationReportProps) => {
   const [reportType, setReportType] = useState<EvalReportType>(variant);
   const [data, setData] = useState<ReportData>(EMPTY);
   const [loading, setLoading] = useState(false);
   const [isAutoFilling, setIsAutoFilling] = useState(false);
+  const [autoExported, setAutoExported] = useState(false);
   const { toast } = useToast();
   const printRef = useRef<HTMLDivElement>(null);
 
@@ -114,6 +117,11 @@ export const ProgressEvaluationReport = ({
     weekly:  "Resident Weekly Progress Evaluation",
     monthly: "Resident Monthly Progress Evaluation",
   };
+
+  useEffect(() => {
+    setReportType(variant);
+    setAutoExported(false);
+  }, [variant, youth.id]);
 
   // ── Date range helper ──
   const getDateRange = (type: EvalReportType): { startDate: Date; endDate: Date; periodLabel: string } => {
@@ -345,6 +353,23 @@ RULES: Write 1–3 concise sentences. Do NOT include raw dates, staff names, or 
   const set = (field: keyof ReportData) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
       setData((prev) => ({ ...prev, [field]: e.target.value }));
+
+  useEffect(() => {
+    if (!onAutoExportComplete || autoExported || !printRef.current) return;
+
+    const timerId = window.setTimeout(async () => {
+      if (!printRef.current) return;
+      try {
+        await handleExportPDF();
+        setAutoExported(true);
+        onAutoExportComplete();
+      } catch (error) {
+        console.error("Error auto-generating evaluation PDF:", error);
+      }
+    }, 300);
+
+    return () => window.clearTimeout(timerId);
+  }, [onAutoExportComplete, autoExported, reportType, youth.id]);
 
   return (
     <div className="space-y-6">

@@ -1,14 +1,17 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Youth, DailyRating } from "@/types/app-types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Calendar, CalendarDays } from "lucide-react";
+import { Calendar, CalendarDays, Upload } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { format, subDays, startOfWeek, startOfMonth } from "date-fns";
-// Supabase removed - using local storage only
 import { useToast } from "@/hooks/use-toast";
+import { CsvUploader, type ParsedRow, type ColumnDef, type ImportResult } from "@/components/common/CsvUploader";
+import { normalizeDate, clampScore, detectHeaders } from "@/utils/csvUtils";
+import { dailyRatingsService } from "@/integrations/firebase/services";
 
 interface DailyRatingsTabProps {
   youth: Youth;
@@ -45,7 +48,88 @@ export const DailyRatingsTab = ({ youth }: DailyRatingsTabProps) => {
     monthly: { peerInteraction: 0, adultInteraction: 0, investmentLevel: 0, dealAuthority: 0 }
   });
   const [loading, setLoading] = useState(false);
+  const [uploadOpen, setUploadOpen] = useState(false);
   const { toast } = useToast();
+
+  // ── CSV Upload for this youth ──
+  type YouthRatingRow = { date: string; peer: number; adult: number; investment: number; authority: number; staff: string; comments: string };
+
+  const ratingUploadColumns: ColumnDef[] = [
+    { key: 'date', label: 'Date' },
+    { key: 'peer', label: 'Peer' },
+    { key: 'adult', label: 'Adult' },
+    { key: 'investment', label: 'Invest' },
+    { key: 'authority', label: 'Auth' },
+    { key: 'staff', label: 'Staff' },
+  ];
+
+  const parseRatingRows = useCallback((rows: string[][]): ParsedRow<YouthRatingRow>[] => {
+    if (rows.length === 0) return [];
+    const hasHeader = detectHeaders(rows[0]);
+    const dataRows = hasHeader ? rows.slice(1) : rows;
+
+    return dataRows.map(cols => {
+      const errors: string[] = [];
+      const warnings: string[] = [];
+      const { date, error: dateErr } = normalizeDate(cols[0] || '');
+      if (dateErr) errors.push(dateErr);
+
+      const parseDomain = (idx: number, label: string) => {
+        if (!cols[idx]) return 0;
+        const raw = parseFloat(cols[idx]);
+        const { score, clamped } = clampScore(raw, 0, 4);
+        if (clamped) warnings.push(`${label} ${raw} clamped to ${score}`);
+        return score ?? 0;
+      };
+
+      return {
+        data: {
+          date,
+          peer: parseDomain(1, 'Peer'),
+          adult: parseDomain(2, 'Adult'),
+          investment: parseDomain(3, 'Investment'),
+          authority: parseDomain(4, 'Authority'),
+          staff: cols[5] || '',
+          comments: cols[6] || '',
+        },
+        valid: errors.length === 0,
+        errors,
+        warnings,
+      };
+    });
+  }, []);
+
+  const importRatings = useCallback(async (rows: YouthRatingRow[]): Promise<ImportResult> => {
+    let imported = 0, skipped = 0;
+    const errors: string[] = [];
+    for (const row of rows) {
+      try {
+        await dailyRatingsService.upsert({
+          youth_id: youth.id,
+          date: row.date,
+          peerInteraction: row.peer,
+          peerInteractionComment: null,
+          adultInteraction: row.adult,
+          adultInteractionComment: null,
+          investmentLevel: row.investment,
+          investmentLevelComment: null,
+          dealAuthority: row.authority,
+          dealAuthorityComment: null,
+          comments: row.comments || null,
+          staff: row.staff || null,
+          createdAt: null,
+          updatedAt: null,
+        });
+        imported++;
+      } catch (e) {
+        errors.push(`${row.date}: ${e}`);
+        skipped++;
+      }
+    }
+    fetchRatings();
+    setUploadOpen(false);
+    return { imported, skipped, errors };
+  }, [youth.id]);
 
   const fetchRatings = () => {
     try {
@@ -242,9 +326,34 @@ export const DailyRatingsTab = ({ youth }: DailyRatingsTabProps) => {
             />
           </div>
 
-          <Button onClick={handleSaveRating} disabled={loading} className="w-full">
-            {loading ? "Saving..." : "Save Rating"}
-          </Button>
+          <div className="flex gap-3">
+            <Button onClick={handleSaveRating} disabled={loading} className="flex-1">
+              {loading ? "Saving..." : "Save Rating"}
+            </Button>
+            <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" className="flex items-center gap-2">
+                  <Upload className="w-4 h-4" />
+                  Upload CSV
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>Upload Daily Ratings for {youth.firstName} {youth.lastName}</DialogTitle>
+                </DialogHeader>
+                <CsvUploader<YouthRatingRow>
+                  templateType="daily_ratings_youth"
+                  title={`Upload ratings for ${youth.firstName}`}
+                  description="CSV rows will be imported for this youth only. No youth name column needed."
+                  parseRows={parseRatingRows}
+                  columns={ratingUploadColumns}
+                  onImport={importRatings}
+                  acceptExcel={false}
+                  compact
+                />
+              </DialogContent>
+            </Dialog>
+          </div>
         </CardContent>
       </Card>
 

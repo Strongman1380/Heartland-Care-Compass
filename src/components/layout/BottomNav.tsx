@@ -1,27 +1,28 @@
 
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Home, Star, FileText, Bell, MoreHorizontal, BarChart3, BookOpen, Calendar, Gavel, GraduationCap, TrendingUp, Database, ClipboardList, ShieldAlert, ClipboardPaste, Clock } from "lucide-react";
+import { Home, Star, FileText, Bell, MoreHorizontal, BarChart3, BookOpen, Calendar, Gavel, GraduationCap, TrendingUp, Database, ClipboardList, ShieldAlert, ClipboardPaste, Clock, Upload } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 
 const primaryTabs = [
   { path: "/", label: "Home", icon: Home },
-  { path: "/daily-points", label: "Points", icon: Star },
   { path: "/progress-notes", label: "Notes", icon: BookOpen },
-  { path: "/incident-reports", label: "Incidents", icon: ShieldAlert },
+  { path: "/referrals", label: "Referrals", icon: ClipboardPaste },
   { path: "/alerts", label: "Alerts", icon: Bell },
 ];
 
 const secondaryRoutes = [
+  { path: "/daily-points", label: "Points", icon: Star },
+  { path: "/incident-reports", label: "Incidents", icon: ShieldAlert },
   { path: "/dashboard", label: "Dashboard", icon: BarChart3 },
   { path: "/reports", label: "Reports", icon: FileText },
   { path: "/monthly-progress", label: "Monthly Progress", icon: Calendar },
   { path: "/court-report", label: "Court Report", icon: Gavel },
-  { path: "/referrals", label: "Referrals", icon: ClipboardPaste },
   { path: "/shift-scores", label: "Shift Scores", icon: Clock },
   { path: "/school/scores", label: "School", icon: GraduationCap },
   { path: "/behavior-analysis", label: "Behavior Analysis", icon: TrendingUp },
   { path: "/assessment-kpi", label: "KPI Dashboard", icon: ClipboardList },
+  { path: "/data-upload", label: "Data Upload", icon: Upload },
   { path: "/migrate-data", label: "Data Migration", icon: Database },
 ];
 

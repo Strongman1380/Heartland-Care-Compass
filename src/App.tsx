@@ -33,6 +33,8 @@ import ShiftScores from "./pages/ShiftScores";
 import AdminFacility from "./pages/AdminFacility";
 import AdminForms from "./pages/AdminForms";
 import PoResponsePage from "./pages/PoResponsePage";
+import { PwaInstallBanner } from "@/components/layout/PwaInstallBanner";
+import DataUpload from "./pages/DataUpload";
 
 const queryClient = new QueryClient();
 
@@ -52,6 +54,7 @@ const App = () => {
       <Sonner />
       <BrowserRouter basename={import.meta.env.BASE_URL}>
         <AwardsProvider>
+        <PwaInstallBanner />
         <Routes>
           <Route path="/auth" element={<Auth />} />
           <Route path="/po-response/:token" element={<PoResponsePage />} />
@@ -80,6 +83,7 @@ const App = () => {
           <Route path="/shift-scores" element={<ProtectedRoute><ShiftScores /></ProtectedRoute>} />
           <Route path="/incident-reports" element={<ProtectedRoute><IncidentReports /></ProtectedRoute>} />
           <Route path="/migrate-data" element={<ProtectedRoute requireAdmin><DataMigrationPage /></ProtectedRoute>} />
+          <Route path="/data-upload" element={<ProtectedRoute><DataUpload /></ProtectedRoute>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
         </AwardsProvider>

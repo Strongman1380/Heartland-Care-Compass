@@ -31,6 +31,8 @@ import {
 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { Header } from '@/components/layout/Header'
+import { CsvUploader, type ParsedRow, type ColumnDef, type ImportResult } from '@/components/common/CsvUploader'
+import { normalizeDate, matchYouth, clampScore, findColumnIndex, detectHeaders, type MatchableYouth } from '@/utils/csvUtils'
 import * as XLSX from 'xlsx'
 
 const toISO = (d: Date) => format(d, 'yyyy-MM-dd')
@@ -1116,64 +1118,23 @@ const ShiftScores: React.FC = () => {
 
           {/* ═══════ UPLOAD TAB ═══════ */}
           <TabsContent value="upload">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Upload className="w-5 h-5 text-red-600" />
-                  Upload Scores
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                {/* Upload Button */}
-                <div className="flex items-center gap-4">
-                  <input ref={fileInputRef} type="file" accept=".csv,.txt,.xlsx,.xls" onChange={handleFileUpload} className="hidden" />
-                  <Button onClick={() => fileInputRef.current?.click()} disabled={uploading} className="bg-red-600 hover:bg-red-700" size="lg">
-                    {uploading
-                      ? <><RefreshCw className="w-4 h-4 mr-2 animate-spin" />Uploading...</>
-                      : <><FileSpreadsheet className="w-4 h-4 mr-2" />Choose Excel or CSV File</>}
-                  </Button>
-                  <span className="text-sm text-gray-500 dark:text-slate-400">Accepts .xlsx, .xls, .csv</span>
-                </div>
+            <Tabs defaultValue="weekly_upload">
+              <TabsList className="grid grid-cols-2 w-full mb-4">
+                <TabsTrigger value="weekly_upload" className="text-xs">Weekly Evals</TabsTrigger>
+                <TabsTrigger value="daily_upload" className="text-xs">Daily Shifts</TabsTrigger>
+              </TabsList>
+              <TabsContent value="weekly_upload">
+                <ShiftScoresCsvUploader type="weekly" youths={sortedYouths} onComplete={() => setRefreshKey(k => k + 1)} />
+              </TabsContent>
+              <TabsContent value="daily_upload">
+                <ShiftScoresCsvUploader type="daily" youths={sortedYouths} onComplete={() => setRefreshKey(k => k + 1)} />
+              </TabsContent>
+            </Tabs>
 
-                {/* Weekly Eval Format */}
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-2">
-                  <h4 className="font-medium text-blue-800">Weekly Eval Format</h4>
-                  <p className="text-sm text-blue-700">For weekly evaluations, use columns: Name, Date, and the 4 domain scores.</p>
-                  <div className="bg-white dark:bg-slate-900 rounded p-3 font-mono text-xs text-gray-700 dark:text-slate-300 overflow-auto">
-                    <div className="font-bold">Youth Name,Date,Peer Interaction,Adult Interaction,Investment Level,Dealing w/authority</div>
-                    <div>Chance Thaller,2025-08-06,3.3,3,2.7,3.3</div>
-                    <div>DAGEN DICKEY,2025-09-03,3.7,3.5,3.3,3.7</div>
-                  </div>
-                </div>
-
-                {/* Daily Shift Format */}
-                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 space-y-2">
-                  <h4 className="font-medium text-amber-800">Daily Shift Score Format</h4>
-                  <p className="text-sm text-amber-700">For daily shift scores, add a <strong>Shift</strong> column. The file will auto-detect as daily shift data.</p>
-                  <div className="bg-white dark:bg-slate-900 rounded p-3 font-mono text-xs text-gray-700 dark:text-slate-300 overflow-auto">
-                    <div className="font-bold">Youth Name,Date,Shift,Peer Interaction,Adult Interaction,Investment Level,Dealing w/authority</div>
-                    <div>Chance Thaller,2025-08-06,Day,3.3,3,2.7,3.3</div>
-                    <div>Chance Thaller,2025-08-06,Evening,3.0,2.8,2.5,3.0</div>
-                    <div>DAGEN DICKEY,2025-09-03,Night,3.7,3.5,3.3,3.7</div>
-                  </div>
-                  <p className="text-xs text-amber-600">Shift values: Day, Evening, or Night</p>
-                </div>
-
-                {/* Shared notes */}
-                <ul className="text-sm text-gray-600 dark:text-slate-400 space-y-1 list-disc list-inside">
-                  <li><strong>Youth Name</strong>: First name, last name, or full name (case-insensitive)</li>
-                  <li><strong>Date</strong>: YYYY-MM-DD, MM/DD/YYYY, or Excel date format</li>
-                  <li><strong>Scores</strong>: 0-4 scale for each domain</li>
-                  <li>Rows with non-numeric scores will be skipped</li>
-                  <li>If no Shift column is found, rows are saved as weekly evals</li>
-                </ul>
-
-                <div className="border-t pt-4">
-                  <h4 className="font-medium mb-3">Manual Weekly Entry</h4>
-                  <ManualWeeklyDomainEntry youths={sortedYouths} toast={toast} />
-                </div>
-              </CardContent>
-            </Card>
+            <div className="border-t pt-4 mt-6">
+              <h4 className="font-medium mb-3">Manual Weekly Entry</h4>
+              <ManualWeeklyDomainEntry youths={sortedYouths} toast={toast} />
+            </div>
           </TabsContent>
         </Tabs>
       </main>
@@ -1264,6 +1225,127 @@ const ManualWeeklyDomainEntry: React.FC<{ youths: any[]; toast: any }> = ({ yout
         {saving ? <><RefreshCw className="w-4 h-4 mr-2 animate-spin" />Saving...</> : <><Save className="w-4 h-4 mr-2" />Save Weekly Evals</>}
       </Button>
     </div>
+  )
+}
+
+// ── Shift Scores CSV Uploader Sub-component ──
+
+type UploadScoreRow = { youthName: string; youthId: string; date: string; shift: string; peer: number; adult: number; investment: number; authority: number }
+
+const weeklyUploadColumns: ColumnDef[] = [
+  { key: 'youthName', label: 'Youth' },
+  { key: 'date', label: 'Week Date' },
+  { key: 'peer', label: 'Peer' },
+  { key: 'adult', label: 'Adult' },
+  { key: 'investment', label: 'Invest' },
+  { key: 'authority', label: 'Auth' },
+]
+
+const dailyUploadColumns: ColumnDef[] = [
+  { key: 'youthName', label: 'Youth' },
+  { key: 'date', label: 'Date' },
+  { key: 'shift', label: 'Shift' },
+  { key: 'peer', label: 'Peer' },
+  { key: 'adult', label: 'Adult' },
+  { key: 'investment', label: 'Invest' },
+  { key: 'authority', label: 'Auth' },
+]
+
+const ShiftScoresCsvUploader: React.FC<{ type: 'weekly' | 'daily'; youths: any[]; onComplete: () => void }> = ({ type, youths, onComplete }) => {
+  const youthList: MatchableYouth[] = youths.map((y: any) => ({ id: y.id, firstName: y.firstName || '', lastName: y.lastName || '' }))
+
+  const parseRows = useCallback((rows: string[][]): ParsedRow<UploadScoreRow>[] => {
+    if (rows.length === 0) return []
+    const hasHeader = detectHeaders(rows[0])
+    const header = hasHeader ? rows[0].map(h => h.toLowerCase()) : []
+    const dataRows = hasHeader ? rows.slice(1) : rows
+
+    const nameIdx = hasHeader ? findColumnIndex(header, 'name', 'youth') : 0
+    const dateIdx = hasHeader ? findColumnIndex(header, 'date') : 1
+
+    let shiftIdx = -1, peerIdx: number, adultIdx: number, investIdx: number, authIdx: number
+
+    if (type === 'daily') {
+      shiftIdx = hasHeader ? findColumnIndex(header, 'shift') : 2
+      peerIdx = hasHeader ? findColumnIndex(header, 'peer') : 3
+      adultIdx = hasHeader ? findColumnIndex(header, 'adult') : 4
+      investIdx = hasHeader ? findColumnIndex(header, 'invest') : 5
+      authIdx = hasHeader ? findColumnIndex(header, 'auth', 'dealing') : 6
+    } else {
+      peerIdx = hasHeader ? findColumnIndex(header, 'peer') : 2
+      adultIdx = hasHeader ? findColumnIndex(header, 'adult') : 3
+      investIdx = hasHeader ? findColumnIndex(header, 'invest') : 4
+      authIdx = hasHeader ? findColumnIndex(header, 'auth', 'dealing') : 5
+    }
+
+    return dataRows.map(cols => {
+      const errors: string[] = []
+      const warnings: string[] = []
+      const nameVal = cols[nameIdx] || ''
+      const matched = matchYouth(nameVal, youthList)
+      if (!matched) errors.push(`Youth "${nameVal}" not found`)
+      const { date, error: dateErr } = normalizeDate(cols[dateIdx] || '')
+      if (dateErr) errors.push(dateErr)
+
+      const parseDomain = (idx: number, label: string) => {
+        if (idx < 0 || !cols[idx]) return 0
+        const raw = parseFloat(cols[idx])
+        const { score, clamped } = clampScore(raw, 0, 4)
+        if (clamped) warnings.push(`${label} ${raw} clamped to ${score}`)
+        return score ?? 0
+      }
+
+      const peer = parseDomain(peerIdx, 'Peer')
+      const adult = parseDomain(adultIdx, 'Adult')
+      const investment = parseDomain(investIdx, 'Investment')
+      const authority = parseDomain(authIdx, 'Authority')
+
+      let shift = ''
+      if (type === 'daily') {
+        const shiftRaw = (cols[shiftIdx] || 'day').toLowerCase().trim()
+        shift = shiftRaw.startsWith('eve') ? 'Evening' : shiftRaw.startsWith('nig') || shiftRaw.startsWith('ove') ? 'Night' : 'Day'
+      }
+
+      const finalDate = type === 'weekly' && date ? toWeekStartISO(date) : date
+
+      return {
+        data: { youthName: matched ? `${matched.firstName} ${matched.lastName}` : nameVal, youthId: matched?.id || '', date: finalDate, shift, peer, adult, investment, authority },
+        valid: errors.length === 0,
+        errors,
+        warnings,
+      }
+    })
+  }, [youthList, type])
+
+  const handleImport = useCallback(async (rows: UploadScoreRow[]): Promise<ImportResult> => {
+    let imported = 0, skipped = 0
+    const errors: string[] = []
+    for (const row of rows) {
+      try {
+        const scores: DomainScores = { peer: row.peer, adult: row.adult, investment: row.investment, authority: row.authority }
+        if (type === 'daily') {
+          const shift: ShiftType = row.shift.toLowerCase().startsWith('eve') ? 'evening' : row.shift.toLowerCase().startsWith('nig') ? 'night' : 'day'
+          await upsertDailyShift(row.youthId, row.date, shift, scores)
+        } else {
+          await upsertWeeklyEval(row.youthId, row.date, scores, 'uploaded')
+        }
+        imported++
+      } catch (e) {
+        errors.push(`${row.youthName} ${row.date}: ${e}`)
+        skipped++
+      }
+    }
+    onComplete()
+    return { imported, skipped, errors }
+  }, [type, onComplete])
+
+  return (
+    <CsvUploader<UploadScoreRow>
+      templateType={type === 'weekly' ? 'weekly_eval' : 'daily_shift'}
+      parseRows={parseRows}
+      columns={type === 'weekly' ? weeklyUploadColumns : dailyUploadColumns}
+      onImport={handleImport}
+    />
   )
 }
 

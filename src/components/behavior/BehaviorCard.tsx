@@ -7,12 +7,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, TrendingUp, TrendingDown, Users, History, Shield, Ban, X, CreditCard, RotateCcw, CalendarDays, Upload } from "lucide-react";
+import { AlertCircle, TrendingUp, TrendingDown, Users, History, Shield, Ban, X, CreditCard, RotateCcw, CalendarDays, Upload, Download, Copy, Check, FileSpreadsheet } from "lucide-react";
 import { useBehaviorPoints, useYouth } from "@/hooks/useSupabase";
 import { useBehaviorPointSummary } from "@/hooks/useBehaviorPointSummary";
 import { caseNotesService } from "@/integrations/firebase/services";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { CSV_TEMPLATES, getTemplateCsvString, downloadCsvTemplate } from "@/utils/csvUtils";
 
 interface BehaviorCardProps {
   youthId: string;
@@ -775,6 +776,9 @@ export const BehaviorCard = ({ youthId, youth, onYouthUpdated }: BehaviorCardPro
           </CardDescription>
         </CardHeader>
         <CardContent className="pt-6 space-y-4">
+          {/* Template Format Display */}
+          <BehaviorPointsTemplate />
+
           <div className="flex items-center gap-3">
             <input
               ref={csvFileRef}
@@ -1151,6 +1155,46 @@ export const BehaviorCard = ({ youthId, youth, onYouthUpdated }: BehaviorCardPro
           </div>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+};
+
+// ── Template display for behavior points CSV ──
+const BehaviorPointsTemplate: React.FC = () => {
+  const [copied, setCopied] = useState(false);
+  const template = CSV_TEMPLATES.behavior_points;
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(getTemplateCsvString('behavior_points'));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-2">
+      <h4 className="font-semibold text-sm text-blue-800 flex items-center gap-2">
+        <FileSpreadsheet className="w-4 h-4" />
+        Expected Points CSV Format
+      </h4>
+      <div className="bg-white rounded p-3 font-mono text-xs text-gray-700 overflow-auto border">
+        <div className="font-bold">{template.headers}</div>
+        {template.sampleRows.map((row, i) => (
+          <div key={i} className="text-gray-600">{row}</div>
+        ))}
+      </div>
+      <div className="flex items-center gap-2">
+        <Button variant="outline" size="sm" onClick={() => downloadCsvTemplate('behavior_points')} className="text-xs">
+          <Download className="w-3 h-3 mr-1" />
+          Download Template
+        </Button>
+        <Button variant="ghost" size="sm" onClick={handleCopy} className="text-xs">
+          {copied ? <Check className="w-3 h-3 mr-1 text-green-600" /> : <Copy className="w-3 h-3 mr-1" />}
+          {copied ? "Copied!" : "Copy Format"}
+        </Button>
+      </div>
+      <ul className="text-xs text-blue-700 space-y-0.5 list-disc list-inside">
+        {template.notes.map((note, i) => <li key={i}>{note}</li>)}
+      </ul>
     </div>
   );
 };

@@ -1150,7 +1150,7 @@ export const ReferralTab = () => {
       accept: import.meta.env.VITE_EMAILJS_ACCEPT_TEMPLATE_ID,
       deny: import.meta.env.VITE_EMAILJS_DENY_TEMPLATE_ID,
       interview: import.meta.env.VITE_EMAILJS_INTERVIEW_TEMPLATE_ID,
-      check_need: import.meta.env.VITE_EMAILJS_DENY_TEMPLATE_ID,
+      check_need: "template_aejmt3d",
     };
     const labels: Record<string, string> = {
       accept: "Acceptance",
@@ -1729,22 +1729,6 @@ export const ReferralTab = () => {
                       }
                       return "";
                     })();
-                    const mailtoTo = inferredPoEmail
-                      ? encodeURIComponent(inferredPoEmail)
-                      : encodeURIComponent(friendlyPoName);
-                    
-                    const subjectCheck = encodeURIComponent(`Referral Follow-Up: ${item.referralName || 'the youth'}`);
-                    const bodyCheck = encodeURIComponent(`Hi ${poFirstName},\n\nWe are reaching out to check whether ${item.referralName || 'this youth'} still needs placement. If placement is no longer needed or they have already been placed elsewhere, please reply to let us know so we can update our records.\n\nWe apologize if you haven't already heard from us regarding this referral. We've updated our referral process to make sure everything is documented and we can provide answers more quickly. This will help us offer better service times for kids and quicker case management responses for you.\n\nThank you,\nHeartland Admissions\nadmissions@heartlandboyshomenebraska.org`);
-                    const priorityHeaders = `&importance=high&X-Priority=1`;
-                    const hrefCheck = `mailto:${mailtoTo}?subject=${subjectCheck}${priorityHeaders}&body=${bodyCheck}`;
-
-                    const subjectDeny = encodeURIComponent(`Referral Update for ${item.referralName || "the youth"}`);
-                    const bodyDeny = encodeURIComponent(`Hi ${poFirstName},\n\nThanks for the referral for ${item.referralName || "the youth"}. We’re not able to accept at this time due to [reason].\n\nThank you,\nHeartland Admissions\nadmissions@heartlandboyshomenebraska.org`);
-                    const hrefDeny = `mailto:${mailtoTo}?subject=${subjectDeny}&body=${bodyDeny}`;
-
-                    const subjectAccept = encodeURIComponent(`Placement Accepted for ${item.referralName || "the youth"}`);
-                    const bodyAccept = encodeURIComponent(`Hi ${poFirstName},\n\nWe can accept ${item.referralName || "the youth"}. What intake date/time are you aiming for, and who is transporting?\n\nThank you,\nHeartland Admissions\nadmissions@heartlandboyshomenebraska.org`);
-                    const hrefAccept = `mailto:${mailtoTo}?subject=${subjectAccept}&body=${bodyAccept}`;
 
                     return (
                     <div key={rowKey} className="rounded-md border p-3">

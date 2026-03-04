@@ -107,11 +107,20 @@ export interface MatchableYouth {
 export function matchYouth(nameVal: string, youths: MatchableYouth[]): MatchableYouth | undefined {
   const lower = nameVal.toLowerCase().trim()
   if (!lower) return undefined
-  return youths.find(y =>
+
+  // 1. Try exact full-name match first
+  const fullNameMatches = youths.filter(y =>
+    `${y.firstName} ${y.lastName}`.toLowerCase() === lower
+  )
+  if (fullNameMatches.length === 1) return fullNameMatches[0]
+  if (fullNameMatches.length > 1) return undefined
+
+  // 2. Fall back to exact firstName or lastName match, only if unambiguous
+  const partialMatches = youths.filter(y =>
     y.firstName.toLowerCase() === lower ||
-    `${y.firstName} ${y.lastName}`.toLowerCase() === lower ||
     y.lastName.toLowerCase() === lower
   )
+  return partialMatches.length === 1 ? partialMatches[0] : undefined
 }
 
 // ── Score Validation ──

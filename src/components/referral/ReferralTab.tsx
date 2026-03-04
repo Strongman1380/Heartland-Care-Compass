@@ -2112,7 +2112,7 @@ export const ReferralTab = () => {
                       : encodeURIComponent(friendlyPoName);
                     
                     const subjectCheck = encodeURIComponent(`Referral Follow-Up: ${item.referralName || 'the youth'}`);
-                    const bodyCheck = encodeURIComponent(`Hi ${poFirstName},\n\nWe apologize if you haven't already heard from us regarding this referral. We've updated our referral process to make sure everything is documented and we can provide answers more quickly. This will help us offer better service times for kids and quicker case management responses for you. Please let us know if this youth still needs placement.\n\nThank you,\nHeartland Admissions\nadmissions@heartlandboyshomenebraska.org`);
+                    const bodyCheck = encodeURIComponent(`Hi ${poFirstName},\n\nWe are reaching out to check whether ${item.referralName || 'this youth'} still needs placement. If placement is no longer needed or they have already been placed elsewhere, please reply to let us know so we can update our records.\n\nWe apologize if you haven't already heard from us regarding this referral. We've updated our referral process to make sure everything is documented and we can provide answers more quickly. This will help us offer better service times for kids and quicker case management responses for you.\n\nThank you,\nHeartland Admissions\nadmissions@heartlandboyshomenebraska.org`);
                     const priorityHeaders = `&importance=high&X-Priority=1`;
                     const hrefCheck = `mailto:${mailtoTo}?subject=${subjectCheck}${priorityHeaders}&body=${bodyCheck}`;
 

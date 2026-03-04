@@ -16,6 +16,7 @@ module.exports = {
         '^.+\\.tsx?$': ['ts-jest', {
           tsconfig: {
             module: 'commonjs',
+            target: 'ES2018',
             esModuleInterop: true,
             allowSyntheticDefaultImports: true,
             baseUrl: '.',

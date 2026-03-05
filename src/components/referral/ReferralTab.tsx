@@ -1232,13 +1232,67 @@ export const ReferralTab = () => {
 
   const kpis = useMemo(() => {
     const active = history.filter((h) => !h.archived);
-    const total = active.length;
-    const archivedCount = history.filter((h) => h.archived).length;
+    const totalReceived = history.length;
     const pendingCount = active.filter((h) => h.status === "pending_interview" || h.status === "new").length;
     const scheduledCount = active.filter((h) => h.status === "interview_scheduled").length;
     const interviewedYes = active.filter((h) => h.status === "interviewed_yes").length;
     const interviewedNo = active.filter((h) => h.status === "interviewed_no").length;
     const deniedCount = active.filter((h) => h.status === "denied").length;
+    const acceptedCount = active.filter((h) => h.status === "accepted").length;
+    const waitlistedCount = active.filter((h) => h.status === "waitlisted").length;
+
+    // PO contact tracking
+    const noPoContact = active.filter((h) => (h.poContactLog || []).length === 0).length;
+    const poContacted = active.filter((h) => (h.poContactLog || []).length > 0).length;
+
+    // Priority breakdown
+    const priorityUrgent = active.filter((h) => h.priority === "urgent").length;
+    const priorityHigh = active.filter((h) => h.priority === "high").length;
+    const priorityRoutine = active.filter((h) => !h.priority || h.priority === "routine").length;
+
+    // AI screening recommendation breakdown
+    const parseRec = (h: ReferralHistoryItem) => { try { return JSON.parse(h.screeningResult).recommendation as string; } catch { return ""; } };
+    const aiInterview = active.filter((h) => parseRec(h) === "INTERVIEW").length;
+    const aiConditions = active.filter((h) => parseRec(h) === "INTERVIEW_WITH_CONDITIONS").length;
+    const aiDecline = active.filter((h) => parseRec(h) === "DECLINE").length;
+    const aiScreened = aiInterview + aiConditions + aiDecline;
+
+    // Staff recommendation breakdown
+    const staffYes = active.filter((h) => h.staffRecommendation === "yes").length;
+    const staffMaybe = active.filter((h) => h.staffRecommendation === "maybe").length;
+    const staffNo = active.filter((h) => h.staffRecommendation === "no").length;
+
+    // Age distribution from parsed demographics
+    const ages = active.flatMap((h) => {
+      const a = h.parsedData?.demographics?.["Age"] || h.parsedData?.demographics?.["age"] || "";
+      const n = parseInt(a);
+      return isNaN(n) || n < 5 || n > 25 ? [] : [n];
+    });
+    const avgAge = ages.length > 0 ? Math.round(ages.reduce((a, b) => a + b, 0) / ages.length) : null;
+    const ageWithData = ages.length;
+
+    // Gender breakdown from parsed demographics
+    const genderMap: Record<string, number> = {};
+    for (const h of active) {
+      const g = (h.parsedData?.demographics?.["Gender"] || h.parsedData?.demographics?.["gender"] || "").toLowerCase().trim();
+      if (!g) continue;
+      const key = g.includes("female") ? "Female" : g.includes("male") ? "Male" : titleCase(g);
+      genderMap[key] = (genderMap[key] || 0) + 1;
+    }
+    const genderTop = Object.entries(genderMap).sort((a, b) => b[1] - a[1]).map(([name, count]) => ({ name, count }));
+
+    // Top diagnoses from mental health section
+    const diagnosisTop = tallyTop(active.flatMap((h) => {
+      const d = h.parsedData?.mentalHealth?.["Diagnosis"] || h.parsedData?.mentalHealth?.["Diagnoses"] || h.parsedData?.mentalHealth?.["diagnosis"] || "";
+      return d ? d.split(/[,;\/]/).map((s) => s.trim()).filter((s) => s.length > 2) : [];
+    }));
+
+    // Top offenses from legal section
+    const offenseTop = tallyTop(active.flatMap((h) => {
+      const o = h.parsedData?.legal?.["Current Offense"] || h.parsedData?.legal?.["Offense"] || h.parsedData?.legal?.["current offense"] || "";
+      return o ? [o.trim()] : [];
+    }));
+
     const sourceTop = tallyTop(active.map((h) => h.referralSource).filter(Boolean));
     const countyTop = tallyTop(active.flatMap(extractCounties));
     const cityTop = tallyTop(active.flatMap(extractCities));
@@ -1246,13 +1300,32 @@ export const ReferralTab = () => {
     const poTop = tallyTop(active.flatMap(extractProbationOfficer));
 
     return {
-      total,
-      archivedCount,
+      totalReceived,
+      total: active.length,
       pendingCount,
       scheduledCount,
       interviewedYes,
       interviewedNo,
       deniedCount,
+      acceptedCount,
+      waitlistedCount,
+      noPoContact,
+      poContacted,
+      priorityUrgent,
+      priorityHigh,
+      priorityRoutine,
+      aiInterview,
+      aiConditions,
+      aiDecline,
+      aiScreened,
+      staffYes,
+      staffMaybe,
+      staffNo,
+      avgAge,
+      ageWithData,
+      genderTop,
+      diagnosisTop,
+      offenseTop,
       sourceTop,
       countyTop,
       cityTop,
@@ -1280,15 +1353,67 @@ export const ReferralTab = () => {
           <CardTitle className="text-base">Referral KPI Snapshot</CardTitle>
           <CardDescription>Operational intake and interview progress</CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-7 gap-3">
-            <div className="rounded-md border p-3"><p className="text-xs text-muted-foreground">Total</p><p className="text-xl font-semibold">{kpis.total}</p></div>
-            <div className="rounded-md border border-yellow-200 bg-yellow-50 p-3"><p className="text-xs text-yellow-700">Pending Interview</p><p className="text-xl font-semibold text-yellow-800">{kpis.pendingCount}</p></div>
-            <div className="rounded-md border border-blue-200 bg-blue-50 p-3"><p className="text-xs text-blue-700">Scheduled</p><p className="text-xl font-semibold text-blue-800">{kpis.scheduledCount}</p></div>
-            <div className="rounded-md border border-green-200 bg-green-50 p-3"><p className="text-xs text-green-700">Interviewed - Yes</p><p className="text-xl font-semibold text-green-800">{kpis.interviewedYes}</p></div>
-            <div className="rounded-md border border-orange-200 bg-orange-50 p-3"><p className="text-xs text-orange-700">Interviewed - No</p><p className="text-xl font-semibold text-orange-800">{kpis.interviewedNo}</p></div>
-            <div className="rounded-md border border-red-200 bg-red-50 p-3"><p className="text-xs text-red-700">Denied</p><p className="text-xl font-semibold text-red-800">{kpis.deniedCount}</p></div>
-            <div className="rounded-md border p-3"><p className="text-xs text-muted-foreground">Archived</p><p className="text-xl font-semibold">{kpis.archivedCount}</p></div>
+        <CardContent className="space-y-3">
+          {/* Pipeline row */}
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
+            <div className="rounded-md border p-3">
+              <p className="text-xs text-muted-foreground">Total Received</p>
+              <p className="text-xl font-semibold">{kpis.totalReceived}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">all time</p>
+            </div>
+            <div className="rounded-md border p-3">
+              <p className="text-xs text-muted-foreground">Active</p>
+              <p className="text-xl font-semibold">{kpis.total}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">non-archived</p>
+            </div>
+            <div className="rounded-md border border-yellow-200 bg-yellow-50 p-3">
+              <p className="text-xs text-yellow-700">Pending</p>
+              <p className="text-xl font-semibold text-yellow-800">{kpis.pendingCount}</p>
+              <p className="text-xs text-yellow-600 mt-0.5">awaiting contact</p>
+            </div>
+            <div className="rounded-md border border-blue-200 bg-blue-50 p-3">
+              <p className="text-xs text-blue-700">Interview Scheduled</p>
+              <p className="text-xl font-semibold text-blue-800">{kpis.scheduledCount}</p>
+              <p className="text-xs text-blue-600 mt-0.5">confirmed dates</p>
+            </div>
+            <div className="rounded-md border border-teal-200 bg-teal-50 p-3">
+              <p className="text-xs text-teal-700">Interviewed – Yes</p>
+              <p className="text-xl font-semibold text-teal-800">{kpis.interviewedYes}</p>
+              <p className="text-xs text-teal-600 mt-0.5">proceeding</p>
+            </div>
+            <div className="rounded-md border border-orange-200 bg-orange-50 p-3">
+              <p className="text-xs text-orange-700">Interviewed – No</p>
+              <p className="text-xl font-semibold text-orange-800">{kpis.interviewedNo}</p>
+              <p className="text-xs text-orange-600 mt-0.5">not suitable</p>
+            </div>
+            <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3">
+              <p className="text-xs text-emerald-700">Accepted</p>
+              <p className="text-xl font-semibold text-emerald-800">{kpis.acceptedCount}</p>
+              {kpis.waitlistedCount > 0 && <p className="text-xs text-emerald-600 mt-0.5">{kpis.waitlistedCount} waitlisted</p>}
+            </div>
+            <div className="rounded-md border border-red-200 bg-red-50 p-3">
+              <p className="text-xs text-red-700">Denied</p>
+              <p className="text-xl font-semibold text-red-800">{kpis.deniedCount}</p>
+              <p className="text-xs text-red-600 mt-0.5">not accepted</p>
+            </div>
+          </div>
+
+          {/* PO contact row */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-md border border-amber-200 bg-amber-50 p-3 flex items-center justify-between">
+              <div>
+                <p className="text-xs text-amber-700 font-medium">No PO Contact</p>
+                <p className="text-2xl font-bold text-amber-800">{kpis.noPoContact}</p>
+                <p className="text-xs text-amber-600 mt-0.5">active referrals needing outreach</p>
+              </div>
+            </div>
+            <div className="rounded-md border border-green-200 bg-green-50 p-3 flex items-center justify-between">
+              <div>
+                <p className="text-xs text-green-700 font-medium">PO Contacted</p>
+                <p className="text-2xl font-bold text-green-800">{kpis.poContacted}</p>
+                <p className="text-xs text-green-600 mt-0.5">active referrals with contact logged</p>
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -1347,6 +1472,138 @@ export const ReferralTab = () => {
                   <div key={x.name} className="text-xs flex justify-between gap-2"><span className="truncate">{x.name}</span><span className="font-semibold">{x.count}</span></div>
                 ))}
               </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Intake Trends */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Intake Trends</CardTitle>
+          <CardDescription>Demographics, clinical profile, and screening patterns across active referrals</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Priority + AI Screening + Staff Rec */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="rounded-md border p-3">
+              <p className="text-xs font-medium text-muted-foreground mb-2">Priority Breakdown</p>
+              <div className="space-y-1.5">
+                {kpis.priorityUrgent > 0 && (
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500 inline-block" />Urgent</span>
+                    <span className="font-semibold text-red-700">{kpis.priorityUrgent}</span>
+                  </div>
+                )}
+                <div className="flex justify-between items-center text-xs">
+                  <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-400 inline-block" />High</span>
+                  <span className="font-semibold">{kpis.priorityHigh}</span>
+                </div>
+                <div className="flex justify-between items-center text-xs">
+                  <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-gray-300 inline-block" />Routine</span>
+                  <span className="font-semibold">{kpis.priorityRoutine}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-md border p-3">
+              <p className="text-xs font-medium text-muted-foreground mb-2">AI Screening Results <span className="font-normal text-muted-foreground">({kpis.aiScreened} screened)</span></p>
+              {kpis.aiScreened === 0 ? (
+                <p className="text-xs text-muted-foreground">No AI screenings yet</p>
+              ) : (
+                <div className="space-y-1.5">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" />Interview</span>
+                    <span className="font-semibold text-green-700">{kpis.aiInterview}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-yellow-400 inline-block" />Conditions</span>
+                    <span className="font-semibold text-yellow-700">{kpis.aiConditions}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-400 inline-block" />Decline</span>
+                    <span className="font-semibold text-red-700">{kpis.aiDecline}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-md border p-3">
+              <p className="text-xs font-medium text-muted-foreground mb-2">Staff Recommendation</p>
+              <div className="space-y-1.5">
+                <div className="flex justify-between items-center text-xs">
+                  <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" />Yes</span>
+                  <span className="font-semibold text-green-700">{kpis.staffYes}</span>
+                </div>
+                <div className="flex justify-between items-center text-xs">
+                  <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-yellow-400 inline-block" />Maybe</span>
+                  <span className="font-semibold text-yellow-700">{kpis.staffMaybe}</span>
+                </div>
+                <div className="flex justify-between items-center text-xs">
+                  <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-400 inline-block" />No</span>
+                  <span className="font-semibold text-red-700">{kpis.staffNo}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Age + Gender + Diagnoses + Offenses */}
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+            <div className="rounded-md border p-3">
+              <p className="text-xs font-medium text-muted-foreground mb-2">Average Age</p>
+              {kpis.avgAge === null ? (
+                <p className="text-xs text-muted-foreground">No age data parsed yet</p>
+              ) : (
+                <>
+                  <p className="text-2xl font-bold">{kpis.avgAge}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">across {kpis.ageWithData} referrals with age data</p>
+                </>
+              )}
+            </div>
+
+            <div className="rounded-md border p-3">
+              <p className="text-xs font-medium text-muted-foreground mb-2">Gender</p>
+              {kpis.genderTop.length === 0 ? (
+                <p className="text-xs text-muted-foreground">No gender data parsed yet</p>
+              ) : (
+                <div className="space-y-1">
+                  {kpis.genderTop.map((x) => (
+                    <div key={x.name} className="text-xs flex justify-between gap-2">
+                      <span>{x.name}</span><span className="font-semibold">{x.count}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-md border p-3">
+              <p className="text-xs font-medium text-muted-foreground mb-2">Top Diagnoses</p>
+              {kpis.diagnosisTop.length === 0 ? (
+                <p className="text-xs text-muted-foreground">No diagnosis data parsed yet</p>
+              ) : (
+                <div className="space-y-1">
+                  {kpis.diagnosisTop.map((x) => (
+                    <div key={x.name} className="text-xs flex justify-between gap-2">
+                      <span className="truncate">{x.name}</span><span className="font-semibold">{x.count}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-md border p-3">
+              <p className="text-xs font-medium text-muted-foreground mb-2">Top Offenses</p>
+              {kpis.offenseTop.length === 0 ? (
+                <p className="text-xs text-muted-foreground">No offense data parsed yet</p>
+              ) : (
+                <div className="space-y-1">
+                  {kpis.offenseTop.map((x) => (
+                    <div key={x.name} className="text-xs flex justify-between gap-2">
+                      <span className="truncate">{x.name}</span><span className="font-semibold">{x.count}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </CardContent>

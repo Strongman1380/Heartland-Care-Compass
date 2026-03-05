@@ -367,6 +367,7 @@ export const ReferralTab = () => {
   const [archiveView, setArchiveView] = useState("active");
   const [historySearch, setHistorySearch] = useState("");
   const [poContactFilter, setPoContactFilter] = useState(false);
+  const [poFilter, setPoFilter] = useState("all");
   const [history, setHistory] = useState<ReferralHistoryItem[]>([]);
 
   const [visibleCount, setVisibleCount] = useState(15);
@@ -937,13 +938,23 @@ export const ReferralTab = () => {
     ? Object.values(parsed).reduce((sum, section) => sum + Object.keys(section).length, 0)
     : 0;
 
+  const uniquePONames = useMemo(() => {
+    const allPOs = history.flatMap(extractProbationOfficer);
+    return [...new Set(allPOs)].sort();
+  }, [history]);
+
   const filteredHistory = history.filter((item) => {
     if (archiveView === "active" && item.archived) return false;
     if (archiveView === "archived" && !item.archived) return false;
     if (historyFilter !== "all" && item.status !== historyFilter) return false;
     if (poContactFilter && item.poContactLog && item.poContactLog.length > 0) return false;
+    if (poFilter !== "all") {
+      const itemPOs = extractProbationOfficer(item).map((p) => p.toLowerCase());
+      if (!itemPOs.some((p) => p.includes(poFilter.toLowerCase()))) return false;
+    }
     if (!historySearch.trim()) return true;
-    const haystack = `${item.referralName} ${item.summary} ${item.staff} ${item.priority} ${item.referralSource}`.toLowerCase();
+    const poNames = extractProbationOfficer(item).join(" ");
+    const haystack = `${item.referralName} ${item.summary} ${item.staff} ${item.priority} ${item.referralSource} ${poNames}`.toLowerCase();
     return haystack.includes(historySearch.toLowerCase().trim());
   });
   const visibleHistory = filteredHistory.slice(0, visibleCount);
@@ -1571,7 +1582,7 @@ export const ReferralTab = () => {
               <CardDescription>Track referral notes and add interview reports for leadership</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-3">
                 <Select value={historyFilter} onValueChange={setHistoryFilter}>
                   <SelectTrigger><SelectValue placeholder="Filter status" /></SelectTrigger>
                   <SelectContent>
@@ -1587,6 +1598,15 @@ export const ReferralTab = () => {
                     <SelectItem value="waitlisted">Waitlisted</SelectItem>
                     <SelectItem value="accepted">Accepted / Admitted</SelectItem>
                     <SelectItem value="denied">Denied</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={poFilter} onValueChange={setPoFilter}>
+                  <SelectTrigger><SelectValue placeholder="Filter by PO" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All POs</SelectItem>
+                    {uniquePONames.map((po) => (
+                      <SelectItem key={po} value={po}>{po}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
                 <Select value={archiveView} onValueChange={setArchiveView}>
@@ -1792,6 +1812,9 @@ export const ReferralTab = () => {
                       </div>
                       <p className="text-sm font-semibold text-foreground">{item.referralName}</p>
                       {item.referralSource && <p className="text-xs text-muted-foreground">Source: {item.referralSource}</p>}
+                      {extractedPOs.length > 0 && (
+                        <p className="text-xs text-muted-foreground">PO: <span className="font-medium text-foreground">{extractedPOs.join(", ")}</span></p>
+                      )}
                       <p className="text-xs text-muted-foreground mt-1">Staff: {item.staff || "Unknown"} | Sections: {item.sectionCount}</p>
                       {item.archived && item.archiveReason && (
                         <p className="text-xs text-amber-700 mt-1">

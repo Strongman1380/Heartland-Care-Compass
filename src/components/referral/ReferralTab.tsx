@@ -1822,8 +1822,8 @@ export const ReferralTab = () => {
                       </div>
                       <p className="text-sm font-semibold text-foreground">{item.referralName}</p>
                       {item.referralSource && <p className="text-xs text-muted-foreground">Source: {item.referralSource}</p>}
-                      {extractedPOs.length > 0 && (
-                        <p className="text-xs text-muted-foreground">PO: <span className="font-medium text-foreground">{extractedPOs.join(", ")}</span></p>
+                      {extractProbationOfficer(item).length > 0 && (
+                        <p className="text-xs text-muted-foreground">PO: <span className="font-medium text-foreground">{extractProbationOfficer(item).join(", ")}</span></p>
                       )}
                       <p className="text-xs text-muted-foreground mt-1">Staff: {item.staff || "Unknown"} | Sections: {item.sectionCount}</p>
                       {item.archived && item.archiveReason && (

@@ -35,9 +35,9 @@ export default defineConfig(({ mode }) => {
         registerType: "autoUpdate",
         manifest: false, // use existing public/manifest.json
         workbox: {
-          // Only precache small static assets — exclude large JS bundles to avoid
-          // mobile browsers hanging during service worker installation
-          globPatterns: ["**/*.{html,css,ico,png,svg,woff2}"],
+          // No precaching — avoids stale SW serving wrong HTML/JS after deploys.
+          // Runtime caching only; the app remains installable as a PWA.
+          globPatterns: [],
           runtimeCaching: [
             {
               urlPattern: /^https:\/\/firestore\.googleapis\.com\/.*/i,

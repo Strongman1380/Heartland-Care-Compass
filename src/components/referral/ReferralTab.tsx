@@ -1735,6 +1735,15 @@ export const ReferralTab = () => {
                       }
                       return "";
                     })();
+                    const mailtoTo = inferredPoEmail
+                      ? encodeURIComponent(inferredPoEmail)
+                      : encodeURIComponent(friendlyPoName);
+
+                    const hrefCheck = `mailto:${mailtoTo}?subject=${encodeURIComponent(`Referral Follow-Up: ${item.referralName || 'the youth'}`)}&body=${encodeURIComponent(`Hi ${poFirstName},\n\nWe are reaching out to check whether ${item.referralName || 'this youth'} still needs placement. If placement is no longer needed or they have already been placed elsewhere, please reply to let us know so we can update our records.\n\nWe apologize if you haven't already heard from us regarding this referral. We've updated our referral process to make sure everything is documented and we can provide answers more quickly. This will help us offer better service times for kids and quicker case management responses for you.\n\nThank you,\nHeartland Admissions\nadmissions@heartlandboyshomenebraska.org`)}`;
+
+                    const hrefAccept = `mailto:${mailtoTo}?subject=${encodeURIComponent(`Placement Accepted for ${item.referralName || "the youth"}`)}&body=${encodeURIComponent(`Hi ${poFirstName},\n\nWe can accept ${item.referralName || "the youth"}. What intake date/time are you aiming for, and who is transporting?\n\nThank you,\nHeartland Admissions\nadmissions@heartlandboyshomenebraska.org`)}`;
+
+                    const hrefDeny = `mailto:${mailtoTo}?subject=${encodeURIComponent(`Referral Update for ${item.referralName || "the youth"}`)}&body=${encodeURIComponent(`Hi ${poFirstName},\n\nThanks for the referral for ${item.referralName || "the youth"}. We're not able to accept at this time due to [reason].\n\nThank you,\nHeartland Admissions\nadmissions@heartlandboyshomenebraska.org`)}`;
 
                     return (
                     <div key={rowKey} className="rounded-md border p-3">
@@ -1979,56 +1988,40 @@ export const ReferralTab = () => {
                         <span className="text-xs font-semibold text-gray-500 mr-1 flex items-center gap-1">
                           <Mail className="h-3 w-3" /> Quick Emails:
                         </span>
-                        <button
-                          onClick={() => sendAndLogEmail(item, "check_need", inferredPoEmail, poFirstName, {
-                            subject: `Referral Follow-Up: ${item.referralName || 'the youth'}`,
-                            message: `We are reaching out to check whether ${item.referralName || 'this youth'} still needs placement. If placement is no longer needed or they have already been placed elsewhere, please reply to let us know so we can update our records.\n\nWe apologize if you haven't already heard from us regarding this referral. We've updated our referral process to make sure everything is documented and we can provide answers more quickly. This will help us offer better service times for kids and quicker case management responses for you.`,
-                          })}
-                          disabled={sendingEmailId === rowKey + "check_need"}
-                          className="text-xs bg-blue-50 text-blue-700 hover:bg-blue-100 px-2 py-1 rounded border border-blue-200 transition-colors disabled:opacity-50 inline-flex items-center gap-1"
+                        <a
+                          href={hrefCheck}
+                          className="text-xs bg-blue-50 text-blue-700 hover:bg-blue-100 px-2 py-1 rounded border border-blue-200 transition-colors"
                         >
-                          {sendingEmailId === rowKey + "check_need" ? (
-                            <><Loader2 className="h-3 w-3 animate-spin" />Sending...</>
-                          ) : "Check Need"}
-                        </button>
-                        <button
-                          onClick={() => sendAndLogEmail(item, "accept", inferredPoEmail, poFirstName)}
-                          disabled={sendingEmailId === rowKey + "accept"}
-                          className="text-xs bg-green-50 text-green-700 hover:bg-green-100 px-2 py-1 rounded border border-green-200 transition-colors disabled:opacity-50 inline-flex items-center gap-1"
+                          Check Need
+                        </a>
+                        <a
+                          href={hrefAccept}
+                          className="text-xs bg-green-50 text-green-700 hover:bg-green-100 px-2 py-1 rounded border border-green-200 transition-colors"
                         >
-                          {sendingEmailId === rowKey + "accept" ? (
-                            <><Loader2 className="h-3 w-3 animate-spin" />Sending...</>
-                          ) : "Accept"}
-                        </button>
-                        <button
-                          onClick={() => sendAndLogEmail(item, "deny", inferredPoEmail, poFirstName, {
-                              subject: `Referral Update for ${item.referralName || "the youth"}`,
-                              message: `Thanks for the referral for ${item.referralName || "the youth"}. We're not able to accept at this time due to [reason].`,
-                            })}
-                          disabled={sendingEmailId === rowKey + "deny"}
-                          className="text-xs bg-red-50 text-red-700 hover:bg-red-100 px-2 py-1 rounded border border-red-200 transition-colors disabled:opacity-50 inline-flex items-center gap-1"
+                          Accept
+                        </a>
+                        <a
+                          href={hrefDeny}
+                          className="text-xs bg-red-50 text-red-700 hover:bg-red-100 px-2 py-1 rounded border border-red-200 transition-colors"
                         >
-                          {sendingEmailId === rowKey + "deny" ? (
-                            <><Loader2 className="h-3 w-3 animate-spin" />Sending...</>
-                          ) : "Deny"}
-                        </button>
-                        {item.interviewScheduledDate && (
-                          <button
-                            onClick={() => sendAndLogEmail(item, "interview", inferredPoEmail, poFirstName, {
-                              interview_date: format(new Date(item.interviewScheduledDate + "T00:00:00"), "MMMM d, yyyy"),
-                              interview_time: item.interviewTime
-                                ? new Date(`2000-01-01T${item.interviewTime}`).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })
-                                : "TBD",
-                              interview_place: item.interviewPlace || "TBD",
-                            })}
-                            disabled={sendingEmailId === rowKey + "interview"}
-                            className="text-xs bg-purple-50 text-purple-700 hover:bg-purple-100 px-2 py-1 rounded border border-purple-200 transition-colors disabled:opacity-50 inline-flex items-center gap-1"
-                          >
-                            {sendingEmailId === rowKey + "interview" ? (
-                              <><Loader2 className="h-3 w-3 animate-spin" />Sending...</>
-                            ) : "Interview"}
-                          </button>
-                        )}
+                          Deny
+                        </a>
+                        {item.interviewScheduledDate && (() => {
+                          const intDate = format(new Date(item.interviewScheduledDate + "T00:00:00"), "MMMM d, yyyy");
+                          const intTime = item.interviewTime
+                            ? new Date(`2000-01-01T${item.interviewTime}`).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })
+                            : "TBD";
+                          const intPlace = item.interviewPlace || "TBD";
+                          const hrefInterview = `mailto:${mailtoTo}?subject=${encodeURIComponent(`Interview Scheduled for ${item.referralName || "the youth"}`)}&body=${encodeURIComponent(`Hi ${poFirstName},\n\nWe'd like to schedule an interview for ${item.referralName || "the youth"}.\n\nDate: ${intDate}\nTime: ${intTime}\nLocation: ${intPlace}\n\nPlease confirm or let us know if adjustments are needed.\n\nThank you,\nHeartland Admissions\nadmissions@heartlandboyshomenebraska.org`)}`;
+                          return (
+                            <a
+                              href={hrefInterview}
+                              className="text-xs bg-purple-50 text-purple-700 hover:bg-purple-100 px-2 py-1 rounded border border-purple-200 transition-colors"
+                            >
+                              Interview
+                            </a>
+                          );
+                        })()}
                       </div>
 
                       <div className="mt-2 flex flex-wrap gap-2 border-t pt-2">

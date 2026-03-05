@@ -118,7 +118,7 @@ const CourtReportPreview = ({ data }: CourtReportPreviewProps) => {
     { label: 'Youth Name', value: data.youthName },
     { label: 'Date of Birth', value: data.dateOfBirth },
     { label: 'Report Date', value: data.reportDate, isDate: true },
-    { label: 'Reporting Officer', value: data.reportingOfficer },
+    { label: 'Reporting Staff', value: data.reportingOfficer },
   ];
 
   const sections = [
@@ -226,7 +226,7 @@ const CourtReportPreview = ({ data }: CourtReportPreviewProps) => {
             </header>
             <div className="grid gap-6 md:grid-cols-2 print:gap-4 print:mt-4">
               <div className="space-y-2">
-                <span className={fieldLabelClass}>Reporting Officer</span>
+                <span className={fieldLabelClass}>Reporting Staff</span>
                 <div className="h-10 border-b-2 border-slate-400 print:border-gray-700" />
               </div>
               <div className="space-y-2">
@@ -1432,7 +1432,7 @@ Write a professional summary suitable for a court report focusing on future plan
             />
           </div>
               <div>
-                <Label htmlFor="reportingOfficer">Reporting Officer</Label>
+                <Label htmlFor="reportingOfficer">Reporting Staff</Label>
                 <Input
                   id="reportingOfficer"
                   value={reportData.reportingOfficer}
@@ -1719,7 +1719,7 @@ Write a professional summary suitable for a court report focusing on future plan
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <div>
               <div className="border-b border-gray-400 mb-2 h-8"></div>
-              <p className="text-sm">Reporting Officer Signature</p>
+              <p className="text-sm">Reporting Staff Signature</p>
             </div>
             <div>
               <div className="border-b border-gray-400 mb-2 h-8"></div>

@@ -7,11 +7,12 @@ import {
   deleteDoc,
   getDoc,
   query,
-  orderBy
+  orderBy,
+  onSnapshot
 } from 'firebase/firestore'
 import { v4 as uuidv4 } from 'uuid'
 
-export type AlertRow = { id: string; title: string; body?: string; level: string; status: string; created_at: string; updated_at: string }
+export type AlertRow = { id: string; title: string; body?: string; level: string; status: string; created_at: string; updated_at: string; link?: string }
 
 export const alertsService = {
   async list(): Promise<AlertRow[]> {
@@ -31,5 +32,12 @@ export const alertsService = {
 
   async delete(id: string): Promise<void> {
     await deleteDoc(doc(db, 'alerts', id))
+  },
+
+  subscribe(callback: (rows: AlertRow[]) => void): () => void {
+    const q = query(collection(db, 'alerts'), orderBy('created_at', 'desc'))
+    return onSnapshot(q, (snapshot) => {
+      callback(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as AlertRow)))
+    })
   }
 }

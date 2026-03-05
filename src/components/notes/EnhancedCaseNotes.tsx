@@ -1157,6 +1157,11 @@ export const EnhancedCaseNotes = ({ youthId, youth }: EnhancedCaseNotesProps) =>
                           <span className="inline-flex items-center rounded-md border border-red-200 bg-red-50 px-2 py-0.5 text-xs text-red-700">
                             Level {y.level}
                           </span>
+                          {(y.currentGrade || y.grade) && (
+                            <span className="inline-flex items-center rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs text-amber-700">
+                              Grade {y.currentGrade || y.grade}
+                            </span>
+                          )}
                         </div>
                       </div>
                       {isCurrent && (
@@ -1197,7 +1202,7 @@ export const EnhancedCaseNotes = ({ youthId, youth }: EnhancedCaseNotesProps) =>
                   className={`flex-1 border transition-colors ${
                     createMode === "session"
                       ? "bg-[#823131] hover:bg-[#6b2828] text-white border-[#823131] shadow-md font-medium"
-                      : "bg-white border-slate-300 text-slate-700 hover:bg-slate-50 hover:text-slate-900"
+                      : "bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200"
                   }`}
                 >
                   Session Note
@@ -1208,7 +1213,7 @@ export const EnhancedCaseNotes = ({ youthId, youth }: EnhancedCaseNotesProps) =>
                   className={`flex-1 border transition-colors ${
                     createMode === "combined"
                       ? "bg-[#823131] hover:bg-[#6b2828] text-white border-[#823131] shadow-md font-medium"
-                      : "bg-white border-slate-300 text-slate-700 hover:bg-slate-50 hover:text-slate-900"
+                      : "bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200"
                   }`}
                 >
                   General / Shift (AI)
@@ -1219,7 +1224,7 @@ export const EnhancedCaseNotes = ({ youthId, youth }: EnhancedCaseNotesProps) =>
                   className={`flex-1 border transition-colors ${
                     createMode === "team-meeting"
                       ? "bg-blue-600 hover:bg-blue-700 text-white border-blue-600 shadow-md font-medium"
-                      : "bg-white border-blue-200 text-blue-700 hover:bg-blue-50 hover:text-blue-800"
+                      : "bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100"
                   }`}
                 >
                   <Users className="h-4 w-4 mr-1.5" />

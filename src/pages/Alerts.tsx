@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { alertsService } from '@/integrations/firebase/alertsService'
 import { toast } from "sonner";
 import { useYouth } from "@/hooks/useSupabase";
@@ -29,6 +30,7 @@ type Alert = {
   createdAt: Date;
   resolved?: boolean;
   category?: string;
+  link?: string;
 };
 
 type AlertTemplate = {
@@ -131,7 +133,21 @@ const ALERT_TEMPLATES: AlertTemplate[] = [
   }
 ];
 
+const mapRow = (r: import('@/integrations/firebase/alertsService').AlertRow): Alert => ({
+  id: r.id,
+  type: mapAlertType(r.level),
+  title: r.title,
+  description: r.body || '',
+  timestamp: 'Now',
+  priority: mapAlertPriority(r.level),
+  createdAt: new Date(r.created_at),
+  resolved: r.status === 'closed',
+  category: 'System',
+  link: r.link,
+});
+
 const Alerts = () => {
+  const navigate = useNavigate();
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isTemplateDialogOpen, setIsTemplateDialogOpen] = useState(false);
@@ -160,31 +176,16 @@ const Alerts = () => {
   const { youths, loading, loadYouths } = useYouth();
 
   useEffect(() => {
-    // Load youths from Supabase
     loadYouths();
-    // Load alerts from Supabase (fallback to empty)
-    (async () => {
-      try {
-        const remote = await alertsService.list();
-        const mapped = remote.map(r => ({
-          id: r.id,
-          type: mapAlertType(r.level),
-          title: r.title,
-          description: r.body || '',
-          timestamp: 'Now',
-          priority: mapAlertPriority(r.level),
-          createdAt: new Date(r.created_at),
-          resolved: r.status === 'closed',
-          category: 'System'
-        }))
-        setAlerts(mapped)
-      } catch {}
-    })();
-
     // Check notification permission status
     if ('Notification' in window) {
       setNotificationsEnabled(Notification.permission === 'granted');
     }
+    // Live subscription — updates whenever Firestore changes
+    const unsubscribe = alertsService.subscribe((rows) => {
+      setAlerts(rows.map(mapRow));
+    });
+    return () => unsubscribe();
   }, [loadYouths]);
 
   const requestNotificationPermission = async () => {
@@ -239,21 +240,8 @@ const Alerts = () => {
       resolved: false
     };
 
-    // Save to Supabase and update UI
+    // Save to Firestore — subscription will update UI automatically
     try { await alertsService.save({ title: alert.title, body: alert.description, level: alert.type, status: 'open' }) } catch {}
-    const remote = await alertsService.list();
-    const mapped = remote.map(r => ({
-      id: r.id,
-      type: mapAlertType(r.level),
-      title: r.title,
-      description: r.body || '',
-      timestamp: 'Now',
-      priority: mapAlertPriority(r.level),
-      createdAt: new Date(r.created_at),
-      resolved: r.status === 'closed',
-      category: 'System'
-    }))
-    setAlerts(mapped)
 
     // Send push notification if enabled
     if (notificationsEnabled) {
@@ -446,20 +434,7 @@ const Alerts = () => {
         await alertsService.save({ title: a.title, body: a.description, level: a.type, status: "open" });
       }
 
-      // Reload alerts
-      const remote = await alertsService.list();
-      const mapped = remote.map((r) => ({
-        id: r.id,
-        type: (r.level === "urgent" ? "urgent" : r.level === "warning" ? "warning" : "info") as Alert["type"],
-        title: r.title,
-        description: r.body || "",
-        timestamp: "Now",
-        priority: (r.level === "urgent" ? "high" : "medium") as Alert["priority"],
-        createdAt: new Date(r.created_at),
-        resolved: r.status === "closed",
-        category: "System",
-      }));
-      setAlerts(mapped);
+      // Subscription will update the list automatically
       toast.success(`Scan complete — ${generated.length} alert${generated.length !== 1 ? "s" : ""} generated.`);
     } catch (err) {
       toast.error("Scan failed: " + (err instanceof Error ? err.message : "Unknown error"));
@@ -734,7 +709,14 @@ const Alerts = () => {
                     <div>
                       <div className="flex items-center space-x-2">
                         <CardTitle className={`text-lg ${alert.resolved ? 'line-through text-gray-500' : ''}`}>
-                          {alert.title}
+                          {alert.link ? (
+                            <button
+                              onClick={() => navigate(alert.link!)}
+                              className="hover:underline text-left"
+                            >
+                              {alert.title}
+                            </button>
+                          ) : alert.title}
                         </CardTitle>
                         {alert.resolved && (
                           <Badge className="bg-green-100 text-green-800 border-green-200">

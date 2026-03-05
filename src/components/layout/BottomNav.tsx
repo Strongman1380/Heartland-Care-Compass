@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Home, Star, FileText, Bell, MoreHorizontal, BarChart3, BookOpen, Calendar, Gavel, GraduationCap, TrendingUp, Database, ClipboardList, ShieldAlert, ClipboardPaste, Clock, Upload } from "lucide-react";
+import { useUnresolvedAlertCount } from "@/hooks/useUnresolvedAlertCount";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 
 const primaryTabs = [
@@ -29,6 +30,7 @@ const secondaryRoutes = [
 export const BottomNav = () => {
   const location = useLocation();
   const [moreOpen, setMoreOpen] = useState(false);
+  const unresolvedAlertCount = useUnresolvedAlertCount();
 
   const isActive = (path: string) => {
     if (path === "/") return location.pathname === "/";
@@ -44,6 +46,7 @@ export const BottomNav = () => {
           const Icon = tab.icon;
           const active = isActive(tab.path);
 
+          const showBadge = tab.path === "/alerts" && unresolvedAlertCount > 0;
           return (
             <Link
               key={tab.path}
@@ -56,7 +59,14 @@ export const BottomNav = () => {
                 }
               `}
             >
-              <Icon className={`h-5 w-5 ${active ? "stroke-[2.5]" : ""}`} />
+              <span className="relative">
+                <Icon className={`h-5 w-5 ${active ? "stroke-[2.5]" : ""}`} />
+                {showBadge && (
+                  <span className="absolute -top-1.5 -right-1.5 flex items-center justify-center min-w-[16px] h-4 px-0.5 rounded-full bg-red-500 text-white text-[9px] font-bold leading-none">
+                    {unresolvedAlertCount > 99 ? "99+" : unresolvedAlertCount}
+                  </span>
+                )}
+              </span>
               <span className={`text-[10px] leading-tight hidden min-[321px]:block ${active ? "font-semibold" : "font-medium"}`}>
                 {tab.label}
               </span>

@@ -1251,7 +1251,7 @@ export const ReferralTab = () => {
     const priorityRoutine = active.filter((h) => !h.priority || h.priority === "routine").length;
 
     // AI screening recommendation breakdown
-    const parseRec = (h: ReferralHistoryItem) => { try { return JSON.parse(h.screeningResult).recommendation as string; } catch { return ""; } };
+    const parseRec = (h: ReferralHistoryItem) => { try { const clean = (h.screeningResult || "").trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim(); return JSON.parse(clean).recommendation as string; } catch { return ""; } };
     const aiInterview = active.filter((h) => parseRec(h) === "INTERVIEW").length;
     const aiConditions = active.filter((h) => parseRec(h) === "INTERVIEW_WITH_CONDITIONS").length;
     const aiDecline = active.filter((h) => parseRec(h) === "DECLINE").length;

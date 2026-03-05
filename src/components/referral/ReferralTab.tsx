@@ -1761,6 +1761,8 @@ export const ReferralTab = () => {
 
                     const hrefCheck = `mailto:${mailtoTo}?subject=${encodeURIComponent(`Referral Follow-Up: ${item.referralName || 'the youth'}`)}&body=${encodeURIComponent(`Hi ${poFirstName},\n\nWe are reaching out to check whether ${item.referralName || 'this youth'} still needs placement. If placement is no longer needed or they have already been placed elsewhere, please reply to let us know so we can update our records.\n\nWe apologize if you haven't already heard from us regarding this referral. We've updated our referral process to make sure everything is documented and we can provide answers more quickly. This will help us offer better service times for kids and quicker case management responses for you.\n\nThank you,\nHeartland Admissions\nadmissions@heartlandboyshomenebraska.org`)}`;
 
+                    const hrefInterviewRequest = `mailto:${mailtoTo}?subject=${encodeURIComponent(`Interview Request – ${item.referralName || 'the youth'}`)}&body=${encodeURIComponent(`Hi ${poFirstName},\n\nWe have received the referral for ${item.referralName || 'the youth'} and would like to schedule an interview to further assess placement fit at Heartland Boys Home.\n\nCould you please let us know your availability, or provide the best way to coordinate this with the youth and their family? We want to ensure the process is as smooth as possible for everyone involved.\n\nPlease feel free to reply to this email or contact us directly at admissions@heartlandboyshomenebraska.org.\n\nThank you for your time and for the work you do on behalf of the youth in your care.\n\nSincerely,\nHeartland Admissions\nHeartland Boys Home\nadmissions@heartlandboyshomenebraska.org`)}`;
+
                     const hrefAccept = `mailto:${mailtoTo}?subject=${encodeURIComponent(`Placement Accepted for ${item.referralName || "the youth"}`)}&body=${encodeURIComponent(`Hi ${poFirstName},\n\nWe can accept ${item.referralName || "the youth"}. What intake date/time are you aiming for, and who is transporting?\n\nThank you,\nHeartland Admissions\nadmissions@heartlandboyshomenebraska.org`)}`;
 
                     const hrefDeny = `mailto:${mailtoTo}?subject=${encodeURIComponent(`Referral Update for ${item.referralName || "the youth"}`)}&body=${encodeURIComponent(`Hi ${poFirstName},\n\nThanks for the referral for ${item.referralName || "the youth"}. We're not able to accept at this time due to [reason].\n\nThank you,\nHeartland Admissions\nadmissions@heartlandboyshomenebraska.org`)}`;
@@ -2016,6 +2018,12 @@ export const ReferralTab = () => {
                           className="text-xs bg-blue-50 text-blue-700 hover:bg-blue-100 px-2 py-1 rounded border border-blue-200 transition-colors"
                         >
                           Check Need
+                        </a>
+                        <a
+                          href={hrefInterviewRequest}
+                          className="text-xs bg-violet-50 text-violet-700 hover:bg-violet-100 px-2 py-1 rounded border border-violet-200 transition-colors"
+                        >
+                          Request Interview
                         </a>
                         <a
                           href={hrefAccept}

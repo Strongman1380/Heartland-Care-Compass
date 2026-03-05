@@ -2334,7 +2334,7 @@ export const ReferralTab = () => {
                       Bulk PO Outreach
                     </DialogTitle>
                     <DialogDescription>
-                      Pending referrals grouped by probation officer. One email per PO covers all their youth.
+                      Pending referrals with no prior PO contact, grouped by probation officer. One email per PO covers all their youth.
                     </DialogDescription>
                   </DialogHeader>
 
@@ -2360,8 +2360,20 @@ export const ReferralTab = () => {
                   {(() => {
                     const PENDING_STATUSES = new Set(["pending_interview", "interview_scheduled", "requested_more_info", "new", ""]);
                     const pendingItems = history.filter(
-                      (item) => !item.archived && PENDING_STATUSES.has(item.status || "")
+                      (item) => !item.archived && PENDING_STATUSES.has(item.status || "") && (item.poContactLog || []).length === 0
                     );
+
+                    const logBulkPoContact = async (items: ReferralHistoryItem[], emailTypeLabel: string, poEmail: string) => {
+                      const { v4: uuidv4 } = await import("uuid");
+                      const today = format(new Date(), "yyyy-MM-dd");
+                      await Promise.all(items.map(async (item) => {
+                        const note = `${emailTypeLabel} email opened via Bulk Outreach${poEmail ? ` (${poEmail})` : ""}`;
+                        const newEntry: POContactEntry = { id: uuidv4(), date: today, notes: note, followUpDate: "" };
+                        const updatedLog = [...(item.poContactLog || []), newEntry];
+                        await referralNotesService.update(toReferralLookup(item), { po_contact_log: updatedLog });
+                        setHistory((prev) => prev.map((h) => sameReferral(h, item) ? { ...h, poContactLog: updatedLog } : h));
+                      }));
+                    };
 
                     // Group by inferred PO email (or friendly name as fallback key)
                     const groups = new Map<string, { poEmail: string; poFirstName: string; poFriendly: string; items: ReferralHistoryItem[] }>();
@@ -2401,9 +2413,14 @@ export const ReferralTab = () => {
                       }
                     };
 
+                    const emailTypeLabel = bulkOutreachType === "check_need" ? "Check Need" : "Request Interview";
+
                     const openAll = () => {
                       groupList.forEach((group, i) => {
-                        setTimeout(() => { window.location.href = buildMailtoHref(group); }, i * 700);
+                        setTimeout(() => {
+                          window.location.href = buildMailtoHref(group);
+                          logBulkPoContact(group.items, emailTypeLabel, group.poEmail);
+                        }, i * 700);
                       });
                     };
 
@@ -2439,12 +2456,15 @@ export const ReferralTab = () => {
                                   ))}
                                 </ul>
                               </div>
-                              <a
-                                href={buildMailtoHref(group)}
+                              <button
+                                onClick={() => {
+                                  window.location.href = buildMailtoHref(group);
+                                  logBulkPoContact(group.items, emailTypeLabel, group.poEmail);
+                                }}
                                 className="shrink-0 text-xs bg-violet-50 text-violet-700 hover:bg-violet-100 px-3 py-1.5 rounded border border-violet-200 transition-colors whitespace-nowrap"
                               >
                                 Open Email
-                              </a>
+                              </button>
                             </div>
                           </div>
                         ))}

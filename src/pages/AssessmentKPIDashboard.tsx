@@ -28,6 +28,7 @@ import {
   Shield,
   RefreshCcw,
   FileDown,
+  UserMinus,
 } from 'lucide-react';
 import { Header } from '@/components/layout/Header';
 import { Button } from '@/components/ui/button';
@@ -45,6 +46,7 @@ import {
   type CaseNotes,
   type DailyRatings,
 } from '@/integrations/firebase/services';
+import { referralNotesService, type ReferralNoteRow } from '@/integrations/firebase/referralNotesService';
 
 type Timeframe = 'week' | 'month' | 'quarter' | 'year';
 
@@ -155,6 +157,7 @@ const AssessmentKPIDashboard = () => {
   const [reportGeneratedAt, setReportGeneratedAt] = useState('');
   const [reportPreparedBy, setReportPreparedBy] = useState('');
   const [kpiReports, setKpiReports] = useState<KpiReportRow[]>([]);
+  const [allReferrals, setAllReferrals] = useState<ReferralNoteRow[]>([]);
   const [historyView, setHistoryView] = useState<'active' | 'archived' | 'all'>('active');
   const [isSavingReport, setIsSavingReport] = useState(false);
 
@@ -164,17 +167,19 @@ const AssessmentKPIDashboard = () => {
         if (showLoading) setIsLoading(true);
         else setIsRefreshing(true);
 
-        const [youthResult, pointsResult, notesResult, reportsResult] = await Promise.allSettled([
+        const [youthResult, pointsResult, notesResult, reportsResult, referralsResult] = await Promise.allSettled([
           youthService.getAll(),
           behaviorPointsService.getAll(),
           caseNotesService.getAll(),
           kpiReportsService.list(),
+          referralNotesService.list(),
         ]);
 
         const youthData = youthResult.status === 'fulfilled' ? youthResult.value : [];
         const pointsData = pointsResult.status === 'fulfilled' ? pointsResult.value : [];
         const notesData = notesResult.status === 'fulfilled' ? notesResult.value : [];
         const reportData = reportsResult.status === 'fulfilled' ? reportsResult.value : [];
+        const referralData = referralsResult.status === 'fulfilled' ? referralsResult.value : [];
 
         if (youthResult.status === 'rejected') {
           console.error('KPI load failed: youthService.getAll()', youthResult.reason);
@@ -188,17 +193,22 @@ const AssessmentKPIDashboard = () => {
         if (reportsResult.status === 'rejected') {
           console.error('KPI load failed: kpiReportsService.list()', reportsResult.reason);
         }
+        if (referralsResult.status === 'rejected') {
+          console.error('KPI load failed: referralNotesService.list()', referralsResult.reason);
+        }
 
         console.log('Fetched data:', {
           youthCount: youthData.length,
           pointsCount: pointsData.length,
           notesCount: notesData.length,
-          reportsCount: reportData.length
+          reportsCount: reportData.length,
+          referralsCount: referralData.length,
         });
 
         setYouths(youthData);
         setAllBehaviorPoints(pointsData);
         setAllCaseNotes(notesData);
+        setAllReferrals(referralData);
 
         const ratingsPromises = youthData.map((youth) =>
           dailyRatingsService.getByYouthId(youth.id).catch(() => [])
@@ -417,6 +427,13 @@ const AssessmentKPIDashboard = () => {
       .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name))
       .slice(0, 5);
 
+    const approvedReferrals = allReferrals.filter((r) => {
+      const d = parseDate(r.referral_date || r.created_at);
+      return isInRange(d, startDate) && (r.staff_recommendation === 'yes' || r.staff_recommendation === 'maybe');
+    });
+    const missedPlacements = approvedReferrals.filter((r) => r.status === 'already_found_placement').length;
+    const missedPercent = approvedReferrals.length > 0 ? Math.round((missedPlacements / approvedReferrals.length) * 100) : 0;
+
     return {
       metrics: {
         activeYouth: youths.length,
@@ -437,6 +454,9 @@ const AssessmentKPIDashboard = () => {
         notesPerYouth,
         ratingsPerYouth,
         pointsPerYouth,
+        missedPlacements,
+        missedPercent,
+        approvedReferrals: approvedReferrals.length,
       },
       riskDistribution,
       levelDistribution,
@@ -446,7 +466,7 @@ const AssessmentKPIDashboard = () => {
       domainTrend,
       documentationByYouth,
     };
-  }, [youths, allCaseNotes, allBehaviorPoints, allDailyRatings, timeframe]);
+  }, [youths, allCaseNotes, allBehaviorPoints, allDailyRatings, allReferrals, timeframe]);
 
   const generateKpiReport = () => {
     const generatedAt = new Date();
@@ -462,6 +482,7 @@ const AssessmentKPIDashboard = () => {
           <li>Admissions in Window: ${analytics.metrics.admissionsInWindow}</li>
           <li>Average HYRNA Score: ${analytics.metrics.avgRiskScore || '--'}</li>
           <li>High-Risk Youth: ${analytics.metrics.highRiskYouth} (${analytics.metrics.highRiskPercent}%)</li>
+          <li>Missed Placements: ${analytics.metrics.missedPlacements} (${analytics.metrics.missedPercent}% of ${analytics.metrics.approvedReferrals} approved referrals)</li>
         </ul>
         <h2 style="margin: 16px 0 8px 0;">Behavioral Domain Averages (0–4 scale)</h2>
         <ul>
@@ -509,6 +530,9 @@ const AssessmentKPIDashboard = () => {
           avgAdult: analytics.metrics.avgDomain.adult,
           avgInvestment: analytics.metrics.avgDomain.investment,
           avgAuthority: analytics.metrics.avgDomain.authority,
+          missedPlacements: analytics.metrics.missedPlacements,
+          missedPercent: analytics.metrics.missedPercent,
+          approvedReferrals: analytics.metrics.approvedReferrals,
         },
         archived: false,
         archived_at: null,
@@ -662,7 +686,7 @@ const AssessmentKPIDashboard = () => {
         </div>
 
         <div className="max-w-5xl mx-auto space-y-4">
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium flex items-center gap-2"><Users className="h-4 w-4" />Active Youth</CardTitle>
@@ -686,6 +710,15 @@ const AssessmentKPIDashboard = () => {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{analytics.metrics.admissionsInWindow}</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium flex items-center gap-2"><UserMinus className="h-4 w-4" />Missed Placements</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{analytics.metrics.missedPlacements}</div>
+                <p className="text-xs text-muted-foreground">{analytics.metrics.missedPercent}% of {analytics.metrics.approvedReferrals} approved referrals</p>
               </CardContent>
             </Card>
           </div>

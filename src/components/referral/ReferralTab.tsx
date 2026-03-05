@@ -1150,7 +1150,7 @@ export const ReferralTab = () => {
       accept: import.meta.env.VITE_EMAILJS_ACCEPT_TEMPLATE_ID,
       deny: import.meta.env.VITE_EMAILJS_DENY_TEMPLATE_ID,
       interview: import.meta.env.VITE_EMAILJS_INTERVIEW_TEMPLATE_ID,
-      check_need: "template_aejmt3d",
+      check_need: import.meta.env.VITE_EMAILJS_CHECK_NEED_TEMPLATE_ID,
     };
     const labels: Record<string, string> = {
       accept: "Acceptance",

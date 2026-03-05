@@ -233,6 +233,24 @@ const extractProbationOfficer = (item: ReferralHistoryItem): string[] => {
   return dedup([...fromFields.map((x) => titleCase(x)), ...rawResults].filter(Boolean));
 };
 
+const derivePoContact = (item: ReferralHistoryItem): { email: string; firstName: string; friendlyName: string } => {
+  const extractedPOs = extractProbationOfficer(item);
+  const rawPOName = extractedPOs.length > 0 ? extractedPOs[0] : "";
+  const friendlyName = rawPOName.split(/[,\(0-9]/)[0].trim() || "Worker";
+  const firstName = friendlyName.split(" ")[0] || "Worker";
+  const clean = rawPOName.trim();
+  let email = "";
+  if (clean.includes(",")) {
+    const [last, rest] = clean.split(",");
+    const first = (rest || "").trim().split(/[\s\(]/)[0];
+    if (first && last.trim()) email = `${first.toLowerCase()}.${last.trim().toLowerCase()}@nejudicial.gov`;
+  } else {
+    const parts = clean.split(/\s+/);
+    if (parts.length >= 2) email = `${parts[0].toLowerCase()}.${parts[parts.length - 1].toLowerCase()}@nejudicial.gov`;
+  }
+  return { email, firstName, friendlyName: friendlyName };
+};
+
 const extractFirstEmail = (item: ReferralHistoryItem): string => {
   const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
   
@@ -383,6 +401,8 @@ export const ReferralTab = () => {
   const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null);
   const [archivingId, setArchivingId] = useState<string | null>(null);
   const [selectedReferralKeys, setSelectedReferralKeys] = useState<Set<string>>(new Set());
+  const [bulkOutreachOpen, setBulkOutreachOpen] = useState(false);
+  const [bulkOutreachType, setBulkOutreachType] = useState<"check_need" | "interview">("check_need");
   const [bulkStatus, setBulkStatus] = useState("no_change");
   const [bulkPriority, setBulkPriority] = useState("no_change");
   const [isBulkApplying, setIsBulkApplying] = useState(false);
@@ -1630,9 +1650,20 @@ export const ReferralTab = () => {
                   </Button>
                 </div>
               </div>
-              <p className="text-xs text-muted-foreground mb-3">
-                Bulk actions support archive, edit, and delete only. Interview report and view details are single-referral actions.
-              </p>
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-xs text-muted-foreground">
+                  Bulk actions support archive, edit, and delete only. Interview report and view details are single-referral actions.
+                </p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="shrink-0 ml-3 text-violet-700 border-violet-300 hover:bg-violet-50"
+                  onClick={() => setBulkOutreachOpen(true)}
+                >
+                  <Mail className="h-3.5 w-3.5 mr-1" />
+                  Bulk Outreach
+                </Button>
+              </div>
 
               {isLoadingHistory ? (
                 <p className="text-sm text-muted-foreground">Loading referral history...</p>
@@ -1731,30 +1762,7 @@ export const ReferralTab = () => {
                     const rowKey = referralRowKey(item);
                     const isExpanded = expandedReferralId === rowKey;
                     
-                    const extractedPOs = extractProbationOfficer(item);
-                    const rawPOName = extractedPOs.length > 0 ? extractedPOs[0] : "";
-                    const friendlyPoName = rawPOName.split(/[,\(0-9]/)[0].trim() || "Worker";
-                    const poFirstName = friendlyPoName.split(" ")[0] || "Worker";
-
-                    // Generate firstname.lastname@nejudicial.gov from PO name
-                    // Handles "Last, First ..." and "First Last" formats
-                    const inferredPoEmail = (() => {
-                      const clean = rawPOName.trim();
-                      if (!clean) return "";
-                      if (clean.includes(",")) {
-                        const [last, rest] = clean.split(",");
-                        const first = (rest || "").trim().split(/[\s\(]/)[0];
-                        if (first && last.trim()) {
-                          return `${first.toLowerCase()}.${last.trim().toLowerCase()}@nejudicial.gov`;
-                        }
-                      } else {
-                        const parts = clean.split(/\s+/);
-                        if (parts.length >= 2) {
-                          return `${parts[0].toLowerCase()}.${parts[parts.length - 1].toLowerCase()}@nejudicial.gov`;
-                        }
-                      }
-                      return "";
-                    })();
+                    const { email: inferredPoEmail, firstName: poFirstName, friendlyName: friendlyPoName } = derivePoContact(item);
                     const mailtoTo = inferredPoEmail
                       ? encodeURIComponent(inferredPoEmail)
                       : encodeURIComponent(friendlyPoName);
@@ -2314,6 +2322,135 @@ export const ReferralTab = () => {
                       </div>
                     )}
                   </div>
+                </DialogContent>
+              </Dialog>
+
+              {/* Bulk Outreach Dialog */}
+              <Dialog open={bulkOutreachOpen} onOpenChange={setBulkOutreachOpen}>
+                <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                      <Mail className="h-4 w-4 text-violet-600" />
+                      Bulk PO Outreach
+                    </DialogTitle>
+                    <DialogDescription>
+                      Pending referrals grouped by probation officer. One email per PO covers all their youth.
+                    </DialogDescription>
+                  </DialogHeader>
+
+                  {/* Email type selector */}
+                  <div className="flex items-center gap-3 pb-2 border-b">
+                    <span className="text-sm font-medium text-gray-700">Email type:</span>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setBulkOutreachType("check_need")}
+                        className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${bulkOutreachType === "check_need" ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50"}`}
+                      >
+                        Check Need
+                      </button>
+                      <button
+                        onClick={() => setBulkOutreachType("interview")}
+                        className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${bulkOutreachType === "interview" ? "bg-violet-600 text-white border-violet-600" : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50"}`}
+                      >
+                        Request Interview
+                      </button>
+                    </div>
+                  </div>
+
+                  {(() => {
+                    const PENDING_STATUSES = new Set(["pending_interview", "interview_scheduled", "requested_more_info", "new", ""]);
+                    const pendingItems = history.filter(
+                      (item) => !item.archived && PENDING_STATUSES.has(item.status || "")
+                    );
+
+                    // Group by inferred PO email (or friendly name as fallback key)
+                    const groups = new Map<string, { poEmail: string; poFirstName: string; poFriendly: string; items: ReferralHistoryItem[] }>();
+                    for (const item of pendingItems) {
+                      const { email, firstName, friendlyName } = derivePoContact(item);
+                      const key = email || friendlyName;
+                      if (!groups.has(key)) {
+                        groups.set(key, { poEmail: email, poFirstName: firstName, poFriendly: friendlyName, items: [] });
+                      }
+                      groups.get(key)!.items.push(item);
+                    }
+
+                    const groupList = [...groups.values()];
+
+                    if (groupList.length === 0) {
+                      return <p className="text-sm text-muted-foreground py-4 text-center">No pending referrals found.</p>;
+                    }
+
+                    const buildMailtoHref = (group: typeof groupList[0]): string => {
+                      const { poEmail, poFirstName, poFriendly, items } = group;
+                      const mailtoTo = poEmail ? encodeURIComponent(poEmail) : encodeURIComponent(poFriendly);
+                      const names = items.map((i) => i.referralName || "the youth");
+                      const isMulti = names.length > 1;
+
+                      if (bulkOutreachType === "check_need") {
+                        const subject = encodeURIComponent(isMulti ? `Referral Follow-Up – Multiple Youth` : `Referral Follow-Up: ${names[0]}`);
+                        const body = isMulti
+                          ? encodeURIComponent(`Hi ${poFirstName},\n\nWe are reaching out regarding the following youth on your caseload who have pending referrals with us:\n${names.map((n) => `  \u2022 ${n}`).join("\n")}\n\nCould you please let us know whether each youth still needs placement? If placement is no longer needed or they have already been placed elsewhere, please reply so we can update our records.\n\nWe apologize if you have already heard from us regarding any of these referrals. We have updated our process to ensure timely communication and better service times.\n\nThank you,\nHeartland Admissions\nadmissions@heartlandboyshomenebraska.org`)
+                          : encodeURIComponent(`Hi ${poFirstName},\n\nWe are reaching out to check whether ${names[0]} still needs placement. If placement is no longer needed or they have already been placed elsewhere, please reply to let us know so we can update our records.\n\nWe apologize if you haven't already heard from us regarding this referral. We've updated our referral process to make sure everything is documented and we can provide answers more quickly.\n\nThank you,\nHeartland Admissions\nadmissions@heartlandboyshomenebraska.org`);
+                        return `mailto:${mailtoTo}?subject=${subject}&body=${body}`;
+                      } else {
+                        const subject = encodeURIComponent(isMulti ? `Interview Request – Multiple Youth` : `Interview Request – ${names[0]}`);
+                        const body = isMulti
+                          ? encodeURIComponent(`Hi ${poFirstName},\n\nWe have received referrals for the following youth and would like to schedule interviews to further assess placement fit at Heartland Boys Home:\n${names.map((n) => `  \u2022 ${n}`).join("\n")}\n\nCould you please let us know your availability, or provide the best way to coordinate with each youth and their family? We want to ensure the process is as smooth as possible for everyone involved.\n\nPlease feel free to reply or contact us at admissions@heartlandboyshomenebraska.org.\n\nSincerely,\nHeartland Admissions\nHeartland Boys Home\nadmissions@heartlandboyshomenebraska.org`)
+                          : encodeURIComponent(`Hi ${poFirstName},\n\nWe have received the referral for ${names[0]} and would like to schedule an interview to further assess placement fit at Heartland Boys Home.\n\nCould you please let us know your availability, or provide the best way to coordinate this with the youth and their family?\n\nPlease feel free to reply or contact us at admissions@heartlandboyshomenebraska.org.\n\nSincerely,\nHeartland Admissions\nHeartland Boys Home\nadmissions@heartlandboyshomenebraska.org`);
+                        return `mailto:${mailtoTo}?subject=${subject}&body=${body}`;
+                      }
+                    };
+
+                    const openAll = () => {
+                      groupList.forEach((group, i) => {
+                        setTimeout(() => { window.location.href = buildMailtoHref(group); }, i * 700);
+                      });
+                    };
+
+                    return (
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm text-gray-600">
+                            <span className="font-semibold">{groupList.length}</span> PO{groupList.length !== 1 ? "s" : ""} · <span className="font-semibold">{pendingItems.length}</span> pending referral{pendingItems.length !== 1 ? "s" : ""}
+                          </p>
+                          <Button size="sm" variant="outline" className="text-violet-700 border-violet-300 hover:bg-violet-50" onClick={openAll}>
+                            <Mail className="h-3.5 w-3.5 mr-1" />
+                            Open All ({groupList.length})
+                          </Button>
+                        </div>
+
+                        {groupList.map((group) => (
+                          <div key={group.poEmail || group.poFriendly} className="rounded-lg border border-gray-200 p-3 bg-gray-50/50">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <p className="text-sm font-semibold text-gray-800 truncate">{group.poFriendly}</p>
+                                {group.poEmail && (
+                                  <p className="text-xs text-gray-500 truncate">{group.poEmail}</p>
+                                )}
+                                <ul className="mt-1.5 space-y-0.5">
+                                  {group.items.map((item) => (
+                                    <li key={item.id} className="text-xs text-gray-600 flex items-center gap-1">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-violet-400 shrink-0" />
+                                      {item.referralName || "Unknown youth"}
+                                      {item.status && (
+                                        <span className="text-gray-400">· {STATUS_LABELS[item.status] || item.status}</span>
+                                      )}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                              <a
+                                href={buildMailtoHref(group)}
+                                className="shrink-0 text-xs bg-violet-50 text-violet-700 hover:bg-violet-100 px-3 py-1.5 rounded border border-violet-200 transition-colors whitespace-nowrap"
+                              >
+                                Open Email
+                              </a>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
                 </DialogContent>
               </Dialog>
             </CardContent>

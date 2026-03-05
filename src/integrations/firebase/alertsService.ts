@@ -34,10 +34,13 @@ export const alertsService = {
     await deleteDoc(doc(db, 'alerts', id))
   },
 
-  subscribe(callback: (rows: AlertRow[]) => void): () => void {
+  subscribe(callback: (rows: AlertRow[]) => void, onError?: (err: unknown) => void): () => void {
     const q = query(collection(db, 'alerts'), orderBy('created_at', 'desc'))
     return onSnapshot(q, (snapshot) => {
       callback(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as AlertRow)))
+    }, (err) => {
+      console.error('[alertsService] subscribe error:', err)
+      onError?.(err)
     })
   }
 }

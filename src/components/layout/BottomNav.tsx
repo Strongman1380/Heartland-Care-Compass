@@ -60,9 +60,13 @@ export const BottomNav = () => {
               `}
             >
               <span className="relative">
-                <Icon className={`h-5 w-5 ${active ? "stroke-[2.5]" : ""}`} />
+                <Icon className={`h-5 w-5 ${active ? "stroke-[2.5]" : ""}`} aria-hidden="true" />
                 {showBadge && (
-                  <span className="absolute -top-1.5 -right-1.5 flex items-center justify-center min-w-[16px] h-4 px-0.5 rounded-full bg-red-500 text-white text-[9px] font-bold leading-none">
+                  <span
+                    role="status"
+                    aria-label={`${unresolvedAlertCount} unresolved alerts`}
+                    className="absolute -top-1.5 -right-1.5 flex items-center justify-center min-w-[16px] h-4 px-0.5 rounded-full bg-red-500 text-white text-[9px] font-bold leading-none"
+                  >
                     {unresolvedAlertCount > 99 ? "99+" : unresolvedAlertCount}
                   </span>
                 )}

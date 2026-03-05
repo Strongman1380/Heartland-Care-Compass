@@ -241,7 +241,13 @@ const Alerts = () => {
     };
 
     // Save to Firestore — subscription will update UI automatically
-    try { await alertsService.save({ title: alert.title, body: alert.description, level: alert.type, status: 'open' }) } catch {}
+    try {
+      await alertsService.save({ title: alert.title, body: alert.description, level: alert.type, status: 'open' });
+    } catch (err) {
+      console.error('[Alerts] Failed to save alert:', err);
+      toast.error('Failed to create alert. Please try again.');
+      return;
+    }
 
     // Send push notification if enabled
     if (notificationsEnabled) {

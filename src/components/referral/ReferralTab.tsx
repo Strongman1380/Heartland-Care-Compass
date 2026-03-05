@@ -1143,6 +1143,10 @@ export const ReferralTab = () => {
     poFirstName: string,
     extraParams?: Record<string, string>
   ) => {
+    if (!toEmail) {
+      toast.error("No PO email found — cannot send. Add a PO name to this referral first.");
+      return;
+    }
     const rowKey = referralRowKey(item);
     const loadingKey = rowKey + emailType;
     setSendingEmailId(loadingKey);
@@ -1164,6 +1168,7 @@ export const ReferralTab = () => {
         templateIds[emailType],
         {
           to_email: toEmail,
+          reply_to: "admissions@heartlandboyshomenebraska.org",
           po_first_name: poFirstName,
           youth_name: item.referralName || "the youth",
           date: format(new Date(), "MMMM d, yyyy"),
@@ -1186,8 +1191,9 @@ export const ReferralTab = () => {
       );
       toast.success(`${labels[emailType]} email sent and logged in PO contact log`);
     } catch (err) {
-      toast.error("Failed to send email — check EmailJS configuration in .env");
-      console.error(err);
+      const errMsg = err && typeof err === "object" && "text" in err ? (err as { text: string }).text : "Unknown error";
+      toast.error(`Failed to send email: ${errMsg}`);
+      console.error("EmailJS error:", err);
     } finally {
       setSendingEmailId(null);
     }

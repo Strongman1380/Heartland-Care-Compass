@@ -33,6 +33,8 @@ import {
 import { format, isValid } from "date-fns";
 import { toast } from "sonner";
 import { referralNotesService, type ReferralNoteRow, type POContactEntry } from "@/integrations/firebase/referralNotesService";
+import { alertService } from "@/utils/alertService";
+import { alertsService } from "@/integrations/firebase/alertsService";
 import { screenReferralIntake } from "@/services/aiService";
 import {
   type ParsedReferral,
@@ -603,7 +605,13 @@ export const ReferralTab = () => {
     try {
       setIsLoadingHistory(true);
       const rows = await referralNotesService.list();
-      setHistory(rows.map(toHistoryItem));
+      const items = rows.map(toHistoryItem);
+      setHistory(items);
+      // Run referral alert scan in the background (fire-and-forget)
+      alertsService.list().then((existing) => {
+        const existingTitles = new Set(existing.map((r) => r.title));
+        alertService.scanReferralAlerts(items, existingTitles).catch(() => {});
+      }).catch(() => {});
     } catch (error) {
       console.warn("Failed to load referral history:", error);
       setHistory([]);

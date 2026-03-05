@@ -269,6 +269,63 @@ class AlertService {
     }
   }
 
+  // Referral alert scan — call after referral history loads
+  async scanReferralAlerts(
+    items: Array<{
+      id?: string;
+      referralName: string;
+      status: string;
+      archived: boolean;
+      createdAt: string;
+      poContactLog: Array<unknown>;
+      interviewScheduledDate: string;
+    }>,
+    existingTitles: Set<string>
+  ): Promise<void> {
+    const now = new Date();
+    const MS_PER_DAY = 1000 * 60 * 60 * 24;
+
+    for (const item of items) {
+      if (item.archived) continue;
+      const name = item.referralName || "Unknown youth";
+      const created = new Date(item.createdAt);
+      const ageDays = isNaN(created.getTime()) ? 0 : Math.floor((now.getTime() - created.getTime()) / MS_PER_DAY);
+      const isPending = item.status === "pending_interview" || item.status === "new";
+
+      // 1. No PO contact after 3 days
+      if (isPending && (item.poContactLog || []).length === 0 && ageDays >= 3) {
+        const title = `No PO Contact — ${name}`;
+        if (!existingTitles.has(title)) {
+          await alertsService.save({ title, body: `${name} has been pending for ${ageDays} day${ageDays !== 1 ? "s" : ""} with no PO contact logged. Consider reaching out.`, level: "warning", status: "open", link: "/referrals" });
+          existingTitles.add(title);
+        }
+      }
+
+      // 2. Interview scheduled within 48 hrs
+      if (item.status === "interview_scheduled" && item.interviewScheduledDate) {
+        const interviewDate = new Date(item.interviewScheduledDate);
+        const daysUntil = isNaN(interviewDate.getTime()) ? Infinity : Math.ceil((interviewDate.getTime() - now.getTime()) / MS_PER_DAY);
+        if (daysUntil >= 0 && daysUntil <= 2) {
+          const title = `Interview Soon — ${name}`;
+          if (!existingTitles.has(title)) {
+            const when = daysUntil === 0 ? "today" : daysUntil === 1 ? "tomorrow" : "in 2 days";
+            await alertsService.save({ title, body: `Interview for ${name} is scheduled ${when} (${item.interviewScheduledDate}). Confirm logistics.`, level: "urgent", status: "open", link: "/referrals" });
+            existingTitles.add(title);
+          }
+        }
+      }
+
+      // 3. Stale referral — pending 7+ days
+      if (isPending && ageDays >= 7) {
+        const title = `Stale Referral — ${name}`;
+        if (!existingTitles.has(title)) {
+          await alertsService.save({ title, body: `${name}'s referral has been pending for ${ageDays} day${ageDays !== 1 ? "s" : ""} with no status update. Review and follow up.`, level: "warning", status: "open", link: "/referrals" });
+          existingTitles.add(title);
+        }
+      }
+    }
+  }
+
   // Enable/disable notifications
   setNotificationsEnabled(enabled: boolean) {
     this.notificationsEnabled = enabled;

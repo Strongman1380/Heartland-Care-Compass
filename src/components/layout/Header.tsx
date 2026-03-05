@@ -22,6 +22,7 @@ import { AddYouthDialog } from "@/components/youth/AddYouthDialog";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import { useUnresolvedAlertCount } from "@/hooks/useUnresolvedAlertCount";
 
 interface NavGroup {
   label: string;
@@ -87,6 +88,7 @@ export const Header = () => {
   const { toast } = useToast();
   const location = useLocation();
   const navigate = useNavigate();
+  const unresolvedAlertCount = useUnresolvedAlertCount();
   const { user, signOutUser } = useAuth();
 
   const isActive = (path: string) => {
@@ -191,6 +193,19 @@ export const Header = () => {
                   Offline
                 </Badge>
               )}
+
+              <button
+                onClick={() => navigate("/alerts")}
+                className="relative p-1.5 rounded-lg text-gray-600 hover:text-red-700 hover:bg-red-50 transition-colors"
+                aria-label="Alerts"
+              >
+                <Bell className="h-4 w-4" />
+                {unresolvedAlertCount > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 flex items-center justify-center min-w-[16px] h-4 px-0.5 rounded-full bg-red-500 text-white text-[9px] font-bold leading-none">
+                    {unresolvedAlertCount > 99 ? "99+" : unresolvedAlertCount}
+                  </span>
+                )}
+              </button>
 
               {!user ? (
                 <Button onClick={() => navigate("/auth")} variant="ghost" size="sm" className="text-xs h-8 px-2">

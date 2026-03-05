@@ -35,13 +35,14 @@ export default defineConfig(({ mode }) => {
         registerType: "autoUpdate",
         manifest: false, // use existing public/manifest.json
         workbox: {
-          maximumFileSizeToCacheInBytes: 4 * 1024 * 1024, // 4 MB
-          globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
+          // Only precache small static assets — exclude large JS bundles to avoid
+          // mobile browsers hanging during service worker installation
+          globPatterns: ["**/*.{html,css,ico,png,svg,woff2}"],
           runtimeCaching: [
             {
               urlPattern: /^https:\/\/firestore\.googleapis\.com\/.*/i,
               handler: "NetworkFirst",
-              options: { cacheName: "firestore-cache", networkTimeoutSeconds: 4 },
+              options: { cacheName: "firestore-cache", networkTimeoutSeconds: 10 },
             },
           ],
         },

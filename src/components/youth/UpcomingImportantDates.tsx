@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Calendar, Clock } from "lucide-react";
 import { Youth } from "@/integrations/firebase/types";
 import { format, isAfter, isBefore, addDays } from "date-fns";
+import { importantDatesService } from "@/integrations/firebase/importantDatesService";
 
 interface UpcomingImportantDatesProps {
   youth: Youth | null | undefined;
@@ -12,11 +13,11 @@ export const UpcomingImportantDates = ({ youth }: UpcomingImportantDatesProps) =
   const [dates, setDates] = useState<{ title: string; date: Date; type: string }[]>([]);
 
   useEffect(() => {
-    const extractDates = () => {
+    const extractDates = async () => {
       const upcomingDates: { title: string; date: Date; type: string }[] = [];
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-      
+
       // Helper to add date if it's in the future
       const addIfUpcoming = (dateStr: string | null | undefined, title: string, type: string, isBirthday: boolean = false) => {
         if (!dateStr) return;
@@ -24,7 +25,7 @@ export const UpcomingImportantDates = ({ youth }: UpcomingImportantDatesProps) =
           // Use local-midnight parsing to avoid UTC offset shifting the date
           const date = new Date(`${dateStr.split('T')[0]}T00:00:00`);
           if (isNaN(date.getTime())) return;
-          
+
           if (isBirthday) {
             // For birthdays, we want the next occurrence
             const nextBirthday = new Date(today.getFullYear(), date.getMonth(), date.getDate());
@@ -41,17 +42,27 @@ export const UpcomingImportantDates = ({ youth }: UpcomingImportantDatesProps) =
       };
 
       // Check various date fields in the youth object
-      addIfUpcoming(youth.dob, "Birthday", "Personal", true);
-      addIfUpcoming(youth.dischargeDate, "Expected Discharge", "Administrative");
-      addIfUpcoming(youth.hyrnaAssessmentDate, "HYRNA Assessment", "Assessment");
-      addIfUpcoming(youth.restrictionStartDate, "Restriction Start", "Behavioral");
-      addIfUpcoming(youth.subsystemStartDate, "Subsystem Start", "Behavioral");
-      
+      addIfUpcoming(youth!.dob, "Birthday", "Personal", true);
+      addIfUpcoming(youth!.dischargeDate, "Expected Discharge", "Administrative");
+      addIfUpcoming(youth!.hyrnaAssessmentDate, "HYRNA Assessment", "Assessment");
+      addIfUpcoming(youth!.restrictionStartDate, "Restriction Start", "Behavioral");
+      addIfUpcoming(youth!.subsystemStartDate, "Subsystem Start", "Behavioral");
+
+      // Fetch custom important dates from Firestore
+      try {
+        const customDates = await importantDatesService.getByYouthId(youth!.id);
+        for (const cd of customDates) {
+          addIfUpcoming(cd.date, cd.title, cd.type);
+        }
+      } catch (err) {
+        console.error("Failed to load custom important dates:", err);
+      }
+
       // Sort by date ascending
       upcomingDates.sort((a, b) => a.date.getTime() - b.date.getTime());
-      
-      // Take top 3
-      setDates(upcomingDates.slice(0, 3));
+
+      // Take top 5
+      setDates(upcomingDates.slice(0, 5));
     };
 
     if (youth) {
@@ -87,7 +98,7 @@ export const UpcomingImportantDates = ({ youth }: UpcomingImportantDatesProps) =
         <div className="space-y-3">
           {dates.map((item, idx) => {
             const isSoon = isBefore(item.date, addDays(new Date(), 7));
-            
+
             return (
               <div key={idx} className="flex items-center justify-between text-sm">
                 <div className="flex items-center gap-2">

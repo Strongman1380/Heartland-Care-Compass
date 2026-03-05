@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { Edit3, Check, X } from "lucide-react";
 import { toast } from "sonner";
+import { ManageImportantDates } from "./ManageImportantDates";
 
 interface PersonalInfoProfileTabProps {
   youth: Youth;
@@ -291,6 +292,8 @@ export const PersonalInfoProfileTab = ({ youth, onYouthUpdated }: PersonalInfoPr
           </div>
         </div>
       </div>
+
+      <ManageImportantDates youthId={youth.id} />
     </div>
   );
 };

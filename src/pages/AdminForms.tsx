@@ -285,10 +285,84 @@ function buildPspHtml() {
 }
 
 // ─────────────────────────────────────────────────────────────
+// Blank Daily DPN Scoring Form
+// ─────────────────────────────────────────────────────────────
+
+function buildDailyDpnHtml() {
+  const domains = [
+    { label: "Relationship and Interaction with Peers", short: "Peer Interaction" },
+    { label: "Relationship and Interaction with Adults", short: "Adult Interaction" },
+    { label: "Investment Level in Program and Personal Growth", short: "Investment Level" },
+    { label: "How the Resident Deals with Authority and Structure", short: "Authority / Structure" },
+  ];
+
+  const domainRows = domains
+    .map(
+      (d) => `
+    <tr>
+      <td style="border:1px solid #000;padding:6px 8px;font-weight:bold;font-size:9pt;width:55%">${d.label}</td>
+      <td style="border:1px solid #000;padding:6px 8px;text-align:center;width:15%">
+        <div style="display:flex;justify-content:center;gap:8px">
+          ${[0, 1, 2, 3, 4].map((n) => `<span style="display:inline-flex;align-items:center;gap:2px;font-size:9pt"><span style="display:inline-block;border:1px solid #000;width:14px;height:14px"></span>${n}</span>`).join("")}
+        </div>
+      </td>
+    </tr>
+    <tr>
+      <td colspan="2" style="border:1px solid #000;padding:4px 8px">
+        <div style="font-size:8pt;color:#555;margin-bottom:2px">Comments — ${d.short}:</div>
+        <div class="field-line"></div>
+        <div class="field-line"></div>
+      </td>
+    </tr>`
+    )
+    .join("");
+
+  return `
+  <h1>Heartland Boys Home</h1>
+  <h2>Daily Performance Notes (DPN) — Scoring Form</h2>
+  <hr style="margin:8px 0 12px;border-top:2px solid #000"/>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:14px;font-size:9pt">
+    <div><strong>Youth Name:</strong> <span class="line" style="width:150px">&nbsp;</span></div>
+    <div><strong>Date:</strong> <span class="line" style="width:120px">&nbsp;</span></div>
+    <div><strong>Staff Name:</strong> <span class="line" style="width:130px">&nbsp;</span></div>
+  </div>
+
+  <div style="margin-bottom:14px;font-size:9pt">
+    <strong>Time of Day:</strong>&nbsp;&nbsp;
+    ${["Morning", "Day", "Evening"].map((t) => `<span style="margin-right:16px"><span style="display:inline-block;border:1px solid #000;width:14px;height:14px;vertical-align:middle;margin-right:3px"></span>${t}</span>`).join("")}
+  </div>
+
+  <div style="border:1px solid #555;border-radius:3px;padding:6px;margin-bottom:14px;background:#f5f5f5;font-size:9pt">
+    <strong>Rating Scale (0–4):</strong>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr;gap:4px;margin-top:4px;font-weight:600;text-align:center">
+      <span>0 = Not Observed</span><span>1 = Poor</span><span>2 = Below Average</span><span>3 = Average</span><span>4 = Above Average</span>
+    </div>
+  </div>
+
+  <table style="margin-bottom:16px">
+    <tbody>${domainRows}</tbody>
+  </table>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;font-size:9pt">
+    <div><strong>Staff Signature:</strong> <span class="line" style="width:160px">&nbsp;</span></div>
+    <div><strong>Date / Time:</strong> <span class="line" style="width:140px">&nbsp;</span></div>
+  </div>`;
+}
+
+// ─────────────────────────────────────────────────────────────
 // Page component
 // ─────────────────────────────────────────────────────────────
 
 const FORMS = [
+  {
+    id: "dpn-daily",
+    title: "DPN Daily Scoring Form",
+    description: "Blank daily performance notes form with the four behavioral domains (0–4 scale), comment lines, and staff signature.",
+    icon: ClipboardList,
+    printLabel: "Print Blank Form",
+    onPrint: () => openPrintWindow("DPN Daily Scoring Form — Blank", buildDailyDpnHtml()),
+  },
   {
     id: "dpn-weekly",
     title: "DPN Weekly Progress Evaluation",

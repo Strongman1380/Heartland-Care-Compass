@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import emailjs from "@emailjs/browser";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -1386,338 +1387,320 @@ export const ReferralTab = () => {
 
       <Collapsible defaultOpen>
       <Card>
-        <CardHeader className="cursor-pointer">
+        <CardHeader className="cursor-pointer pb-2">
           <CollapsibleTrigger className="flex items-center justify-between w-full text-left">
             <div>
-              <CardTitle className="text-base">Referral KPI Snapshot</CardTitle>
-              <CardDescription>Operational intake and interview progress</CardDescription>
+              <CardTitle className="text-base">Referral KPI Dashboard</CardTitle>
+              <CardDescription>Operational intake metrics, source analysis, and intake trends</CardDescription>
             </div>
             <ChevronDown className="h-4 w-4 text-muted-foreground" />
           </CollapsibleTrigger>
         </CardHeader>
         <CollapsibleContent>
-        <CardContent className="space-y-3">
-          {/* Pipeline row */}
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-9 gap-3">
-            <div className="rounded-md border p-3">
-              <p className="text-xs text-muted-foreground">Total Received</p>
-              <p className="text-xl font-semibold">{kpis.totalReceived}</p>
-              <p className="text-xs text-muted-foreground mt-0.5">all time</p>
-            </div>
-            <div className="rounded-md border p-3">
-              <p className="text-xs text-muted-foreground">Active</p>
-              <p className="text-xl font-semibold">{kpis.total}</p>
-              <p className="text-xs text-muted-foreground mt-0.5">non-archived</p>
-            </div>
-            <div className="rounded-md border border-yellow-200 bg-yellow-50 p-3">
-              <p className="text-xs text-yellow-700">Pending</p>
-              <p className="text-xl font-semibold text-yellow-800">{kpis.pendingCount}</p>
-              <p className="text-xs text-yellow-600 mt-0.5">awaiting contact</p>
-            </div>
-            <div className="rounded-md border border-blue-200 bg-blue-50 p-3">
-              <p className="text-xs text-blue-700">Interview Scheduled</p>
-              <p className="text-xl font-semibold text-blue-800">{kpis.scheduledCount}</p>
-              <p className="text-xs text-blue-600 mt-0.5">confirmed dates</p>
-            </div>
-            <div className="rounded-md border border-teal-200 bg-teal-50 p-3">
-              <p className="text-xs text-teal-700">Interviewed – Yes</p>
-              <p className="text-xl font-semibold text-teal-800">{kpis.interviewedYes}</p>
-              <p className="text-xs text-teal-600 mt-0.5">proceeding</p>
-            </div>
-            <div className="rounded-md border border-orange-200 bg-orange-50 p-3">
-              <p className="text-xs text-orange-700">Interviewed – No</p>
-              <p className="text-xl font-semibold text-orange-800">{kpis.interviewedNo}</p>
-              <p className="text-xs text-orange-600 mt-0.5">not suitable</p>
-            </div>
-            <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3">
-              <p className="text-xs text-emerald-700">Accepted</p>
-              <p className="text-xl font-semibold text-emerald-800">{kpis.acceptedCount}</p>
-              {kpis.waitlistedCount > 0 && <p className="text-xs text-emerald-600 mt-0.5">{kpis.waitlistedCount} waitlisted</p>}
-            </div>
-            <div className="rounded-md border border-red-200 bg-red-50 p-3">
-              <p className="text-xs text-red-700">Denied</p>
-              <p className="text-xl font-semibold text-red-800">{kpis.deniedCount}</p>
-              <p className="text-xs text-red-600 mt-0.5">not accepted</p>
-            </div>
-            <div className="rounded-md border border-slate-300 bg-slate-100 p-3">
-              <p className="text-xs text-slate-700">Already Found Placement</p>
-              <p className="text-xl font-semibold text-slate-800">{kpis.alreadyFoundPlacement}</p>
-              <p className="text-xs text-slate-600 mt-0.5">{kpis.totalReceived > 0 ? Math.round((kpis.alreadyFoundPlacement / kpis.totalReceived) * 100) : 0}% of all referrals</p>
-            </div>
-          </div>
+        <CardContent className="pt-2">
+          <Tabs defaultValue="snapshot">
+            <TabsList className="w-full grid grid-cols-3 mb-4">
+              <TabsTrigger value="snapshot" className="text-xs">KPI Snapshot</TabsTrigger>
+              <TabsTrigger value="source_po" className="text-xs">Source & PO</TabsTrigger>
+              <TabsTrigger value="trends" className="text-xs">Intake Trends</TabsTrigger>
+            </TabsList>
 
-          {/* PO contact row */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-md border border-amber-200 bg-amber-50 p-3 flex items-center justify-between">
-              <div>
-                <p className="text-xs text-amber-700 font-medium">No PO Contact</p>
-                <p className="text-2xl font-bold text-amber-800">{kpis.noPoContact}</p>
-                <p className="text-xs text-amber-600 mt-0.5">active referrals needing outreach</p>
+            <TabsContent value="snapshot" className="space-y-3 mt-0">
+              {/* Pipeline row */}
+              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-9 gap-3">
+                <div className="rounded-md border p-3">
+                  <p className="text-xs text-muted-foreground">Total Received</p>
+                  <p className="text-xl font-semibold">{kpis.totalReceived}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">all time</p>
+                </div>
+                <div className="rounded-md border p-3">
+                  <p className="text-xs text-muted-foreground">Active</p>
+                  <p className="text-xl font-semibold">{kpis.total}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">non-archived</p>
+                </div>
+                <div className="rounded-md border border-yellow-200 bg-yellow-50 p-3">
+                  <p className="text-xs text-yellow-700">Pending</p>
+                  <p className="text-xl font-semibold text-yellow-800">{kpis.pendingCount}</p>
+                  <p className="text-xs text-yellow-600 mt-0.5">awaiting contact</p>
+                </div>
+                <div className="rounded-md border border-blue-200 bg-blue-50 p-3">
+                  <p className="text-xs text-blue-700">Interview Scheduled</p>
+                  <p className="text-xl font-semibold text-blue-800">{kpis.scheduledCount}</p>
+                  <p className="text-xs text-blue-600 mt-0.5">confirmed dates</p>
+                </div>
+                <div className="rounded-md border border-teal-200 bg-teal-50 p-3">
+                  <p className="text-xs text-teal-700">Interviewed – Yes</p>
+                  <p className="text-xl font-semibold text-teal-800">{kpis.interviewedYes}</p>
+                  <p className="text-xs text-teal-600 mt-0.5">proceeding</p>
+                </div>
+                <div className="rounded-md border border-orange-200 bg-orange-50 p-3">
+                  <p className="text-xs text-orange-700">Interviewed – No</p>
+                  <p className="text-xl font-semibold text-orange-800">{kpis.interviewedNo}</p>
+                  <p className="text-xs text-orange-600 mt-0.5">not suitable</p>
+                </div>
+                <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3">
+                  <p className="text-xs text-emerald-700">Accepted</p>
+                  <p className="text-xl font-semibold text-emerald-800">{kpis.acceptedCount}</p>
+                  {kpis.waitlistedCount > 0 && <p className="text-xs text-emerald-600 mt-0.5">{kpis.waitlistedCount} waitlisted</p>}
+                </div>
+                <div className="rounded-md border border-red-200 bg-red-50 p-3">
+                  <p className="text-xs text-red-700">Denied</p>
+                  <p className="text-xl font-semibold text-red-800">{kpis.deniedCount}</p>
+                  <p className="text-xs text-red-600 mt-0.5">not accepted</p>
+                </div>
+                <div className="rounded-md border border-slate-300 bg-slate-100 p-3">
+                  <p className="text-xs text-slate-700">Already Found Placement</p>
+                  <p className="text-xl font-semibold text-slate-800">{kpis.alreadyFoundPlacement}</p>
+                  <p className="text-xs text-slate-600 mt-0.5">{kpis.totalReceived > 0 ? Math.round((kpis.alreadyFoundPlacement / kpis.totalReceived) * 100) : 0}% of all referrals</p>
+                </div>
               </div>
-            </div>
-            <div className="rounded-md border border-green-200 bg-green-50 p-3 flex items-center justify-between">
-              <div>
-                <p className="text-xs text-green-700 font-medium">PO Contacted</p>
-                <p className="text-2xl font-bold text-green-800">{kpis.poContacted}</p>
-                <p className="text-xs text-green-600 mt-0.5">active referrals with contact logged</p>
-              </div>
-            </div>
-          </div>
 
-          {/* New KPIs row */}
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
-            <div className="rounded-md border border-indigo-200 bg-indigo-50 p-3">
-              <p className="text-xs text-indigo-700">Conversion Rate</p>
-              <p className="text-xl font-semibold text-indigo-800">{kpis.conversionRate}%</p>
-              <p className="text-xs text-indigo-600 mt-0.5">accepted / received</p>
-            </div>
-            <div className="rounded-md border border-violet-200 bg-violet-50 p-3">
-              <p className="text-xs text-violet-700">Placement Rate</p>
-              <p className="text-xl font-semibold text-violet-800">{kpis.placementRate}%</p>
-              <p className="text-xs text-violet-600 mt-0.5">accepted / decided</p>
-            </div>
-            <div className="rounded-md border border-cyan-200 bg-cyan-50 p-3">
-              <p className="text-xs text-cyan-700">Active Pipeline</p>
-              <p className="text-xl font-semibold text-cyan-800">{kpis.activePipeline}</p>
-              <p className="text-xs text-cyan-600 mt-0.5">in progress</p>
-            </div>
-            <div className="rounded-md border border-rose-200 bg-rose-50 p-3">
-              <p className="text-xs text-rose-700">Aging ({">"}14d)</p>
-              <p className="text-xl font-semibold text-rose-800">{kpis.agingReferrals}</p>
-              <p className="text-xs text-rose-600 mt-0.5">pending &gt; 2 weeks</p>
-            </div>
-            <div className="rounded-md border p-3">
-              <p className="text-xs text-muted-foreground">Avg Days to Interview</p>
-              <p className="text-xl font-semibold">{kpis.avgDaysToInterview ?? "—"}</p>
-              <p className="text-xs text-muted-foreground mt-0.5">referral → interview</p>
-            </div>
-            <div className="rounded-md border p-3">
-              <p className="text-xs text-muted-foreground">Avg Days to Decision</p>
-              <p className="text-xl font-semibold">{kpis.avgDaysToDecision ?? "—"}</p>
-              <p className="text-xs text-muted-foreground mt-0.5">referral → accept/deny</p>
-            </div>
-          </div>
+              {/* PO contact row */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-md border border-amber-200 bg-amber-50 p-3 flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-amber-700 font-medium">No PO Contact</p>
+                    <p className="text-2xl font-bold text-amber-800">{kpis.noPoContact}</p>
+                    <p className="text-xs text-amber-600 mt-0.5">active referrals needing outreach</p>
+                  </div>
+                </div>
+                <div className="rounded-md border border-green-200 bg-green-50 p-3 flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-green-700 font-medium">PO Contacted</p>
+                    <p className="text-2xl font-bold text-green-800">{kpis.poContacted}</p>
+                    <p className="text-xs text-green-600 mt-0.5">active referrals with contact logged</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* New KPIs row */}
+              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+                <div className="rounded-md border border-indigo-200 bg-indigo-50 p-3">
+                  <p className="text-xs text-indigo-700">Conversion Rate</p>
+                  <p className="text-xl font-semibold text-indigo-800">{kpis.conversionRate}%</p>
+                  <p className="text-xs text-indigo-600 mt-0.5">accepted / received</p>
+                </div>
+                <div className="rounded-md border border-violet-200 bg-violet-50 p-3">
+                  <p className="text-xs text-violet-700">Placement Rate</p>
+                  <p className="text-xl font-semibold text-violet-800">{kpis.placementRate}%</p>
+                  <p className="text-xs text-violet-600 mt-0.5">accepted / decided</p>
+                </div>
+                <div className="rounded-md border border-cyan-200 bg-cyan-50 p-3">
+                  <p className="text-xs text-cyan-700">Active Pipeline</p>
+                  <p className="text-xl font-semibold text-cyan-800">{kpis.activePipeline}</p>
+                  <p className="text-xs text-cyan-600 mt-0.5">in progress</p>
+                </div>
+                <div className="rounded-md border border-rose-200 bg-rose-50 p-3">
+                  <p className="text-xs text-rose-700">Aging ({">"}14d)</p>
+                  <p className="text-xl font-semibold text-rose-800">{kpis.agingReferrals}</p>
+                  <p className="text-xs text-rose-600 mt-0.5">pending &gt; 2 weeks</p>
+                </div>
+                <div className="rounded-md border p-3">
+                  <p className="text-xs text-muted-foreground">Avg Days to Interview</p>
+                  <p className="text-xl font-semibold">{kpis.avgDaysToInterview ?? "—"}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">referral → interview</p>
+                </div>
+                <div className="rounded-md border p-3">
+                  <p className="text-xs text-muted-foreground">Avg Days to Decision</p>
+                  <p className="text-xl font-semibold">{kpis.avgDaysToDecision ?? "—"}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">referral → accept/deny</p>
+                </div>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="source_po" className="space-y-4 mt-0">
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                <div className="rounded-md border p-3"><p className="text-xs text-muted-foreground">Unique Sources</p><p className="text-xl font-semibold">{kpis.uniqueSources}</p></div>
+                <div className="rounded-md border p-3"><p className="text-xs text-muted-foreground">Unique Counties</p><p className="text-xl font-semibold">{kpis.uniqueCounties}</p></div>
+                <div className="rounded-md border p-3"><p className="text-xs text-muted-foreground">Unique Cities</p><p className="text-xl font-semibold">{kpis.uniqueCities}</p></div>
+                <div className="rounded-md border p-3"><p className="text-xs text-muted-foreground">Unique States</p><p className="text-xl font-semibold">{kpis.uniqueStates}</p></div>
+                <div className="rounded-md border p-3"><p className="text-xs text-muted-foreground">Unique POs</p><p className="text-xl font-semibold">{kpis.uniquePOs}</p></div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3">
+                <div className="rounded-md border p-3">
+                  <p className="text-xs font-medium text-muted-foreground mb-2">Top Sources</p>
+                  <div className="space-y-1">
+                    {kpis.sourceTop.length === 0 ? <p className="text-xs text-muted-foreground">No source data yet</p> : kpis.sourceTop.map((x) => (
+                      <div key={x.name} className="text-xs flex justify-between gap-2"><span className="truncate">{x.name}</span><span className="font-semibold">{x.count}</span></div>
+                    ))}
+                  </div>
+                </div>
+                <div className="rounded-md border p-3">
+                  <p className="text-xs font-medium text-muted-foreground mb-2">Top Counties</p>
+                  <div className="space-y-1">
+                    {kpis.countyTop.length === 0 ? <p className="text-xs text-muted-foreground">No county data yet</p> : kpis.countyTop.map((x) => (
+                      <div key={x.name} className="text-xs flex justify-between gap-2"><span className="truncate">{x.name}</span><span className="font-semibold">{x.count}</span></div>
+                    ))}
+                  </div>
+                </div>
+                <div className="rounded-md border p-3">
+                  <p className="text-xs font-medium text-muted-foreground mb-2">Top Cities</p>
+                  <div className="space-y-1">
+                    {kpis.cityTop.length === 0 ? <p className="text-xs text-muted-foreground">No city data yet</p> : kpis.cityTop.map((x) => (
+                      <div key={x.name} className="text-xs flex justify-between gap-2"><span className="truncate">{x.name}</span><span className="font-semibold">{x.count}</span></div>
+                    ))}
+                  </div>
+                </div>
+                <div className="rounded-md border p-3">
+                  <p className="text-xs font-medium text-muted-foreground mb-2">Top States</p>
+                  <div className="space-y-1">
+                    {kpis.stateTop.length === 0 ? <p className="text-xs text-muted-foreground">No state data yet</p> : kpis.stateTop.map((x) => (
+                      <div key={x.name} className="text-xs flex justify-between gap-2"><span className="truncate">{x.name}</span><span className="font-semibold">{x.count}</span></div>
+                    ))}
+                  </div>
+                </div>
+                <div className="rounded-md border p-3">
+                  <p className="text-xs font-medium text-muted-foreground mb-2">Top POs</p>
+                  <div className="space-y-1">
+                    {kpis.poTop.length === 0 ? <p className="text-xs text-muted-foreground">No PO data yet</p> : kpis.poTop.map((x) => (
+                      <div key={x.name} className="text-xs flex justify-between gap-2"><span className="truncate">{x.name}</span><span className="font-semibold">{x.count}</span></div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="trends" className="space-y-4 mt-0">
+              {/* Priority + AI Screening + Staff Rec */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="rounded-md border p-3">
+                  <p className="text-xs font-medium text-muted-foreground mb-2">Priority Breakdown</p>
+                  <div className="space-y-1.5">
+                    {kpis.priorityUrgent > 0 && (
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500 inline-block" />Urgent</span>
+                        <span className="font-semibold text-red-700">{kpis.priorityUrgent}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-400 inline-block" />High</span>
+                      <span className="font-semibold">{kpis.priorityHigh}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-gray-300 inline-block" />Routine</span>
+                      <span className="font-semibold">{kpis.priorityRoutine}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-md border p-3">
+                  <p className="text-xs font-medium text-muted-foreground mb-2">AI Screening Results <span className="font-normal text-muted-foreground">({kpis.aiScreened} screened)</span></p>
+                  {kpis.aiScreened === 0 ? (
+                    <p className="text-xs text-muted-foreground">No AI screenings yet</p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" />Interview</span>
+                        <span className="font-semibold text-green-700">{kpis.aiInterview}</span>
+                      </div>
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-yellow-400 inline-block" />Conditions</span>
+                        <span className="font-semibold text-yellow-700">{kpis.aiConditions}</span>
+                      </div>
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-400 inline-block" />Decline</span>
+                        <span className="font-semibold text-red-700">{kpis.aiDecline}</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="rounded-md border p-3">
+                  <p className="text-xs font-medium text-muted-foreground mb-2">Staff Recommendation</p>
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" />Yes</span>
+                      <span className="font-semibold text-green-700">{kpis.staffYes}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-yellow-400 inline-block" />Maybe</span>
+                      <span className="font-semibold text-yellow-700">{kpis.staffMaybe}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-400 inline-block" />No</span>
+                      <span className="font-semibold text-red-700">{kpis.staffNo}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Age + Gender + Diagnoses + Offenses */}
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+                <div className="rounded-md border p-3">
+                  <p className="text-xs font-medium text-muted-foreground mb-2">Average Age</p>
+                  {kpis.avgAge === null ? (
+                    <p className="text-xs text-muted-foreground">No age data parsed yet</p>
+                  ) : (
+                    <>
+                      <p className="text-2xl font-bold">{kpis.avgAge}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">across {kpis.ageWithData} referrals with age data</p>
+                    </>
+                  )}
+                </div>
+
+                <div className="rounded-md border p-3">
+                  <p className="text-xs font-medium text-muted-foreground mb-2">Gender</p>
+                  {kpis.genderTop.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">No gender data parsed yet</p>
+                  ) : (
+                    <div className="space-y-1">
+                      {kpis.genderTop.map((x) => (
+                        <div key={x.name} className="text-xs flex justify-between gap-2">
+                          <span>{x.name}</span><span className="font-semibold">{x.count}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="rounded-md border p-3">
+                  <p className="text-xs font-medium text-muted-foreground mb-2">Top Diagnoses</p>
+                  {kpis.diagnosisTop.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">No diagnosis data parsed yet</p>
+                  ) : (
+                    <div className="space-y-1">
+                      {kpis.diagnosisTop.map((x) => (
+                        <div key={x.name} className="text-xs flex justify-between gap-2">
+                          <span className="truncate">{x.name}</span><span className="font-semibold">{x.count}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="rounded-md border p-3">
+                  <p className="text-xs font-medium text-muted-foreground mb-2">Top Offenses</p>
+                  {kpis.offenseTop.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">No offense data parsed yet</p>
+                  ) : (
+                    <div className="space-y-1">
+                      {kpis.offenseTop.map((x) => (
+                        <div key={x.name} className="text-xs flex justify-between gap-2">
+                          <span className="truncate">{x.name}</span><span className="font-semibold">{x.count}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </TabsContent>
+          </Tabs>
         </CardContent>
         </CollapsibleContent>
       </Card>
       </Collapsible>
 
-      <Collapsible defaultOpen>
-      <Card>
-        <CardHeader className="cursor-pointer">
-          <CollapsibleTrigger className="flex items-center justify-between w-full text-left">
-            <div>
-              <CardTitle className="text-base">Referral Source and PO KPI</CardTitle>
-              <CardDescription>Track intake origin by source, county, city, state, and probation officer volume</CardDescription>
-            </div>
-            <ChevronDown className="h-4 w-4 text-muted-foreground" />
-          </CollapsibleTrigger>
-        </CardHeader>
-        <CollapsibleContent>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-            <div className="rounded-md border p-3"><p className="text-xs text-muted-foreground">Unique Sources</p><p className="text-xl font-semibold">{kpis.uniqueSources}</p></div>
-            <div className="rounded-md border p-3"><p className="text-xs text-muted-foreground">Unique Counties</p><p className="text-xl font-semibold">{kpis.uniqueCounties}</p></div>
-            <div className="rounded-md border p-3"><p className="text-xs text-muted-foreground">Unique Cities</p><p className="text-xl font-semibold">{kpis.uniqueCities}</p></div>
-            <div className="rounded-md border p-3"><p className="text-xs text-muted-foreground">Unique States</p><p className="text-xl font-semibold">{kpis.uniqueStates}</p></div>
-            <div className="rounded-md border p-3"><p className="text-xs text-muted-foreground">Unique POs</p><p className="text-xl font-semibold">{kpis.uniquePOs}</p></div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3">
-            <div className="rounded-md border p-3">
-              <p className="text-xs font-medium text-muted-foreground mb-2">Top Sources</p>
-              <div className="space-y-1">
-                {kpis.sourceTop.length === 0 ? <p className="text-xs text-muted-foreground">No source data yet</p> : kpis.sourceTop.map((x) => (
-                  <div key={x.name} className="text-xs flex justify-between gap-2"><span className="truncate">{x.name}</span><span className="font-semibold">{x.count}</span></div>
-                ))}
-              </div>
-            </div>
-            <div className="rounded-md border p-3">
-              <p className="text-xs font-medium text-muted-foreground mb-2">Top Counties</p>
-              <div className="space-y-1">
-                {kpis.countyTop.length === 0 ? <p className="text-xs text-muted-foreground">No county data yet</p> : kpis.countyTop.map((x) => (
-                  <div key={x.name} className="text-xs flex justify-between gap-2"><span className="truncate">{x.name}</span><span className="font-semibold">{x.count}</span></div>
-                ))}
-              </div>
-            </div>
-            <div className="rounded-md border p-3">
-              <p className="text-xs font-medium text-muted-foreground mb-2">Top Cities</p>
-              <div className="space-y-1">
-                {kpis.cityTop.length === 0 ? <p className="text-xs text-muted-foreground">No city data yet</p> : kpis.cityTop.map((x) => (
-                  <div key={x.name} className="text-xs flex justify-between gap-2"><span className="truncate">{x.name}</span><span className="font-semibold">{x.count}</span></div>
-                ))}
-              </div>
-            </div>
-            <div className="rounded-md border p-3">
-              <p className="text-xs font-medium text-muted-foreground mb-2">Top States</p>
-              <div className="space-y-1">
-                {kpis.stateTop.length === 0 ? <p className="text-xs text-muted-foreground">No state data yet</p> : kpis.stateTop.map((x) => (
-                  <div key={x.name} className="text-xs flex justify-between gap-2"><span className="truncate">{x.name}</span><span className="font-semibold">{x.count}</span></div>
-                ))}
-              </div>
-            </div>
-            <div className="rounded-md border p-3">
-              <p className="text-xs font-medium text-muted-foreground mb-2">Top POs</p>
-              <div className="space-y-1">
-                {kpis.poTop.length === 0 ? <p className="text-xs text-muted-foreground">No PO data yet</p> : kpis.poTop.map((x) => (
-                  <div key={x.name} className="text-xs flex justify-between gap-2"><span className="truncate">{x.name}</span><span className="font-semibold">{x.count}</span></div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </CardContent>
-        </CollapsibleContent>
-      </Card>
-      </Collapsible>
-
-      {/* Intake Trends */}
-      <Collapsible defaultOpen>
-      <Card>
-        <CardHeader className="cursor-pointer">
-          <CollapsibleTrigger className="flex items-center justify-between w-full text-left">
-            <div>
-              <CardTitle className="text-base">Intake Trends</CardTitle>
-              <CardDescription>Demographics, clinical profile, and screening patterns across active referrals</CardDescription>
-            </div>
-            <ChevronDown className="h-4 w-4 text-muted-foreground" />
-          </CollapsibleTrigger>
-        </CardHeader>
-        <CollapsibleContent>
-        <CardContent className="space-y-4">
-          {/* Priority + AI Screening + Staff Rec */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div className="rounded-md border p-3">
-              <p className="text-xs font-medium text-muted-foreground mb-2">Priority Breakdown</p>
-              <div className="space-y-1.5">
-                {kpis.priorityUrgent > 0 && (
-                  <div className="flex justify-between items-center text-xs">
-                    <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500 inline-block" />Urgent</span>
-                    <span className="font-semibold text-red-700">{kpis.priorityUrgent}</span>
-                  </div>
-                )}
-                <div className="flex justify-between items-center text-xs">
-                  <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-400 inline-block" />High</span>
-                  <span className="font-semibold">{kpis.priorityHigh}</span>
-                </div>
-                <div className="flex justify-between items-center text-xs">
-                  <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-gray-300 inline-block" />Routine</span>
-                  <span className="font-semibold">{kpis.priorityRoutine}</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="rounded-md border p-3">
-              <p className="text-xs font-medium text-muted-foreground mb-2">AI Screening Results <span className="font-normal text-muted-foreground">({kpis.aiScreened} screened)</span></p>
-              {kpis.aiScreened === 0 ? (
-                <p className="text-xs text-muted-foreground">No AI screenings yet</p>
-              ) : (
-                <div className="space-y-1.5">
-                  <div className="flex justify-between items-center text-xs">
-                    <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" />Interview</span>
-                    <span className="font-semibold text-green-700">{kpis.aiInterview}</span>
-                  </div>
-                  <div className="flex justify-between items-center text-xs">
-                    <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-yellow-400 inline-block" />Conditions</span>
-                    <span className="font-semibold text-yellow-700">{kpis.aiConditions}</span>
-                  </div>
-                  <div className="flex justify-between items-center text-xs">
-                    <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-400 inline-block" />Decline</span>
-                    <span className="font-semibold text-red-700">{kpis.aiDecline}</span>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="rounded-md border p-3">
-              <p className="text-xs font-medium text-muted-foreground mb-2">Staff Recommendation</p>
-              <div className="space-y-1.5">
-                <div className="flex justify-between items-center text-xs">
-                  <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" />Yes</span>
-                  <span className="font-semibold text-green-700">{kpis.staffYes}</span>
-                </div>
-                <div className="flex justify-between items-center text-xs">
-                  <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-yellow-400 inline-block" />Maybe</span>
-                  <span className="font-semibold text-yellow-700">{kpis.staffMaybe}</span>
-                </div>
-                <div className="flex justify-between items-center text-xs">
-                  <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-400 inline-block" />No</span>
-                  <span className="font-semibold text-red-700">{kpis.staffNo}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Age + Gender + Diagnoses + Offenses */}
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
-            <div className="rounded-md border p-3">
-              <p className="text-xs font-medium text-muted-foreground mb-2">Average Age</p>
-              {kpis.avgAge === null ? (
-                <p className="text-xs text-muted-foreground">No age data parsed yet</p>
-              ) : (
-                <>
-                  <p className="text-2xl font-bold">{kpis.avgAge}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">across {kpis.ageWithData} referrals with age data</p>
-                </>
-              )}
-            </div>
-
-            <div className="rounded-md border p-3">
-              <p className="text-xs font-medium text-muted-foreground mb-2">Gender</p>
-              {kpis.genderTop.length === 0 ? (
-                <p className="text-xs text-muted-foreground">No gender data parsed yet</p>
-              ) : (
-                <div className="space-y-1">
-                  {kpis.genderTop.map((x) => (
-                    <div key={x.name} className="text-xs flex justify-between gap-2">
-                      <span>{x.name}</span><span className="font-semibold">{x.count}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="rounded-md border p-3">
-              <p className="text-xs font-medium text-muted-foreground mb-2">Top Diagnoses</p>
-              {kpis.diagnosisTop.length === 0 ? (
-                <p className="text-xs text-muted-foreground">No diagnosis data parsed yet</p>
-              ) : (
-                <div className="space-y-1">
-                  {kpis.diagnosisTop.map((x) => (
-                    <div key={x.name} className="text-xs flex justify-between gap-2">
-                      <span className="truncate">{x.name}</span><span className="font-semibold">{x.count}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="rounded-md border p-3">
-              <p className="text-xs font-medium text-muted-foreground mb-2">Top Offenses</p>
-              {kpis.offenseTop.length === 0 ? (
-                <p className="text-xs text-muted-foreground">No offense data parsed yet</p>
-              ) : (
-                <div className="space-y-1">
-                  {kpis.offenseTop.map((x) => (
-                    <div key={x.name} className="text-xs flex justify-between gap-2">
-                      <span className="truncate">{x.name}</span><span className="font-semibold">{x.count}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </CardContent>
-        </CollapsibleContent>
-      </Card>
-      </Collapsible>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="space-y-4">
-          <Card>
-            <CardHeader>
+      <Collapsible defaultOpen={false}>
+        <Card>
+          <CardHeader className="pb-2">
+            <CollapsibleTrigger className="flex items-center justify-between w-full text-left">
               <CardTitle className="text-base flex items-center gap-2"><ClipboardPaste className="h-4 w-4" /> Paste Referral Text</CardTitle>
-              <CardDescription>Paste referral packet, intake email, or placement document</CardDescription>
-            </CardHeader>
+              <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform" />
+            </CollapsibleTrigger>
+            <CardDescription>Paste referral packet, intake email, or placement document</CardDescription>
+          </CardHeader>
+          <CollapsibleContent>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -1785,175 +1768,172 @@ export const ReferralTab = () => {
                   Bulk mode active: {parsedEntries.length} referrals detected and will be saved as separate referral notes.
                 </p>
               )}
-              <Textarea
-                value={rawText}
-                onChange={(e) => {
-                  setRawText(e.target.value);
-                  setParsed(null);
-                }}
-                rows={16}
-                placeholder="Paste referral text here..."
-                className="font-mono text-sm"
-              />
-              <div className="flex gap-2">
-                <Button onClick={handleParse} disabled={!rawText.trim() || isParsing} className="flex-1">
-                  {isParsing ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Parsing...</> : "Parse Referral"}
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => handleAIScreen(rawText)}
-                  disabled={!rawText.trim() || isScreeningNew}
-                  className="border-purple-300 text-purple-700 hover:bg-purple-50"
-                >
-                  {isScreeningNew ? <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" />Screening...</> : <><Sparkles className="h-4 w-4 mr-1.5" />AI Screen</>}
-                </Button>
-                {(rawText || parsed) && (
-                  <Button variant="outline" onClick={() => { handleReset(); setNewReferralScreening(""); }}><RotateCcw className="h-4 w-4 mr-1" />Reset</Button>
-                )}
+              <div className="flex gap-2 items-start">
+                <Textarea
+                  value={rawText}
+                  onChange={(e) => {
+                    setRawText(e.target.value);
+                    setParsed(null);
+                  }}
+                  rows={5}
+                  placeholder="Paste referral text here..."
+                  className="font-mono text-sm flex-1"
+                />
+                <div className="flex flex-col gap-2 shrink-0">
+                  <Button onClick={handleParse} disabled={!rawText.trim() || isParsing} className="whitespace-nowrap">
+                    {isParsing ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Parsing...</> : "Parse Referral"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleAIScreen(rawText)}
+                    disabled={!rawText.trim() || isScreeningNew}
+                    className="border-purple-300 text-purple-700 hover:bg-purple-50 whitespace-nowrap"
+                  >
+                    {isScreeningNew ? <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" />Screening...</> : <><Sparkles className="h-4 w-4 mr-1.5" />AI Screen</>}
+                  </Button>
+                  {(rawText || parsed) && (
+                    <Button variant="outline" size="sm" onClick={() => { handleReset(); setNewReferralScreening(""); }}><RotateCcw className="h-4 w-4 mr-1" />Reset</Button>
+                  )}
+                </div>
               </div>
             </CardContent>
-          </Card>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
 
-          {newReferralScreening && (
-            <Card className="border-purple-200 bg-purple-50/40">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm flex items-center gap-2 text-purple-800">
-                  <Sparkles className="h-4 w-4" />AI Screening Result
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {renderAIScreening(newReferralScreening)}
-              </CardContent>
-            </Card>
-          )}
+      {newReferralScreening && (
+        <Card className="border-purple-200 bg-purple-50/40">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-2 text-purple-800">
+              <Sparkles className="h-4 w-4" />AI Screening Result
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {renderAIScreening(newReferralScreening)}
+          </CardContent>
+        </Card>
+      )}
 
-          {parsed && (
-            <Card>
-              <CardHeader><CardTitle className="text-base">Save Referral Note</CardTitle></CardHeader>
-              <CardContent className="space-y-3">
-                <p className="text-xs text-muted-foreground">
-                  Saving with global metadata above: Date, Staff Name, Status, and Priority.
-                </p>
-                <Button onClick={handleSave} disabled={isSaving} className="w-full">
-                  {isSaving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving...</> : <><Save className="h-4 w-4 mr-2" />Save Referral Note</>}
-                </Button>
-              </CardContent>
-            </Card>
-          )}
-          {parsedEntries.length > 1 && (
-            <Card>
-              <CardHeader><CardTitle className="text-base">Save Referral Notes</CardTitle></CardHeader>
-              <CardContent className="space-y-3">
-                <p className="text-xs text-muted-foreground">
-                  Staff name and metadata from the top section will be applied to all {parsedEntries.length} parsed notes.
-                </p>
-                <Button onClick={handleSave} disabled={isSaving} className="w-full">
-                  {isSaving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving...</> : <><Save className="h-4 w-4 mr-2" />Save {parsedEntries.length} Referral Notes</>}
-                </Button>
-              </CardContent>
-            </Card>
-          )}
-        </div>
+      {parsed && (
+        <Card>
+          <CardHeader><CardTitle className="text-base">Save Referral Note</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-xs text-muted-foreground">
+              Saving with global metadata above: Date, Staff Name, Status, and Priority.
+            </p>
+            <Button onClick={handleSave} disabled={isSaving} className="w-full">
+              {isSaving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving...</> : <><Save className="h-4 w-4 mr-2" />Save Referral Note</>}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+      {parsedEntries.length > 1 && (
+        <Card>
+          <CardHeader><CardTitle className="text-base">Save Referral Notes</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-xs text-muted-foreground">
+              Staff name and metadata from the top section will be applied to all {parsedEntries.length} parsed notes.
+            </p>
+            <Button onClick={handleSave} disabled={isSaving} className="w-full">
+              {isSaving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving...</> : <><Save className="h-4 w-4 mr-2" />Save {parsedEntries.length} Referral Notes</>}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
-        <div className="space-y-4">
-          {!parsed && parsedEntries.length === 0 ? (
-            <Card className="border-dashed border-2">
-              <CardContent className="flex flex-col items-center justify-center py-16 text-gray-400">
-                <ClipboardPaste className="h-12 w-12 mb-4" />
-                <p className="text-center font-medium">Paste referral text and click "Parse Referral"</p>
-                <p className="text-center text-sm mt-1">Structured sections will appear here</p>
-              </CardContent>
-            </Card>
-          ) : parsedEntries.length > 1 ? (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Bulk Referral Preview</CardTitle>
-                <CardDescription>{parsedEntries.length} referral entries detected — each will be saved as an individual card</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {parsedEntries.map((entry, idx) => {
-                    const fieldCount = Object.values(entry.parsed).reduce((sum, section) => sum + Object.keys(section).length, 0);
-                    const dob = entry.parsed.demographics["Date of Birth"] || entry.parsed.demographics["DOB"] || entry.parsed.demographics["dob"] || "";
-                    const age = entry.parsed.demographics["Age"] || entry.parsed.demographics["age"] || "";
-                    const gender = entry.parsed.demographics["Sex"] || entry.parsed.demographics["Gender"] || "";
-                    return (
-                      <div key={idx} className="rounded-md border p-3 bg-gray-50">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex-1">
-                            <p className="text-sm font-semibold text-gray-900">
-                              {idx + 1}. {entry.referralName || `Referral ${idx + 1}`}
-                            </p>
-                            <div className="mt-1 flex flex-wrap gap-2">
-                              {age && <span className="text-xs text-gray-600">Age: {age}</span>}
-                              {gender && <span className="text-xs text-gray-600">• {gender}</span>}
-                              {dob && <span className="text-xs text-gray-600">• DOB: {dob}</span>}
-                            </div>
-                            {entry.referralSource && (
-                              <p className="text-xs text-gray-500 mt-1">Source: {entry.referralSource}</p>
-                            )}
-                            {entry.caseWorker && (
-                              <p className="text-xs text-blue-700 mt-0.5 font-medium">PO / Case Worker: {entry.caseWorker}</p>
-                            )}
-                          </div>
-                          <Badge variant="outline" className="shrink-0">{fieldCount} fields</Badge>
+      {parsedEntries.length > 1 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Bulk Referral Preview</CardTitle>
+            <CardDescription>{parsedEntries.length} referral entries detected — each will be saved as an individual card</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {parsedEntries.map((entry, idx) => {
+                const fieldCount = Object.values(entry.parsed).reduce((sum, section) => sum + Object.keys(section).length, 0);
+                const dob = entry.parsed.demographics["Date of Birth"] || entry.parsed.demographics["DOB"] || entry.parsed.demographics["dob"] || "";
+                const age = entry.parsed.demographics["Age"] || entry.parsed.demographics["age"] || "";
+                const gender = entry.parsed.demographics["Sex"] || entry.parsed.demographics["Gender"] || "";
+                return (
+                  <div key={idx} className="rounded-md border p-3 bg-gray-50">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1">
+                        <p className="text-sm font-semibold text-gray-900">
+                          {idx + 1}. {entry.referralName || `Referral ${idx + 1}`}
+                        </p>
+                        <div className="mt-1 flex flex-wrap gap-2">
+                          {age && <span className="text-xs text-gray-600">Age: {age}</span>}
+                          {gender && <span className="text-xs text-gray-600">• {gender}</span>}
+                          {dob && <span className="text-xs text-gray-600">• DOB: {dob}</span>}
                         </div>
+                        {entry.referralSource && (
+                          <p className="text-xs text-gray-500 mt-1">Source: {entry.referralSource}</p>
+                        )}
+                        {entry.caseWorker && (
+                          <p className="text-xs text-blue-700 mt-0.5 font-medium">PO / Case Worker: {entry.caseWorker}</p>
+                        )}
                       </div>
-                    );
-                  })}
+                      <Badge variant="outline" className="shrink-0">{fieldCount} fields</Badge>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {parsed && parsedEntries.length <= 1 && (
+        <>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Badge variant="secondary" className="text-sm">{totalFields} fields parsed</Badge>
+            {SECTION_CONFIG_UI.filter((s) => sectionHasContent(parsed[s.key])).map((s) => (
+              <Badge key={s.key} className={badgeColorMap[s.color]}>{s.label} ({Object.keys(parsed[s.key]).length})</Badge>
+            ))}
+          </div>
+
+          {SECTION_CONFIG_UI.map((sectionDef) => {
+            const data = parsed[sectionDef.key];
+            if (!sectionHasContent(data)) return null;
+            const Icon = sectionDef.icon;
+            return (
+              <Card key={sectionDef.key} className={`border ${colorMap[sectionDef.color].split(" ").slice(1).join(" ")}`}>
+                <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><Icon className="h-4 w-4" />{sectionDef.label}</CardTitle></CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 gap-1.5">
+                    {Object.entries(data).map(([key, val]) => (
+                      <div key={key} className="flex gap-2 text-sm">
+                        <span className="font-medium text-gray-600 min-w-[140px] shrink-0">{key}:</span>
+                        <span className="text-gray-900">{val}</span>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+
+          {sectionHasContent(parsed.other) && (
+            <Card className="border border-gray-200">
+              <CardHeader className="pb-2"><CardTitle className="text-sm">Other Information</CardTitle></CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 gap-1.5">
+                  {Object.entries(parsed.other).map(([key, val]) => (
+                    <div key={key} className="text-sm">
+                      {key === "Referral Notes" ? (
+                        <div className="whitespace-pre-wrap text-gray-800">{val}</div>
+                      ) : (
+                        <div className="flex gap-2"><span className="font-medium text-gray-600 min-w-[140px] shrink-0">{key}:</span><span className="text-gray-900">{val}</span></div>
+                      )}
+                    </div>
+                  ))}
                 </div>
               </CardContent>
             </Card>
-          ) : (
-            <>
-              <div className="flex items-center gap-2 flex-wrap">
-                <Badge variant="secondary" className="text-sm">{totalFields} fields parsed</Badge>
-                {SECTION_CONFIG_UI.filter((s) => sectionHasContent(parsed[s.key])).map((s) => (
-                  <Badge key={s.key} className={badgeColorMap[s.color]}>{s.label} ({Object.keys(parsed[s.key]).length})</Badge>
-                ))}
-              </div>
-
-              {SECTION_CONFIG_UI.map((sectionDef) => {
-                const data = parsed[sectionDef.key];
-                if (!sectionHasContent(data)) return null;
-                const Icon = sectionDef.icon;
-                return (
-                  <Card key={sectionDef.key} className={`border ${colorMap[sectionDef.color].split(" ").slice(1).join(" ")}`}>
-                    <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><Icon className="h-4 w-4" />{sectionDef.label}</CardTitle></CardHeader>
-                    <CardContent>
-                      <div className="grid grid-cols-1 gap-1.5">
-                        {Object.entries(data).map(([key, val]) => (
-                          <div key={key} className="flex gap-2 text-sm">
-                            <span className="font-medium text-gray-600 min-w-[140px] shrink-0">{key}:</span>
-                            <span className="text-gray-900">{val}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-
-              {sectionHasContent(parsed.other) && (
-                <Card className="border border-gray-200">
-                  <CardHeader className="pb-2"><CardTitle className="text-sm">Other Information</CardTitle></CardHeader>
-                  <CardContent>
-                    <div className="grid grid-cols-1 gap-1.5">
-                      {Object.entries(parsed.other).map(([key, val]) => (
-                        <div key={key} className="text-sm">
-                          {key === "Referral Notes" ? (
-                            <div className="whitespace-pre-wrap text-gray-800">{val}</div>
-                          ) : (
-                            <div className="flex gap-2"><span className="font-medium text-gray-600 min-w-[140px] shrink-0">{key}:</span><span className="text-gray-900">{val}</span></div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-            </>
           )}
+        </>
+      )}
 
           <Card>
             <CardHeader>
@@ -2135,58 +2115,67 @@ export const ReferralTab = () => {
                     const hrefDeny = `mailto:${mailtoTo}?subject=${encodeURIComponent(`Referral Update for ${item.referralName || "the youth"}`)}&body=${encodeURIComponent(`Hi ${poFirstName},\n\nThanks for the referral for ${item.referralName || "the youth"}. We're not able to accept at this time due to [reason].\n\nThank you,\nHeartland Admissions\nadmissions@heartlandboyshomenebraska.org`)}`;
 
                     return (
-                    <div key={rowKey} className="rounded-md border p-3">
-                      <div className="flex items-center justify-between mb-1 gap-2 flex-wrap">
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="checkbox"
-                            checked={selectedReferralKeys.has(rowKey)}
-                            onChange={(e) => toggleReferralSelection(item, e.target.checked)}
-                          />
-                          <span className="text-xs text-muted-foreground">{formattedDate}</span>
-                        </div>
-                        <div className="flex items-center gap-1 flex-wrap">
-                          <Badge variant="outline">{item.fieldCount} fields</Badge>
-                          <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${STATUS_COLORS[item.status] || STATUS_COLORS.new}`}>
-                            {STATUS_LABELS[item.status] || item.status}
-                          </span>
-                          <Badge variant="secondary">{item.priority}</Badge>
-                          {item.staffRecommendation === "yes" && <Badge className="bg-green-100 text-green-800 border-green-300">Staff: Yes</Badge>}
-                          {item.staffRecommendation === "maybe" && <Badge className="bg-yellow-100 text-yellow-800 border-yellow-300">Staff: Maybe</Badge>}
-                          {item.staffRecommendation === "no" && <Badge className="bg-red-100 text-red-800 border-red-300">Staff: No</Badge>}
-                          {item.interviewScheduledDate && (
-                            <Badge className="bg-blue-100 text-blue-800 border-blue-300">
-                              Interview: {format(new Date(item.interviewScheduledDate + "T00:00:00"), "MMM d, yyyy")}
-                            </Badge>
-                          )}
-                          {item.archived && <Badge variant="outline">archived</Badge>}
-                          {(() => {
-                            const sr = item.screeningResult || aiScreeningResults[rowKey] || "";
-                            if (!sr) return null;
-                            try {
-                              const clean = sr.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
-                              const parsed = JSON.parse(clean);
-                              const rec = parsed.recommendation || "";
-                              const styles: Record<string, string> = {
-                                INTERVIEW: "bg-green-100 text-green-800 border-green-300",
-                                INTERVIEW_WITH_CONDITIONS: "bg-yellow-100 text-yellow-800 border-yellow-300",
-                                DECLINE: "bg-red-100 text-red-800 border-red-300",
-                              };
-                              return <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium border ${styles[rec] || "bg-purple-100 text-purple-800 border-purple-300"}`}><Sparkles className="h-3 w-3" />{rec.replace(/_/g, " ") || "AI Screened"}</span>;
-                            } catch {
-                              return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium border bg-purple-100 text-purple-800 border-purple-300"><Sparkles className="h-3 w-3" />AI Screened</span>;
-                            }
-                          })()}
-                        </div>
+                    <div key={rowKey} className={`rounded-md border transition-colors ${isExpanded ? "p-3 border-blue-200 bg-blue-50/20" : "p-2 hover:bg-slate-50 cursor-pointer"}`}>
+                      {/* Compact summary row — always visible */}
+                      <div
+                        className="flex items-center gap-2 flex-wrap"
+                        onClick={(e) => {
+                          // Don't toggle if clicking on checkbox or interactive elements
+                          if ((e.target as HTMLElement).closest('input[type="checkbox"]')) return;
+                          setExpandedReferralId(isExpanded ? null : rowKey);
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedReferralKeys.has(rowKey)}
+                          onChange={(e) => toggleReferralSelection(item, e.target.checked)}
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                        <span className="text-sm font-semibold text-foreground truncate max-w-[180px]">{item.referralName}</span>
+                        {item.referralSource && <span className="text-xs text-muted-foreground truncate max-w-[120px]">{item.referralSource}</span>}
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${STATUS_COLORS[item.status] || STATUS_COLORS.new}`}>
+                          {STATUS_LABELS[item.status] || item.status}
+                        </span>
+                        <Badge variant="secondary" className="text-xs">{item.priority}</Badge>
+                        {item.staffRecommendation === "yes" && <Badge className="bg-green-100 text-green-800 border-green-300 text-xs">Staff: Yes</Badge>}
+                        {item.staffRecommendation === "maybe" && <Badge className="bg-yellow-100 text-yellow-800 border-yellow-300 text-xs">Staff: Maybe</Badge>}
+                        {item.staffRecommendation === "no" && <Badge className="bg-red-100 text-red-800 border-red-300 text-xs">Staff: No</Badge>}
+                        {item.interviewScheduledDate && (
+                          <Badge className="bg-blue-100 text-blue-800 border-blue-300 text-xs">
+                            Interview: {format(new Date(item.interviewScheduledDate + "T00:00:00"), "MMM d, yyyy")}
+                          </Badge>
+                        )}
+                        {item.archived && <Badge variant="outline" className="text-xs">archived</Badge>}
+                        {(() => {
+                          const sr = item.screeningResult || aiScreeningResults[rowKey] || "";
+                          if (!sr) return null;
+                          try {
+                            const clean = sr.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
+                            const parsed = JSON.parse(clean);
+                            const rec = parsed.recommendation || "";
+                            const styles: Record<string, string> = {
+                              INTERVIEW: "bg-green-100 text-green-800 border-green-300",
+                              INTERVIEW_WITH_CONDITIONS: "bg-yellow-100 text-yellow-800 border-yellow-300",
+                              DECLINE: "bg-red-100 text-red-800 border-red-300",
+                            };
+                            return <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium border ${styles[rec] || "bg-purple-100 text-purple-800 border-purple-300"}`}><Sparkles className="h-3 w-3" />{rec.replace(/_/g, " ") || "AI Screened"}</span>;
+                          } catch {
+                            return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium border bg-purple-100 text-purple-800 border-purple-300"><Sparkles className="h-3 w-3" />AI Screened</span>;
+                          }
+                        })()}
+                        <span className="text-xs text-muted-foreground ml-auto shrink-0">{formattedDate}</span>
+                        {isExpanded ? <ChevronUp className="h-4 w-4 text-muted-foreground shrink-0" /> : <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />}
                       </div>
-                      <p className="text-sm font-semibold text-foreground">{item.referralName}</p>
-                      {item.referralSource && <p className="text-xs text-muted-foreground">Source: {item.referralSource}</p>}
+
+                      {/* Expanded content — shown on click */}
+                      {isExpanded && (
+                      <div className="mt-3 pt-3 border-t space-y-3">
                       {extractProbationOfficer(item).length > 0 && (
                         <p className="text-xs text-muted-foreground">PO: <span className="font-medium text-foreground">{extractProbationOfficer(item).join(", ")}</span></p>
                       )}
-                      <p className="text-xs text-muted-foreground mt-1">Staff: {item.staff || "Unknown"} | Sections: {item.sectionCount}</p>
+                      <p className="text-xs text-muted-foreground">Staff: {item.staff || "Unknown"} | Sections: {item.sectionCount} | Fields: {item.fieldCount}</p>
                       {item.archived && item.archiveReason && (
-                        <p className="text-xs text-amber-700 mt-1">
+                        <p className="text-xs text-amber-700">
                           Archive reason: {item.archiveReason}
                           {item.archiveReasonDetail ? ` ${item.archiveReasonDetail}` : ""}
                         </p>
@@ -2201,7 +2190,7 @@ export const ReferralTab = () => {
                         const charges = item.parsedData.legal?.["Current Charges"] || item.parsedData.legal?.["Charges"] || "";
                         if (!dob && !age && !worker && !charges) return null;
                         return (
-                          <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 mb-1 text-xs text-slate-600 bg-slate-50 p-2 rounded-md border border-slate-100">
+                          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600 bg-slate-50 p-2 rounded-md border border-slate-100">
                             {dob && <div><span className="font-medium text-slate-700">DOB:</span> {dob}</div>}
                             {age && <div><span className="font-medium text-slate-700">Age:</span> {age}</div>}
                             {worker && <div><span className="font-medium text-slate-700">Worker:</span> {worker}</div>}
@@ -2211,7 +2200,7 @@ export const ReferralTab = () => {
                       })()}
 
                       {/* Staff Recommendation */}
-                      <div className="mt-2 flex items-center gap-2 flex-wrap">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-xs text-gray-600 font-medium shrink-0">Staff Rec:</span>
                         {(["yes", "maybe", "no"] as const).map((rec) => (
                           <button
@@ -2423,15 +2412,6 @@ export const ReferralTab = () => {
                       </div>
 
                       <div className="mt-2 flex flex-wrap gap-2 border-t pt-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setExpandedReferralId(isExpanded ? null : rowKey)}
-                        >
-                          <Eye className="h-3.5 w-3.5 mr-1" />
-                          View Details
-                          {isExpanded ? <ChevronUp className="h-3.5 w-3.5 ml-1" /> : <ChevronDown className="h-3.5 w-3.5 ml-1" />}
-                        </Button>
                         <Button size="sm" variant="outline" onClick={() => openInterviewEditor(item)}>Interview Report</Button>
                         <Button
                           size="sm"
@@ -2479,8 +2459,7 @@ export const ReferralTab = () => {
                         </Button>
                       </div>
 
-                      {isExpanded && (
-                        <div className="mt-3 pt-3 border-t space-y-3">
+                      {/* Parsed data sections */}
                           {item.parsedData && Object.values(item.parsedData).some((section: any) => section && typeof section === "object" && Object.keys(section).length > 0) ? (
                             <>
                               {SECTION_CONFIG_UI.map((sectionDef) => {
@@ -2788,8 +2767,6 @@ export const ReferralTab = () => {
               </Dialog>
             </CardContent>
           </Card>
-        </div>
-      </div>
     </div>
   );
 };

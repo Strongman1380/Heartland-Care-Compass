@@ -73,6 +73,9 @@ interface MonthlyProgressData {
   qualityOfFamilyInteractions: "Poor" | "Fair" | "Good" | "Excellent" | "Not Applicable";
   familyParticipationInTreatment: "None" | "Minimal" | "Moderate" | "Active" | "Very Active";
 
+  // V-b. FAMILY ENGAGEMENT NOTES
+  familyEngagementNotes: string;
+
   // VI. SUMMARY & RECOMMENDATIONS
   overallProgress: "Regression" | "No Change" | "Minimal Progress" | "Moderate Progress" | "Significant Progress";
   strengthsDemonstrated: string;
@@ -126,6 +129,7 @@ export const HeartlandMonthlyProgressReport = ({ youth }: HeartlandMonthlyProgre
     homePasses: "",
     qualityOfFamilyInteractions: "Good",
     familyParticipationInTreatment: "Moderate",
+    familyEngagementNotes: "",
 
     overallProgress: "Moderate Progress",
     strengthsDemonstrated: "",
@@ -229,13 +233,88 @@ export const HeartlandMonthlyProgressReport = ({ youth }: HeartlandMonthlyProgre
 
   const [isAIPopulating, setIsAIPopulating] = useState(false);
 
+  /** Extract readable text from a case note object */
+  const extractNoteContent = (n: any): string => {
+    if (typeof n.note === "string") {
+      try {
+        const parsed = JSON.parse(n.note);
+        if (parsed?.sections) {
+          return [parsed.sections.summary, parsed.sections.strengthsChallenges, parsed.sections.interventionsResponse, parsed.sections.planNextSteps].filter(Boolean).join(" ");
+        }
+        if (parsed?.summary) return parsed.summary;
+        if (parsed?.content) return parsed.content;
+        return n.note;
+      } catch { return n.note; }
+    }
+    if (typeof n.summary === "string" && n.summary.trim()) return n.summary;
+    return "";
+  };
+
+  /** Generate local fallback content from data when AI is unavailable */
+  const generateLocalFallback = (
+    field: string,
+    stats: { avgPoints: string; avgPeer: string; avgAdult: string; avgInvestment: string; avgAuthority: string; noteCount: number; allText: string }
+  ): string => {
+    const name = youth.firstName;
+    const allText = stats.allText.toLowerCase();
+    const hasPeerPos = /positive peer|cooperat|gets along|played game/.test(allText);
+    const hasPeerNeg = /conflict|argument|fight|peer issue/.test(allText);
+    const hasAdultPos = /respectful|compliant|followed|responsive/.test(allText);
+    const hasAdultNeg = /defiant|refused|disrespect|non-compliant/.test(allText);
+    const hasInvestPos = /engaged|participated|motivated|completed/.test(allText);
+    const hasInvestNeg = /refused to participate|sleeping|disengaged/.test(allText);
+
+    switch (field) {
+      case "significantIncidentsDescription":
+        return /incident|restraint|awol|fight|assault/.test(allText)
+          ? `Staff documented behavioral incidents during this period. ${name} required staff intervention on occasion. The care team addressed each incident through processing and de-escalation.`
+          : "No significant incidents reported during this period.";
+      case "goal1Notes":
+        return `${name} has been working on primary treatment goals this month. Staff documented ${stats.noteCount} case notes. Average daily points: ${stats.avgPoints}. ${hasInvestPos ? "He has shown engagement in programming." : "Continued focus on program investment is recommended."}`;
+      case "goal2Notes":
+        return `${name} continues to work on secondary treatment objectives. ${hasPeerPos ? "Positive peer interactions have been observed." : "Peer interaction skills remain an area of focus."} Staff continue to support his development in this area.`;
+      case "goal3Notes":
+        return `Progress on tertiary goals is ongoing. ${hasAdultPos ? `${name} has been responsive to staff guidance.` : `${name} is working on appropriate interactions with authority figures.`}`;
+      case "socialSkills":
+        return `${name}'s social skills ${hasPeerPos && !hasPeerNeg ? "have shown positive development" : "continue to develop"} this month. ${hasPeerPos ? "He demonstrates the ability to engage cooperatively with peers." : "He is working on building positive peer relationships."} Staff provide consistent coaching on social awareness.`;
+      case "academicProgress":
+        return `${name} ${hasInvestPos ? "has been engaged in educational programming" : "continues to participate in educational programming"} this month. ${youth.hasIEP ? "IEP goals are being addressed through specialized instruction." : "Academic progress is being monitored by education staff."} Behavioral observations in the school setting align with overall program trends.`;
+      case "independentLivingSkills":
+        return `${name} is developing independent living skills including daily hygiene, room maintenance, and personal organization. ${hasInvestPos ? "He has shown initiative in completing daily tasks." : "Continued support is provided to build consistency in daily routines."}`;
+      case "areasOfGrowth":
+        return [
+          hasPeerPos ? "Positive peer relationship building" : "Developing peer interaction skills",
+          hasAdultPos ? "Appropriate adult interactions and compliance" : "Growing responsiveness to staff direction",
+          hasInvestPos ? "Consistent program engagement and investment" : "Increasing participation in programming",
+          "Personal responsibility and daily routine adherence"
+        ].join(". ") + ".";
+      case "areasNeedingDevelopment":
+        return [
+          hasPeerNeg ? "Peer conflict resolution" : "Consistency in peer interactions across all settings",
+          hasAdultNeg ? "Appropriate responses to authority and redirection" : "Accepting feedback without defensiveness",
+          "Emotional regulation during stressful situations",
+          "Generalizing positive behaviors across all program areas"
+        ].join(". ") + ".";
+      case "strengthsDemonstrated":
+        return `${name}'s strengths include ${hasPeerPos ? "cooperative peer engagement" : "moments of positive social interaction"}, ${hasAdultPos ? "respectful interactions with staff" : "developing responsiveness to guidance"}, and ${hasInvestPos ? "active program participation" : "willingness to participate when motivated"}. ${youth.strengthsTalents ? `Additional strengths: ${youth.strengthsTalents}.` : ""}`;
+      case "challengesConcerns":
+        return `Areas of concern include ${hasPeerNeg ? "peer conflict and social boundaries" : "maintaining consistent positive peer interactions"}, ${hasAdultNeg ? "authority acceptance and compliance" : "consistency in following program expectations"}, and continued development of emotional regulation and impulse control.`;
+      case "familyEngagementNotes":
+        return `${name} has maintained contact with family through scheduled phone calls and visits. ${youth.legalGuardian ? `His guardian, ${youth.legalGuardian}, has been involved in communication with the care team.` : "The care team continues to facilitate family engagement."} Family participation in the treatment process is ongoing.`;
+      case "planAdjustmentsNeeded":
+        return `The care team recommends continued focus on ${hasPeerNeg ? "conflict resolution and peer skills training" : "social skills generalization"}. ${hasAdultNeg ? "Additional staff coaching on authority acceptance is recommended." : ""} ${parseFloat(stats.avgPoints.replace(/,/g, '')) >= 80000 ? "Current programming appears effective — maintain course." : "Consider adjusting behavioral intervention strategies to increase point achievement."} Family engagement activities should continue as scheduled.`;
+      default:
+        return "";
+    }
+  };
+
   const handleAIPopulate = async () => {
     const hasData = !!(reportData.significantIncidentsDescription || reportData.goal1Notes || reportData.socialSkills || reportData.strengthsDemonstrated);
-    if (hasData && !confirm("AI will overwrite text fields with generated summaries. Continue?")) return;
+    if (hasData && !confirm("This will overwrite text fields with generated summaries. Continue?")) return;
 
     setIsAIPopulating(true);
     try {
-      toast({ title: "AI Processing", description: "Analyzing data from the last 30 days..." });
+      toast({ title: "Populating Report", description: "Gathering data from the last 30 days..." });
 
       const thirtyDaysAgoISO = subMonths(new Date(), 1).toISOString().split("T")[0];
       const todayISO = new Date().toISOString().split("T")[0];
@@ -253,17 +332,18 @@ export const HeartlandMonthlyProgressReport = ({ youth }: HeartlandMonthlyProgre
       const recentRatings = dailyRatings.filter((r: any) => r.date && new Date(r.date) >= thirtyDaysAgo);
 
       const caseNotesText = recentNotes.map((n: any) => {
-        const content = typeof n.summary === "string" && n.summary.trim() ? n.summary : (typeof n.note === "string" ? n.note : "");
+        const content = extractNoteContent(n);
         const date = n.date ? format(new Date(n.date), "MMM d, yyyy") : "No date";
         return `[${date}] ${content}`;
-      }).join("\n\n");
+      }).filter((t: string) => t.length > 15).join("\n\n");
 
       const rc = recentRatings.length;
       const avgPeer = rc > 0 ? (recentRatings.reduce((s: number, r: any) => s + (r.peerInteraction ?? 0), 0) / rc).toFixed(1) : "N/A";
       const avgAdult = rc > 0 ? (recentRatings.reduce((s: number, r: any) => s + (r.adultInteraction ?? 0), 0) / rc).toFixed(1) : "N/A";
       const avgInvestment = rc > 0 ? (recentRatings.reduce((s: number, r: any) => s + (r.investmentLevel ?? 0), 0) / rc).toFixed(1) : "N/A";
       const avgAuthority = rc > 0 ? (recentRatings.reduce((s: number, r: any) => s + (r.dealAuthority ?? 0), 0) / rc).toFixed(1) : "N/A";
-      const avgPoints = recentBehavior.length > 0 ? (recentBehavior.reduce((s: number, bp: any) => s + (bp.totalPoints ?? 0), 0) / recentBehavior.length).toFixed(1) : "N/A";
+      const avgPointsRaw = recentBehavior.length > 0 ? Math.round(recentBehavior.reduce((s: number, bp: any) => s + (bp.totalPoints ?? 0), 0) / recentBehavior.length) : 0;
+      const avgPoints = avgPointsRaw > 0 ? avgPointsRaw.toLocaleString() : "N/A";
 
       const allEvals = [...weeklyEvals, ...dailyShifts];
       const ec = allEvals.length;
@@ -272,40 +352,103 @@ export const HeartlandMonthlyProgressReport = ({ youth }: HeartlandMonthlyProgre
       const evalAvgInvestment = ec > 0 ? (allEvals.reduce((s, e) => s + (e.investment ?? 0), 0) / ec).toFixed(1) : "N/A";
       const evalAvgAuthority = ec > 0 ? (allEvals.reduce((s, e) => s + (e.authority ?? 0), 0) / ec).toFixed(1) : "N/A";
 
-      const dataContext = `Youth: ${youth.firstName} ${youth.lastName}, Level ${youth.level}\nAvg Daily Points: ${avgPoints}/15\nDaily Ratings (peer/adult/investment/authority): ${avgPeer}, ${avgAdult}, ${avgInvestment}, ${avgAuthority}\nWeekly Eval Averages (peer/adult/investment/authority): ${evalAvgPeer}, ${evalAvgAdult}, ${evalAvgInvestment}, ${evalAvgAuthority}\n\nCase Notes:\n${caseNotesText || "No case notes available."}`;
+      // Build a shared data context block for all AI prompts
+      const dataContext = `You are a clinical staff member at Heartland Boys Home writing a Monthly Progress Report for ${youth.firstName} ${youth.lastName}.
+Current Level: ${youth.level || "Not specified"}
+Reporting Period: Last 30 days
 
-      const prompts: Record<string, string> = {
-        significantIncidentsDescription: `You are a clinical professional writing a monthly progress report. Based on the following data, write a brief summary of significant behavioral incidents this month. If no incidents are noted, say "No significant incidents reported."\n\n${dataContext}`,
-        goal1Notes: `Based on the case notes and behavioral data, write brief progress notes for the youth's primary treatment goal. Focus on concrete observations.\n\n${dataContext}`,
-        goal2Notes: `Based on the case notes, write brief progress notes for the youth's secondary treatment goal.\n\n${dataContext}`,
-        goal3Notes: `Based on the case notes, write brief progress notes for the youth's tertiary treatment goal.\n\n${dataContext}`,
-        socialSkills: `Write a 2-3 sentence summary of the youth's social skills development this month based on the data.\n\n${dataContext}`,
-        academicProgress: `Write a 2-3 sentence summary of the youth's academic progress this month. Focus on behavioral observations related to school.\n\n${dataContext}`,
-        independentLivingSkills: `Write a 2-3 sentence summary of the youth's independent living skills development.\n\n${dataContext}`,
-        areasOfGrowth: `List 3-4 specific areas of growth demonstrated this month.\n\n${dataContext}`,
-        areasNeedingDevelopment: `List 3-4 specific areas needing continued development.\n\n${dataContext}`,
-        strengthsDemonstrated: `Write a brief summary of key strengths the youth demonstrated this month.\n\n${dataContext}`,
-        challengesConcerns: `Write a brief summary of challenges and concerns observed this month.\n\n${dataContext}`,
-        planAdjustmentsNeeded: `Based on the data, recommend any plan adjustments needed for the coming month.\n\n${dataContext}`,
-      };
+POINT SYSTEM: Heartland uses a behavioral point system where points are measured in the thousands. Boys earn increments of 1,000 to 20,000 points per activity. A typical daily total ranges from 90,000 to over 100,000. Minimum points per achievement is about 2,000.
+Average Daily Behavior Points this period: ${avgPoints} (over ${recentBehavior.length} days)
+
+Daily Performance Ratings (0-5 scale, ${rc} entries):
+- Peer Interaction: ${avgPeer}/5
+- Adult Interaction: ${avgAdult}/5
+- Program Investment: ${avgInvestment}/5
+- Dealing with Authority: ${avgAuthority}/5
+Weekly Eval / Shift Scores (0-4 scale, ${ec} entries):
+- Peer: ${evalAvgPeer}/4, Adult: ${evalAvgAdult}/4, Investment: ${evalAvgInvestment}/4, Authority: ${evalAvgAuthority}/4
+${youth.currentDiagnoses || youth.diagnoses ? `Diagnoses: ${youth.currentDiagnoses || youth.diagnoses}` : ""}
+${youth.strengthsTalents ? `Known Strengths: ${youth.strengthsTalents}` : ""}
+${youth.legalGuardian ? `Guardian: ${youth.legalGuardian}` : ""}
+
+Staff Case Notes (last 30 days):
+${caseNotesText || "No case notes documented for this period."}
+
+CRITICAL OUTPUT RULES:
+1. Output ONLY plain text. No headings, no titles, no labels, no "Summary:", no "Recommendations:", no markdown, no bullet points with dashes.
+2. Do NOT start your response with the field name or a heading. Just write the content directly.
+3. Write in professional clinical language.
+4. Do not include raw dates or staff names.
+5. Do not fabricate incidents or data not documented in case notes.
+6. When referencing points, use the thousands format (e.g., "averaging 95,000 daily points").`;
+
+      const fields = [
+        { key: "significantIncidentsDescription", prompt: `${dataContext}\n\nThis text goes into the "Brief Description of Significant Incidents" textarea on the form. Write 2-4 sentences describing any significant behavioral incidents this month (restraints, AWOL, fights, property damage). If no incidents are documented in the case notes, simply write "No significant behavioral incidents were reported during this reporting period." Do not invent incidents.` },
+        { key: "goal1Notes", prompt: `${dataContext}\n\nThis text goes into the "Goal #1 Notes" textarea on the form. Write 2-3 sentences describing progress on Goal 1 (typically behavioral regulation, compliance, or emotional management). Reference the youth's average daily points and relevant behavioral observations from case notes.` },
+        { key: "goal2Notes", prompt: `${dataContext}\n\nThis text goes into the "Goal #2 Notes" textarea on the form. Write 2-3 sentences describing progress on Goal 2 (typically peer/social skills). Reference peer interaction ratings and case note observations about peer relationships.` },
+        { key: "goal3Notes", prompt: `${dataContext}\n\nThis text goes into the "Goal #3 Notes" textarea on the form. Write 2-3 sentences describing progress on Goal 3 (typically adult interaction, authority acceptance, or program investment). Reference relevant rating data and case note observations.` },
+        { key: "socialSkills", prompt: `${dataContext}\n\nThis text goes into the "Social Skills" textarea. Write 2-3 sentences about social skills development: peer communication, conflict resolution, empathy, group participation. Reference peer interaction scores.` },
+        { key: "academicProgress", prompt: `${dataContext}\n\n${youth.firstName} attends the Heartland Boys Home Independent School managed by Berniklau Education Solutions.${youth.currentGrade ? ` Grade: ${youth.currentGrade}.` : ""}${youth.hasIEP ? " Has an active IEP." : ""}\nThis text goes into the "Academic Progress" textarea. Write 2-3 sentences about academic engagement based on behavioral observations in school. Do NOT fabricate grades or test scores.` },
+        { key: "independentLivingSkills", prompt: `${dataContext}\n\nThis text goes into the "Independent Living Skills" textarea. Write 2-3 sentences about daily living skills: hygiene, room maintenance, laundry, personal organization, time management.` },
+        { key: "areasOfGrowth", prompt: `${dataContext}\n\nThis text goes into the "Areas of Growth" textarea. Write 3-4 short statements about areas of growth this month, separated by periods. Example: "Improved peer interactions. Higher daily point averages. Better compliance with schedule. More engaged in group activities."` },
+        { key: "areasNeedingDevelopment", prompt: `${dataContext}\n\nThis text goes into the "Areas Needing Development" textarea. Write 3-4 short statements about areas needing improvement, separated by periods.` },
+        { key: "familyEngagementNotes", prompt: `${dataContext}\n\nThis text goes into the "Family Engagement Notes" textarea. Write 2-4 sentences giving a brief synopsis of the youth's family contact this month: visits with parents/guardians, phone calls, home passes, and general quality of family engagement. Keep it factual and based on case notes.` },
+        { key: "strengthsDemonstrated", prompt: `${dataContext}\n\nThis text goes into the "Strengths Demonstrated" textarea. Write 2-3 sentences about the youth's key strengths this month: positive behaviors, skills, attitude, interests, talents.` },
+        { key: "challengesConcerns", prompt: `${dataContext}\n\nThis text goes into the "Challenges/Concerns" textarea. Write 2-3 sentences about ongoing challenges and concerns: behavioral patterns, areas of regression, treatment barriers. Be honest but constructive.` },
+        { key: "planAdjustmentsNeeded", prompt: `${dataContext}\n\nThis text goes into the "Plan Adjustments Needed" textarea. Write 2-3 sentences about any adjustments to the treatment plan for next month: intervention changes, goal modifications, level recommendations.` },
+      ];
+
+      const allText = caseNotesText;
+      const localStats = { avgPoints, avgPeer, avgAdult, avgInvestment, avgAuthority, noteCount: recentNotes.length, allText };
+
+      // Run all AI calls in PARALLEL with a 45-second global timeout
+      const aiTimeout = 45000;
+      const aiPromises = fields.map(async ({ key, prompt }) => {
+        try {
+          const response = await aiService.queryData(prompt, { youth, period: "Last 30 days", caseNotes: caseNotesText });
+          if (response.success && response.data?.answer) {
+            return { key, value: response.data.answer };
+          }
+          return { key, value: null };
+        } catch {
+          return { key, value: null };
+        }
+      });
+
+      const results = await Promise.race([
+        Promise.allSettled(aiPromises),
+        new Promise<PromiseSettledResult<{ key: string; value: string | null }>[]>((resolve) =>
+          setTimeout(() => resolve(fields.map(f => ({ status: "rejected" as const, reason: "timeout" }))), aiTimeout)
+        ),
+      ]);
 
       const updates: Partial<MonthlyProgressData> = {};
-      for (const [field, prompt] of Object.entries(prompts)) {
-        try {
-          const response = await aiService.queryData(prompt, { youth, period: "Last 30 days" });
-          if (response.success && response.data?.answer) {
-            updates[field as keyof MonthlyProgressData] = response.data.answer as any;
+      let aiSuccessCount = 0;
+
+      results.forEach((result, idx) => {
+        const fieldKey = fields[idx].key;
+        if (result.status === "fulfilled" && result.value?.value) {
+          updates[fieldKey as keyof MonthlyProgressData] = result.value.value as any;
+          aiSuccessCount++;
+        } else {
+          // Use local fallback for this field
+          const fallback = generateLocalFallback(fieldKey, localStats);
+          if (fallback) {
+            updates[fieldKey as keyof MonthlyProgressData] = fallback as any;
           }
-        } catch (error) {
-          console.error(`Error generating ${field}:`, error);
         }
-      }
+      });
 
       setReportData((prev) => ({ ...prev, ...updates }));
-      toast({ title: "AI Complete", description: "Report sections populated. Review and edit as needed." });
+
+      if (aiSuccessCount > 0) {
+        toast({ title: "Report Populated", description: `${aiSuccessCount} sections generated from AI, ${fields.length - aiSuccessCount} from local data. Review and edit.` });
+      } else {
+        toast({ title: "Report Populated", description: "Sections filled from local case notes and behavioral data. AI was unavailable — review and edit as needed." });
+      }
     } catch (error) {
-      console.error("AI populate error:", error);
-      toast({ title: "Error", description: "Failed to auto-populate. Please try again.", variant: "destructive" });
+      console.error("Populate error:", error);
+      toast({ title: "Error", description: "Failed to populate report. Please try again.", variant: "destructive" });
     } finally {
       setIsAIPopulating(false);
     }
@@ -651,6 +794,17 @@ export const HeartlandMonthlyProgressReport = ({ youth }: HeartlandMonthlyProgre
                   </label>
                 ))}
               </div>
+            </div>
+
+            <div>
+              <Label className="font-semibold">Family Engagement Notes:</Label>
+              <Textarea
+                value={reportData.familyEngagementNotes}
+                onChange={(e) => handleInputChange('familyEngagementNotes', e.target.value)}
+                rows={3}
+                className="mt-1"
+                placeholder="Brief synopsis of family contact, visits, home passes, and family engagement during this period..."
+              />
             </div>
           </div>
         </div>

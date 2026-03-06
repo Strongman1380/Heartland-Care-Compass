@@ -270,25 +270,29 @@ Weekly Eval / Shift Scores (0–4 scale, ${ec} entries):
 Case Notes / Staff Observations for this period:
 ${caseNotesText || "No case notes documented for this period."}
 
-RULES: Write 1–3 concise sentences. Do NOT include raw dates, staff names, or note excerpts. Synthesize into professional clinical language. No markdown formatting.`;
+CRITICAL OUTPUT RULES:
+1. Output ONLY plain text. No headings, no titles, no labels, no "Summary:", no markdown, no bullet points.
+2. Do NOT start your response with the field name or a heading. Just write the content directly.
+3. Write 1-3 concise sentences in professional clinical language.
+4. Do not include raw dates, staff names, or note excerpts.`;
 
       // Generate all four narrative fields
       const prompts: Array<{ field: keyof ReportData; instruction: string }> = [
         {
           field: "socialSkillsStrengths",
-          instruction: `${baseContext}\n\nWrite 1–3 sentences describing this resident's social skills STRENGTHS during this period — positive peer interactions, cooperative behavior, relationship-building, respectful communication, or constructive engagement with staff.`,
+          instruction: `${baseContext}\n\nThis text goes into the "Social Skills Strengths" textarea. Write 1-3 sentences about the resident's social skills strengths this period: positive peer interactions, cooperative behavior, relationship-building, respectful communication.`,
         },
         {
           field: "socialSkillsDeficiencies",
-          instruction: `${baseContext}\n\nWrite 1–3 sentences describing this resident's social skills DEFICIENCIES or areas needing improvement — conflict patterns, authority challenges, peer difficulties, communication issues, or behavioral areas that require continued support.`,
+          instruction: `${baseContext}\n\nThis text goes into the "Social Skill Deficiencies" textarea. Write 1-3 sentences about areas needing improvement: conflict patterns, authority challenges, peer difficulties, communication issues.`,
         },
         {
           field: "incidents",
-          instruction: `${baseContext}\n\nWrite 1–3 sentences summarizing any significant incidents, behavioral concerns, rule violations, or safety events documented during this period. If no incidents occurred, state that clearly in one sentence.`,
+          instruction: `${baseContext}\n\nThis text goes into the "Incidents" textarea. Write 1-3 sentences about any significant incidents or behavioral concerns this period. If no incidents occurred, simply state that.`,
         },
         {
           field: "recommendations",
-          instruction: `${baseContext}\n\nWrite 2–3 sentences of clinical recommendations: what this resident should focus on for the next period, any level advancement readiness or concerns, suggested interventions, and goals for continued progress.`,
+          instruction: `${baseContext}\n\nThis text goes into the "Recommendations" textarea. Write 2-3 sentences about what this resident should focus on next period, level advancement readiness, and suggested interventions.`,
         },
       ];
 

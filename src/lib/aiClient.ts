@@ -316,26 +316,27 @@ export const generateLocalBehavioralInsights = (behaviorData: any[], youth: any)
   const trend = recentAvg > avgPoints ? 'improving' : recentAvg < avgPoints ? 'declining' : 'stable';
   const trendStrength = Math.abs(recentAvg - avgPoints);
 
-  let analysis = `BEHAVIORAL ANALYSIS: ${youth.firstName} is averaging ${Math.round(avgPoints)} points per day over ${behaviorData.length} data points, with recent performance showing a ${trend} trend`;
+  const avgFormatted = Math.round(avgPoints).toLocaleString();
+  let analysis = `${youth.firstName} is averaging ${avgFormatted} points per day over ${behaviorData.length} data points, with recent performance showing a ${trend} trend`;
 
-  if (trendStrength > 2) {
-    analysis += ` (${trendStrength.toFixed(1)} point ${trend === 'improving' ? 'increase' : 'decrease'})`;
+  if (trendStrength > 2000) {
+    analysis += ` (${Math.round(trendStrength).toLocaleString()} point ${trend === 'improving' ? 'increase' : 'decrease'})`;
   }
 
   analysis += '. ';
 
-  if (avgPoints >= 15) {
+  if (avgPoints >= 90000) {
     analysis += 'This demonstrates excellent program compliance and readiness for increased privileges and level advancement.';
-  } else if (avgPoints >= 12) {
+  } else if (avgPoints >= 70000) {
     analysis += 'This shows good progress with opportunities for continued improvement in consistency and engagement.';
   } else {
     analysis += 'This indicates need for additional behavioral support, intervention strategies, and possibly adjusted program goals.';
   }
 
   // Add trend-specific recommendations
-  if (trend === 'improving' && trendStrength > 1) {
+  if (trend === 'improving' && trendStrength > 5000) {
     analysis += ' Recent upward trend suggests effective intervention strategies and increased motivation.';
-  } else if (trend === 'declining' && trendStrength > 1) {
+  } else if (trend === 'declining' && trendStrength > 5000) {
     analysis += ' Recent decline warrants immediate review of the care plan and potential triggers.';
   }
 

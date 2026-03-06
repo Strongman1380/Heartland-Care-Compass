@@ -12,7 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { exportElementToPDF } from "@/utils/export";
 import { buildReportFilename } from "@/utils/reportFilenames";
 import { ReportHeader } from "@/components/reports/ReportHeader";
-import { format, differenceInDays, subMonths } from "date-fns";
+import { format, differenceInDays, subMonths, isValid } from "date-fns";
 import * as aiService from "@/services/aiService";
 import { getBehaviorPointsByYouth, getDailyRatingsByYouth } from "@/lib/api";
 import { fetchAllProgressNotes } from "@/utils/local-storage-utils";
@@ -178,13 +178,34 @@ export const DischargeReport = ({ youth }: DischargeReportProps) => {
 
   const [isAIPopulating, setIsAIPopulating] = useState(false);
 
+  /** Extract readable text from a case note object */
+  const extractNoteContent = (n: any): string => {
+    if (typeof n.note === "string") {
+      try {
+        const parsed = JSON.parse(n.note);
+        if (parsed?.sections) return [parsed.sections.summary, parsed.sections.strengthsChallenges, parsed.sections.interventionsResponse, parsed.sections.planNextSteps].filter(Boolean).join(" ");
+        if (parsed?.summary) return parsed.summary;
+        if (parsed?.content) return parsed.content;
+        return n.note;
+      } catch { return n.note; }
+    }
+    if (typeof n.summary === "string" && n.summary.trim()) return n.summary;
+    return "";
+  };
+
   const handleAIPopulate = async () => {
-    const hasData = !!(reportData.behavioralProgress || reportData.treatmentGoalsSummary || reportData.strengthsAtDischarge);
-    if (hasData && !confirm("AI will overwrite text fields with generated summaries. Continue?")) return;
+    const aiFields: (keyof DischargeData)[] = [
+      "treatmentGoalsSummary", "behavioralProgress", "peerInteractionSummary",
+      "adultInteractionSummary", "programInvestmentSummary", "authoritySummary",
+      "academicSummary", "independentLivingSkills", "familyEngagementSummary",
+      "aftercarePlan", "strengthsAtDischarge", "ongoingConcerns", "recommendations",
+    ];
+    const hasData = aiFields.some((f) => !!(reportData[f] as string));
+    if (hasData && !confirm("This will overwrite text fields with generated content. Continue?")) return;
 
     setIsAIPopulating(true);
     try {
-      toast({ title: "AI Processing", description: "Analyzing data to generate discharge summaries..." });
+      toast({ title: "Populating Report", description: "Gathering full-stay data..." });
 
       const admDate = youth.admissionDate ? new Date(youth.admissionDate).toISOString().split("T")[0] : subMonths(new Date(), 6).toISOString().split("T")[0];
       const todayISO = new Date().toISOString().split("T")[0];
@@ -197,17 +218,18 @@ export const DischargeReport = ({ youth }: DischargeReportProps) => {
       ]);
 
       const caseNotesText = progressNotes.slice(0, 50).map((n: any) => {
-        const content = typeof n.summary === "string" && n.summary.trim() ? n.summary : (typeof n.note === "string" ? n.note : "");
+        const content = extractNoteContent(n);
         const date = n.date ? format(new Date(n.date), "MMM d, yyyy") : "No date";
         return `[${date}] ${content}`;
-      }).join("\n\n");
+      }).filter((t: string) => t.length > 15).join("\n\n");
 
       const rc = dailyRatings.length;
       const avgPeer = rc > 0 ? (dailyRatings.reduce((s: number, r: any) => s + (r.peerInteraction ?? 0), 0) / rc).toFixed(1) : "N/A";
       const avgAdult = rc > 0 ? (dailyRatings.reduce((s: number, r: any) => s + (r.adultInteraction ?? 0), 0) / rc).toFixed(1) : "N/A";
       const avgInvestment = rc > 0 ? (dailyRatings.reduce((s: number, r: any) => s + (r.investmentLevel ?? 0), 0) / rc).toFixed(1) : "N/A";
       const avgAuthority = rc > 0 ? (dailyRatings.reduce((s: number, r: any) => s + (r.dealAuthority ?? 0), 0) / rc).toFixed(1) : "N/A";
-      const avgPoints = behaviorPoints.length > 0 ? (behaviorPoints.reduce((s: number, bp: any) => s + (bp.totalPoints ?? 0), 0) / behaviorPoints.length).toFixed(1) : "N/A";
+      const avgPointsRaw = behaviorPoints.length > 0 ? Math.round(behaviorPoints.reduce((s: number, bp: any) => s + (bp.totalPoints ?? 0), 0) / behaviorPoints.length) : 0;
+      const avgPoints = avgPointsRaw > 0 ? avgPointsRaw.toLocaleString() : "N/A";
 
       const allEvals = [...weeklyEvals, ...dailyShifts];
       const ec = allEvals.length;
@@ -217,41 +239,112 @@ export const DischargeReport = ({ youth }: DischargeReportProps) => {
       const evalAvgAuthority = ec > 0 ? (allEvals.reduce((s, e) => s + (e.authority ?? 0), 0) / ec).toFixed(1) : "N/A";
 
       const los = reportData.lengthOfStay || "Unknown";
-      const dataContext = `Youth: ${youth.firstName} ${youth.lastName}, Level ${youth.level}, Length of Stay: ${los}\nAvg Daily Points: ${avgPoints}/15\nDaily Ratings (peer/adult/investment/authority): ${avgPeer}, ${avgAdult}, ${avgInvestment}, ${avgAuthority}\nWeekly Eval Averages (peer/adult/investment/authority): ${evalAvgPeer}, ${evalAvgAdult}, ${evalAvgInvestment}, ${evalAvgAuthority}\n\nCase Notes (recent):\n${caseNotesText || "No case notes available."}`;
+      const dataContext = `You are a clinical staff member at Heartland Boys Home writing a Discharge Report for ${youth.firstName} ${youth.lastName}.
+Current Level: ${youth.level || "Not specified"}
+Length of Stay: ${los}
 
-      const prompts: Record<string, string> = {
-        treatmentGoalsSummary: `You are writing a discharge report for a youth residential facility. Write a 2-3 paragraph summary of the youth's treatment progress over their entire stay.\n\n${dataContext}`,
-        behavioralProgress: `Write a 2-3 paragraph summary of the youth's overall behavioral progress during their stay.\n\n${dataContext}`,
-        peerInteractionSummary: `Write 2-3 sentences summarizing the youth's peer interaction development.\n\n${dataContext}`,
-        adultInteractionSummary: `Write 2-3 sentences summarizing the youth's adult interaction development.\n\n${dataContext}`,
-        programInvestmentSummary: `Write 2-3 sentences summarizing the youth's program investment over time.\n\n${dataContext}`,
-        authoritySummary: `Write 2-3 sentences summarizing how the youth dealt with authority.\n\n${dataContext}`,
-        academicSummary: `Write a brief academic summary. Focus on behavioral observations in school.\n\n${dataContext}`,
-        independentLivingSkills: `Write a brief summary of independent living skills developed.\n\n${dataContext}`,
-        familyEngagementSummary: `Write a brief summary of family engagement during the stay.\n\n${dataContext}`,
-        aftercarePlan: `Write recommended aftercare/transition plan items.\n\n${dataContext}`,
-        strengthsAtDischarge: `List the youth's key strengths at discharge.\n\n${dataContext}`,
-        ongoingConcerns: `List ongoing concerns at discharge.\n\n${dataContext}`,
-        recommendations: `Write clinical recommendations for post-discharge.\n\n${dataContext}`,
+POINT SYSTEM: Heartland uses a behavioral point system where points are measured in the thousands. Boys earn increments of 1,000 to 20,000 points per activity. A typical daily total ranges from 90,000 to over 100,000. Minimum per achievement is about 2,000 points.
+Average Daily Behavior Points (full stay): ${avgPoints} (over ${behaviorPoints.length} days)
+
+Daily Performance Ratings (0-5 scale, ${rc} entries):
+- Peer Interaction: ${avgPeer}/5
+- Adult Interaction: ${avgAdult}/5
+- Program Investment: ${avgInvestment}/5
+- Dealing with Authority: ${avgAuthority}/5
+Weekly Eval / Shift Scores (0-4 scale, ${ec} entries):
+- Peer: ${evalAvgPeer}/4, Adult: ${evalAvgAdult}/4, Investment: ${evalAvgInvestment}/4, Authority: ${evalAvgAuthority}/4
+${youth.currentDiagnoses || youth.diagnoses ? `Diagnoses: ${youth.currentDiagnoses || youth.diagnoses}` : ""}
+${youth.legalGuardian ? `Guardian: ${youth.legalGuardian}` : ""}
+
+Staff Case Notes (most recent 50):
+${caseNotesText || "No case notes available."}
+
+CRITICAL OUTPUT RULES:
+1. Output ONLY plain text. No headings, no titles, no labels, no "Summary:", no markdown, no bullet points with dashes.
+2. Do NOT start your response with the field name or a heading. Just write the content directly.
+3. Write in professional clinical language.
+4. Do not include raw dates or staff names.
+5. Do not fabricate incidents or data not in case notes.
+6. When referencing points, use the thousands format (e.g., "averaging 95,000 daily points").`;
+
+      const fields = [
+        { key: "treatmentGoalsSummary", prompt: `${dataContext}\n\nThis text goes into the "Treatment Goals Summary" textarea. Write 2-3 paragraphs summarizing treatment progress over the entire stay. Cover primary treatment goals, therapeutic participation, and clinical milestones achieved.` },
+        { key: "behavioralProgress", prompt: `${dataContext}\n\nThis text goes into the "Behavioral Progress" textarea. Write 2-3 paragraphs about overall behavioral progress during the stay: point trends, compliance patterns, response to redirection, and behavioral growth from admission to discharge.` },
+        { key: "peerInteractionSummary", prompt: `${dataContext}\n\nThis text goes into the "Peer Interaction Summary" textarea. Write 2-3 sentences about how the youth's peer interactions developed over the stay. Reference peer interaction ratings.` },
+        { key: "adultInteractionSummary", prompt: `${dataContext}\n\nThis text goes into the "Adult Interaction Summary" textarea. Write 2-3 sentences about how the youth's interactions with adults/staff developed. Reference adult interaction ratings.` },
+        { key: "programInvestmentSummary", prompt: `${dataContext}\n\nThis text goes into the "Program Investment Summary" textarea. Write 2-3 sentences about the youth's overall investment and engagement in programming. Reference investment ratings.` },
+        { key: "authoritySummary", prompt: `${dataContext}\n\nThis text goes into the "Authority Summary" textarea. Write 2-3 sentences about how the youth dealt with authority, rules, and structure. Reference authority ratings.` },
+        { key: "academicSummary", prompt: `${dataContext}\n\n${youth.firstName} attended the Heartland Boys Home Independent School managed by Berniklau Education Solutions.${youth.hasIEP ? " Had an active IEP." : ""}\nThis text goes into the "Academic Summary" textarea. Write 2-3 sentences about academic engagement. Focus on behavioral observations in school — do not fabricate grades.` },
+        { key: "independentLivingSkills", prompt: `${dataContext}\n\nThis text goes into the "Independent Living Skills" textarea. Write 2-3 sentences about independent living skills the youth developed: hygiene, room maintenance, cooking, personal organization.` },
+        { key: "familyEngagementSummary", prompt: `${dataContext}\n\nThis text goes into the "Family Engagement Summary" textarea. Write 2-3 sentences about family engagement during the stay: visits, phone calls, home passes, family participation in treatment.` },
+        { key: "aftercarePlan", prompt: `${dataContext}\n\nThis text goes into the "Aftercare Plan" textarea. Write 2-3 sentences about recommended aftercare: continued therapy, community resources, school transition, family support services.` },
+        { key: "strengthsAtDischarge", prompt: `${dataContext}\n\nThis text goes into the "Strengths at Discharge" textarea. Write 2-3 sentences listing the youth's key strengths at discharge: behavioral skills, social abilities, coping strategies, personal growth.` },
+        { key: "ongoingConcerns", prompt: `${dataContext}\n\nThis text goes into the "Ongoing Concerns" textarea. Write 2-3 sentences about any remaining concerns: behavioral patterns that need continued monitoring, risk factors, areas still needing support.` },
+        { key: "recommendations", prompt: `${dataContext}\n\nThis text goes into the "Recommendations" textarea. Write 2-3 sentences of clinical recommendations for post-discharge: continued treatment needs, community supports, follow-up care.` },
+      ];
+
+      // Run all AI calls in PARALLEL with a 45-second global timeout
+      const aiTimeout = 45000;
+      const aiPromises = fields.map(async ({ key, prompt }) => {
+        try {
+          const response = await aiService.queryData(prompt, { youth, period: "Full stay", caseNotes: caseNotesText });
+          if (response.success && response.data?.answer) return { key, value: response.data.answer };
+          return { key, value: null };
+        } catch { return { key, value: null }; }
+      });
+
+      const results = await Promise.race([
+        Promise.allSettled(aiPromises),
+        new Promise<PromiseSettledResult<{ key: string; value: string | null }>[]>((resolve) =>
+          setTimeout(() => resolve(fields.map(() => ({ status: "rejected" as const, reason: "timeout" }))), aiTimeout)
+        ),
+      ]);
+
+      // Local fallback content generator
+      const name = youth.firstName;
+      const allText = caseNotesText.toLowerCase();
+      const hasPeerPos = /positive peer|cooperat|gets along/.test(allText);
+      const hasAdultPos = /respectful|compliant|followed|responsive/.test(allText);
+      const hasInvestPos = /engaged|participated|motivated/.test(allText);
+      const localFallback: Record<string, string> = {
+        treatmentGoalsSummary: `${name} participated in the Heartland Boys Home residential treatment program for ${los}. Over the course of placement, ${name} worked on treatment goals related to behavioral regulation, social skills development, and program investment. The care team provided consistent interventions and therapeutic support throughout the stay.`,
+        behavioralProgress: `${name}'s behavioral trajectory during placement showed ${hasInvestPos ? "positive engagement" : "developing progress"} with the program. Average daily points were ${avgPoints}. ${hasAdultPos ? "He demonstrated growing responsiveness to staff direction." : "Behavioral consistency remained an area of focus throughout placement."}`,
+        peerInteractionSummary: `${name}'s peer interactions ${hasPeerPos ? "showed positive development over the course of placement" : "were an area of ongoing focus during placement"}. Peer interaction ratings averaged ${avgPeer}/5.`,
+        adultInteractionSummary: `${name}'s interactions with staff ${hasAdultPos ? "demonstrated growth in respectfulness and compliance" : "showed developing responsiveness to adult guidance"}. Adult interaction ratings averaged ${avgAdult}/5.`,
+        programInvestmentSummary: `${name} ${hasInvestPos ? "demonstrated engagement in programming and daily activities" : "worked on developing consistent program investment"}. Investment ratings averaged ${avgInvestment}/5.`,
+        authoritySummary: `${name} ${hasAdultPos ? "showed improvement in accepting authority and following program structure" : "continued to work on appropriate responses to rules and structure"}. Authority ratings averaged ${avgAuthority}/5.`,
+        academicSummary: `${name} attended the Heartland Boys Home Independent School managed by Berniklau Education Solutions. ${youth.hasIEP ? "IEP goals were addressed through specialized instruction." : "Academic programming was provided throughout the stay."}`,
+        independentLivingSkills: `${name} developed independent living skills including personal hygiene, room maintenance, and daily routine management during placement.`,
+        familyEngagementSummary: `${name}'s family ${youth.legalGuardian ? `(guardian: ${youth.legalGuardian})` : ""} maintained contact through scheduled phone calls and visits during the stay. The care team facilitated family engagement and participation in the treatment process.`,
+        aftercarePlan: `Recommended aftercare includes continued therapeutic support, family-based services, and connection to community resources to maintain gains achieved during placement.`,
+        strengthsAtDischarge: `${name}'s strengths at discharge include ${hasPeerPos ? "positive peer engagement" : "developing social skills"}, ${hasAdultPos ? "appropriate adult interactions" : "growing responsiveness to guidance"}, and ${hasInvestPos ? "program investment" : "willingness to participate when motivated"}.`,
+        ongoingConcerns: `Areas requiring continued monitoring include behavioral consistency, emotional regulation, and generalization of skills learned in the residential setting to community environments.`,
+        recommendations: `Clinical recommendations include continued individual therapy, family counseling, and connection to school-based support services. Regular follow-up with the aftercare team is recommended to ensure continuity of care.`,
       };
 
       const updates: Partial<DischargeData> = {};
-      for (const [field, prompt] of Object.entries(prompts)) {
-        try {
-          const response = await aiService.queryData(prompt, { youth, period: "Full stay" });
-          if (response.success && response.data?.answer) {
-            updates[field as keyof DischargeData] = response.data.answer as any;
-          }
-        } catch (error) {
-          console.error(`Error generating ${field}:`, error);
+      let aiSuccessCount = 0;
+
+      results.forEach((result, idx) => {
+        const fieldKey = fields[idx].key;
+        if (result.status === "fulfilled" && result.value?.value) {
+          updates[fieldKey as keyof DischargeData] = result.value.value as any;
+          aiSuccessCount++;
+        } else {
+          updates[fieldKey as keyof DischargeData] = (localFallback[fieldKey] || "") as any;
         }
-      }
+      });
 
       setReportData((prev) => ({ ...prev, ...updates }));
-      toast({ title: "AI Complete", description: "Discharge report sections populated. Review and edit as needed." });
+
+      if (aiSuccessCount > 0) {
+        toast({ title: "Report Populated", description: `${aiSuccessCount} sections from AI, ${fields.length - aiSuccessCount} from local data. Review and edit.` });
+      } else {
+        toast({ title: "Report Populated", description: "Sections filled from local data. AI was unavailable — review and edit as needed." });
+      }
     } catch (error) {
-      console.error("AI populate error:", error);
-      toast({ title: "Error", description: "Failed to auto-populate.", variant: "destructive" });
+      console.error("Populate error:", error);
+      toast({ title: "Error", description: "Failed to populate report.", variant: "destructive" });
     } finally {
       setIsAIPopulating(false);
     }

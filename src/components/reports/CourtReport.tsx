@@ -946,9 +946,10 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
         ? (recentRatings.reduce((sum, rating) => sum + (rating.dealAuthority ?? 0), 0) / ratingCount).toFixed(1)
         : '0';
 
-      const avgPoints = recentBehavior.length > 0
-        ? (recentBehavior.reduce((sum, bp) => sum + (bp.totalPoints ?? 0), 0) / recentBehavior.length).toFixed(1)
-        : '0';
+      const avgPointsRaw = recentBehavior.length > 0
+        ? Math.round(recentBehavior.reduce((sum, bp) => sum + (bp.totalPoints ?? 0), 0) / recentBehavior.length)
+        : 0;
+      const avgPoints = avgPointsRaw > 0 ? avgPointsRaw.toLocaleString() : 'N/A';
 
       const schoolScoreCount = recentSchoolScores.length;
       const schoolAverage = schoolScoreCount > 0
@@ -969,99 +970,92 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
         ? calculateLengthOfStay(youth.admissionDate)
         : 'Not available';
 
+      // Shared context for all court report AI prompts
+      const courtContext = `You are a clinical professional at Heartland Boys Home writing a Court Report for ${youth.firstName} ${youth.lastName}.
+
+POINT SYSTEM: Heartland uses a behavioral point system where points are measured in the thousands. Boys earn increments of 1,000 to 20,000 points per activity. A typical daily total ranges from 90,000 to over 100,000.
+Average Daily Points (last 30 days): ${avgPoints} over ${recentBehavior.length} days
+Current Level: ${youth.level || 'Not specified'}
+Length of Stay: ${lengthOfStay}
+
+Daily Performance Ratings (0-5 scale, ${ratingCount} entries):
+- Peer Interaction: ${avgPeer}/5, Adult Interaction: ${avgAdult}/5
+- Investment Level: ${avgInvestment}/5, Authority/Compliance: ${avgAuthority}/5
+
+Weekly Eval / Shift Scores (0-4 scale, ${evalCount} entries):
+- Peer: ${evalAvgPeer}/4, Adult: ${evalAvgAdult}/4, Investment: ${evalAvgInvestment}/4, Authority: ${evalAvgAuthority}/4, Overall: ${evalAvgOverall}/4
+School Score Average: ${schoolAverage}
+
+CRITICAL OUTPUT RULES:
+1. Output ONLY plain text. No headings, no titles, no labels, no "Summary:", no markdown.
+2. Do NOT start with the section name or a heading — just write the content directly.
+3. Write in professional clinical language suitable for court presentation.
+4. Do not include raw dates, staff names, or case note excerpts.
+5. Do not fabricate data not documented in case notes.
+6. When referencing points, use the thousands format (e.g., "averaging 95,000 daily points").`;
+
       // Use AI to generate each section based on case notes
       const aiPrompts = {
-        treatmentProgressSummary: `You are a clinical professional writing a court report. Based on the following case notes and data for ${youth.firstName} ${youth.lastName}, write a comprehensive 3-4 paragraph summary about their treatment goals, progress toward goals, therapeutic participation, and clinical observations.
+        treatmentProgressSummary: `${courtContext}
 
-Treatment Information:
-- Current Diagnoses: ${youth.currentDiagnoses || youth.diagnoses || 'Not documented'}
-- Current Counseling: ${youth.currentCounseling?.join(', ') || 'Not specified'}
-- Therapist: ${youth.therapistName || 'Not specified'}
-- Length of Stay: ${lengthOfStay}
-
-Case Notes:
-${caseNotesText || 'No case notes available for this period.'}
-
-Write a professional, clinical summary suitable for a court report.`,
-
-        behavioralAssessmentSummary: `You are a clinical professional writing a court report. Based on the following case notes and data for ${youth.firstName} ${youth.lastName}, write a comprehensive 3-4 paragraph summary about their behavioral progress, significant incidents, and behavioral interventions.
-
-Behavioral Data:
-- Average Daily Points: ${avgPoints}/15 over ${recentBehavior.length} days
-- Peer Interaction (daily ratings): ${avgPeer}/5
-- Adult Interaction (daily ratings): ${avgAdult}/5
-- Authority/Compliance (daily ratings): ${avgAuthority}/5
-- Current Level: ${youth.level || 'Not specified'}
-
-Weekly Eval / Shift Scores (4-domain behavioral assessment, 0-4 scale, ${evalCount} entries):
-- Peer Interaction: ${evalAvgPeer}/4
-- Adult Interaction: ${evalAvgAdult}/4
-- Investment Level: ${evalAvgInvestment}/4
-- Dealing w/ Authority: ${evalAvgAuthority}/4
-- Overall Average: ${evalAvgOverall}/4
+This text goes into the "Treatment Progress Summary" textarea on the court report form.
+Diagnoses: ${youth.currentDiagnoses || youth.diagnoses || 'Not documented'}
+Counseling: ${youth.currentCounseling?.join(', ') || 'Not specified'}
+Therapist: ${youth.therapistName || 'Not specified'}
 
 Case Notes:
 ${caseNotesText || 'No case notes available for this period.'}
 
-Write a professional, clinical summary suitable for a court report focusing on behavioral assessment.`,
+Write 3-4 paragraphs about treatment goals, progress toward goals, therapeutic participation, and clinical observations.`,
 
-        educationalProgressSummary: `You are a clinical professional writing a court report. Based on the following case notes and data for ${youth.firstName} ${youth.lastName}, write a comprehensive 2-3 paragraph summary about their educational progress.
+        behavioralAssessmentSummary: `${courtContext}
 
-Important context: ${youth.firstName} attends the Heartland Boys Home Independent School, which is managed by Berniklau Education Solutions.${youth.currentGrade ? ` ${youth.firstName} is currently enrolled in grade ${youth.currentGrade}.` : ''}
+This text goes into the "Behavioral Assessment Summary" textarea on the court report form.
 
-Focus your summary on:
-1. The youth's educational placement through Berniklau Education Solutions
-2. Behavioral observations from the Daily Progress Notes (DPNs) that relate to school performance — classroom behavior, compliance with school expectations, engagement, and interactions with teachers and peers during school hours
-3. What the youth is doing well academically and specific areas that need improvement
+Case Notes:
+${caseNotesText || 'No case notes available for this period.'}
 
-Do NOT fabricate specific grades, test scores, or credit counts unless they appear in the case notes. Base your observations on behavioral progress noted in the DPNs, since DPNs typically include school-related behaviors.
+Write 3-4 paragraphs about behavioral progress, significant incidents, behavioral interventions, and point achievement trends. Reference the behavioral data provided above.`,
+
+        educationalProgressSummary: `${courtContext}
+
+This text goes into the "Educational Progress Summary" textarea on the court report form.
+${youth.firstName} attends the Heartland Boys Home Independent School managed by Berniklau Education Solutions.${youth.currentGrade ? ` Grade: ${youth.currentGrade}.` : ''}${youth.hasIEP ? ' Has an active IEP.' : ''}
 
 Case Notes / DPN Observations:
 ${caseNotesText || 'No case notes available for this period.'}
 
-Write a professional, educational summary suitable for a court report. Do not include raw case note excerpts or staff names.`,
+Write 2-3 paragraphs about academic engagement based on behavioral observations in school. Do NOT fabricate grades, test scores, or credit counts. Focus on classroom behavior, compliance, and engagement.`,
 
-        familySocialSummary: `You are a clinical professional writing a court report. Based on the following case notes and data for ${youth.firstName} ${youth.lastName}, write a comprehensive 2-3 paragraph summary about their family relationships, social development, peer relationships, and community involvement.
+        familySocialSummary: `${courtContext}
 
-Social-Emotional Data:
-- Peer Interaction Rating (daily): ${avgPeer}/5
-- Adult Interaction Rating (daily): ${avgAdult}/5
-- Peer Interaction (weekly eval): ${evalAvgPeer}/4
-- Adult Interaction (weekly eval): ${evalAvgAdult}/4
-- Family Members: ${youth.familyMembers?.map((fm: any) => `${fm.firstName} ${fm.lastName} (${fm.relation})`).join(', ') || 'Not documented'}
+This text goes into the "Family & Social Summary" textarea on the court report form.
+Family Members: ${youth.familyMembers?.map((fm: any) => `${fm.firstName} ${fm.lastName} (${fm.relation})`).join(', ') || 'Not documented'}
 
 Case Notes:
 ${caseNotesText || 'No case notes available for this period.'}
 
-Write a professional, clinical summary suitable for a court report focusing on family and social relationships.`,
+Write 2-3 paragraphs about family relationships, social development, peer relationships, visits, and family engagement.`,
 
-        programParticipationSummary: `You are a clinical professional writing a court report. Based on the following case notes and data for ${youth.firstName} ${youth.lastName}, write a comprehensive 2-3 paragraph summary about their program participation, daily structure compliance, life skills development, and overall engagement.
+        programParticipationSummary: `${courtContext}
 
-Program Data:
-- Current Level: ${youth.level || 'Not specified'}
-- Average Points: ${avgPoints}/15
-- Investment Level (daily): ${avgInvestment}/5
-- Investment Level (weekly eval): ${evalAvgInvestment}/4
-- Overall Eval Average: ${evalAvgOverall}/4
-- School Score Average: ${schoolAverage}
-- Number of Case Notes: ${recentNotes.length}
+This text goes into the "Program Participation Summary" textarea on the court report form.
+Number of Case Notes this period: ${recentNotes.length}
 
 Case Notes:
 ${caseNotesText || 'No case notes available for this period.'}
 
-Write a professional summary suitable for a court report focusing on program participation.`,
+Write 2-3 paragraphs about program participation, daily structure compliance, life skills development, level progress, and overall engagement.`,
 
-        futurePlanningSummary: `You are a clinical professional writing a court report. Based on the following case notes and data for ${youth.firstName} ${youth.lastName}, write a comprehensive 2-3 paragraph summary about discharge planning, transition timeline, aftercare recommendations, and future goals.
+        futurePlanningSummary: `${courtContext}
 
-Planning Information:
-- Length of Stay: ${lengthOfStay}
-- Current Level: ${youth.level || 'Not specified'}
-- Placement Status: ${youth.placementStatus || 'Not specified'}
+This text goes into the "Future Planning Summary" textarea on the court report form.
+Placement Status: ${youth.placementStatus || 'Not specified'}
 
 Case Notes:
 ${caseNotesText || 'No case notes available for this period.'}
 
-Write a professional summary suitable for a court report focusing on future planning and discharge recommendations.`
+Write 2-3 paragraphs about discharge planning, transition timeline, aftercare recommendations, and future goals.`
       };
 
       // Generate AI summaries for each section

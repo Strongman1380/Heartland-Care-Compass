@@ -439,7 +439,8 @@ export const ServicePlanReport = ({ youth }: ServicePlanReportProps) => {
 
       // Calculate behavior point averages
       const bpCount = behaviorPoints.length;
-      const avgPoints = bpCount > 0 ? (behaviorPoints.reduce((s: number, p: any) => s + (p.totalPoints || 0), 0) / bpCount).toFixed(1) : 'N/A';
+      const avgPointsRaw = bpCount > 0 ? Math.round(behaviorPoints.reduce((s: number, p: any) => s + (p.totalPoints || 0), 0) / bpCount) : 0;
+      const avgPoints = avgPointsRaw > 0 ? avgPointsRaw.toLocaleString() : 'N/A';
 
       // Calculate daily rating averages
       const ratingCount = dailyRatings.length;
@@ -464,11 +465,12 @@ export const ServicePlanReport = ({ youth }: ServicePlanReportProps) => {
 
       const baseInstruction = `You are a clinical professional writing a service plan for ${youth.firstName} ${youth.lastName} at Heartland Boys Home, a group home.
 
-CRITICAL RULES:
-- Do NOT include raw case note excerpts, dates in brackets, or staff names
-- SYNTHESIZE information into cohesive professional narrative
-- Write in third person professional clinical language
-- Do not use markdown formatting. Write plain professional text.
+CRITICAL OUTPUT RULES:
+1. Output ONLY plain text. No headings, no titles, no labels, no "Summary:", no markdown, no bullet points with dashes.
+2. Do NOT start your response with the field name or a heading. Just write the content directly.
+3. SYNTHESIZE information into cohesive professional narrative in third person.
+4. Do NOT include raw case note excerpts, dates in brackets, or staff names.
+5. When referencing points, use the thousands format (e.g., "averaging 95,000 daily points").
 
 Youth Information:
 - Current Level: ${youth.level}
@@ -476,7 +478,9 @@ Youth Information:
 - Current Counseling: ${youth.currentCounseling?.join(', ') || 'Not specified'}
 - Therapist: ${youth.therapistName || 'Not specified'}
 - Placing Agency: ${youth.placingAgencyCounty || 'Not specified'}
-- Average Daily Points: ${avgPoints}/15 (${bpCount} days tracked)
+
+POINT SYSTEM: Heartland uses a behavioral point system where points are measured in the thousands. Boys earn increments of 1,000 to 20,000 points per activity. A typical daily total ranges from 90,000 to over 100,000.
+- Average Daily Points: ${avgPoints} (${bpCount} days tracked)
 
 Daily Ratings (0-5 scale, ${ratingCount} entries):
 - Peer Interaction: ${avgPeer}/5
@@ -497,23 +501,23 @@ Case Notes:
 ${caseNotesText}`;
 
       const aiPrompts: Partial<Record<keyof ServicePlanData, string>> = {
-        recommendations: `${baseInstruction}\n\nWrite 2-3 paragraphs of clinical recommendations: continued treatment needs, suggested modifications to the service plan, referrals, discharge readiness assessment, and next steps for the treatment team.`,
+        recommendations: `${baseInstruction}\n\nThis text goes into the "Recommendations" textarea on the service plan form. Write 2-3 paragraphs of clinical recommendations: continued treatment needs, suggested modifications to the service plan, referrals, discharge readiness assessment, and next steps for the treatment team.`,
       };
 
       if (!reportData.assessmentSummary.trim() && !dbUpdates.assessmentSummary?.trim()) {
-        aiPrompts.assessmentSummary = `${baseInstruction}\n\nWrite a 2-3 paragraph assessment summary covering: presenting problems, clinical observations, strengths, areas of need, and current functioning level. This should provide context for the treatment plan.`;
+        aiPrompts.assessmentSummary = `${baseInstruction}\n\nThis text goes into the "Assessment Summary" textarea. Write 2-3 paragraphs covering: presenting problems, clinical observations, strengths, areas of need, and current functioning level.`;
       }
       if (!reportData.treatmentObjectives.trim() && !dbUpdates.treatmentObjectives?.trim()) {
-        aiPrompts.treatmentObjectives = `${baseInstruction}\n\nWrite 2-3 paragraphs outlining treatment objectives based on the youth's documented needs. Include specific, measurable goals across behavioral, social, emotional, and educational domains. Reference treatment goals if documented.`;
+        aiPrompts.treatmentObjectives = `${baseInstruction}\n\nThis text goes into the "Treatment Objectives" textarea. Write 2-3 paragraphs outlining treatment objectives: specific, measurable goals across behavioral, social, emotional, and educational domains.`;
       }
       if (!reportData.permanencyPlanning.trim() && !dbUpdates.permanencyPlanning?.trim()) {
-        aiPrompts.permanencyPlanning = `${baseInstruction}\n\nWrite 2-3 paragraphs about permanency planning: family reunification efforts, family engagement, discharge planning considerations, and the long-term plan for stable placement after residential care.`;
+        aiPrompts.permanencyPlanning = `${baseInstruction}\n\nThis text goes into the "Permanency Planning" textarea. Write 2-3 paragraphs about family reunification efforts, family engagement, discharge planning, and the long-term placement plan.`;
       }
       if (!reportData.serviceInterventions.trim() && !dbUpdates.serviceInterventions?.trim()) {
-        aiPrompts.serviceInterventions = `${baseInstruction}\n\nWrite 2-3 paragraphs describing service interventions currently in place or recommended: individual therapy, group counseling, behavioral modification program, educational supports, life skills training, family therapy, and any specialized interventions.`;
+        aiPrompts.serviceInterventions = `${baseInstruction}\n\nThis text goes into the "Service Interventions" textarea. Write 2-3 paragraphs about interventions in place or recommended: individual therapy, group counseling, behavioral modification, educational supports, life skills training, family therapy.`;
       }
       if (!reportData.progressIndicators.trim() && !dbUpdates.progressIndicators?.trim()) {
-        aiPrompts.progressIndicators = `${baseInstruction}\n\nWrite 2-3 paragraphs about progress indicators: what measurable improvements have been observed, behavioral trends, level advancement progress, academic engagement, social skill development, and areas still requiring intervention.`;
+        aiPrompts.progressIndicators = `${baseInstruction}\n\nThis text goes into the "Progress Indicators" textarea. Write 2-3 paragraphs about measurable improvements, behavioral trends, level advancement progress, academic engagement, and social skill development.`;
       }
 
       const updates: Partial<ServicePlanData> = {};

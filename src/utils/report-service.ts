@@ -1058,14 +1058,11 @@ BEHAVIORAL PERFORMANCE:
   if (reportData.behaviorPoints && reportData.behaviorPoints.length > 0) {
     const totalPoints = reportData.behaviorPoints.reduce((sum: number, p: any) => sum + (p.totalPoints || 0), 0);
     const avgDaily = Math.round(totalPoints / reportData.behaviorPoints.length);
-    const maxPossible = reportData.behaviorPoints.length * 15; // Assuming 15 is max daily points
-    const percentage = Math.round((totalPoints / maxPossible) * 100);
-    
     report += `Behavior Point Summary:
-- Total Points Earned: ${totalPoints} out of ${maxPossible} possible (${percentage}%)
-- Daily Average: ${avgDaily} points
+- Total Points Earned: ${totalPoints.toLocaleString()}
+- Daily Average: ${avgDaily.toLocaleString()} points
 - Days Evaluated: ${reportData.behaviorPoints.length}
-- Performance Level: ${percentage >= 80 ? 'Excellent' : percentage >= 70 ? 'Good' : percentage >= 60 ? 'Satisfactory' : 'Needs Improvement'}
+- Performance Level: ${avgDaily >= 90000 ? 'Excellent' : avgDaily >= 70000 ? 'Good' : avgDaily >= 50000 ? 'Satisfactory' : 'Needs Improvement'}
 
 `;
   }

@@ -1,7 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
-  Calendar, Gavel, FileText, ClipboardList, Star, BookOpen, FileCheck,
+  Calendar, Gavel, FileText, ClipboardList, Star, BookOpen, FileCheck, LogOut,
 } from "lucide-react";
 
 export type ReportTypeKey =
@@ -11,7 +11,8 @@ export type ReportTypeKey =
   | "dpnMonthly"
   | "evalWeekly"
   | "evalMonthly"
-  | "servicePlan";
+  | "servicePlan"
+  | "discharge";
 
 interface ReportTypeDef {
   key: ReportTypeKey;
@@ -85,6 +86,15 @@ const reportTypes: ReportTypeDef[] = [
     icon: FileCheck,
     color: "text-teal-600",
     bg: "bg-teal-50",
+    autoExport: false,
+  },
+  {
+    key: "discharge",
+    label: "Discharge Report",
+    description: "Discharge summary and transition plan",
+    icon: LogOut,
+    color: "text-slate-600",
+    bg: "bg-slate-50",
     autoExport: false,
   },
 ];

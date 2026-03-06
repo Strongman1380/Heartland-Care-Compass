@@ -1,13 +1,19 @@
 import { useState, useEffect } from "react";
 import { Header } from "@/components/layout/Header";
-import { ReportCenter } from "@/components/reports/ReportCenter";
 import { ReportTypeSelector, type ReportTypeKey } from "@/components/reports/ReportTypeSelector";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Label } from "@/components/ui/label";
 import { useYouth } from "@/hooks/useSupabase";
 import { type Youth } from "@/integrations/firebase/services";
 import { BottomNav } from "@/components/layout/BottomNav";
+
+// Report components
+import { HeartlandMonthlyProgressReport } from "@/components/reports/HeartlandMonthlyProgressReport";
+import { CourtReport } from "@/components/reports/CourtReport";
+import { DpnReport } from "@/components/reports/DpnReport";
+import { ProgressEvaluationReport } from "@/components/reports/ProgressEvaluationReport";
+import { ServicePlanReport } from "@/components/reports/ServicePlanReport";
+import { DischargeReport } from "@/components/reports/DischargeReport";
 
 const Reports = () => {
   const [selectedYouthId, setSelectedYouthId] = useState<string>("");
@@ -28,6 +34,36 @@ const Reports = () => {
       setSelectedYouth(null);
     }
   }, [selectedYouthId, youths]);
+
+  // Reset report type when youth changes
+  useEffect(() => {
+    setSelectedReportType(null);
+  }, [selectedYouthId]);
+
+  const renderReport = () => {
+    if (!selectedYouth || !selectedReportType) return null;
+
+    switch (selectedReportType) {
+      case "progressMonthly":
+        return <HeartlandMonthlyProgressReport key={selectedYouth.id} youth={selectedYouth} />;
+      case "court":
+        return <CourtReport key={selectedYouth.id} youth={selectedYouth} />;
+      case "dpnBiWeekly":
+        return <DpnReport key={`${selectedYouth.id}-biweekly`} youth={selectedYouth} variant="biweekly" />;
+      case "dpnMonthly":
+        return <DpnReport key={`${selectedYouth.id}-monthly`} youth={selectedYouth} variant="monthly" />;
+      case "evalWeekly":
+        return <ProgressEvaluationReport key={`${selectedYouth.id}-weekly`} youth={selectedYouth} variant="weekly" />;
+      case "evalMonthly":
+        return <ProgressEvaluationReport key={`${selectedYouth.id}-monthly-eval`} youth={selectedYouth} variant="monthly" />;
+      case "servicePlan":
+        return <ServicePlanReport key={selectedYouth.id} youth={selectedYouth} />;
+      case "discharge":
+        return <DischargeReport key={selectedYouth.id} youth={selectedYouth} />;
+      default:
+        return null;
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-red-50 via-yellow-50 to-red-100">
@@ -85,13 +121,11 @@ const Reports = () => {
               </Card>
             )}
 
-            {/* Report Generation */}
+            {/* Rendered Report */}
             {selectedYouth && selectedReportType && (
-              <ReportCenter
-                youthId={selectedYouthId}
-                youth={selectedYouth}
-                preselectedType={selectedReportType}
-              />
+              <div className="mt-2">
+                {renderReport()}
+              </div>
             )}
 
             {!selectedYouthId && youths.length > 0 && (

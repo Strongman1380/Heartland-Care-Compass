@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import emailjs from "@emailjs/browser";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -34,6 +35,7 @@ import { format, isValid } from "date-fns";
 import { toast } from "sonner";
 import { referralNotesService, type ReferralNoteRow, type POContactEntry } from "@/integrations/firebase/referralNotesService";
 import { alertService } from "@/utils/alertService";
+import { InterviewReportForm } from "./InterviewReportForm";
 import { alertsService } from "@/integrations/firebase/alertsService";
 import { screenReferralIntake } from "@/services/aiService";
 import {
@@ -1346,6 +1348,30 @@ export const ReferralTab = () => {
       uniqueCities: new Set(active.flatMap(extractCities)).size,
       uniqueStates: new Set(active.flatMap(extractStates)).size,
       uniquePOs: new Set(active.flatMap(extractProbationOfficer)).size,
+      // New KPIs
+      conversionRate: totalReceived > 0 ? Math.round((acceptedCount / totalReceived) * 100) : 0,
+      placementRate: (acceptedCount + deniedCount) > 0 ? Math.round((acceptedCount / (acceptedCount + deniedCount)) * 100) : 0,
+      activePipeline: active.filter((h) => !["accepted", "denied", "already_found_placement"].includes(h.status)).length,
+      agingReferrals: active.filter((h) => {
+        if (["accepted", "denied", "already_found_placement"].includes(h.status)) return false;
+        const created = new Date(h.createdAt);
+        return (Date.now() - created.getTime()) > 14 * 24 * 60 * 60 * 1000;
+      }).length,
+      avgDaysToInterview: (() => {
+        const daysArr = active.filter((h) => h.interviewScheduledDate && h.createdAt).map((h) => {
+          const diff = new Date(h.interviewScheduledDate).getTime() - new Date(h.createdAt).getTime();
+          return Math.max(0, Math.round(diff / (24 * 60 * 60 * 1000)));
+        });
+        return daysArr.length > 0 ? Math.round(daysArr.reduce((a, b) => a + b, 0) / daysArr.length) : null;
+      })(),
+      avgDaysToDecision: (() => {
+        const terminal = history.filter((h) => ["accepted", "denied"].includes(h.status) && h.createdAt);
+        const daysArr = terminal.map((h) => {
+          const diff = Date.now() - new Date(h.createdAt).getTime();
+          return Math.max(0, Math.round(diff / (24 * 60 * 60 * 1000)));
+        });
+        return daysArr.length > 0 ? Math.round(daysArr.reduce((a, b) => a + b, 0) / daysArr.length) : null;
+      })(),
     };
   }, [history]);
 
@@ -1358,11 +1384,18 @@ export const ReferralTab = () => {
         </p>
       </div>
 
+      <Collapsible defaultOpen>
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Referral KPI Snapshot</CardTitle>
-          <CardDescription>Operational intake and interview progress</CardDescription>
+        <CardHeader className="cursor-pointer">
+          <CollapsibleTrigger className="flex items-center justify-between w-full text-left">
+            <div>
+              <CardTitle className="text-base">Referral KPI Snapshot</CardTitle>
+              <CardDescription>Operational intake and interview progress</CardDescription>
+            </div>
+            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+          </CollapsibleTrigger>
         </CardHeader>
+        <CollapsibleContent>
         <CardContent className="space-y-3">
           {/* Pipeline row */}
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-9 gap-3">
@@ -1430,14 +1463,57 @@ export const ReferralTab = () => {
               </div>
             </div>
           </div>
-        </CardContent>
-      </Card>
 
+          {/* New KPIs row */}
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+            <div className="rounded-md border border-indigo-200 bg-indigo-50 p-3">
+              <p className="text-xs text-indigo-700">Conversion Rate</p>
+              <p className="text-xl font-semibold text-indigo-800">{kpis.conversionRate}%</p>
+              <p className="text-xs text-indigo-600 mt-0.5">accepted / received</p>
+            </div>
+            <div className="rounded-md border border-violet-200 bg-violet-50 p-3">
+              <p className="text-xs text-violet-700">Placement Rate</p>
+              <p className="text-xl font-semibold text-violet-800">{kpis.placementRate}%</p>
+              <p className="text-xs text-violet-600 mt-0.5">accepted / decided</p>
+            </div>
+            <div className="rounded-md border border-cyan-200 bg-cyan-50 p-3">
+              <p className="text-xs text-cyan-700">Active Pipeline</p>
+              <p className="text-xl font-semibold text-cyan-800">{kpis.activePipeline}</p>
+              <p className="text-xs text-cyan-600 mt-0.5">in progress</p>
+            </div>
+            <div className="rounded-md border border-rose-200 bg-rose-50 p-3">
+              <p className="text-xs text-rose-700">Aging ({">"}14d)</p>
+              <p className="text-xl font-semibold text-rose-800">{kpis.agingReferrals}</p>
+              <p className="text-xs text-rose-600 mt-0.5">pending &gt; 2 weeks</p>
+            </div>
+            <div className="rounded-md border p-3">
+              <p className="text-xs text-muted-foreground">Avg Days to Interview</p>
+              <p className="text-xl font-semibold">{kpis.avgDaysToInterview ?? "—"}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">referral → interview</p>
+            </div>
+            <div className="rounded-md border p-3">
+              <p className="text-xs text-muted-foreground">Avg Days to Decision</p>
+              <p className="text-xl font-semibold">{kpis.avgDaysToDecision ?? "—"}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">referral → accept/deny</p>
+            </div>
+          </div>
+        </CardContent>
+        </CollapsibleContent>
+      </Card>
+      </Collapsible>
+
+      <Collapsible defaultOpen>
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Referral Source and PO KPI</CardTitle>
-          <CardDescription>Track intake origin by source, county, city, state, and probation officer volume</CardDescription>
+        <CardHeader className="cursor-pointer">
+          <CollapsibleTrigger className="flex items-center justify-between w-full text-left">
+            <div>
+              <CardTitle className="text-base">Referral Source and PO KPI</CardTitle>
+              <CardDescription>Track intake origin by source, county, city, state, and probation officer volume</CardDescription>
+            </div>
+            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+          </CollapsibleTrigger>
         </CardHeader>
+        <CollapsibleContent>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
             <div className="rounded-md border p-3"><p className="text-xs text-muted-foreground">Unique Sources</p><p className="text-xl font-semibold">{kpis.uniqueSources}</p></div>
@@ -1490,14 +1566,23 @@ export const ReferralTab = () => {
             </div>
           </div>
         </CardContent>
+        </CollapsibleContent>
       </Card>
+      </Collapsible>
 
       {/* Intake Trends */}
+      <Collapsible defaultOpen>
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Intake Trends</CardTitle>
-          <CardDescription>Demographics, clinical profile, and screening patterns across active referrals</CardDescription>
+        <CardHeader className="cursor-pointer">
+          <CollapsibleTrigger className="flex items-center justify-between w-full text-left">
+            <div>
+              <CardTitle className="text-base">Intake Trends</CardTitle>
+              <CardDescription>Demographics, clinical profile, and screening patterns across active referrals</CardDescription>
+            </div>
+            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+          </CollapsibleTrigger>
         </CardHeader>
+        <CollapsibleContent>
         <CardContent className="space-y-4">
           {/* Priority + AI Screening + Staff Rec */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -1622,7 +1707,9 @@ export const ReferralTab = () => {
             </div>
           </div>
         </CardContent>
+        </CollapsibleContent>
       </Card>
+      </Collapsible>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="space-y-4">
@@ -2512,88 +2599,42 @@ export const ReferralTab = () => {
                   if (!open) setEditingInterviewTarget(null);
                 }}
               >
-                <DialogContent className="sm:max-w-2xl">
+                <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
                   <DialogHeader>
-                    <DialogTitle>Interview Report and Director Brief</DialogTitle>
-                    <DialogDescription>Use this after the referral interview to prepare leadership-ready notes</DialogDescription>
+                    <DialogTitle>Interview Report — {editingInterviewTarget?.referralName}</DialogTitle>
                   </DialogHeader>
-                  <div className="space-y-3">
-                    <div>
-                      <Label>Interview Report</Label>
-                      <Textarea
-                        value={interviewReport}
-                        onChange={(e) => setInterviewReport(e.target.value)}
-                        rows={6}
-                        placeholder="Enter interview findings, strengths, risks, placement fit, and recommendations..."
-                      />
-                    </div>
-                    <div>
-                      <Label>Director and Executive Director Summary</Label>
-                      <Textarea
-                        value={directorSummary}
-                        onChange={(e) => setDirectorSummary(e.target.value)}
-                        rows={4}
-                        placeholder="Concise summary for leadership decision-making"
-                      />
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div>
-                        <Label>Update Status</Label>
-                        <Select value={editStatus} onValueChange={setEditStatus}>
-                          <SelectTrigger><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="pending_interview">Pending Interview</SelectItem>
-                            <SelectItem value="interview_scheduled">Interview Scheduled</SelectItem>
-                            <SelectItem value="interviewed_yes">Interviewed - Yes</SelectItem>
-                            <SelectItem value="interviewed_no">Interviewed - No</SelectItem>
-                            <SelectItem value="contacted_po">Logged PO Contact</SelectItem>
-                            <SelectItem value="contacted_caseworker">Logged Caseworker Contact</SelectItem>
-                            <SelectItem value="requested_more_info">Requested More Info</SelectItem>
-                            <SelectItem value="already_found_placement">Already Found Placement</SelectItem>
-                            <SelectItem value="waitlisted">Waitlisted</SelectItem>
-                            <SelectItem value="accepted">Accepted / Admitted</SelectItem>
-                            <SelectItem value="denied">Denied</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="flex items-end gap-2">
-                        <Button onClick={saveInterviewUpdate} disabled={savingInterview} className="w-full">
-                          {savingInterview ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving...</> : <><Save className="h-4 w-4 mr-2" />Save Interview Update</>}
-                        </Button>
-                        <Button variant="outline" onClick={() => setEditingInterviewTarget(null)}>Cancel</Button>
-                      </div>
-                    </div>
-                    {(interviewReport.trim() || directorSummary.trim()) && (
-                      <div className="flex gap-2 pt-2 border-t">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            const text = [
-                              editingInterviewTarget ? `Referral: ${editingInterviewTarget.referralName}` : "",
-                              interviewReport.trim() ? `\nInterview Report:\n${interviewReport.trim()}` : "",
-                              directorSummary.trim() ? `\nDirector Summary:\n${directorSummary.trim()}` : "",
-                            ].filter(Boolean).join("\n");
-                            navigator.clipboard.writeText(text).then(() => toast.success("Copied to clipboard"));
-                          }}
-                        >
-                          <Copy className="h-3.5 w-3.5 mr-1" />Copy Report
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            const name = editingInterviewTarget?.referralName || "Referral";
-                            const html = `<html><head><title>Interview Report — ${name}</title><style>body{font-family:sans-serif;padding:2rem;max-width:800px;margin:auto}h2{margin-top:1.5rem}pre{white-space:pre-wrap;font-family:inherit}</style></head><body><h1>Interview Report</h1><p><strong>Referral:</strong> ${name}</p>${interviewReport.trim() ? `<h2>Interview Report</h2><pre>${interviewReport.trim()}</pre>` : ""}${directorSummary.trim() ? `<h2>Director Summary</h2><pre>${directorSummary.trim()}</pre>` : ""}</body></html>`;
-                            const win = window.open("", "_blank");
-                            if (win) { win.document.write(html); win.document.close(); win.print(); }
-                          }}
-                        >
-                          <Printer className="h-3.5 w-3.5 mr-1" />Print / PDF
-                        </Button>
-                      </div>
-                    )}
-                  </div>
+                  {editingInterviewTarget && (
+                    <InterviewReportForm
+                      referralName={editingInterviewTarget.referralName}
+                      initialData={(() => {
+                        try {
+                          const raw = editingInterviewTarget.interviewReport;
+                          if (raw && raw.startsWith("{")) return JSON.parse(raw);
+                        } catch {}
+                        return null;
+                      })()}
+                      onSave={async (data, newStatus) => {
+                        setSavingInterview(true);
+                        try {
+                          const updates: any = {
+                            interviewReport: JSON.stringify(data),
+                            directorSummary: data.sections.directorSummary?.text || directorSummary,
+                          };
+                          if (newStatus) updates.status = newStatus;
+                          await referralNotesService.save({
+                            id: editingInterviewTarget.id,
+                            referral_name: editingInterviewTarget.referralName,
+                            ...updates,
+                          });
+                          loadHistory();
+                          setEditingInterviewTarget(null);
+                        } finally {
+                          setSavingInterview(false);
+                        }
+                      }}
+                      onCancel={() => setEditingInterviewTarget(null)}
+                    />
+                  )}
                 </DialogContent>
               </Dialog>
 

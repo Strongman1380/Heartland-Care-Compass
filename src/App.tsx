@@ -7,26 +7,19 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useEffect } from "react";
 import { initializeStorage } from "@/utils/local-storage-utils";
 import { initializePointSync } from "@/utils/pointSyncService";
+import MainDashboard from "./pages/MainDashboard";
 import Index from "./pages/Index";
 import ProgressNotesPage from "./pages/ProgressNotesPage";
-import Dashboard from "./pages/Dashboard";
 import Alerts from "./pages/Alerts";
 import Reports from "./pages/Reports";
 import AssessmentKPIDashboard from "./pages/AssessmentKPIDashboard";
 import DataMigrationPage from "./pages/DataMigrationPage";
-import { MonthlyProgressReportPage } from "./pages/MonthlyProgressReportPage";
-import { CourtReportPage } from "./pages/CourtReportPage";
 import DailyPoints from "./pages/DailyPoints";
-import BehaviorAnalysisPage from "./pages/BehaviorAnalysisPage";
+
 import NotFound from "./pages/NotFound";
 import Auth from "./pages/Auth";
 import { ProtectedRoute } from "@/components/layout/ProtectedRoute";
 import { AwardsProvider } from "@/contexts/AwardsContext";
-import School from "./pages/School";
-import SchoolScores from "./pages/SchoolScores";
-import AcademicProgressDashboard from "./pages/AcademicProgressDashboard";
-import SchoolIncidentReports from "./pages/SchoolIncidentReports";
-import SchoolPrintReports from "./pages/SchoolPrintReports";
 import IncidentReports from "./pages/IncidentReports";
 import Referrals from "./pages/Referrals";
 import ShiftScores from "./pages/ShiftScores";
@@ -35,6 +28,7 @@ import AdminForms from "./pages/AdminForms";
 import PoResponsePage from "./pages/PoResponsePage";
 import { PwaInstallBanner } from "@/components/layout/PwaInstallBanner";
 import DataUpload from "./pages/DataUpload";
+import YouthDetailPage from "./pages/YouthDetailPage";
 
 const queryClient = new QueryClient();
 
@@ -58,27 +52,20 @@ const App = () => {
         <Routes>
           <Route path="/auth" element={<Auth />} />
           <Route path="/po-response/:token" element={<PoResponsePage />} />
-          <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
+          <Route path="/" element={<ProtectedRoute><MainDashboard /></ProtectedRoute>} />
+          <Route path="/youth-list" element={<ProtectedRoute><Index /></ProtectedRoute>} />
+          <Route path="/youth/:id" element={<ProtectedRoute><YouthDetailPage /></ProtectedRoute>} />
           <Route path="/progress-notes" element={<ProtectedRoute><ProgressNotesPage /></ProtectedRoute>} />
-          <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+          <Route path="/dashboard" element={<Navigate to="/" replace />} />
           <Route path="/alerts" element={<ProtectedRoute><Alerts /></ProtectedRoute>} />
           <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
-          <Route path="/monthly-progress" element={<ProtectedRoute><MonthlyProgressReportPage /></ProtectedRoute>} />
-          <Route path="/court-report" element={<ProtectedRoute><CourtReportPage /></ProtectedRoute>} />
+          <Route path="/monthly-progress" element={<Navigate to="/reports" replace />} />
+          <Route path="/court-report" element={<Navigate to="/reports" replace />} />
           <Route path="/daily-points" element={<ProtectedRoute><DailyPoints /></ProtectedRoute>} />
-          <Route path="/behavior-analysis" element={<ProtectedRoute><BehaviorAnalysisPage /></ProtectedRoute>} />
           <Route path="/assessment-kpi" element={<ProtectedRoute><AssessmentKPIDashboard /></ProtectedRoute>} />
           <Route path="/admin/facility" element={<ProtectedRoute requireAdmin><AdminFacility /></ProtectedRoute>} />
           <Route path="/admin/forms" element={<ProtectedRoute><AdminForms /></ProtectedRoute>} />
           <Route path="/referrals" element={<ProtectedRoute><Referrals /></ProtectedRoute>} />
-
-          <Route path="/school" element={<ProtectedRoute><School /></ProtectedRoute>}>
-            <Route index element={<Navigate to="scores" replace />} />
-            <Route path="scores" element={<SchoolScores />} />
-            <Route path="dashboard" element={<AcademicProgressDashboard />} />
-            <Route path="incidents" element={<SchoolIncidentReports />} />
-            <Route path="print-reports" element={<SchoolPrintReports />} />
-          </Route>
 
           <Route path="/shift-scores" element={<ProtectedRoute><ShiftScores /></ProtectedRoute>} />
           <Route path="/incident-reports" element={<ProtectedRoute><IncidentReports /></ProtectedRoute>} />

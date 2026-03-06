@@ -1,8 +1,9 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ReportGenerationForm } from "./ReportGenerationForm";
 import { RecentReports } from "./RecentReports";
 import { ReportTemplates } from "./ReportTemplates";
+import type { ReportTypeKey } from "./ReportTypeSelector";
 import { generateReport, downloadReport, ReportOptions, generateReportHTML } from "@/utils/report-service";
 import { exportElementToPDF, exportElementToDocx, exportHTMLToPDF, exportHTMLToDocx } from "@/utils/export";
 import { useRef } from "react";
@@ -29,9 +30,10 @@ const escapeHtml = (value: string) =>
 interface ReportCenterProps {
   youthId: string;
   youth: any;
+  preselectedType?: ReportTypeKey;
 }
 
-export const ReportCenter = ({ youthId, youth }: ReportCenterProps) => {
+export const ReportCenter = ({ youthId, youth, preselectedType }: ReportCenterProps) => {
   const [isGenerating, setIsGenerating] = useState(false);
   const { toast } = useToast();
   const exportRef = useRef<HTMLDivElement>(null);
@@ -39,7 +41,32 @@ export const ReportCenter = ({ youthId, youth }: ReportCenterProps) => {
   const [dpnVariant, setDpnVariant] = useState<null | 'weekly' | 'biweekly' | 'monthly'>(null);
   const [evalVariant, setEvalVariant] = useState<EvalReportType | null>(null);
   const [formKey, setFormKey] = useState(0);
-  
+
+  // Auto-trigger when preselectedType changes from parent
+  useEffect(() => {
+    if (!preselectedType) return;
+    // Map ReportTypeKey to the internal report type names
+    const typeMap: Record<ReportTypeKey, string> = {
+      progressMonthly: "progressMonthly",
+      court: "court",
+      dpnBiWeekly: "dpnBiWeekly",
+      dpnMonthly: "dpnMonthly",
+      evalWeekly: "evalWeekly",
+      evalMonthly: "evalMonthly",
+      servicePlan: "progressMonthly",
+    };
+    const mapped = typeMap[preselectedType];
+    if (mapped === "court") {
+      setShowCourtReport(true);
+    } else if (mapped.startsWith("dpn")) {
+      const variant = mapped === "dpnBiWeekly" ? "biweekly" : "monthly";
+      setDpnVariant(variant as 'biweekly' | 'monthly');
+    } else if (mapped.startsWith("eval")) {
+      setEvalVariant(mapped === "evalWeekly" ? "weekly" : "monthly");
+    }
+    // For progressMonthly/servicePlan, the form is shown below for user to configure options
+  }, [preselectedType]);
+
   const handleGenerateReport = async (options: ReportOptions) => {
     setIsGenerating(true);
     

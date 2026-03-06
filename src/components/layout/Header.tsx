@@ -3,10 +3,10 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
-  PlusCircle, BarChart3, LogOut, LogIn, Calendar, Gavel, BookOpen,
+  PlusCircle, BarChart3, LogOut, LogIn, BookOpen,
   ClipboardPaste, ShieldAlert, Home, Star, Bell, FileText,
-  GraduationCap, TrendingUp, Database, ClipboardList, Clock,
-  Menu, ChevronDown, LayoutDashboard,
+  ClipboardList, Clock,
+  Menu, ChevronDown,
   Building2, Upload,
 } from "lucide-react";
 import {
@@ -32,15 +32,6 @@ interface NavGroup {
 
 const navGroups: NavGroup[] = [
   {
-    label: "Daily",
-    icon: Star,
-    items: [
-      { path: "/daily-points", label: "Daily Points", icon: Star },
-      { path: "/shift-scores", label: "Shift Scores", icon: Clock },
-      { path: "/alerts", label: "Alerts", icon: Bell },
-    ],
-  },
-  {
     label: "Documentation",
     icon: BookOpen,
     items: [
@@ -50,34 +41,16 @@ const navGroups: NavGroup[] = [
     ],
   },
   {
-    label: "Reports",
-    icon: FileText,
-    items: [
-      { path: "/monthly-progress", label: "Monthly Progress", icon: Calendar },
-      { path: "/court-report", label: "Court Report", icon: Gavel },
-      { path: "/reports", label: "Report Center", icon: FileText },
-      { path: "/behavior-analysis", label: "Behavior Analysis", icon: TrendingUp },
-    ],
-  },
-  {
-    label: "School",
-    icon: GraduationCap,
-    items: [
-      { path: "/school/scores", label: "School Scores", icon: GraduationCap },
-      { path: "/school/dashboard", label: "Academic Dashboard", icon: LayoutDashboard },
-      { path: "/school/incidents", label: "School Incidents", icon: ShieldAlert },
-    ],
-  },
-  {
     label: "Admin",
     icon: BarChart3,
     items: [
-      { path: "/dashboard", label: "Dashboard", icon: BarChart3 },
+      { path: "/daily-points", label: "Daily Points", icon: Star },
+      { path: "/shift-scores", label: "Shift Scores", icon: Clock },
       { path: "/assessment-kpi", label: "KPI Dashboard", icon: ClipboardList },
       { path: "/admin/facility", label: "Facility Ops", icon: Building2 },
       { path: "/admin/forms", label: "Forms Library", icon: FileText },
       { path: "/data-upload", label: "Data Upload", icon: Upload },
-      { path: "/migrate-data", label: "Data Migration", icon: Database },
+      { path: "/alerts", label: "Alerts", icon: Bell },
     ],
   },
 ];
@@ -138,6 +111,16 @@ export const Header = () => {
               >
                 <Home className="h-4 w-4" />
                 <span>Home</span>
+              </Link>
+
+              {/* Reports direct link */}
+              <Link
+                to="/reports"
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 whitespace-nowrap
+                  ${isActive("/reports") ? "bg-red-50 text-red-700" : "text-gray-600 hover:text-red-700 hover:bg-red-50"}`}
+              >
+                <FileText className="h-4 w-4" />
+                <span>Reports</span>
               </Link>
 
               {/* Dropdown groups */}
@@ -263,6 +246,17 @@ export const Header = () => {
                     >
                       <Home className="h-4 w-4" />
                       Home
+                    </Link>
+
+                    {/* Reports direct link */}
+                    <Link
+                      to="/reports"
+                      onClick={() => setMobileMenuOpen(false)}
+                      className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors
+                        ${isActive("/reports") ? "bg-red-50 text-red-700" : "text-gray-700 hover:bg-gray-50"}`}
+                    >
+                      <FileText className="h-4 w-4" />
+                      Reports
                     </Link>
 
                     {/* Groups */}

@@ -147,7 +147,7 @@ export function detectHeaders(row: string[]): boolean {
 
 // ── CSV Template Types ──
 
-export type CsvTemplateType = 'weekly_eval' | 'daily_shift' | 'behavior_points' | 'daily_ratings' | 'daily_ratings_youth'
+export type CsvTemplateType = 'weekly_eval' | 'daily_shift' | 'behavior_points' | 'daily_ratings' | 'daily_ratings_youth' | 'referral_upload' | 'bulk_case_notes'
 
 interface CsvTemplate {
   label: string
@@ -235,6 +235,40 @@ export const CSV_TEMPLATES: Record<CsvTemplateType, CsvTemplate> = {
       'Staff: Optional staff member name',
       'Comments: Optional notes',
       'All rows are imported for the currently selected youth',
+    ],
+  },
+  referral_upload: {
+    label: 'Referral Upload',
+    description: 'Bulk upload referrals with name, source, date, status, and priority.',
+    headers: 'Referral Name,Referral Source,Referral Date,Staff Name,Status,Priority,Summary',
+    sampleRows: [
+      'John Doe,Juvenile Court,2026-02-15,Jane Smith,pending,high,Court-ordered placement referral',
+      'Mike Jones,DCS,2026-02-16,Bob Wilson,screening,medium,DCS referral for placement',
+    ],
+    notes: [
+      'Referral Name: Full name of the referred youth (required)',
+      'Referral Source: Where the referral came from (e.g. Juvenile Court, DCS, PO)',
+      'Referral Date: YYYY-MM-DD or MM/DD/YYYY',
+      'Staff Name: Staff member handling the referral',
+      'Status: pending, screening, interviewed, accepted, denied, waitlisted',
+      'Priority: low, medium, high, urgent',
+      'Summary: Brief description of the referral',
+    ],
+  },
+  bulk_case_notes: {
+    label: 'Bulk Case Notes',
+    description: 'Upload case notes for multiple youth at once.',
+    headers: 'Youth Name,Date,Summary,Note,Staff',
+    sampleRows: [
+      'Chance Thaller,2026-02-15,Weekly check-in,Youth discussed goals and progress,Jane Smith',
+      'Dagen Dickey,2026-02-15,Behavioral review,Reviewed recent incidents and coping strategies,Bob Wilson',
+    ],
+    notes: [
+      'Youth Name: First name, last name, or full name (case-insensitive)',
+      'Date: YYYY-MM-DD or MM/DD/YYYY',
+      'Summary: Brief summary/title of the note',
+      'Note: Full case note content',
+      'Staff: Staff member who created the note',
     ],
   },
 }

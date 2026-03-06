@@ -1,30 +1,25 @@
 
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Home, Star, FileText, Bell, MoreHorizontal, BarChart3, BookOpen, Calendar, Gavel, GraduationCap, TrendingUp, Database, ClipboardList, ShieldAlert, ClipboardPaste, Clock, Upload } from "lucide-react";
+import { Home, Star, FileText, Bell, MoreHorizontal, BarChart3, BookOpen, ClipboardList, ShieldAlert, ClipboardPaste, Clock, Upload } from "lucide-react";
 import { useUnresolvedAlertCount } from "@/hooks/useUnresolvedAlertCount";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 
 const primaryTabs = [
   { path: "/", label: "Home", icon: Home },
   { path: "/progress-notes", label: "Notes", icon: BookOpen },
-  { path: "/referrals", label: "Referrals", icon: ClipboardPaste },
+  { path: "/reports", label: "Reports", icon: FileText },
   { path: "/alerts", label: "Alerts", icon: Bell },
 ];
 
 const secondaryRoutes = [
   { path: "/daily-points", label: "Points", icon: Star },
-  { path: "/incident-reports", label: "Incidents", icon: ShieldAlert },
-  { path: "/dashboard", label: "Dashboard", icon: BarChart3 },
-  { path: "/reports", label: "Reports", icon: FileText },
-  { path: "/monthly-progress", label: "Monthly Progress", icon: Calendar },
-  { path: "/court-report", label: "Court Report", icon: Gavel },
   { path: "/shift-scores", label: "Shift Scores", icon: Clock },
-  { path: "/school/scores", label: "School", icon: GraduationCap },
-  { path: "/behavior-analysis", label: "Behavior Analysis", icon: TrendingUp },
+  { path: "/incident-reports", label: "Incidents", icon: ShieldAlert },
+  { path: "/referrals", label: "Referrals", icon: ClipboardPaste },
   { path: "/assessment-kpi", label: "KPI Dashboard", icon: ClipboardList },
   { path: "/data-upload", label: "Data Upload", icon: Upload },
-  { path: "/migrate-data", label: "Data Migration", icon: Database },
+  { path: "/admin/facility", label: "Admin", icon: BarChart3 },
 ];
 
 export const BottomNav = () => {

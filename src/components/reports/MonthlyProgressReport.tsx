@@ -1033,7 +1033,7 @@ Discuss behavioral patterns, compliance, response to redirection, and emphasize 
                 className="bg-[#823131] hover:bg-[#6b2828] text-white border-[#823131]"
               >
                 <Sparkles className="h-4 w-4 mr-2" />
-                {isAutoPopulating ? 'Populating...' : 'AI Populate All'}
+                {isAutoPopulating ? 'Populating...' : 'Populate Report'}
               </Button>
               <Button
                 variant="outline"

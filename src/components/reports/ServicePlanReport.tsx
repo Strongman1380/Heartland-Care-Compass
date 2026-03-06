@@ -706,7 +706,7 @@ ${caseNotesText}`;
       <div className="flex flex-wrap gap-2">
         <Button onClick={() => autoPopulateForm()} disabled={isAutoPopulating} className="bg-[#823131] hover:bg-[#6b2828] text-white border-[#823131]">
           <Sparkles className="w-4 h-4 mr-2" />
-          {isAutoPopulating ? "Generating..." : "Generate AI Summaries"}
+          {isAutoPopulating ? "Populating..." : "Populate Report"}
         </Button>
         <Button onClick={handleSave} disabled={isSaving} variant="outline" className="border-gray-300 text-gray-700 hover:bg-gray-50">
           <Save className="w-4 h-4 mr-2" />

@@ -414,7 +414,7 @@ RULES: Write 1–3 concise sentences. Do NOT include raw dates, staff names, or 
               className="bg-amber-600 hover:bg-amber-700 text-white shrink-0"
             >
               <Sparkles className="h-4 w-4 mr-2" />
-              {isAutoFilling ? "Generating..." : "Auto-Fill Narrative"}
+              {isAutoFilling ? "Populating..." : "Populate Report"}
             </Button>
           </div>
 

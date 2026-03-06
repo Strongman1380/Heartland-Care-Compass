@@ -1163,7 +1163,7 @@ Write a professional summary suitable for a court report focusing on future plan
                 Court Report
               </CardTitle>
               <p className="text-sm text-slate-500 mt-1">
-                Use Auto-Populate to fill behavioral and progress data from the last 30 days
+                Use Populate Report to fill behavioral and progress data from the last 30 days
               </p>
               <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
                 <span className="inline-flex items-center gap-1">
@@ -1220,7 +1220,7 @@ Write a professional summary suitable for a court report focusing on future plan
                 className="bg-[#823131] hover:bg-[#6b2828] text-white border-[#823131]"
               >
                 <Sparkles className="mr-2 h-4 w-4" />
-                Auto-Populate
+                Populate Report
               </Button>
               <Button
                 variant="outline"

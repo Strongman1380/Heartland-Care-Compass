@@ -7,14 +7,18 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { FileText, Save, RotateCcw, Download } from "lucide-react";
+import { FileText, Save, RotateCcw, Download, Sparkles, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { exportElementToPDF } from "@/utils/export";
 import { buildReportFilename } from "@/utils/reportFilenames";
 import { ReportHeader } from "@/components/reports/ReportHeader";
-import { format } from "date-fns";
+import { format, subMonths } from "date-fns";
 import { useAuth } from '@/contexts/AuthContext'
 import { draftsService } from '@/integrations/firebase/draftsService'
+import * as aiService from "@/services/aiService";
+import { getBehaviorPointsByYouth, getDailyRatingsByYouth } from "@/lib/api";
+import { fetchAllProgressNotes } from "@/utils/local-storage-utils";
+import { getWeeklyEvalsForYouthInRange, getDailyShiftsForYouthInRange } from "@/utils/shiftScores";
 
 interface HeartlandMonthlyProgressReportProps {
   youth: Youth;
@@ -223,6 +227,90 @@ export const HeartlandMonthlyProgressReport = ({ youth }: HeartlandMonthlyProgre
     }
   };
 
+  const [isAIPopulating, setIsAIPopulating] = useState(false);
+
+  const handleAIPopulate = async () => {
+    const hasData = !!(reportData.significantIncidentsDescription || reportData.goal1Notes || reportData.socialSkills || reportData.strengthsDemonstrated);
+    if (hasData && !confirm("AI will overwrite text fields with generated summaries. Continue?")) return;
+
+    setIsAIPopulating(true);
+    try {
+      toast({ title: "AI Processing", description: "Analyzing data from the last 30 days..." });
+
+      const thirtyDaysAgoISO = subMonths(new Date(), 1).toISOString().split("T")[0];
+      const todayISO = new Date().toISOString().split("T")[0];
+      const [behaviorPoints, progressNotes, dailyRatings, weeklyEvals, dailyShifts] = await Promise.all([
+        getBehaviorPointsByYouth(youth.id),
+        fetchAllProgressNotes(youth.id),
+        getDailyRatingsByYouth(youth.id),
+        getWeeklyEvalsForYouthInRange(youth.id, thirtyDaysAgoISO, todayISO).catch(() => []),
+        getDailyShiftsForYouthInRange(youth.id, thirtyDaysAgoISO, todayISO).catch(() => []),
+      ]);
+
+      const thirtyDaysAgo = subMonths(new Date(), 1);
+      const recentBehavior = behaviorPoints.filter((bp: any) => bp.date && new Date(bp.date) >= thirtyDaysAgo);
+      const recentNotes = progressNotes.filter((n: any) => n.date && new Date(n.date) >= thirtyDaysAgo);
+      const recentRatings = dailyRatings.filter((r: any) => r.date && new Date(r.date) >= thirtyDaysAgo);
+
+      const caseNotesText = recentNotes.map((n: any) => {
+        const content = typeof n.summary === "string" && n.summary.trim() ? n.summary : (typeof n.note === "string" ? n.note : "");
+        const date = n.date ? format(new Date(n.date), "MMM d, yyyy") : "No date";
+        return `[${date}] ${content}`;
+      }).join("\n\n");
+
+      const rc = recentRatings.length;
+      const avgPeer = rc > 0 ? (recentRatings.reduce((s: number, r: any) => s + (r.peerInteraction ?? 0), 0) / rc).toFixed(1) : "N/A";
+      const avgAdult = rc > 0 ? (recentRatings.reduce((s: number, r: any) => s + (r.adultInteraction ?? 0), 0) / rc).toFixed(1) : "N/A";
+      const avgInvestment = rc > 0 ? (recentRatings.reduce((s: number, r: any) => s + (r.investmentLevel ?? 0), 0) / rc).toFixed(1) : "N/A";
+      const avgAuthority = rc > 0 ? (recentRatings.reduce((s: number, r: any) => s + (r.dealAuthority ?? 0), 0) / rc).toFixed(1) : "N/A";
+      const avgPoints = recentBehavior.length > 0 ? (recentBehavior.reduce((s: number, bp: any) => s + (bp.totalPoints ?? 0), 0) / recentBehavior.length).toFixed(1) : "N/A";
+
+      const allEvals = [...weeklyEvals, ...dailyShifts];
+      const ec = allEvals.length;
+      const evalAvgPeer = ec > 0 ? (allEvals.reduce((s, e) => s + (e.peer ?? 0), 0) / ec).toFixed(1) : "N/A";
+      const evalAvgAdult = ec > 0 ? (allEvals.reduce((s, e) => s + (e.adult ?? 0), 0) / ec).toFixed(1) : "N/A";
+      const evalAvgInvestment = ec > 0 ? (allEvals.reduce((s, e) => s + (e.investment ?? 0), 0) / ec).toFixed(1) : "N/A";
+      const evalAvgAuthority = ec > 0 ? (allEvals.reduce((s, e) => s + (e.authority ?? 0), 0) / ec).toFixed(1) : "N/A";
+
+      const dataContext = `Youth: ${youth.firstName} ${youth.lastName}, Level ${youth.level}\nAvg Daily Points: ${avgPoints}/15\nDaily Ratings (peer/adult/investment/authority): ${avgPeer}, ${avgAdult}, ${avgInvestment}, ${avgAuthority}\nWeekly Eval Averages (peer/adult/investment/authority): ${evalAvgPeer}, ${evalAvgAdult}, ${evalAvgInvestment}, ${evalAvgAuthority}\n\nCase Notes:\n${caseNotesText || "No case notes available."}`;
+
+      const prompts: Record<string, string> = {
+        significantIncidentsDescription: `You are a clinical professional writing a monthly progress report. Based on the following data, write a brief summary of significant behavioral incidents this month. If no incidents are noted, say "No significant incidents reported."\n\n${dataContext}`,
+        goal1Notes: `Based on the case notes and behavioral data, write brief progress notes for the youth's primary treatment goal. Focus on concrete observations.\n\n${dataContext}`,
+        goal2Notes: `Based on the case notes, write brief progress notes for the youth's secondary treatment goal.\n\n${dataContext}`,
+        goal3Notes: `Based on the case notes, write brief progress notes for the youth's tertiary treatment goal.\n\n${dataContext}`,
+        socialSkills: `Write a 2-3 sentence summary of the youth's social skills development this month based on the data.\n\n${dataContext}`,
+        academicProgress: `Write a 2-3 sentence summary of the youth's academic progress this month. Focus on behavioral observations related to school.\n\n${dataContext}`,
+        independentLivingSkills: `Write a 2-3 sentence summary of the youth's independent living skills development.\n\n${dataContext}`,
+        areasOfGrowth: `List 3-4 specific areas of growth demonstrated this month.\n\n${dataContext}`,
+        areasNeedingDevelopment: `List 3-4 specific areas needing continued development.\n\n${dataContext}`,
+        strengthsDemonstrated: `Write a brief summary of key strengths the youth demonstrated this month.\n\n${dataContext}`,
+        challengesConcerns: `Write a brief summary of challenges and concerns observed this month.\n\n${dataContext}`,
+        planAdjustmentsNeeded: `Based on the data, recommend any plan adjustments needed for the coming month.\n\n${dataContext}`,
+      };
+
+      const updates: Partial<MonthlyProgressData> = {};
+      for (const [field, prompt] of Object.entries(prompts)) {
+        try {
+          const response = await aiService.queryData(prompt, { youth, period: "Last 30 days" });
+          if (response.success && response.data?.answer) {
+            updates[field as keyof MonthlyProgressData] = response.data.answer as any;
+          }
+        } catch (error) {
+          console.error(`Error generating ${field}:`, error);
+        }
+      }
+
+      setReportData((prev) => ({ ...prev, ...updates }));
+      toast({ title: "AI Complete", description: "Report sections populated. Review and edit as needed." });
+    } catch (error) {
+      console.error("AI populate error:", error);
+      toast({ title: "Error", description: "Failed to auto-populate. Please try again.", variant: "destructive" });
+    } finally {
+      setIsAIPopulating(false);
+    }
+  };
+
   const handleExportPDF = async () => {
     if (printRef.current) {
       try {
@@ -254,12 +342,16 @@ export const HeartlandMonthlyProgressReport = ({ youth }: HeartlandMonthlyProgre
             {isAutoSaving && <span className="text-sm text-green-600">(Auto-saving...)</span>}
           </CardTitle>
         </CardHeader>
-        <CardContent className="flex gap-2">
+        <CardContent className="flex gap-2 flex-wrap">
+          <Button onClick={handleAIPopulate} disabled={isAIPopulating} className="bg-[#823131] hover:bg-[#6b2828] text-white border-[#823131]">
+            {isAIPopulating ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Sparkles className="h-4 w-4 mr-2" />}
+            {isAIPopulating ? "Populating..." : "Populate Report"}
+          </Button>
           <Button onClick={handleSaveReport} variant="outline" className="border-gray-300 text-gray-700 hover:bg-gray-50">
             <Save className="h-4 w-4 mr-2" />
             Save Report
           </Button>
-          <Button onClick={handleExportPDF} className="bg-[#823131] hover:bg-[#6b2828] text-white border-[#823131]">
+          <Button onClick={handleExportPDF} variant="outline">
             <Download className="h-4 w-4 mr-2" />
             Export PDF
           </Button>

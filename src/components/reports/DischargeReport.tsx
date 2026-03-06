@@ -7,12 +7,16 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { FileText, Save, RotateCcw, Download } from "lucide-react";
+import { FileText, Save, RotateCcw, Download, Sparkles, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { exportElementToPDF } from "@/utils/export";
 import { buildReportFilename } from "@/utils/reportFilenames";
 import { ReportHeader } from "@/components/reports/ReportHeader";
-import { format, differenceInDays } from "date-fns";
+import { format, differenceInDays, subMonths } from "date-fns";
+import * as aiService from "@/services/aiService";
+import { getBehaviorPointsByYouth, getDailyRatingsByYouth } from "@/lib/api";
+import { fetchAllProgressNotes } from "@/utils/local-storage-utils";
+import { getWeeklyEvalsForYouthInRange, getDailyShiftsForYouthInRange } from "@/utils/shiftScores";
 import { useAuth } from "@/contexts/AuthContext";
 import { draftsService } from "@/integrations/firebase/draftsService";
 
@@ -172,6 +176,87 @@ export const DischargeReport = ({ youth }: DischargeReportProps) => {
     toast({ title: "Report Saved", description: "Discharge Report has been saved." });
   };
 
+  const [isAIPopulating, setIsAIPopulating] = useState(false);
+
+  const handleAIPopulate = async () => {
+    const hasData = !!(reportData.behavioralProgress || reportData.treatmentGoalsSummary || reportData.strengthsAtDischarge);
+    if (hasData && !confirm("AI will overwrite text fields with generated summaries. Continue?")) return;
+
+    setIsAIPopulating(true);
+    try {
+      toast({ title: "AI Processing", description: "Analyzing data to generate discharge summaries..." });
+
+      const admDate = youth.admissionDate ? new Date(youth.admissionDate).toISOString().split("T")[0] : subMonths(new Date(), 6).toISOString().split("T")[0];
+      const todayISO = new Date().toISOString().split("T")[0];
+      const [behaviorPoints, progressNotes, dailyRatings, weeklyEvals, dailyShifts] = await Promise.all([
+        getBehaviorPointsByYouth(youth.id),
+        fetchAllProgressNotes(youth.id),
+        getDailyRatingsByYouth(youth.id),
+        getWeeklyEvalsForYouthInRange(youth.id, admDate, todayISO).catch(() => []),
+        getDailyShiftsForYouthInRange(youth.id, admDate, todayISO).catch(() => []),
+      ]);
+
+      const caseNotesText = progressNotes.slice(0, 50).map((n: any) => {
+        const content = typeof n.summary === "string" && n.summary.trim() ? n.summary : (typeof n.note === "string" ? n.note : "");
+        const date = n.date ? format(new Date(n.date), "MMM d, yyyy") : "No date";
+        return `[${date}] ${content}`;
+      }).join("\n\n");
+
+      const rc = dailyRatings.length;
+      const avgPeer = rc > 0 ? (dailyRatings.reduce((s: number, r: any) => s + (r.peerInteraction ?? 0), 0) / rc).toFixed(1) : "N/A";
+      const avgAdult = rc > 0 ? (dailyRatings.reduce((s: number, r: any) => s + (r.adultInteraction ?? 0), 0) / rc).toFixed(1) : "N/A";
+      const avgInvestment = rc > 0 ? (dailyRatings.reduce((s: number, r: any) => s + (r.investmentLevel ?? 0), 0) / rc).toFixed(1) : "N/A";
+      const avgAuthority = rc > 0 ? (dailyRatings.reduce((s: number, r: any) => s + (r.dealAuthority ?? 0), 0) / rc).toFixed(1) : "N/A";
+      const avgPoints = behaviorPoints.length > 0 ? (behaviorPoints.reduce((s: number, bp: any) => s + (bp.totalPoints ?? 0), 0) / behaviorPoints.length).toFixed(1) : "N/A";
+
+      const allEvals = [...weeklyEvals, ...dailyShifts];
+      const ec = allEvals.length;
+      const evalAvgPeer = ec > 0 ? (allEvals.reduce((s, e) => s + (e.peer ?? 0), 0) / ec).toFixed(1) : "N/A";
+      const evalAvgAdult = ec > 0 ? (allEvals.reduce((s, e) => s + (e.adult ?? 0), 0) / ec).toFixed(1) : "N/A";
+      const evalAvgInvestment = ec > 0 ? (allEvals.reduce((s, e) => s + (e.investment ?? 0), 0) / ec).toFixed(1) : "N/A";
+      const evalAvgAuthority = ec > 0 ? (allEvals.reduce((s, e) => s + (e.authority ?? 0), 0) / ec).toFixed(1) : "N/A";
+
+      const los = reportData.lengthOfStay || "Unknown";
+      const dataContext = `Youth: ${youth.firstName} ${youth.lastName}, Level ${youth.level}, Length of Stay: ${los}\nAvg Daily Points: ${avgPoints}/15\nDaily Ratings (peer/adult/investment/authority): ${avgPeer}, ${avgAdult}, ${avgInvestment}, ${avgAuthority}\nWeekly Eval Averages (peer/adult/investment/authority): ${evalAvgPeer}, ${evalAvgAdult}, ${evalAvgInvestment}, ${evalAvgAuthority}\n\nCase Notes (recent):\n${caseNotesText || "No case notes available."}`;
+
+      const prompts: Record<string, string> = {
+        treatmentGoalsSummary: `You are writing a discharge report for a youth residential facility. Write a 2-3 paragraph summary of the youth's treatment progress over their entire stay.\n\n${dataContext}`,
+        behavioralProgress: `Write a 2-3 paragraph summary of the youth's overall behavioral progress during their stay.\n\n${dataContext}`,
+        peerInteractionSummary: `Write 2-3 sentences summarizing the youth's peer interaction development.\n\n${dataContext}`,
+        adultInteractionSummary: `Write 2-3 sentences summarizing the youth's adult interaction development.\n\n${dataContext}`,
+        programInvestmentSummary: `Write 2-3 sentences summarizing the youth's program investment over time.\n\n${dataContext}`,
+        authoritySummary: `Write 2-3 sentences summarizing how the youth dealt with authority.\n\n${dataContext}`,
+        academicSummary: `Write a brief academic summary. Focus on behavioral observations in school.\n\n${dataContext}`,
+        independentLivingSkills: `Write a brief summary of independent living skills developed.\n\n${dataContext}`,
+        familyEngagementSummary: `Write a brief summary of family engagement during the stay.\n\n${dataContext}`,
+        aftercarePlan: `Write recommended aftercare/transition plan items.\n\n${dataContext}`,
+        strengthsAtDischarge: `List the youth's key strengths at discharge.\n\n${dataContext}`,
+        ongoingConcerns: `List ongoing concerns at discharge.\n\n${dataContext}`,
+        recommendations: `Write clinical recommendations for post-discharge.\n\n${dataContext}`,
+      };
+
+      const updates: Partial<DischargeData> = {};
+      for (const [field, prompt] of Object.entries(prompts)) {
+        try {
+          const response = await aiService.queryData(prompt, { youth, period: "Full stay" });
+          if (response.success && response.data?.answer) {
+            updates[field as keyof DischargeData] = response.data.answer as any;
+          }
+        } catch (error) {
+          console.error(`Error generating ${field}:`, error);
+        }
+      }
+
+      setReportData((prev) => ({ ...prev, ...updates }));
+      toast({ title: "AI Complete", description: "Discharge report sections populated. Review and edit as needed." });
+    } catch (error) {
+      console.error("AI populate error:", error);
+      toast({ title: "Error", description: "Failed to auto-populate.", variant: "destructive" });
+    } finally {
+      setIsAIPopulating(false);
+    }
+  };
+
   const handleExportPDF = async () => {
     if (printRef.current) {
       try {
@@ -201,9 +286,13 @@ export const DischargeReport = ({ youth }: DischargeReportProps) => {
             {isAutoSaving && <span className="text-sm text-green-600">(Auto-saving...)</span>}
           </CardTitle>
         </CardHeader>
-        <CardContent className="flex gap-2">
+        <CardContent className="flex gap-2 flex-wrap">
+          <Button onClick={handleAIPopulate} disabled={isAIPopulating} className="bg-[#823131] hover:bg-[#6b2828] text-white border-[#823131]">
+            {isAIPopulating ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Sparkles className="h-4 w-4 mr-2" />}
+            {isAIPopulating ? "Populating..." : "Populate Report"}
+          </Button>
           <Button onClick={handleSave} variant="outline"><Save className="h-4 w-4 mr-2" />Save</Button>
-          <Button onClick={handleExportPDF} className="bg-[#823131] hover:bg-[#6b2828] text-white"><Download className="h-4 w-4 mr-2" />Export PDF</Button>
+          <Button onClick={handleExportPDF} variant="outline"><Download className="h-4 w-4 mr-2" />Export PDF</Button>
           <Button onClick={handleReset} variant="outline" className="border-red-300 text-red-700 hover:bg-red-50"><RotateCcw className="h-4 w-4 mr-2" />Reset</Button>
         </CardContent>
       </Card>

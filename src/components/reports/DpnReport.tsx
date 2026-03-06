@@ -282,7 +282,7 @@ export function DpnReport({
 
           <div className="flex gap-2 flex-wrap">
             <Button variant="outline" onClick={handleGenerateAISummary} disabled={isGeneratingAI}>
-              {isGeneratingAI ? 'Generating AI...' : 'Generate AI Summary'}
+              {isGeneratingAI ? 'Populating...' : 'Populate Report'}
             </Button>
             <Button variant="outline" onClick={handleSaveComments}>Save Comments</Button>
             <Button variant="outline" onClick={exportPDF}>Export PDF</Button>

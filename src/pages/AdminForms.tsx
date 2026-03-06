@@ -351,6 +351,101 @@ function buildDailyDpnHtml() {
 }
 
 // ─────────────────────────────────────────────────────────────
+// Blank Interview Report Form
+// ─────────────────────────────────────────────────────────────
+
+function buildInterviewReportHtml() {
+  const sections = [
+    { label: "Youth Presentation", hint: "Appearance, demeanor, attitude during interview" },
+    { label: "Motivation for Change", hint: "Self-identified goals, willingness to engage, understanding of placement" },
+    { label: "Risk Factor Assessment", hint: "Violence history, substance use, runaway risk, self-harm, gang involvement" },
+    { label: "Behavioral Indicators", hint: "Impulse control observations, emotional regulation, peer interaction style" },
+    { label: "Family Dynamics", hint: "Family support, custody situation, family willingness to participate" },
+    { label: "Educational Engagement", hint: "Academic motivation, school behavior, IEP needs" },
+    { label: "Treatment History", hint: "Prior placements, therapy history, medication compliance" },
+    { label: "Program Fit Assessment", hint: "Suitability for Heartland, anticipated challenges, recommended level" },
+    { label: "Interviewer Recommendation", hint: "Accept / Deny / Conditional recommendation with rationale" },
+    { label: "Director / Executive Director Summary", hint: "Concise leadership brief" },
+  ];
+
+  const sectionRows = sections
+    .map(
+      (s) => `
+    <div style="margin-bottom:14px;page-break-inside:avoid">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+        <div>
+          <span style="font-weight:bold;font-size:10pt">${s.label}</span>
+          <span style="font-size:8pt;color:#666;margin-left:8px">${s.hint}</span>
+        </div>
+        <div style="white-space:nowrap;font-size:9pt">
+          Rating:&nbsp;
+          ${[1, 2, 3, 4, 5]
+            .map(
+              (n) =>
+                `<span style="display:inline-flex;align-items:center;gap:1px;margin-right:6px"><span style="display:inline-block;border:1px solid #000;width:14px;height:14px"></span><span style="font-size:8pt">${n}</span></span>`
+            )
+            .join("")}
+        </div>
+      </div>
+      <div class="field-line"></div>
+      <div class="field-line"></div>
+      <div class="field-line"></div>
+      <div class="field-line"></div>
+    </div>`
+    )
+    .join("");
+
+  return `
+  <h1>Heartland Boys Home</h1>
+  <h2>Interview Report</h2>
+  <hr style="margin:8px 0 12px;border-top:2px solid #000"/>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:14px;font-size:9pt">
+    <div><strong>Youth Name:</strong> <span class="line" style="width:150px">&nbsp;</span></div>
+    <div><strong>Date:</strong> <span class="line" style="width:120px">&nbsp;</span></div>
+    <div><strong>Interviewer:</strong> <span class="line" style="width:130px">&nbsp;</span></div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;font-size:9pt">
+    <div><strong>Referral Source:</strong> <span class="line" style="width:180px">&nbsp;</span></div>
+    <div><strong>Probation Officer:</strong> <span class="line" style="width:160px">&nbsp;</span></div>
+  </div>
+
+  <div style="border:1px solid #555;border-radius:3px;padding:6px;margin-bottom:14px;background:#f5f5f5;font-size:9pt">
+    <strong>Rating Scale (1–5):</strong>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr;gap:4px;margin-top:4px;font-weight:600;text-align:center">
+      <span>1 = Poor</span><span>2 = Below Avg</span><span>3 = Average</span><span>4 = Good</span><span>5 = Excellent</span>
+    </div>
+  </div>
+
+  ${sectionRows}
+
+  <div style="margin-top:16px;padding-top:10px;border-top:2px solid #000">
+    <div style="font-weight:bold;font-size:10pt;margin-bottom:8px">Overall Recommendation:</div>
+    <div style="display:flex;gap:24px;font-size:9pt;margin-bottom:12px">
+      ${["Accept", "Conditional", "Deny"]
+        .map(
+          (opt) =>
+            `<span style="display:inline-flex;align-items:center;gap:4px"><span style="display:inline-block;border:1px solid #000;width:14px;height:14px"></span>${opt}</span>`
+        )
+        .join("")}
+    </div>
+    <div style="font-size:9pt"><strong>Notes:</strong></div>
+    <div class="field-line"></div>
+    <div class="field-line"></div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;font-size:9pt;margin-top:16px">
+    <div><strong>Interviewer Signature:</strong> <span class="line" style="width:160px">&nbsp;</span></div>
+    <div><strong>Date:</strong> <span class="line" style="width:140px">&nbsp;</span></div>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;font-size:9pt;margin-top:10px">
+    <div><strong>Director Signature:</strong> <span class="line" style="width:160px">&nbsp;</span></div>
+    <div><strong>Date:</strong> <span class="line" style="width:140px">&nbsp;</span></div>
+  </div>`;
+}
+
+// ─────────────────────────────────────────────────────────────
 // Page component
 // ─────────────────────────────────────────────────────────────
 
@@ -394,6 +489,14 @@ const FORMS = [
     icon: FileText,
     printLabel: "Print Blank Form",
     onPrint: () => openPrintWindow("Progress Evaluation Report — Blank", buildProgressEvalHtml()),
+  },
+  {
+    id: "interview-report",
+    title: "Interview Report",
+    description: "Blank interview report form with 10 structured assessment sections (1–5 rating scale), recommendation checkboxes, and signature lines.",
+    icon: FileText,
+    printLabel: "Print Blank Form",
+    onPrint: () => openPrintWindow("Interview Report — Blank", buildInterviewReportHtml()),
   },
   {
     id: "psp",

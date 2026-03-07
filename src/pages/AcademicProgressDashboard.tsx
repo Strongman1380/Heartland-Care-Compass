@@ -148,9 +148,9 @@ export default function AcademicProgressDashboard() {
     }
 
     if (selectedId != null) {
-      filteredCredits = filteredCredits.filter(c => String(c.student_id) === selectedId)
-      filteredGrades = filteredGrades.filter(g => String(g.student_id) === selectedId)
-      filteredSteps = filteredSteps.filter(s => String(s.student_id) === selectedId)
+      filteredCredits = filteredCredits.filter(c => c.student_id?.toString() === selectedId)
+      filteredGrades = filteredGrades.filter(g => g.student_id?.toString() === selectedId)
+      filteredSteps = filteredSteps.filter(s => s.student_id?.toString() === selectedId)
     }
 
     return { filteredCredits, filteredGrades, filteredSteps }
@@ -188,9 +188,9 @@ export default function AcademicProgressDashboard() {
     
     const { filteredCredits, filteredGrades, filteredSteps } = getFilteredData()
     return youths.map(y => {
-      const studentCredits = filteredCredits.filter(c => String(c.student_id) === String(y.id))
-      const studentGrades = filteredGrades.filter(g => String(g.student_id) === String(y.id))
-      const studentSteps = filteredSteps.filter(s => String(s.student_id) === String(y.id))
+      const studentCredits = filteredCredits.filter(c => c.student_id?.toString() === y.id?.toString())
+      const studentGrades = filteredGrades.filter(g => g.student_id?.toString() === y.id?.toString())
+      const studentSteps = filteredSteps.filter(s => s.student_id?.toString() === y.id?.toString())
 
       const totalCredits = studentCredits.reduce((sum, c) => sum + (Number(c.credit_value) || 0), 0)
       const avgGrade = studentGrades.length > 0

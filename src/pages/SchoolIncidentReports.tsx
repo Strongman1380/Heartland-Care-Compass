@@ -431,7 +431,7 @@ function IncidentRow({
             {incident.incident_type} • {incident.location}
           </div>
           <div className="text-sm text-slate-600">
-            {incident.summary}
+            {incident?.summary || 'No summary provided.'}
           </div>
           <div className="flex items-center gap-4 text-xs text-slate-500">
             <span>Reported by: {reporterName}</span>

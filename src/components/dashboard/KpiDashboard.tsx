@@ -331,9 +331,9 @@ export const KpiDashboard = ({ youthId, youth }: KpiDashboardProps) => {
       .map(([name, value]) => ({ name, value }));
 
     // --- Academics ---
-    const youthCredits = credits.filter((c) => c.student_id === youthId && inRange(c.date_earned));
-    const youthGrades = grades.filter((g) => g.student_id === youthId && inRange(g.date_entered));
-    const youthSteps = steps.filter((s) => s.student_id === youthId && inRange(s.date_completed));
+    const youthCredits = credits.filter((c) => c.student_id?.toString() === youthId?.toString() && inRange(c.date_earned));
+    const youthGrades = grades.filter((g) => g.student_id?.toString() === youthId?.toString() && inRange(g.date_entered));
+    const youthSteps = steps.filter((s) => s.student_id?.toString() === youthId?.toString() && inRange(s.date_completed));
 
     const totalCredits = youthCredits.reduce((sum, c) => sum + (c.credit_value || 0), 0);
     const avgGrade = youthGrades.length

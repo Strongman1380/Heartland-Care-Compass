@@ -216,9 +216,9 @@ export const behaviorPointsService = {
 
 // Case Notes Services
 export const caseNotesService = {
-  async getAll(): Promise<CaseNotes[]> {
+  async getAll(limitCount: number = 1000): Promise<CaseNotes[]> {
     // Avoid hard dependency on a collection-group composite index; sort client-side.
-    const q = query(collectionGroup(db, 'case_notes'))
+    const q = query(collectionGroup(db, 'case_notes'), firestoreLimit(limitCount))
     const snapshot = await getDocs(q)
     return snapshot.docs
       .map(d => docToData<CaseNotes>(d))

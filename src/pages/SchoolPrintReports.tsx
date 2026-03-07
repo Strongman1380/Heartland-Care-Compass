@@ -853,7 +853,7 @@ Write 3-4 paragraphs in a professional tone suitable for program directors.`
 
               <div className="mb-3">
                 <p className="text-sm text-gray-600">Summary</p>
-                <p className="text-gray-700">{incident.summary}</p>
+                <p className="text-gray-700">{incident?.summary || 'No summary provided.'}</p>
               </div>
 
               {incident.involved_residents && incident.involved_residents.length > 0 && (

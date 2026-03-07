@@ -213,13 +213,9 @@ export const CaseNotes = ({ youthId, youth, onYouthChange, onBackToSelection }: 
             wordWrap: 'break-word',
             overflowWrap: 'break-word'
           }}
-          dangerouslySetInnerHTML={{
-            __html: (note.note || 'No content')
-              .replace(/\n/g, '<br>')
-              .replace(/  /g, '&nbsp;&nbsp;')
-              .replace(/\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;')
-          }}
-        />
+        >
+          {note.note || 'No content'}
+        </div>
       );
     }
 

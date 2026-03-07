@@ -41,4 +41,4 @@ async function check() {
   process.exit(0);
 }
 
-check().catch(console.error);
+check().catch(err => { console.error(err); process.exit(1); });

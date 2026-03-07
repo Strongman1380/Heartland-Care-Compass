@@ -1,0 +1,10 @@
+import re
+
+with open("src/pages/SchoolIncidentReports.tsx", "r") as f:
+    content = f.read()
+
+content = content.replace("{incident.summary}", "{incident?.summary || 'No summary provided.'}")
+
+with open("src/pages/SchoolIncidentReports.tsx", "w") as f:
+    f.write(content)
+print("Updated SchoolIncidentReports.tsx")

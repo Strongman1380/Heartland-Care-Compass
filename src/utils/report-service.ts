@@ -95,6 +95,7 @@ export const generateReportHTML = async (youth: Youth, options: ReportOptions): 
   if (typeof window !== 'undefined' && window.fetch) {
     try {
       const res = await fetch(logoUrl, { cache: 'force-cache' });
+      if (!res.ok) throw new Error(`Failed to fetch logo: ${res.statusText}`);
       const blob = await res.blob();
       const reader = new FileReader();
       const dataUrl: string = await new Promise((resolve, reject) => {

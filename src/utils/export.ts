@@ -98,15 +98,18 @@ export async function exportHTMLToPDF(content: string | HTMLElement, filename: s
       tempContainer.style.opacity = '1'; // Ensure it's fully opaque for html2canvas
       tempContainer.style.backgroundColor = '#ffffff'; // Ensure white background
       tempContainer.innerHTML = content;
-      document.body.appendChild(tempContainer);
-
-      // Wait a tiny bit for the DOM to fully render the new element before capturing
-      await new Promise(resolve => setTimeout(resolve, 100));
-
+      
       try {
+        document.body.appendChild(tempContainer);
+
+        // Wait a tiny bit for the DOM to fully render the new element before capturing
+        await new Promise(resolve => setTimeout(resolve, 100));
+
         await (html2pdf() as any).set(opt).from(tempContainer).save();
       } finally {
-        document.body.removeChild(tempContainer);
+        if (tempContainer.parentNode) {
+          document.body.removeChild(tempContainer);
+        }
       }
     } else {
       await (html2pdf() as any).set(opt).from(content).save();

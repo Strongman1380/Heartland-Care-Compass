@@ -104,35 +104,78 @@ export interface MatchableYouth {
   lastName: string
 }
 
+function normalizeNameForMatch(value: string): string {
+  return value
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function tokenizeName(value: string): string[] {
+  return normalizeNameForMatch(value).split(' ').filter(Boolean)
+}
+
 export function matchYouth(nameVal: string, youths: MatchableYouth[]): MatchableYouth | undefined {
-  const lower = nameVal.toLowerCase().trim()
-  if (!lower) return undefined
+  const normalizedInput = normalizeNameForMatch(nameVal)
+  const inputTokens = tokenizeName(nameVal)
+  if (!normalizedInput) return undefined
 
-  // 1. Try exact full-name match first
-  let matches = youths.filter(y => {
-    const full = `${y.firstName || ''} ${y.lastName || ''}`.trim().toLowerCase()
-    const rev = `${y.lastName || ''}, ${y.firstName || ''}`.trim().toLowerCase()
-    return full === lower || rev === lower
-  })
-  if (matches.length > 0) return matches[0]
+  const candidateNames = youths.map((youth) => {
+    const first = (youth.firstName || '').trim()
+    const last = (youth.lastName || '').trim()
+    const full = `${first} ${last}`.trim()
+    const reversed = `${last} ${first}`.trim()
 
-  // 2. Fall back to exact firstName or lastName match
-  let partialMatches = youths.filter(y => {
-    const f = (y.firstName || '').trim().toLowerCase()
-    const l = (y.lastName || '').trim().toLowerCase()
-    return f === lower || l === lower
+    return {
+      youth,
+      first: normalizeNameForMatch(first),
+      last: normalizeNameForMatch(last),
+      full: normalizeNameForMatch(full),
+      reversed: normalizeNameForMatch(reversed),
+      tokens: tokenizeName(full),
+    }
   })
-  if (partialMatches.length > 0) return partialMatches[0]
-  
-  // 3. Fallback to substrings
-  let subMatches = youths.filter(y => {
-    const full = `${y.firstName || ''} ${y.lastName || ''}`.trim().toLowerCase()
-    return full.includes(lower)
+
+  // 1. Exact full-name or reversed-name match.
+  const exactMatches = candidateNames.filter(({ full, reversed }) => (
+    full === normalizedInput || reversed === normalizedInput
+  ))
+  if (exactMatches.length > 0) return exactMatches[0].youth
+
+  // 2. Exact first-name or last-name match.
+  const partialMatches = candidateNames.filter(({ first, last }) => (
+    first === normalizedInput || last === normalizedInput
+  ))
+  if (partialMatches.length === 1) return partialMatches[0].youth
+  if (partialMatches.length > 1) {
+    console.warn(`Ambiguous match for "${nameVal}"`)
+    return undefined
+  }
+
+  // 3. Same name tokens in a different order, e.g. "Thaller Chance".
+  const tokenSetMatches = candidateNames.filter(({ tokens }) => {
+    if (tokens.length !== inputTokens.length || tokens.length === 0) return false
+    const sortedCandidate = [...tokens].sort().join(' ')
+    const sortedInput = [...inputTokens].sort().join(' ')
+    return sortedCandidate === sortedInput
   })
-  if (subMatches.length === 1) return subMatches[0]
+  if (tokenSetMatches.length === 1) return tokenSetMatches[0].youth
+  if (tokenSetMatches.length > 1) {
+    console.warn(`Ambiguous match for "${nameVal}"`)
+    return undefined
+  }
+
+  // 4. Fallback to substring matching against both full-name orders.
+  const subMatches = candidateNames.filter(({ full, reversed }) => (
+    full.includes(normalizedInput) || reversed.includes(normalizedInput)
+  ))
+  if (subMatches.length === 1) return subMatches[0].youth
   if (subMatches.length > 1) {
     console.warn(`Ambiguous match for "${nameVal}"`)
-    return undefined // Ambiguity handling
+    return undefined
   }
 
   return undefined

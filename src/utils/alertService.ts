@@ -290,7 +290,12 @@ class AlertService {
       const name = item.referralName || "Unknown youth";
       const created = new Date(item.createdAt);
       const ageDays = isNaN(created.getTime()) ? 0 : Math.floor((now.getTime() - created.getTime()) / MS_PER_DAY);
-      const isPending = item.status === "pending_interview" || item.status === "new";
+      const isPending = [
+        "pending_interview",
+        "schedule_interview",
+        "waiting_for_response",
+        "new",
+      ].includes(item.status);
 
       // 1. No PO contact after 3 days
       if (isPending && (item.poContactLog || []).length === 0 && ageDays >= 3) {

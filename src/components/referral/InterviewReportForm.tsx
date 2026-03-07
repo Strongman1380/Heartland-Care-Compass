@@ -205,6 +205,8 @@ export const InterviewReportForm = ({ referralName, initialData, onSave, onCance
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="pending_interview">Pending Interview</SelectItem>
+                <SelectItem value="schedule_interview">Schedule Interview</SelectItem>
+                <SelectItem value="waiting_for_response">Waiting for Response</SelectItem>
                 <SelectItem value="interview_scheduled">Interview Scheduled</SelectItem>
                 <SelectItem value="interviewed_yes">Interviewed – Yes</SelectItem>
                 <SelectItem value="interviewed_no">Interviewed – No</SelectItem>

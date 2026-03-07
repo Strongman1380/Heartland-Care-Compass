@@ -102,6 +102,8 @@ const sectionHasContent = (section: Record<string, string>): boolean => Object.k
 
 const STATUS_LABELS: Record<string, string> = {
   pending_interview: "Pending Interview",
+  schedule_interview: "Schedule Interview",
+  waiting_for_response: "Waiting for Response",
   interview_scheduled: "Interview Scheduled",
   interviewed_yes: "Interviewed - Yes",
   interviewed_no: "Interviewed - No",
@@ -120,6 +122,8 @@ const STATUS_LABELS: Record<string, string> = {
 
 const STATUS_COLORS: Record<string, string> = {
   pending_interview: "bg-yellow-100 text-yellow-800 border-yellow-300",
+  schedule_interview: "bg-sky-100 text-sky-800 border-sky-300",
+  waiting_for_response: "bg-violet-100 text-violet-800 border-violet-300",
   interview_scheduled: "bg-blue-100 text-blue-800 border-blue-300",
   interviewed_yes: "bg-green-100 text-green-800 border-green-300",
   interviewed_no: "bg-orange-100 text-orange-800 border-orange-300",
@@ -134,6 +138,29 @@ const STATUS_COLORS: Record<string, string> = {
   reviewed: "bg-purple-100 text-purple-800 border-purple-300",
   actioned: "bg-teal-100 text-teal-800 border-teal-300",
 };
+
+const REFERRAL_STATUS_OPTIONS = [
+  { value: "pending_interview", label: "Pending Interview" },
+  { value: "schedule_interview", label: "Schedule Interview" },
+  { value: "waiting_for_response", label: "Waiting for Response" },
+  { value: "interview_scheduled", label: "Interview Scheduled" },
+  { value: "interviewed_yes", label: "Interviewed - Yes" },
+  { value: "interviewed_no", label: "Interviewed - No" },
+  { value: "contacted_po", label: "Logged PO Contact" },
+  { value: "contacted_caseworker", label: "Logged Caseworker Contact" },
+  { value: "requested_more_info", label: "Requested More Info" },
+  { value: "already_found_placement", label: "Already Found Placement" },
+  { value: "waitlisted", label: "Waitlisted" },
+  { value: "accepted", label: "Accepted / Admitted" },
+  { value: "denied", label: "Denied" },
+] as const;
+
+const PENDING_REFERRAL_STATUSES = new Set([
+  "pending_interview",
+  "schedule_interview",
+  "waiting_for_response",
+  "new",
+]);
 
 const colorMap: Record<string, string> = {
   blue: "bg-blue-50 border-blue-200 text-blue-800",
@@ -1244,7 +1271,7 @@ export const ReferralTab = () => {
   const kpis = useMemo(() => {
     const active = history.filter((h) => !h.archived);
     const totalReceived = history.length;
-    const pendingCount = active.filter((h) => h.status === "pending_interview" || h.status === "new").length;
+    const pendingCount = active.filter((h) => PENDING_REFERRAL_STATUSES.has(h.status || "")).length;
     const scheduledCount = active.filter((h) => h.status === "interview_scheduled").length;
     const interviewedYes = active.filter((h) => h.status === "interviewed_yes").length;
     const interviewedNo = active.filter((h) => h.status === "interviewed_no").length;
@@ -1736,17 +1763,11 @@ export const ReferralTab = () => {
                     <Select value={status} onValueChange={setStatus}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="pending_interview">Pending Interview</SelectItem>
-                        <SelectItem value="interview_scheduled">Interview Scheduled</SelectItem>
-                        <SelectItem value="interviewed_yes">Interviewed - Yes</SelectItem>
-                        <SelectItem value="interviewed_no">Interviewed - No</SelectItem>
-                        <SelectItem value="contacted_po">Logged PO Contact</SelectItem>
-                        <SelectItem value="contacted_caseworker">Logged Caseworker Contact</SelectItem>
-                        <SelectItem value="requested_more_info">Requested More Info</SelectItem>
-                        <SelectItem value="already_found_placement">Already Found Placement</SelectItem>
-                        <SelectItem value="waitlisted">Waitlisted</SelectItem>
-                        <SelectItem value="accepted">Accepted / Admitted</SelectItem>
-                        <SelectItem value="denied">Denied</SelectItem>
+                        {REFERRAL_STATUS_OPTIONS.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -1946,17 +1967,11 @@ export const ReferralTab = () => {
                   <SelectTrigger><SelectValue placeholder="Filter status" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Statuses</SelectItem>
-                    <SelectItem value="pending_interview">Pending Interview</SelectItem>
-                    <SelectItem value="interview_scheduled">Interview Scheduled</SelectItem>
-                    <SelectItem value="interviewed_yes">Interviewed - Yes</SelectItem>
-                    <SelectItem value="interviewed_no">Interviewed - No</SelectItem>
-                    <SelectItem value="contacted_po">Logged PO Contact</SelectItem>
-                    <SelectItem value="contacted_caseworker">Logged Caseworker Contact</SelectItem>
-                    <SelectItem value="requested_more_info">Requested More Info</SelectItem>
-                    <SelectItem value="already_found_placement">Already Found Placement</SelectItem>
-                    <SelectItem value="waitlisted">Waitlisted</SelectItem>
-                    <SelectItem value="accepted">Accepted / Admitted</SelectItem>
-                    <SelectItem value="denied">Denied</SelectItem>
+                    {REFERRAL_STATUS_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
                 <Select value={poFilter} onValueChange={setPoFilter}>
@@ -2040,17 +2055,11 @@ export const ReferralTab = () => {
                           <SelectTrigger className="bg-white w-full"><SelectValue placeholder="Bulk status update" /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value="no_change">No status change</SelectItem>
-                            <SelectItem value="pending_interview">Pending Interview</SelectItem>
-                            <SelectItem value="interview_scheduled">Interview Scheduled</SelectItem>
-                            <SelectItem value="interviewed_yes">Interviewed - Yes</SelectItem>
-                            <SelectItem value="interviewed_no">Interviewed - No</SelectItem>
-                            <SelectItem value="contacted_po">Logged PO Contact</SelectItem>
-                            <SelectItem value="contacted_caseworker">Logged Caseworker Contact</SelectItem>
-                            <SelectItem value="requested_more_info">Requested More Info</SelectItem>
-                            <SelectItem value="already_found_placement">Already Found Placement</SelectItem>
-                            <SelectItem value="waitlisted">Waitlisted</SelectItem>
-                            <SelectItem value="accepted">Accepted / Admitted</SelectItem>
-                            <SelectItem value="denied">Denied</SelectItem>
+                            {REFERRAL_STATUS_OPTIONS.map((option) => (
+                              <SelectItem key={option.value} value={option.value}>
+                                {option.label}
+                              </SelectItem>
+                            ))}
                           </SelectContent>
                         </Select>
                         <Select value={bulkPriority} onValueChange={setBulkPriority}>
@@ -2334,17 +2343,11 @@ export const ReferralTab = () => {
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="pending_interview">Pending Interview</SelectItem>
-                            <SelectItem value="interview_scheduled">Interview Scheduled</SelectItem>
-                            <SelectItem value="interviewed_yes">Interviewed - Yes</SelectItem>
-                            <SelectItem value="interviewed_no">Interviewed - No</SelectItem>
-                            <SelectItem value="contacted_po">Logged PO Contact</SelectItem>
-                            <SelectItem value="contacted_caseworker">Logged Caseworker Contact</SelectItem>
-                            <SelectItem value="requested_more_info">Requested More Info</SelectItem>
-                            <SelectItem value="already_found_placement">Already Found Placement</SelectItem>
-                            <SelectItem value="waitlisted">Waitlisted</SelectItem>
-                            <SelectItem value="accepted">Accepted / Admitted</SelectItem>
-                            <SelectItem value="denied">Denied</SelectItem>
+                            {REFERRAL_STATUS_OPTIONS.map((option) => (
+                              <SelectItem key={option.value} value={option.value}>
+                                {option.label}
+                              </SelectItem>
+                            ))}
                           </SelectContent>
                         </Select>
 
@@ -2650,7 +2653,15 @@ export const ReferralTab = () => {
                   </div>
 
                   {(() => {
-                    const PENDING_STATUSES = new Set(["pending_interview", "interview_scheduled", "requested_more_info", "new", ""]);
+                    const PENDING_STATUSES = new Set([
+                      "pending_interview",
+                      "schedule_interview",
+                      "waiting_for_response",
+                      "interview_scheduled",
+                      "requested_more_info",
+                      "new",
+                      "",
+                    ]);
                     const pendingItems = history.filter(
                       (item) => !item.archived && PENDING_STATUSES.has(item.status || "") && (item.poContactLog || []).length === 0
                     );

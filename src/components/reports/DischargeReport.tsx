@@ -217,11 +217,22 @@ export const DischargeReport = ({ youth }: DischargeReportProps) => {
         getDailyShiftsForYouthInRange(youth.id, admDate, todayISO).catch(() => []),
       ]);
 
-      const caseNotesText = progressNotes.slice(0, 50).map((n: any) => {
-        const content = extractNoteContent(n);
-        const date = n.date ? format(new Date(n.date), "MMM d, yyyy") : "No date";
-        return `[${date}] ${content}`;
-      }).filter((t: string) => t.length > 15).join("\n\n");
+      const caseNotesText = progressNotes
+        .slice(0, 50)
+        .filter((n: any) => {
+          const content = extractNoteContent(n);
+          return content.trim().length > 0;
+        })
+        .map((n: any) => {
+          const content = extractNoteContent(n);
+          let dateStr = "No date";
+          if (n.date) {
+            const parsed = new Date(n.date);
+            if (isValid(parsed)) dateStr = format(parsed, "MMM d, yyyy");
+          }
+          return `[${dateStr}] ${content}`;
+        })
+        .join("\n\n");
 
       const rc = dailyRatings.length;
       const avgPeer = rc > 0 ? (dailyRatings.reduce((s: number, r: any) => s + (r.peerInteraction ?? 0), 0) / rc).toFixed(1) : "N/A";
@@ -243,7 +254,7 @@ export const DischargeReport = ({ youth }: DischargeReportProps) => {
 Current Level: ${youth.level || "Not specified"}
 Length of Stay: ${los}
 
-POINT SYSTEM: Heartland uses a behavioral point system where points are measured in the thousands. Boys earn increments of 1,000 to 20,000 points per activity. A typical daily total ranges from 90,000 to over 100,000. Minimum per achievement is about 2,000 points.
+POINT SYSTEM: Heartland uses a behavioral point system where daily totals are measured in thousands. A typical daily total ranges from 8,000 to 15,000. Above 12,000 is excellent; 10,000–12,000 is good; 8,000–10,000 is satisfactory.
 Average Daily Behavior Points (full stay): ${avgPoints} (over ${behaviorPoints.length} days)
 
 Daily Performance Ratings (0-5 scale, ${rc} entries):
@@ -265,7 +276,7 @@ CRITICAL OUTPUT RULES:
 3. Write in professional clinical language.
 4. Do not include raw dates or staff names.
 5. Do not fabricate incidents or data not in case notes.
-6. When referencing points, use the thousands format (e.g., "averaging 95,000 daily points").`;
+6. When referencing points, use comma formatting (e.g., "averaging 12,500 daily points").`;
 
       const fields = [
         { key: "treatmentGoalsSummary", prompt: `${dataContext}\n\nThis text goes into the "Treatment Goals Summary" textarea. Write 2-3 paragraphs summarizing treatment progress over the entire stay. Cover primary treatment goals, therapeutic participation, and clinical milestones achieved.` },

@@ -4,6 +4,7 @@
  */
 
 import { auth } from '@/lib/firebase';
+import { logger } from '@/utils/logger';
 
 // ============================================================================
 // AI Configuration and Utilities
@@ -76,7 +77,7 @@ const circuitBreaker = {
     this.failureCount += 1;
     if (this.failureCount >= this.threshold && this.openedAt === null) {
       this.openedAt = Date.now();
-      console.warn('AI circuit breaker opened — too many consecutive failures.');
+      logger.warn('AI circuit breaker opened — too many consecutive failures.');
     }
   },
 };
@@ -113,7 +114,7 @@ async function makeAIRequest<T>(
           const token = await auth.currentUser.getIdToken();
           headers['Authorization'] = `Bearer ${token}`;
         } catch (tokenError) {
-          console.warn('Could not retrieve Firebase token:', tokenError);
+          logger.warn('Could not retrieve Firebase token:', tokenError);
         }
       }
 
@@ -171,7 +172,7 @@ async function makeAIRequest<T>(
         } : undefined,
       };
     } catch (error: any) {
-      console.warn(`AI request attempt ${attempt + 1} failed:`, error.message);
+      logger.warn(`AI request attempt ${attempt + 1} failed:`, error);
       circuitBreaker.recordFailure();
       const retryable = error?.retryable === true
         || error?.name === 'AbortError'
@@ -220,7 +221,7 @@ export async function queryDataStream(
       const token = await auth.currentUser.getIdToken();
       headers['Authorization'] = `Bearer ${token}`;
     } catch (tokenError) {
-      console.warn('Could not retrieve Firebase token for stream:', tokenError);
+      logger.warn('Could not retrieve Firebase token for stream:', tokenError);
     }
   }
 

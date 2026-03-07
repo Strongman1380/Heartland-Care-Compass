@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
+import { logger } from '@/utils/logger';
 import {
   ResponsiveContainer,
   LineChart,
@@ -177,19 +178,19 @@ const AssessmentKPIDashboard = () => {
         const reportData = reportsResult.status === 'fulfilled' ? reportsResult.value : [];
 
         if (youthResult.status === 'rejected') {
-          console.error('KPI load failed: youthService.getAll()', youthResult.reason);
+          logger.error('KPI load failed: youthService.getAll()', youthResult.reason);
         }
         if (pointsResult.status === 'rejected') {
-          console.error('KPI load failed: behaviorPointsService.getAll()', pointsResult.reason);
+          logger.error('KPI load failed: behaviorPointsService.getAll()', pointsResult.reason);
         }
         if (notesResult.status === 'rejected') {
-          console.error('KPI load failed: caseNotesService.getAll()', notesResult.reason);
+          logger.error('KPI load failed: caseNotesService.getAll()', notesResult.reason);
         }
         if (reportsResult.status === 'rejected') {
-          console.error('KPI load failed: kpiReportsService.list()', reportsResult.reason);
+          logger.error('KPI load failed: kpiReportsService.list()', reportsResult.reason);
         }
 
-        console.log('Fetched data:', {
+        logger.info('Fetched data:', {
           youthCount: youthData.length,
           pointsCount: pointsData.length,
           notesCount: notesData.length,
@@ -208,7 +209,7 @@ const AssessmentKPIDashboard = () => {
         setKpiReports(reportData);
         setLastUpdated(new Date().toISOString());
       } catch (error) {
-        console.error('Error loading KPI data:', error);
+        logger.error('Error loading KPI data:', error);
       } finally {
         if (showLoading) setIsLoading(false);
         else setIsRefreshing(false);
@@ -242,7 +243,7 @@ const AssessmentKPIDashboard = () => {
     const filteredPoints = allBehaviorPoints.filter((point) => isInRange(parseDate(point.date || point.createdAt), startDate));
     const filteredRatings = allDailyRatings.filter((rating) => isInRange(parseDate(rating.date || rating.createdAt), startDate));
 
-    console.log('Filtered data:', {
+    logger.info('Filtered data:', {
       timeframe,
       startDate,
       filteredNotesCount: filteredNotes.length,
@@ -516,7 +517,7 @@ const AssessmentKPIDashboard = () => {
       toast.success('KPI report snapshot saved');
       await fetchAllData(false);
     } catch (error) {
-      console.error(error);
+      logger.error('Failed to save KPI report snapshot:', error);
       toast.error('Failed to save KPI report snapshot');
     } finally {
       setIsSavingReport(false);
@@ -529,7 +530,7 @@ const AssessmentKPIDashboard = () => {
       await exportHTMLToPDF(reportHtml, `Program-KPI-Report-${format(new Date(), 'yyyy-MM-dd')}.pdf`);
       toast.success('KPI report PDF exported');
     } catch (error) {
-      console.error(error);
+      logger.error('Failed to export KPI report PDF:', error);
       toast.error('Failed to export KPI report PDF');
     }
   };
@@ -540,7 +541,7 @@ const AssessmentKPIDashboard = () => {
       await exportHTMLToDocx(reportHtml, `Program-KPI-Report-${format(new Date(), 'yyyy-MM-dd')}.docx`);
       toast.success('KPI report DOCX exported');
     } catch (error) {
-      console.error(error);
+      logger.error('Failed to export KPI report DOCX:', error);
       toast.error('Failed to export KPI report DOCX');
     }
   };
@@ -552,7 +553,7 @@ const AssessmentKPIDashboard = () => {
       await exportHTMLToPDF(report.report_html, filename);
       toast.success('KPI report PDF exported');
     } catch (error) {
-      console.error(error);
+      logger.error('Failed to export KPI report PDF:', error);
       toast.error('Failed to export KPI report PDF');
     }
   };
@@ -564,7 +565,7 @@ const AssessmentKPIDashboard = () => {
       await exportHTMLToDocx(report.report_html, filename);
       toast.success('KPI report DOCX exported');
     } catch (error) {
-      console.error(error);
+      logger.error('Failed to export KPI report DOCX:', error);
       toast.error('Failed to export KPI report DOCX');
     }
   };
@@ -581,7 +582,7 @@ const AssessmentKPIDashboard = () => {
       );
       toast.success(archived ? 'KPI report archived' : 'KPI report restored');
     } catch (error) {
-      console.error(error);
+      logger.error('Failed to update KPI report:', error);
       toast.error('Failed to update KPI report');
     }
   };
@@ -592,7 +593,7 @@ const AssessmentKPIDashboard = () => {
       setKpiReports((prev) => prev.filter((row) => row.id !== id));
       toast.success('KPI report deleted');
     } catch (error) {
-      console.error(error);
+      logger.error('Failed to delete KPI report:', error);
       toast.error('Failed to delete KPI report');
     }
   };

@@ -118,18 +118,10 @@
 
 ### `/src/hooks/` - Custom React Hooks
 
-- `useSupabase.ts` - ✅ ACTIVE - Supabase data hooks
 - `useYouthForm.ts` - Youth form management
 - `use-toast.ts` - Toast notifications
 - `use-mobile.tsx` - Mobile detection
 
-### `/src/integrations/supabase/` - Database Integration
-
-- `client.ts` - Supabase client
-- `services.ts` - Main service functions
-- `types.ts` - TypeScript types
-- `academicsService.ts` - Academic data
-- `alertsService.ts` - Alerts
 - `draftsService.ts` - Draft management
 - `notesService.ts` - Notes handling
 - `schoolIncidentsService.ts` - School incidents
@@ -141,7 +133,6 @@
 - `export.ts` - PDF/export utilities
 - `pointCalculations.ts` - Point calculations
 - `pointSyncService.ts` - Point synchronization
-- `supabaseSync.ts` - Supabase sync
 - `schoolScores.ts` - School score utilities
 - `academicStore.ts` - Academic data store
 - `alertService.ts` - Alert utilities

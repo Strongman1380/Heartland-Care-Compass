@@ -1062,7 +1062,7 @@ BEHAVIORAL PERFORMANCE:
 - Total Points Earned: ${totalPoints.toLocaleString()}
 - Daily Average: ${avgDaily.toLocaleString()} points
 - Days Evaluated: ${reportData.behaviorPoints.length}
-- Performance Level: ${avgDaily >= 90000 ? 'Excellent' : avgDaily >= 70000 ? 'Good' : avgDaily >= 50000 ? 'Satisfactory' : 'Needs Improvement'}
+- Performance Level: ${avgDaily >= 12000 ? 'Excellent' : avgDaily >= 10000 ? 'Good' : avgDaily >= 8000 ? 'Satisfactory' : 'Needs Improvement'}
 
 `;
   }

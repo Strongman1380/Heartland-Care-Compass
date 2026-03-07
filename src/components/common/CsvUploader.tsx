@@ -5,6 +5,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Upload, Download, FileSpreadsheet, RefreshCw, CheckCircle2, XCircle, AlertTriangle, Copy, Check } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { parseCsvLine, parseFileToRows, CSV_TEMPLATES, getTemplateCsvString, downloadCsvTemplate, type CsvTemplateType } from '@/utils/csvUtils'
+import { logger } from '@/utils/logger';
 
 // ── Types ──
 
@@ -113,7 +114,7 @@ export function CsvUploader<T>({
       if (result.errors.length > 0) parts.push(`${result.errors.length} error${result.errors.length === 1 ? '' : 's'}`)
       toast({ title: 'Import Complete', description: parts.join('. ') + '.', duration: 5000 })
       if (result.errors.length > 0) {
-        console.warn('Import errors:\n' + result.errors.join('\n'))
+        logger.warn('Import errors:\n' + result.errors.join('\n'))
       }
       setCsvText('')
       setPreview([])

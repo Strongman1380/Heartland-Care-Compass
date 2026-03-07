@@ -21,6 +21,7 @@ import * as aiService from "@/services/aiService";
 import { draftsService } from "@/integrations/firebase/draftsService";
 import { useAuth } from "@/contexts/AuthContext";
 import { findProfessional } from "@/utils/professionalUtils";
+import { logger } from '@/utils/logger';
 
 interface ServicePlanReportProps {
   youth: Youth;
@@ -173,7 +174,7 @@ export const ServicePlanReport = ({ youth }: ServicePlanReportProps) => {
           return;
         }
       } catch (error) {
-        console.warn('Firebase draft load failed:', error);
+        logger.warn('Firebase draft load failed:', error);
       }
 
       // Fallback: check localStorage
@@ -187,7 +188,7 @@ export const ServicePlanReport = ({ youth }: ServicePlanReportProps) => {
           return;
         }
       } catch (error) {
-        console.warn('localStorage load failed:', error);
+        logger.warn('localStorage load failed:', error);
       }
 
       setIsLoadingDraft(false);
@@ -213,7 +214,7 @@ export const ServicePlanReport = ({ youth }: ServicePlanReportProps) => {
       setReportData(prev => ({ ...prev, lastSavedAt: now }));
       toast({ title: "Saved", description: "Service plan saved successfully" });
     } catch (error) {
-      console.warn('Firebase save failed, saved locally:', error);
+      logger.warn('Firebase save failed, saved locally:', error);
       toast({ title: "Saved Locally", description: "Saved to local storage. Cloud sync failed." });
     } finally {
       setIsSaving(false);
@@ -533,7 +534,7 @@ ${caseNotesText}`;
             updates[field as keyof ServicePlanData] = response.data.answer as any;
           }
         } catch (error) {
-          console.error(`Error generating ${field}:`, error);
+          logger.error(`Error generating ${field}:`, error);
         }
       }
 
@@ -542,7 +543,7 @@ ${caseNotesText}`;
 
       toast({ title: "Success", description: "Service plan populated with AI-generated summaries from case notes. Review and edit as needed." });
     } catch (error) {
-      console.error("Error auto-populating:", error);
+      logger.error("Error auto-populating:", error);
       toast({ title: "Error", description: "Failed to auto-populate form data", variant: "destructive" });
     } finally {
       setIsAutoPopulating(false);
@@ -573,7 +574,7 @@ ${caseNotesText}`;
         throw new Error(response.error || "Failed to enhance text");
       }
     } catch (error: any) {
-      console.error("AI enhancement error:", error);
+      logger.error("AI enhancement error:", error);
       toast({ title: "Error", description: `Enhancement failed: ${error.message}`, variant: "destructive" });
     } finally {
       setIsEnhancing(null);
@@ -588,7 +589,7 @@ ${caseNotesText}`;
       await exportElementToPDF(printRef.current, filename);
       toast({ title: "Success", description: "Service Plan PDF has been generated and downloaded" });
     } catch (error) {
-      console.error("Error exporting PDF:", error);
+      logger.error("Error exporting PDF:", error);
       toast({ title: "Error", description: "Failed to generate PDF", variant: "destructive" });
     }
   };
@@ -621,7 +622,7 @@ ${caseNotesText}`;
       try {
         await draftsService.delete(youth.id, 'service_plan', user?.uid || null);
       } catch (error) {
-        console.warn('Failed to delete Firebase draft:', error);
+        logger.warn('Failed to delete Firebase draft:', error);
       }
     }
 

@@ -13,6 +13,7 @@ import {
   subWeeks, subMonths,
 } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
+import { logger } from '@/utils/logger';
 import { fetchDailyRatings, fetchAllProgressNotes } from "@/utils/local-storage-utils";
 import { getDailyRatingsByYouth } from "@/lib/api";
 import { getWeeklyEvalsForYouthInRange, getDailyShiftsForYouthInRange } from "@/utils/shiftScores";
@@ -188,7 +189,7 @@ export const ProgressEvaluationReport = ({
         evaluationPeriod: periodLabel,
       }));
     } catch (err) {
-      console.error("Error generating evaluation report:", err);
+      logger.error("Error generating evaluation report:", err);
       toast({ title: "Error", description: "Failed to load ratings.", variant: "destructive" });
     } finally {
       setLoading(false);
@@ -308,7 +309,7 @@ CRITICAL OUTPUT RULES:
             updates[field] = response.data.answer as string;
           }
         } catch (err) {
-          console.error(`Auto-fill failed for ${field}:`, err);
+          logger.error(`Auto-fill failed for ${field}:`, err);
         }
       }
 
@@ -326,7 +327,7 @@ CRITICAL OUTPUT RULES:
         });
       }
     } catch (err) {
-      console.error("Auto-fill error:", err);
+      logger.error("Auto-fill error:", err);
       toast({ title: "Error", description: "Failed to auto-fill narrative.", variant: "destructive" });
     } finally {
       setIsAutoFilling(false);
@@ -368,7 +369,7 @@ CRITICAL OUTPUT RULES:
         setAutoExported(true);
         onAutoExportComplete();
       } catch (error) {
-        console.error("Error auto-generating evaluation PDF:", error);
+        logger.error("Error auto-generating evaluation PDF:", error);
       }
     }, 300);
 

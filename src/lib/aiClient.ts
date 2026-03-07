@@ -319,24 +319,26 @@ export const generateLocalBehavioralInsights = (behaviorData: any[], youth: any)
   const avgFormatted = Math.round(avgPoints).toLocaleString();
   let analysis = `${youth.firstName} is averaging ${avgFormatted} points per day over ${behaviorData.length} data points, with recent performance showing a ${trend} trend`;
 
-  if (trendStrength > 2000) {
+  if (trendStrength > 1000) {
     analysis += ` (${Math.round(trendStrength).toLocaleString()} point ${trend === 'improving' ? 'increase' : 'decrease'})`;
   }
 
   analysis += '. ';
 
-  if (avgPoints >= 90000) {
+  if (avgPoints >= 12000) {
     analysis += 'This demonstrates excellent program compliance and readiness for increased privileges and level advancement.';
-  } else if (avgPoints >= 70000) {
+  } else if (avgPoints >= 10000) {
     analysis += 'This shows good progress with opportunities for continued improvement in consistency and engagement.';
+  } else if (avgPoints >= 8000) {
+    analysis += 'This shows satisfactory engagement with room for growth in consistency and daily point achievement.';
   } else {
     analysis += 'This indicates need for additional behavioral support, intervention strategies, and possibly adjusted program goals.';
   }
 
   // Add trend-specific recommendations
-  if (trend === 'improving' && trendStrength > 5000) {
+  if (trend === 'improving' && trendStrength > 2000) {
     analysis += ' Recent upward trend suggests effective intervention strategies and increased motivation.';
-  } else if (trend === 'declining' && trendStrength > 5000) {
+  } else if (trend === 'declining' && trendStrength > 2000) {
     analysis += ' Recent decline warrants immediate review of the care plan and potential triggers.';
   }
 

@@ -6,7 +6,8 @@
       "Bash(npx jest --config jest.config.ts --testPathPattern=\"__tests__\" --no-coverage)",
       "Bash(npx jest --config jest.config.ts --testPathPatterns=\"__tests__\" --no-coverage)",
       "Bash(npx jest --config jest.config.cjs --testPathPatterns=\"__tests__\" --no-coverage)",
-      "Bash(node_modules/.bin/tsc --noEmit)"
+      "Bash(node_modules/.bin/tsc --noEmit)",
+      "Bash(npm run deploy)"
     ],
     "additionalDirectories": [
       "/Users/brandonhinrichs/.claude/projects/-Users-brandonhinrichs-Local-Repositories-Web-Applications-Heartland-Care-Compass-main"

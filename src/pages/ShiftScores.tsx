@@ -34,6 +34,7 @@ import { Header } from '@/components/layout/Header'
 import { CsvUploader, type ParsedRow, type ColumnDef, type ImportResult } from '@/components/common/CsvUploader'
 import { normalizeDate, matchYouth, clampScore, findColumnIndex, detectHeaders, type MatchableYouth } from '@/utils/csvUtils'
 import * as XLSX from 'xlsx'
+import { logger } from '@/utils/logger';
 
 const toISO = (d: Date) => format(d, 'yyyy-MM-dd')
 
@@ -183,7 +184,7 @@ const ShiftScores: React.FC = () => {
         setWeeklyGrid(grid)
         setYouthStats(statsMap)
       } catch (error) {
-        console.error('Error loading weekly evals:', error)
+        logger.error('Error loading weekly evals:', error)
       }
     }
     loadWeekly()
@@ -217,7 +218,7 @@ const ShiftScores: React.FC = () => {
         }
         setDailyGrid(grid)
       } catch (error) {
-        console.error('Error loading daily shifts:', error)
+        logger.error('Error loading daily shifts:', error)
       }
     }
     loadDaily()
@@ -260,7 +261,7 @@ const ShiftScores: React.FC = () => {
               setLastSaved(new Date())
               setIsSaving(false)
             }).catch(err => {
-              console.error('Auto-save weekly eval failed:', err)
+              logger.error('Auto-save weekly eval failed:', err)
               toast({ title: "Save Failed", description: String(err), variant: "destructive" })
               setIsSaving(false)
               // Rollback to previous cell value
@@ -317,7 +318,7 @@ const ShiftScores: React.FC = () => {
               setLastSaved(new Date())
               setIsSaving(false)
             }).catch(err => {
-              console.error('Auto-save daily shift failed:', err)
+              logger.error('Auto-save daily shift failed:', err)
               toast({ title: "Save Failed", description: String(err), variant: "destructive" })
               setIsSaving(false)
               // Rollback to previous cell value
@@ -488,13 +489,14 @@ const ShiftScores: React.FC = () => {
   }
 
   // ── Match youth by name ──
-  const matchYouth = (nameVal: string) => {
+  const matchYouthLocal = (nameVal: string) => {
     const lower = nameVal.toLowerCase().trim()
-    return sortedYouths.find(y =>
-      y.firstName.toLowerCase() === lower ||
-      `${y.firstName} ${y.lastName}`.toLowerCase() === lower ||
-      y.lastName.toLowerCase() === lower
-    )
+    return sortedYouths.find(y => {
+      const f = (y.firstName || '').toLowerCase().trim()
+      const l = (y.lastName || '').toLowerCase().trim()
+      const full = `${f} ${l}`.trim()
+      return f === lower || l === lower || full === lower || full.includes(lower)
+    })
   }
 
   // ── XLSX/CSV upload ──
@@ -562,10 +564,9 @@ const ShiftScores: React.FC = () => {
         }
 
         if ([peer, adult, invest, auth].every(v => isNaN(v))) { skipped++; continue }
-
-        const matched = matchYouth(nameVal)
+        
+        const matched = matchYouthLocal(nameVal)
         if (!matched) { skipped++; continue }
-
         const isoDate = normalizeDate(dateVal)
         if (!isoDate || !/^\d{4}-\d{2}-\d{2}$/.test(isoDate)) { skipped++; continue }
 
@@ -598,11 +599,11 @@ const ShiftScores: React.FC = () => {
         duration: 7000,
       })
       if (invalidRows.length > 0) {
-        console.warn('Import rows with out-of-range values (clamped to 0–4):\n' + invalidRows.join('\n'))
+        logger.warn('Import rows with out-of-range values (clamped to 0–4):', invalidRows.join('\n'))
       }
       setRefreshKey(k => k + 1)
     } catch (error) {
-      console.error('Upload error:', error)
+      logger.error('Upload error:', error)
       toast({ title: "Upload Failed", description: "Could not parse the file.", variant: "destructive" })
     } finally {
       setUploading(false)

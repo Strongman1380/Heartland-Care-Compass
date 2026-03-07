@@ -13,6 +13,7 @@ import { listCredits, listGrades, listSteps, parseYmd, truncateDecimal, saveCred
 import { subDays, format } from 'date-fns'
 import { useToast } from '@/hooks/use-toast'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, LineChart as RechartsLineChart, Line, PieChart as RechartsPieChart, Pie, Cell, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from 'recharts'
+import { logger } from '@/utils/logger';
 
 const HEARTLAND_CHART_COLORS = {
   burgundy: '#b91c1c',
@@ -48,34 +49,34 @@ export default function AcademicProgressDashboard() {
 
   const loadAcademicData = useCallback(async () => {
     try {
-      console.log('Loading academic data...')
+      logger.log('Loading academic data...')
       const [creditsData, gradesData, stepsData] = await Promise.all([
         listCredits().catch(err => {
-          console.error('Failed to load credits:', err)
+          logger.error('Failed to load credits:', err)
           return []
         }),
         listGrades().catch(err => {
-          console.error('Failed to load grades:', err)
+          logger.error('Failed to load grades:', err)
           return []
         }),
         listSteps().catch(err => {
-          console.error('Failed to load steps:', err)
+          logger.error('Failed to load steps:', err)
           return []
         })
       ])
-      
-      console.log('Academic data loaded:', {
+
+      logger.log('Academic data loaded:', {
         credits: creditsData.length,
         grades: gradesData.length,
         steps: stepsData.length
       })
-      
+
       setCredits(creditsData)
       setGrades(gradesData)
       setSteps(stepsData)
       setDataVersion(prev => prev + 1)
     } catch (error) {
-      console.error('Failed to load academic data:', error)
+      logger.error('Failed to load academic data:', error)
       // Set empty arrays as fallback
       setCredits([])
       setGrades([])
@@ -92,7 +93,7 @@ export default function AcademicProgressDashboard() {
         description: "Dashboard data has been refreshed successfully.",
       })
     } catch (error) {
-      console.error('Refresh failed:', error)
+      logger.error('Refresh failed:', error)
       toast({
         title: "Refresh Failed",
         description: "Failed to refresh dashboard data. Please try again.",
@@ -107,18 +108,18 @@ export default function AcademicProgressDashboard() {
     const initializeData = async () => {
       setIsLoading(true)
       try {
-        console.log('Initializing Academic Progress Dashboard...')
-        
+        logger.log('Initializing Academic Progress Dashboard...')
+
         // Load youths first
         await loadYouths()
-        console.log('Youths loaded successfully')
-        
+        logger.log('Youths loaded successfully')
+
         // Then load academic data
         await loadAcademicData()
-        console.log('Academic data loaded successfully')
-        
+        logger.log('Academic data loaded successfully')
+
       } catch (error) {
-        console.error('Failed to initialize data:', error)
+        logger.error('Failed to initialize data:', error)
         toast({
           title: "Initialization Failed",
           description: "Failed to load dashboard data. Some features may not work properly.",
@@ -126,7 +127,7 @@ export default function AcademicProgressDashboard() {
         })
       } finally {
         setIsLoading(false)
-        console.log('Dashboard initialization complete')
+        logger.log('Dashboard initialization complete')
       }
     }
     initializeData()
@@ -181,7 +182,7 @@ export default function AcademicProgressDashboard() {
 
   const studentComparison = useMemo(() => {
     if (!youths || youths.length === 0) {
-      console.log('No youths available for comparison')
+      logger.log('No youths available for comparison')
       return []
     }
     
@@ -310,7 +311,7 @@ export default function AcademicProgressDashboard() {
       setEntryCourseName('')
       setEntrySteps('')
     } catch (e) {
-      console.error('Save failed:', e)
+      logger.error('Save failed:', e)
       toast({ title: 'Save failed', description: 'Failed to save academic entries. Please try again.', variant: 'destructive' })
     }
   }

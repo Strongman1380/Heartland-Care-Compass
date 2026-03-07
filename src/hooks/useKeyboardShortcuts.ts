@@ -14,6 +14,16 @@ export function useKeyboardShortcuts({ enabled = true }: UseKeyboardShortcutsOpt
     }
 
     const handleKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement;
+      if (
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.tagName === 'SELECT' ||
+        target.isContentEditable
+      ) {
+        return;
+      }
+
       const key = event.key.toLowerCase();
       const hasModifier = event.metaKey || event.ctrlKey;
 
@@ -46,9 +56,9 @@ export function useKeyboardShortcuts({ enabled = true }: UseKeyboardShortcutsOpt
         return;
       }
 
-      if (key === 'escape') {
+      if (key === 'escape' && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) {
         event.preventDefault();
-        window.history.back();
+        navigate(-1);
       }
     };
 

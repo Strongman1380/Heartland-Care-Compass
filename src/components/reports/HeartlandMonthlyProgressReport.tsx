@@ -12,13 +12,14 @@ import { useToast } from "@/hooks/use-toast";
 import { exportElementToPDF } from "@/utils/export";
 import { buildReportFilename } from "@/utils/reportFilenames";
 import { ReportHeader } from "@/components/reports/ReportHeader";
-import { format, subMonths } from "date-fns";
+import { format, subMonths, isValid } from "date-fns";
 import { useAuth } from '@/contexts/AuthContext'
 import { draftsService } from '@/integrations/firebase/draftsService'
 import * as aiService from "@/services/aiService";
 import { getBehaviorPointsByYouth, getDailyRatingsByYouth } from "@/lib/api";
 import { fetchAllProgressNotes } from "@/utils/local-storage-utils";
 import { getWeeklyEvalsForYouthInRange, getDailyShiftsForYouthInRange } from "@/utils/shiftScores";
+import { logger } from '@/utils/logger';
 
 interface HeartlandMonthlyProgressReportProps {
   youth: Youth;
@@ -165,7 +166,7 @@ export const HeartlandMonthlyProgressReport = ({ youth }: HeartlandMonthlyProgre
             setReportData(prev => ({ ...prev, ...parsed }));
             hasLoadedData = true;
           } catch (error) {
-            console.error("Error loading saved report data:", error);
+            logger.error("Error loading saved report data:", error);
           }
         }
       }
@@ -309,7 +310,13 @@ export const HeartlandMonthlyProgressReport = ({ youth }: HeartlandMonthlyProgre
   };
 
   const handleAIPopulate = async () => {
-    const hasData = !!(reportData.significantIncidentsDescription || reportData.goal1Notes || reportData.socialSkills || reportData.strengthsDemonstrated);
+    const aiPopulatedFields: (keyof MonthlyProgressData)[] = [
+      "significantIncidentsDescription", "goal1Notes", "goal2Notes", "goal3Notes",
+      "socialSkills", "academicProgress", "independentLivingSkills",
+      "areasOfGrowth", "areasNeedingDevelopment",
+      "strengthsDemonstrated", "challengesConcerns", "planAdjustmentsNeeded",
+    ];
+    const hasData = aiPopulatedFields.some((f) => !!(reportData[f] as string));
     if (hasData && !confirm("This will overwrite text fields with generated summaries. Continue?")) return;
 
     setIsAIPopulating(true);
@@ -331,11 +338,21 @@ export const HeartlandMonthlyProgressReport = ({ youth }: HeartlandMonthlyProgre
       const recentNotes = progressNotes.filter((n: any) => n.date && new Date(n.date) >= thirtyDaysAgo);
       const recentRatings = dailyRatings.filter((r: any) => r.date && new Date(r.date) >= thirtyDaysAgo);
 
-      const caseNotesText = recentNotes.map((n: any) => {
-        const content = extractNoteContent(n);
-        const date = n.date ? format(new Date(n.date), "MMM d, yyyy") : "No date";
-        return `[${date}] ${content}`;
-      }).filter((t: string) => t.length > 15).join("\n\n");
+      const caseNotesText = recentNotes
+        .filter((n: any) => {
+          const content = extractNoteContent(n);
+          return content.trim().length > 0;
+        })
+        .map((n: any) => {
+          const content = extractNoteContent(n);
+          let dateStr = "No date";
+          if (n.date) {
+            const parsed = new Date(n.date);
+            if (isValid(parsed)) dateStr = format(parsed, "MMM d, yyyy");
+          }
+          return `[${dateStr}] ${content}`;
+        })
+        .join("\n\n");
 
       const rc = recentRatings.length;
       const avgPeer = rc > 0 ? (recentRatings.reduce((s: number, r: any) => s + (r.peerInteraction ?? 0), 0) / rc).toFixed(1) : "N/A";
@@ -357,7 +374,7 @@ export const HeartlandMonthlyProgressReport = ({ youth }: HeartlandMonthlyProgre
 Current Level: ${youth.level || "Not specified"}
 Reporting Period: Last 30 days
 
-POINT SYSTEM: Heartland uses a behavioral point system where points are measured in the thousands. Boys earn increments of 1,000 to 20,000 points per activity. A typical daily total ranges from 90,000 to over 100,000. Minimum points per achievement is about 2,000.
+POINT SYSTEM: Heartland uses a behavioral point system where daily totals are measured in thousands. A typical daily total ranges from 8,000 to 15,000. Above 12,000 is excellent; 10,000–12,000 is good; 8,000–10,000 is satisfactory.
 Average Daily Behavior Points this period: ${avgPoints} (over ${recentBehavior.length} days)
 
 Daily Performance Ratings (0-5 scale, ${rc} entries):
@@ -447,7 +464,7 @@ CRITICAL OUTPUT RULES:
         toast({ title: "Report Populated", description: "Sections filled from local case notes and behavioral data. AI was unavailable — review and edit as needed." });
       }
     } catch (error) {
-      console.error("Populate error:", error);
+      logger.error("Populate error:", error);
       toast({ title: "Error", description: "Failed to populate report. Please try again.", variant: "destructive" });
     } finally {
       setIsAIPopulating(false);
@@ -464,7 +481,7 @@ CRITICAL OUTPUT RULES:
           description: "Monthly Progress Report has been exported as PDF."
         });
       } catch (error) {
-        console.error("Error exporting PDF:", error);
+        logger.error("Error exporting PDF:", error);
         toast({
           title: "Export Error",
           description: "Failed to export PDF. Please try again.",

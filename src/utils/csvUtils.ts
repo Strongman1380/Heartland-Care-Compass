@@ -109,18 +109,29 @@ export function matchYouth(nameVal: string, youths: MatchableYouth[]): Matchable
   if (!lower) return undefined
 
   // 1. Try exact full-name match first
-  const fullNameMatches = youths.filter(y =>
-    `${y.firstName} ${y.lastName}`.toLowerCase() === lower
-  )
-  if (fullNameMatches.length === 1) return fullNameMatches[0]
-  if (fullNameMatches.length > 1) return undefined
+  let matches = youths.filter(y => {
+    const full = `${y.firstName || ''} ${y.lastName || ''}`.trim().toLowerCase()
+    const rev = `${y.lastName || ''}, ${y.firstName || ''}`.trim().toLowerCase()
+    return full === lower || rev === lower
+  })
+  if (matches.length > 0) return matches[0]
 
-  // 2. Fall back to exact firstName or lastName match, only if unambiguous
-  const partialMatches = youths.filter(y =>
-    y.firstName.toLowerCase() === lower ||
-    y.lastName.toLowerCase() === lower
-  )
-  return partialMatches.length === 1 ? partialMatches[0] : undefined
+  // 2. Fall back to exact firstName or lastName match
+  let partialMatches = youths.filter(y => {
+    const f = (y.firstName || '').trim().toLowerCase()
+    const l = (y.lastName || '').trim().toLowerCase()
+    return f === lower || l === lower
+  })
+  if (partialMatches.length > 0) return partialMatches[0]
+  
+  // 3. Fallback to substrings / partial inclusions
+  let subMatches = youths.filter(y => {
+    const full = `${y.firstName || ''} ${y.lastName || ''}`.trim().toLowerCase()
+    return full.includes(lower) || lower.includes(full)
+  })
+  if (subMatches.length > 0) return subMatches[0]
+
+  return undefined
 }
 
 // ── Score Validation ──

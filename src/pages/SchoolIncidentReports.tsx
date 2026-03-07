@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, Eye, Edit, Trash2, AlertTriangle, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
+import { logger } from '@/utils/logger';
 
 export default function SchoolIncidentReports() {
   const [showForm, setShowForm] = useState(false);
@@ -28,7 +29,7 @@ export default function SchoolIncidentReports() {
       // Ensure data is always an array
       setIncidents(Array.isArray(data) ? data : []);
     } catch (error) {
-      console.error('Error loading incidents:', error);
+      logger.error('Error loading incidents:', error);
       toast.error('Failed to load incident reports');
       setIncidents([]);
     } finally {
@@ -59,7 +60,7 @@ export default function SchoolIncidentReports() {
       setViewMode('list');
       setSelectedIncident(null);
     } catch (error) {
-      console.error('Error saving incident:', error);
+      logger.error('Error saving incident:', error);
       toast.error('Failed to save incident report');
       setIsRefreshing(false);
     }
@@ -73,7 +74,7 @@ export default function SchoolIncidentReports() {
         toast.success('Incident report deleted successfully');
         setRefreshKey((k) => k + 1);
       } catch (error) {
-        console.error('Error deleting incident:', error);
+        logger.error('Error deleting incident:', error);
         toast.error('Failed to delete incident report');
         setIsRefreshing(false);
       }

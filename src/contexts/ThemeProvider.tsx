@@ -15,12 +15,7 @@ interface ThemeProviderState {
   setTheme: (theme: Theme) => void;
 }
 
-const initialState: ThemeProviderState = {
-  theme: "system",
-  setTheme: () => null,
-};
-
-const ThemeProviderContext = createContext<ThemeProviderState>(initialState);
+const ThemeProviderContext = createContext<ThemeProviderState | undefined>(undefined);
 
 export function ThemeProvider({
   children,
@@ -42,25 +37,38 @@ export function ThemeProvider({
   useEffect(() => {
     const root = window.document.documentElement;
 
-    // Remove all theme classes first
+    if (disableTransitionOnChange) {
+      root.style.setProperty("transition", "none");
+    }
+
     root.classList.remove("light", "dark");
 
-    // Apply the appropriate theme
-    if (theme === "system") {
-      const systemTheme = window.matchMedia("(prefers-color-scheme: dark)").matches
-        ? "dark"
-        : "light";
-      root.classList.add(systemTheme);
+    let cleanup: (() => void) | undefined;
+
+    if (theme === "system" && enableSystem) {
+      const mq = window.matchMedia("(prefers-color-scheme: dark)");
+      const applySystemTheme = () => {
+        root.classList.remove("light", "dark");
+        root.classList.add(mq.matches ? "dark" : "light");
+      };
+      applySystemTheme();
+      mq.addEventListener("change", applySystemTheme);
+      cleanup = () => mq.removeEventListener("change", applySystemTheme);
+    } else if (theme === "system") {
+      root.classList.add("light");
     } else {
       root.classList.add(theme);
     }
 
-    if (!disableTransitionOnChange) {
-      root.style.setProperty("transition", "background-color 0.2s ease");
+    if (disableTransitionOnChange) {
+      void root.offsetHeight;
+      root.style.removeProperty("transition");
     }
 
     localStorage.setItem(storageKey, theme);
-  }, [theme, storageKey, disableTransitionOnChange]);
+
+    return cleanup;
+  }, [theme, storageKey, disableTransitionOnChange, enableSystem]);
 
   const value = {
     theme,

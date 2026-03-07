@@ -14,6 +14,7 @@ import FacilityIncidentPrintView from '@/components/incidents/FacilityIncidentPr
 import { exportElementToPDF } from '@/utils/export'
 import type { FacilityIncidentReport, FacilityIncidentFormData } from '@/types/facility-incident-types'
 import { Header } from '@/components/layout/Header'
+import { logger } from '@/utils/logger';
 
 type ViewMode = 'list' | 'form' | 'view'
 
@@ -31,7 +32,7 @@ export default function IncidentReports() {
       const data = await incidentReportsService.list()
       setIncidents(Array.isArray(data) ? data : [])
     } catch (error) {
-      console.error('Error loading incidents:', error)
+      logger.error('Error loading incidents:', error)
       toast.error('Failed to load incident reports')
       setIncidents([])
     } finally {
@@ -52,7 +53,7 @@ export default function IncidentReports() {
       setViewMode('list')
       setSelectedIncident(null)
     } catch (error) {
-      console.error('Error saving incident:', error)
+      logger.error('Error saving incident:', error)
       toast.error('Failed to save incident report')
     } finally {
       setIsSaving(false)
@@ -70,7 +71,7 @@ export default function IncidentReports() {
         setSelectedIncident(null)
       }
     } catch (error) {
-      console.error('Error deleting incident:', error)
+      logger.error('Error deleting incident:', error)
       toast.error('Failed to delete incident report')
     }
   }, [loadIncidents, selectedIncident])
@@ -83,7 +84,7 @@ export default function IncidentReports() {
       await exportElementToPDF(printRef.current, filename)
       toast.success('PDF exported successfully')
     } catch (error) {
-      console.error('Export error:', error)
+      logger.error('Export error:', error)
       toast.error('Failed to export PDF')
     } finally {
       setIsExporting(false)

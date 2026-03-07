@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { exportHTMLToDocx, exportHTMLToPDF } from "@/utils/export";
+import { logger } from '@/utils/logger';
 import { facilityNotesService, type FacilityNoteRow } from "@/integrations/firebase/facilityNotesService";
 import { facilityReportsService, type FacilityReportRow } from "@/integrations/firebase/facilityReportsService";
 import { referralNotesService, type ReferralNoteRow } from "@/integrations/firebase/referralNotesService";
@@ -132,7 +133,7 @@ const AdminFacility = () => {
       setArchivedYouths(loadedArchived);
       setLastRefreshAt(new Date().toISOString());
     } catch (error) {
-      console.error("Failed to load facility admin data", error);
+      logger.error("Failed to load facility admin data:", error);
       toast.error("Failed to refresh facility data");
     } finally {
       setIsRefreshing(false);
@@ -151,7 +152,7 @@ const AdminFacility = () => {
           }))
         );
       })
-      .catch(console.error);
+      .catch((error) => logger.error('Failed to load user roles:', error));
   }, []);
 
   const metrics = useMemo(() => {
@@ -203,7 +204,7 @@ const AdminFacility = () => {
       setNoteText("");
       await loadData();
     } catch (error) {
-      console.error(error);
+      logger.error('Failed to save facility note:', error);
       toast.error("Failed to save facility note");
     } finally {
       setIsSaving(false);
@@ -264,7 +265,7 @@ const AdminFacility = () => {
       setBulkText("");
       await loadData();
     } catch (error) {
-      console.error(error);
+      logger.error('Bulk import failed:', error);
       toast.error("Bulk import failed");
     } finally {
       setIsBulkSaving(false);
@@ -277,7 +278,7 @@ const AdminFacility = () => {
       setFacilityNotes((prev) => prev.filter((note) => note.id !== id));
       toast.success("Facility note deleted");
     } catch (error) {
-      console.error(error);
+      logger.error('Failed to delete facility note:', error);
       toast.error("Failed to delete note");
     }
   };
@@ -359,7 +360,7 @@ const AdminFacility = () => {
       toast.success("Facility report snapshot saved");
       await loadData();
     } catch (error) {
-      console.error(error);
+      logger.error('Failed to save report snapshot:', error);
       toast.error("Failed to save report snapshot");
     } finally {
       setIsSavingReport(false);
@@ -376,7 +377,7 @@ const AdminFacility = () => {
       await exportHTMLToPDF(reportHtml, filename);
       toast.success("Facility report PDF exported");
     } catch (error) {
-      console.error(error);
+      logger.error('Failed to export PDF:', error);
       toast.error("Failed to export PDF");
     }
   };
@@ -391,7 +392,7 @@ const AdminFacility = () => {
       await exportHTMLToDocx(reportHtml, filename);
       toast.success("Facility report DOCX exported");
     } catch (error) {
-      console.error(error);
+      logger.error('Failed to export DOCX:', error);
       toast.error("Failed to export DOCX");
     }
   };
@@ -403,7 +404,7 @@ const AdminFacility = () => {
       await exportHTMLToPDF(report.report_html, filename);
       toast.success("Report PDF exported");
     } catch (error) {
-      console.error(error);
+      logger.error('Failed to export report PDF:', error);
       toast.error("Failed to export report PDF");
     }
   };
@@ -415,7 +416,7 @@ const AdminFacility = () => {
       await exportHTMLToDocx(report.report_html, filename);
       toast.success("Report DOCX exported");
     } catch (error) {
-      console.error(error);
+      logger.error('Failed to export report DOCX:', error);
       toast.error("Failed to export report DOCX");
     }
   };
@@ -435,7 +436,7 @@ const AdminFacility = () => {
       );
       toast.success(archived ? "Report archived" : "Report restored");
     } catch (error) {
-      console.error(error);
+      logger.error('Failed to update report archive status:', error);
       toast.error("Failed to update report archive status");
     }
   };
@@ -446,7 +447,7 @@ const AdminFacility = () => {
       setFacilityReports((prev) => prev.filter((row) => row.id !== id));
       toast.success("Report deleted");
     } catch (error) {
-      console.error(error);
+      logger.error('Failed to delete report:', error);
       toast.error("Failed to delete report");
     }
   };
@@ -459,7 +460,7 @@ const AdminFacility = () => {
       setEditingLevels(null);
       toast.success('Level configuration saved');
     } catch (error) {
-      console.error(error);
+      logger.error('Failed to save level configuration:', error);
       toast.error('Failed to save level configuration');
     } finally {
       setIsSavingLevels(false);
@@ -476,7 +477,7 @@ const AdminFacility = () => {
       );
       toast.success(`Role updated to ${newRole}`);
     } catch (error) {
-      console.error(error);
+      logger.error('Failed to update role:', error);
       toast.error('Failed to update role');
     } finally {
       setIsUpdatingRole(null);
@@ -490,7 +491,7 @@ const AdminFacility = () => {
       setArchivedYouths((prev) => prev.filter((y) => y.id !== youthId));
       toast.success("Youth profile restored to active list");
     } catch (error) {
-      console.error(error);
+      logger.error('Failed to restore youth profile:', error);
       toast.error("Failed to restore youth profile");
     } finally {
       setIsRestoringYouth(null);
@@ -505,7 +506,7 @@ const AdminFacility = () => {
       setArchivedYouths((prev) => prev.filter((y) => y.id !== youth.id));
       toast.success(`${youth.firstName} ${youth.lastName}'s profile permanently deleted`);
     } catch (error) {
-      console.error(error);
+      logger.error('Failed to permanently delete youth profile:', error);
       toast.error("Failed to permanently delete youth profile");
     } finally {
       setIsDeletingYouth(null);

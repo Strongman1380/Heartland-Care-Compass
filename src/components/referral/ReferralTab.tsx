@@ -28,6 +28,7 @@ import {
   RotateCcw,
   Save,
   Scale,
+  Send,
   Shield,
   Sparkles,
   User,
@@ -2119,9 +2120,26 @@ export const ReferralTab = () => {
 
                     const hrefInterviewRequest = `mailto:${mailtoTo}?subject=${encodeURIComponent(`Interview Request – ${item.referralName || 'the youth'}`)}&body=${encodeURIComponent(`Hi ${poFirstName},\n\nWe have received the referral for ${item.referralName || 'the youth'} and would like to schedule an interview to further assess placement fit at Heartland Boys Home.\n\nCould you please let us know your availability, or provide the best way to coordinate this with the youth and their family? We want to ensure the process is as smooth as possible for everyone involved.\n\nPlease feel free to reply to this email or contact us directly at admissions@heartlandboyshomenebraska.org.\n\nThank you for your time and for the work you do on behalf of the youth in your care.\n\nSincerely,\nHeartland Admissions\nHeartland Boys Home\nadmissions@heartlandboyshomenebraska.org`)}`;
 
-                    const hrefAccept = `mailto:${mailtoTo}?subject=${encodeURIComponent(`Placement Accepted for ${item.referralName || "the youth"}`)}&body=${encodeURIComponent(`Hi ${poFirstName},\n\nWe can accept ${item.referralName || "the youth"}. What intake date/time are you aiming for, and who is transporting?\n\nThank you,\nHeartland Admissions\nadmissions@heartlandboyshomenebraska.org`)}`;
+                    const hrefAccept = `mailto:${mailtoTo}?subject=${encodeURIComponent(`Placement Accepted for ${item.referralName || "the youth"}`)}&body=${encodeURIComponent(`Hi ${poFirstName},\n\nWe can accept ${item.referralName || "the youth"}. We are looking forward for you to reach out and coordinate services. What intake date/time are you aiming for, and who is transporting?\n\nThank you,\nHeartland Admissions\nadmissions@heartlandboyshomenebraska.org`)}`;
 
-                    const hrefDeny = `mailto:${mailtoTo}?subject=${encodeURIComponent(`Referral Update for ${item.referralName || "the youth"}`)}&body=${encodeURIComponent(`Hi ${poFirstName},\n\nThanks for the referral for ${item.referralName || "the youth"}. We're not able to accept at this time due to [reason].\n\nThank you,\nHeartland Admissions\nadmissions@heartlandboyshomenebraska.org`)}`;
+                    let denialReasons = "[reason]";
+                    const srRaw = item.screeningResult || aiScreeningResults[rowKey] || "";
+                    if (srRaw) {
+                      try {
+                        const clean = srRaw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
+                        const parsed = JSON.parse(clean);
+                        const reasons: string[] = [];
+                        if (Array.isArray(parsed.rationale_bullets)) reasons.push(...parsed.rationale_bullets);
+                        if (Array.isArray(parsed.barriers)) reasons.push(...parsed.barriers);
+                        if (reasons.length > 0) {
+                          denialReasons = "\n- " + reasons.join("\n- ");
+                        }
+                      } catch (e) {
+                         // ignore
+                      }
+                    }
+
+                    const hrefDeny = `mailto:${mailtoTo}?subject=${encodeURIComponent(`Referral Update for ${item.referralName || "the youth"}`)}&body=${encodeURIComponent(`Hi ${poFirstName},\n\nThanks for the referral for ${item.referralName || "the youth"}. We're not able to accept at this time due to the following concerns:\n${denialReasons}\n\nThank you,\nHeartland Admissions\nadmissions@heartlandboyshomenebraska.org`)}`;
 
                     return (
                     <div key={rowKey} className={`rounded-md border transition-colors ${isExpanded ? "p-3 border-blue-200 bg-blue-50/20" : "p-2 hover:bg-slate-50 cursor-pointer"}`}>
@@ -2396,6 +2414,30 @@ export const ReferralTab = () => {
                         >
                           Deny
                         </a>
+                        
+                        <div className="w-px h-4 bg-gray-300 mx-1 hidden sm:block"></div>
+                        
+                        <span className="text-xs font-semibold text-gray-500 mr-1 flex items-center gap-1 hidden sm:flex">
+                          <Send className="h-3 w-3" /> Auto-Send:
+                        </span>
+                        <button
+                          onClick={() => sendAndLogEmail(item, "accept", inferredPoEmail, poFirstName, {
+                            accept_message: "We are looking forward for you to reach out and coordinate services. What intake date/time are you aiming for, and who is transporting?"
+                          })}
+                          disabled={sendingEmailId === rowKey + "accept"}
+                          className="hidden sm:block text-xs bg-green-600 text-white hover:bg-green-700 px-2 py-1 rounded transition-colors disabled:opacity-50"
+                        >
+                          {sendingEmailId === rowKey + "accept" ? "Sending..." : "Accept"}
+                        </button>
+                        <button
+                          onClick={() => sendAndLogEmail(item, "deny", inferredPoEmail, poFirstName, {
+                            denial_reason: denialReasons.replace("[reason]", "various concerns")
+                          })}
+                          disabled={sendingEmailId === rowKey + "deny"}
+                          className="hidden sm:block text-xs bg-red-600 text-white hover:bg-red-700 px-2 py-1 rounded transition-colors disabled:opacity-50"
+                        >
+                          {sendingEmailId === rowKey + "deny" ? "Sending..." : "Deny"}
+                        </button>
                         {item.interviewScheduledDate && (() => {
                           const intDate = format(new Date(item.interviewScheduledDate + "T00:00:00"), "MMMM d, yyyy");
                           const intTime = item.interviewTime

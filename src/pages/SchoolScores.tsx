@@ -7,6 +7,7 @@ import { upsertScore, getScore, getYouthStats, calculateOverallAverage, getScore
 import { format } from 'date-fns'
 import { TrendingUp, TrendingDown, Minus, Sparkles, Save, CheckCircle2, RefreshCw } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
+import { logger } from '@/utils/logger';
 
 // Helpers
 const toISO = (d: Date) => format(d, 'yyyy-MM-dd')
@@ -147,7 +148,7 @@ const SchoolScores: React.FC = () => {
         setYouthStats(statsMap)
 
       } catch (error) {
-        console.error('Error loading scores:', error)
+        logger.error('Error loading scores:', error)
       }
     }
 
@@ -169,18 +170,14 @@ const SchoolScores: React.FC = () => {
               setYouthStats(prev => new Map(prev).set(youthId, stats))
             }
           } catch (statsError) {
-            console.error('Failed to update stats after auto-save:', statsError)
+            logger.error('Failed to update stats after auto-save:', statsError)
           }
         }, 100)
       } catch (error) {
-        console.error('Auto-save failed:', error)
+        logger.error('Auto-save failed:', error)
         // Log more details for debugging
         if (error instanceof Error) {
-          console.error('Error details:', {
-            message: error.message,
-            name: error.name,
-            stack: error.stack
-          })
+          logger.error('Error details:', error)
         }
         toast({
           title: "Auto-save Failed",
@@ -236,7 +233,7 @@ const SchoolScores: React.FC = () => {
       }
       setYouthStats(statsMap)
     } catch (error) {
-      console.error('Manual save failed:', error)
+      logger.error('Manual save failed:', error)
       toast({
         title: "Save Failed",
         description: "Failed to save scores. Please try again.",
@@ -261,7 +258,7 @@ const SchoolScores: React.FC = () => {
         duration: 2000,
       })
     } catch (error) {
-      console.error('Failed to refresh trends:', error)
+      logger.error('Failed to refresh trends:', error)
       toast({
         title: "Refresh Failed",
         description: "Failed to refresh trends. Please try again.",
@@ -423,7 +420,7 @@ const SchoolScores: React.FC = () => {
         duration: 3000,
       })
     } catch (error) {
-      console.error('Error generating insights:', error)
+      logger.error('Error generating insights:', error)
       toast({
         title: "Error",
         description: "Failed to generate insights. Please try again.",

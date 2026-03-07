@@ -18,6 +18,7 @@ import { findProfessional } from "@/utils/professionalUtils";
 import { getDailyRatingsByYouth } from "@/lib/api";
 import { getScoresByYouth, type SchoolDailyScore } from "@/utils/schoolScores";
 import { getWeeklyEvalsForYouthInRange, getDailyShiftsForYouthInRange } from "@/utils/shiftScores";
+import { logger } from '@/utils/logger';
 import * as aiService from "@/services/aiService";
 import { draftsService } from "@/integrations/firebase/draftsService";
 import { useAuth } from "@/contexts/AuthContext";
@@ -256,7 +257,7 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
       });
 
     } catch (error) {
-      console.error("Error auto-populating form:", error);
+      logger.error("Error auto-populating form:", error);
     }
   };
 
@@ -508,7 +509,7 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
           return;
         }
       } catch (error) {
-        console.warn('Firebase draft load failed:', error);
+        logger.warn('Firebase draft load failed:', error);
       }
 
       // Fallback to localStorage
@@ -520,7 +521,7 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
           const savedData = JSON.parse(saved) as MonthlyReportData;
           setReportData(prev => ({ ...prev, ...savedData }));
         } catch (error) {
-          console.error("Error loading saved data:", error);
+          logger.error("Error loading saved data:", error);
         }
       }
     };
@@ -635,7 +636,7 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
         throw new Error(response.error || 'Failed to enhance text');
       }
     } catch (error: any) {
-      console.error('AI enhancement error:', error);
+      logger.error('AI enhancement error:', error);
       toast({
         title: "Enhancement Failed",
         description: error.message || "Failed to enhance text. Please try again.",
@@ -879,7 +880,7 @@ Discuss behavioral patterns, compliance, response to redirection, and emphasize 
             updates[field as keyof MonthlyReportData] = response.data.answer;
           }
         } catch (error) {
-          console.error(`Error generating ${field}:`, error);
+          logger.error(`Error generating ${field}:`, error);
         }
       }
 
@@ -893,7 +894,7 @@ Discuss behavioral patterns, compliance, response to redirection, and emphasize 
       });
 
     } catch (error: any) {
-      console.error('AI auto-populate error:', error);
+      logger.error('AI auto-populate error:', error);
       toast({
         title: "Auto-Populate Failed",
         description: error.message || "Failed to auto-populate report. Please try again.",
@@ -925,7 +926,7 @@ Discuss behavioral patterns, compliance, response to redirection, and emphasize 
         description: "Monthly progress report has been saved successfully",
       });
     } catch (error) {
-      console.warn('Firebase save failed, saved locally:', error);
+      logger.warn('Firebase save failed, saved locally:', error);
       toast({
         title: "Saved Locally",
         description: "Saved to local storage. Cloud sync failed.",
@@ -946,7 +947,7 @@ Discuss behavioral patterns, compliance, response to redirection, and emphasize 
         description: "Monthly progress report PDF has been generated and downloaded",
       });
     } catch (error) {
-      console.error("Error exporting PDF:", error);
+      logger.error("Error exporting PDF:", error);
       toast({
         title: "Error",
         description: "Failed to generate PDF. Please try again.",
@@ -992,7 +993,7 @@ Discuss behavioral patterns, compliance, response to redirection, and emphasize 
         const draftType = `monthly_progress_${selectedMonth}`;
         await draftsService.delete(youth.id, draftType, user?.uid || null);
       } catch (error) {
-        console.warn('Failed to delete Firebase draft:', error);
+        logger.warn('Failed to delete Firebase draft:', error);
       }
     }
 

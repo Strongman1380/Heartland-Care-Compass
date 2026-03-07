@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Sparkles, Users, TrendingUp, TrendingDown } from "lucide-react";
 import { format } from "date-fns";
 import { levelEventService, type LevelEvent } from "@/integrations/firebase/services";
+import { logger } from '@/utils/logger';
 
 const Dashboard = () => {
   const [selectedYouthId, setSelectedYouthId] = useState<string | undefined>(undefined);
@@ -18,7 +19,7 @@ const Dashboard = () => {
   useEffect(() => {
     levelEventService.getRecent(10)
       .then(setLevelEvents)
-      .catch(console.error);
+      .catch((error) => logger.error('Level event load failed:', error));
   }, []);
 
   const handleYouthSelect = (youthId: string) => {

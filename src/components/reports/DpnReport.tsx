@@ -12,6 +12,7 @@ import { fetchDailyRatings, fetchBehaviorPoints, fetchAllProgressNotes } from '@
 import { getDailyRatingsByYouth, getBehaviorPointsByYouth } from '@/lib/api';
 import { saveDpnComments, fetchDpnCommentsInRange } from '@/utils/local-storage-utils';
 import { summarizeReport, generateDPNFieldComments, type DPNFieldComments } from '@/lib/aiClient';
+import { logger } from '@/utils/logger';
 
 export function DpnReport({
   youth,
@@ -132,7 +133,7 @@ export function DpnReport({
         setAutoExported(true);
         onAutoExportComplete();
       } catch (error) {
-        console.error("Error auto-generating DPN PDF:", error);
+        logger.error("Error auto-generating DPN PDF:", error);
       }
     }, 300);
 
@@ -183,7 +184,7 @@ export function DpnReport({
 
       throw new Error('AI did not return any content');
     } catch (e) {
-      console.warn('AI narrative unavailable for DPN:', e);
+      logger.warn('AI narrative unavailable for DPN:', e);
     } finally {
       setIsGeneratingAI(false);
     }
@@ -223,7 +224,7 @@ export function DpnReport({
       await exportElementToPDF(printRef.current, `${buildReportFilename(youth, label)}.pdf`);
       // Optional: Add toast notification here if needed
     } catch (error) {
-      console.error("Error exporting DPN PDF:", error);
+      logger.error("Error exporting DPN PDF:", error);
     }
   };
   const exportDOCX = async () => {

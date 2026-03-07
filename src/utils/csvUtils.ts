@@ -124,12 +124,16 @@ export function matchYouth(nameVal: string, youths: MatchableYouth[]): Matchable
   })
   if (partialMatches.length > 0) return partialMatches[0]
   
-  // 3. Fallback to substrings / partial inclusions
+  // 3. Fallback to substrings
   let subMatches = youths.filter(y => {
     const full = `${y.firstName || ''} ${y.lastName || ''}`.trim().toLowerCase()
-    return full.includes(lower) || lower.includes(full)
+    return full.includes(lower)
   })
-  if (subMatches.length > 0) return subMatches[0]
+  if (subMatches.length === 1) return subMatches[0]
+  if (subMatches.length > 1) {
+    console.warn(`Ambiguous match for "${nameVal}"`)
+    return undefined // Ambiguity handling
+  }
 
   return undefined
 }
@@ -202,18 +206,19 @@ export const CSV_TEMPLATES: Record<CsvTemplateType, CsvTemplate> = {
   },
   behavior_points: {
     label: 'Behavior Points',
-    description: 'Daily behavior point totals for a specific youth.',
-    headers: 'Date,Points,Notes',
+    description: 'Daily behavior point totals per shift for each youth.',
+    headers: 'Youth Name,Date,Morning Points,Afternoon Points,Evening Points,Notes',
     sampleRows: [
-      '2026-01-15,2100,Good day overall',
-      '2026-01-16,1850,Incident in afternoon',
-      '2026-01-17,2200,',
+      'Chance Thaller,2026-01-15,700,800,600,Good day overall',
+      'Dagen Dickey,2026-01-15,650,750,500,',
+      'Chance Thaller,2026-01-16,0,900,700,Incident in morning',
     ],
     notes: [
-      'Date: YYYY-MM-DD or MM/DD/YYYY (no future dates)',
-      'Points: Non-negative integer',
+      'Youth Name: First name, last name, or full name (case-insensitive)',
+      'Date: YYYY-MM-DD or MM/DD/YYYY',
+      'Morning/Afternoon/Evening Points: Non-negative integers — Total is auto-calculated from these',
+      'Leave a shift column empty or 0 if that shift did not occur',
       'Notes: Optional comments for the day',
-      'Each row updates the total points for that date',
     ],
   },
   daily_ratings: {

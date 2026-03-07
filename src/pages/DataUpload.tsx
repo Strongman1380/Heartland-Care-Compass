@@ -1,7 +1,5 @@
 import React, { useCallback, useState, useRef } from 'react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Label } from '@/components/ui/label'
 import { Header } from '@/components/layout/Header'
 import { CsvUploader, type ParsedRow, type ColumnDef, type ImportResult } from '@/components/common/CsvUploader'
 import { useYouth } from '@/hooks/useSupabase'
@@ -21,7 +19,7 @@ import { useToast } from '@/hooks/use-toast'
 
 type WeeklyRow = { youthName: string; youthId: string; weekDate: string; peer: number; adult: number; investment: number; authority: number }
 type DailyShiftRow = { youthName: string; youthId: string; date: string; shift: string; peer: number; adult: number; investment: number; authority: number }
-type PointsRow = { date: string; points: number; notes: string }
+type PointsRow = { youthName: string; youthId: string; date: string; morningPoints: number | null; afternoonPoints: number | null; eveningPoints: number | null; totalPoints: number; notes: string }
 type RatingsRow = { youthName: string; youthId: string; date: string; peer: number; adult: number; investment: number; authority: number; staff: string; comments: string }
 type ReferralRow = { referralName: string; referralSource: string; referralDate: string; staffName: string; status: string; priority: string; summary: string }
 type CaseNoteRow = { youthName: string; youthId: string; date: string; summary: string; note: string; staff: string }
@@ -48,8 +46,12 @@ const dailyShiftColumns: ColumnDef[] = [
 ]
 
 const pointsColumns: ColumnDef[] = [
+  { key: 'youthName', label: 'Youth' },
   { key: 'date', label: 'Date' },
-  { key: 'points', label: 'Points' },
+  { key: 'morningPoints', label: 'Morning' },
+  { key: 'afternoonPoints', label: 'Afternoon' },
+  { key: 'eveningPoints', label: 'Evening' },
+  { key: 'totalPoints', label: 'Total' },
   { key: 'notes', label: 'Notes' },
 ]
 
@@ -128,7 +130,6 @@ const VALID_PRIORITIES = ['low', 'medium', 'high', 'urgent']
 const DataUpload: React.FC = () => {
   const { youths } = useYouth()
   const { toast } = useToast()
-  const [selectedYouthId, setSelectedYouthId] = useState<string>('')
   const [dpnText, setDpnText] = useState('')
   const [dpnEntries, setDpnEntries] = useState<DpnShiftEntry[]>([])
   const [dpnWarnings, setDpnWarnings] = useState<string[]>([])
@@ -218,24 +219,61 @@ const DataUpload: React.FC = () => {
   const parsePointsRows = useCallback((rows: string[][]): ParsedRow<PointsRow>[] => {
     if (rows.length === 0) return []
     const hasHeader = detectHeaders(rows[0])
+    const header = hasHeader ? rows[0].map(h => h.toLowerCase()) : []
     const dataRows = hasHeader ? rows.slice(1) : rows
+
+    const nameIdx = hasHeader ? findColumnIndex(header, 'name', 'youth') : 0
+    const dateIdx = hasHeader ? findColumnIndex(header, 'date') : 1
+    const morningIdx = hasHeader ? findColumnIndex(header, 'morning') : 2
+    const afternoonIdx = hasHeader ? findColumnIndex(header, 'afternoon') : 3
+    const eveningIdx = hasHeader ? findColumnIndex(header, 'evening') : 4
+    const totalIdx = hasHeader ? findColumnIndex(header, 'total', 'points') : -1
+    const notesIdx = hasHeader ? findColumnIndex(header, 'note') : 5
+
+    const parseNullableInt = (cols: string[], idx: number): number | null => {
+      if (idx < 0 || !cols[idx]?.trim()) return null
+      const v = parseInt(cols[idx], 10)
+      return isNaN(v) ? null : Math.max(0, v)
+    }
 
     return dataRows.map(cols => {
       const errors: string[] = []
-      const { date, error: dateErr } = normalizeDate(cols[0] || '')
+      const nameVal = cols[nameIdx] || ''
+      const matched = matchYouth(nameVal, youthList)
+      if (!matched) errors.push(`Youth "${nameVal}" not found`)
+      const { date, error: dateErr } = normalizeDate(cols[dateIdx] || '')
       if (dateErr) errors.push(dateErr)
-      const pts = parseInt(cols[1] || '', 10)
-      if (isNaN(pts) || pts < 0) errors.push(`Invalid points "${cols[1]}"`)
-      const notes = cols[2] || ''
+
+      const morning = parseNullableInt(cols, morningIdx)
+      const afternoon = parseNullableInt(cols, afternoonIdx)
+      const evening = parseNullableInt(cols, eveningIdx)
+      const explicitTotal = parseNullableInt(cols, totalIdx)
+
+      const hasShifts = morning !== null || afternoon !== null || evening !== null
+      const total = hasShifts
+        ? (morning ?? 0) + (afternoon ?? 0) + (evening ?? 0)
+        : (explicitTotal ?? 0)
+
+      const notesCol = notesIdx >= 0 ? notesIdx : 5
+      const notes = cols[notesCol] || ''
 
       return {
-        data: { date, points: isNaN(pts) ? 0 : pts, notes },
+        data: {
+          youthName: matched ? `${matched.firstName} ${matched.lastName}` : nameVal,
+          youthId: matched?.id || '',
+          date,
+          morningPoints: morning,
+          afternoonPoints: afternoon,
+          eveningPoints: evening,
+          totalPoints: total,
+          notes,
+        },
         valid: errors.length === 0,
         errors,
         warnings: [],
       }
     })
-  }, [])
+  }, [youthList])
 
   // ── Daily Ratings Parser ──
   const parseRatingsRows = useCallback((rows: string[][]): ParsedRow<RatingsRow>[] => {
@@ -307,29 +345,28 @@ const DataUpload: React.FC = () => {
   }, [])
 
   const importPoints = useCallback(async (rows: PointsRow[]): Promise<ImportResult> => {
-    if (!selectedYouthId) return { imported: 0, skipped: 0, errors: ['No youth selected'] }
     let imported = 0, skipped = 0
     const errors: string[] = []
     for (const row of rows) {
       try {
         await behaviorPointsService.upsert({
-          youth_id: selectedYouthId,
+          youth_id: row.youthId,
           date: row.date,
-          morningPoints: null,
-          afternoonPoints: null,
-          eveningPoints: null,
-          totalPoints: row.points,
+          morningPoints: row.morningPoints,
+          afternoonPoints: row.afternoonPoints,
+          eveningPoints: row.eveningPoints,
+          totalPoints: row.totalPoints,
           comments: row.notes || null,
           createdAt: new Date().toISOString(),
         })
         imported++
       } catch (e) {
-        errors.push(`${row.date}: ${e}`)
+        errors.push(`${row.youthName} ${row.date}: ${e}`)
         skipped++
       }
     }
     return { imported, skipped, errors }
-  }, [selectedYouthId])
+  }, [])
 
   const importRatings = useCallback(async (rows: RatingsRow[]): Promise<ImportResult> => {
     let imported = 0, skipped = 0
@@ -598,34 +635,12 @@ const DataUpload: React.FC = () => {
             </TabsContent>
 
             <TabsContent value="behavior_points">
-              <div className="mb-4">
-                <Label className="text-sm font-medium">Select Youth for Point Import</Label>
-                <Select value={selectedYouthId} onValueChange={setSelectedYouthId}>
-                  <SelectTrigger className="mt-1">
-                    <SelectValue placeholder="Choose a youth..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {sortedYouths.map((y: any) => (
-                      <SelectItem key={y.id} value={y.id}>
-                        {y.lastName}, {y.firstName}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              {selectedYouthId ? (
-                <CsvUploader<PointsRow>
-                  templateType="behavior_points"
-                  parseRows={parsePointsRows}
-                  columns={pointsColumns}
-                  onImport={importPoints}
-                  acceptExcel={false}
-                />
-              ) : (
-                <div className="text-center py-12 text-gray-500">
-                  Select a youth above to upload behavior points.
-                </div>
-              )}
+              <CsvUploader<PointsRow>
+                templateType="behavior_points"
+                parseRows={parsePointsRows}
+                columns={pointsColumns}
+                onImport={importPoints}
+              />
             </TabsContent>
 
             <TabsContent value="daily_ratings">

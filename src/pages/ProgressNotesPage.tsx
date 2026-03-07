@@ -6,6 +6,7 @@ import { EnhancedCaseNotes } from "@/components/notes/EnhancedCaseNotes";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useYouth } from "@/hooks/useSupabase";
 import { type Youth } from "@/integrations/firebase/services";
+import { BottomNav } from "@/components/layout/BottomNav";
 
 const ProgressNotesPage = () => {
   const [selectedYouthId, setSelectedYouthId] = useState<string | null>(null);
@@ -73,6 +74,7 @@ const ProgressNotesPage = () => {
           </div>
         )}
       </main>
+      <BottomNav />
     </div>
   );
 };

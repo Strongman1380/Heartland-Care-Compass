@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useYouth } from "@/hooks/useSupabase";
 import { type Youth } from "@/integrations/firebase/services";
 import { ArrowRightLeft } from "lucide-react";
+import { BottomNav } from "@/components/layout/BottomNav";
 
 const DailyPoints = () => {
   const [selectedYouthId, setSelectedYouthId] = useState<string | null>(null);
@@ -154,6 +155,7 @@ const DailyPoints = () => {
           </div>
         )}
       </main>
+      <BottomNav />
     </div>
   );
 };

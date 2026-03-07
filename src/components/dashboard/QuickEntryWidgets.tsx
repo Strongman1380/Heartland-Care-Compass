@@ -1,12 +1,12 @@
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
-import { Star, Clock, ClipboardPaste, BookOpen } from "lucide-react";
+import { Star, FileText, BookOpen, Users } from "lucide-react";
 
 const widgets = [
+  { label: "Youth Workspace", path: "/youth-list", icon: Users, color: "text-red-700", bg: "bg-red-50", border: "hover:border-red-200" },
   { label: "Daily Points", path: "/daily-points", icon: Star, color: "text-amber-600", bg: "bg-amber-50", border: "hover:border-amber-200" },
-  { label: "Shift Scores", path: "/shift-scores", icon: Clock, color: "text-blue-600", bg: "bg-blue-50", border: "hover:border-blue-200" },
-  { label: "New Referral", path: "/referrals", icon: ClipboardPaste, color: "text-purple-600", bg: "bg-purple-50", border: "hover:border-purple-200" },
   { label: "Case Notes", path: "/progress-notes", icon: BookOpen, color: "text-green-600", bg: "bg-green-50", border: "hover:border-green-200" },
+  { label: "Reports", path: "/reports", icon: FileText, color: "text-blue-600", bg: "bg-blue-50", border: "hover:border-blue-200" },
 ];
 
 export const QuickEntryWidgets = () => {

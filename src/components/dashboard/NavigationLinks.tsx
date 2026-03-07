@@ -1,11 +1,12 @@
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import {
-  FileText, BookOpen, ShieldAlert, ClipboardPaste,
-  ClipboardList, Building2, Upload, Bell,
+  Users, FileText, BookOpen, ShieldAlert, ClipboardPaste,
+  ClipboardList, Building2, Upload, Database,
 } from "lucide-react";
 
 const links = [
+  { label: "Youth Directory", path: "/youth-list", icon: Users, color: "text-red-700", bg: "bg-red-50" },
   { label: "Reports", path: "/reports", icon: FileText, color: "text-indigo-600", bg: "bg-indigo-50" },
   { label: "Case Notes", path: "/progress-notes", icon: BookOpen, color: "text-emerald-600", bg: "bg-emerald-50" },
   { label: "Incidents", path: "/incident-reports", icon: ShieldAlert, color: "text-red-600", bg: "bg-red-50" },
@@ -13,7 +14,7 @@ const links = [
   { label: "KPI Dashboard", path: "/assessment-kpi", icon: ClipboardList, color: "text-blue-600", bg: "bg-blue-50" },
   { label: "Facility Ops", path: "/admin/facility", icon: Building2, color: "text-slate-600", bg: "bg-slate-50" },
   { label: "Data Upload", path: "/data-upload", icon: Upload, color: "text-teal-600", bg: "bg-teal-50" },
-  { label: "Alerts", path: "/alerts", icon: Bell, color: "text-orange-600", bg: "bg-orange-50" },
+  { label: "System Ops", path: "/alerts", icon: Database, color: "text-slate-700", bg: "bg-slate-100" },
 ];
 
 export const NavigationLinks = () => {

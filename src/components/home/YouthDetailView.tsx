@@ -4,11 +4,12 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { YouthProfile } from "@/components/youth/YouthProfile";
 import { BehaviorCard } from "@/components/behavior/BehaviorCard";
+import { ConsolidatedScoringTab } from "@/components/youth/ConsolidatedScoringTab";
 import { EnhancedCaseNotes } from "@/components/notes/EnhancedCaseNotes";
 import { ReportsTab } from "@/components/reports/ReportsTab";
 import { ProgressEvaluationReport } from "@/components/reports/ProgressEvaluationReport";
 import { Badge } from "@/components/ui/badge";
-import { User, CheckSquare, FileText, BarChart3, ClipboardList, ArrowLeft, ArrowRightLeft } from "lucide-react";
+import { User, CheckSquare, FileText, BarChart3, ClipboardList, ArrowLeft, ArrowRightLeft, NotebookPen } from "lucide-react";
 import { Youth } from "@/integrations/firebase/services";
 
 interface YouthDetailViewProps {
@@ -136,9 +137,13 @@ export const YouthDetailView = ({
             <User size={18} className="sm:w-4 sm:h-4" />
             <span className="hidden sm:inline">Profile</span>
           </TabsTrigger>
+          <TabsTrigger value="dpn" className="flex items-center gap-1.5 sm:gap-2 min-h-[44px] px-2 sm:px-3.5 data-[state=active]:bg-yellow-400 data-[state=active]:text-red-900">
+            <NotebookPen size={18} className="sm:w-4 sm:h-4" />
+            <span className="hidden sm:inline">Daily DPN</span>
+          </TabsTrigger>
           <TabsTrigger value="behavior" className="flex items-center gap-1.5 sm:gap-2 min-h-[44px] px-2 sm:px-3.5 data-[state=active]:bg-yellow-400 data-[state=active]:text-red-900">
             <CheckSquare size={18} className="sm:w-4 sm:h-4" />
-            <span className="hidden sm:inline">Level Tracking</span>
+            <span className="hidden sm:inline">Points and Level</span>
           </TabsTrigger>
           <TabsTrigger value="notes" className="flex items-center gap-1.5 sm:gap-2 min-h-[44px] px-2 sm:px-3.5 data-[state=active]:bg-yellow-400 data-[state=active]:text-red-900">
             <FileText size={18} className="sm:w-4 sm:h-4" />
@@ -160,6 +165,10 @@ export const YouthDetailView = ({
             onBack={onBackToHome}
             onYouthUpdated={onYouthUpdated}
           />
+        </TabsContent>
+
+        <TabsContent value="dpn">
+          <ConsolidatedScoringTab youth={selectedYouth} />
         </TabsContent>
 
         <TabsContent value="behavior">

@@ -8,6 +8,8 @@ import { useYouth } from "@/hooks/useSupabase";
 import type { Youth } from "@/integrations/firebase/services";
 import { useToast } from "@/hooks/use-toast";
 import { toast } from "sonner";
+import { BottomNav } from "@/components/layout/BottomNav";
+import { logger } from '@/utils/logger';
 
 const Index = () => {
   const [selectedYouth, setSelectedYouth] = useState<Youth | null>(null);
@@ -71,7 +73,7 @@ const Index = () => {
 
       toast.success(`${youthToDischarge.firstName} ${youthToDischarge.lastName} has been discharged.`);
     } catch (error) {
-      console.error("Error discharging youth:", error);
+      logger.error("Error discharging youth:", error);
       toast.error("Failed to discharge youth.");
     } finally {
       setDischargeDialogOpen(false);
@@ -139,6 +141,7 @@ const Index = () => {
           </div>
         )}
       </main>
+      <BottomNav />
       
       {/* Edit Youth Dialog */}
       {editingYouth && (

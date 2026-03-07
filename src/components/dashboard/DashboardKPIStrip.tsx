@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Users, Star, TrendingUp, ShieldAlert, Bell } from "lucide-react";
+import { Users, Star, TrendingUp, ShieldAlert, Database } from "lucide-react";
 import type { Youth } from "@/integrations/firebase/services";
 import { incidentReportsService } from "@/integrations/firebase/incidentReportsService";
 import { alertService } from "@/utils/alertService";
@@ -11,7 +11,7 @@ interface DashboardKPIStripProps {
 
 export const DashboardKPIStrip = ({ youths }: DashboardKPIStripProps) => {
   const [incidentsThisWeek, setIncidentsThisWeek] = useState(0);
-  const [openAlerts, setOpenAlerts] = useState(0);
+  const [openSystemEvents, setOpenSystemEvents] = useState(0);
 
   useEffect(() => {
     const now = new Date();
@@ -26,7 +26,7 @@ export const DashboardKPIStrip = ({ youths }: DashboardKPIStripProps) => {
     }).catch(console.error);
 
     alertService.getUnresolvedAlerts().then((alerts) => {
-      setOpenAlerts(alerts.length);
+      setOpenSystemEvents(alerts.length);
     }).catch(console.error);
   }, []);
 
@@ -48,7 +48,7 @@ export const DashboardKPIStrip = ({ youths }: DashboardKPIStripProps) => {
     { label: "Avg Points", value: avgPoints.toLocaleString(), icon: Star, color: "text-amber-600", bg: "bg-amber-50" },
     { label: "Avg Domain Score", value: avgDomainScore, icon: TrendingUp, color: "text-green-600", bg: "bg-green-50" },
     { label: "Incidents (7d)", value: incidentsThisWeek, icon: ShieldAlert, color: "text-red-600", bg: "bg-red-50" },
-    { label: "Open Alerts", value: openAlerts, icon: Bell, color: "text-orange-600", bg: "bg-orange-50" },
+    { label: "Open System Events", value: openSystemEvents, icon: Database, color: "text-slate-700", bg: "bg-slate-100" },
   ];
 
   return (

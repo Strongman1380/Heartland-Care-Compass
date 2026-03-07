@@ -8,11 +8,12 @@ import { NavigationLinks } from "@/components/dashboard/NavigationLinks";
 import { AwardsSection } from "@/components/common/AwardsSection";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { TrendingUp, TrendingDown, ChevronDown } from "lucide-react";
-import { format } from "date-fns";
+import { TrendingUp, TrendingDown, ChevronDown, NotebookPen, TriangleAlert, FileClock } from "lucide-react";
+import { differenceInCalendarDays, format } from "date-fns";
 import { useYouth } from "@/hooks/useSupabase";
-import { levelEventService, type LevelEvent } from "@/integrations/firebase/services";
+import { caseNotesService, dailyRatingsService, levelEventService, type LevelEvent } from "@/integrations/firebase/services";
 import { BottomNav } from "@/components/layout/BottomNav";
+import { logger } from '@/utils/logger';
 
 const CollapsibleSection = ({
   title,
@@ -40,6 +41,11 @@ const CollapsibleSection = ({
 const MainDashboard = () => {
   const { youths, loading, loadYouths } = useYouth();
   const [levelEvents, setLevelEvents] = useState<LevelEvent[]>([]);
+  const [prioritySnapshot, setPrioritySnapshot] = useState({
+    missingDpn: 0,
+    staleNotes: 0,
+    loading: true,
+  });
 
   useEffect(() => {
     loadYouths();
@@ -49,8 +55,65 @@ const MainDashboard = () => {
     levelEventService
       .getRecent(10)
       .then(setLevelEvents)
-      .catch(console.error);
+      .catch((error) => logger.error('Level event load failed:', error));
   }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadPriorities = async () => {
+      if (youths.length === 0) {
+        if (active) {
+          setPrioritySnapshot({ missingDpn: 0, staleNotes: 0, loading: false });
+        }
+        return;
+      }
+
+      if (active) {
+        setPrioritySnapshot((prev) => ({ ...prev, loading: true }));
+      }
+
+      const today = format(new Date(), "yyyy-MM-dd");
+
+      try {
+        const snapshots = await Promise.all(
+          youths.map(async (youth) => {
+            const [todayRating, latestNote] = await Promise.all([
+              dailyRatingsService.getByDate(youth.id, today),
+              caseNotesService.getByYouthId(youth.id, 1),
+            ]);
+
+            const lastNoteDate = latestNote[0]?.date ? new Date(latestNote[0].date) : null;
+            const noteAge = lastNoteDate ? differenceInCalendarDays(new Date(), lastNoteDate) : Number.POSITIVE_INFINITY;
+
+            return {
+              missingDpn: !todayRating,
+              staleNote: !lastNoteDate || noteAge >= 3,
+            };
+          })
+        );
+
+        if (!active) return;
+
+        setPrioritySnapshot({
+          missingDpn: snapshots.filter((item) => item.missingDpn).length,
+          staleNotes: snapshots.filter((item) => item.staleNote).length,
+          loading: false,
+        });
+      } catch (error) {
+        logger.error("Failed to load dashboard priorities:", error);
+        if (active) {
+          setPrioritySnapshot({ missingDpn: 0, staleNotes: 0, loading: false });
+        }
+      }
+    };
+
+    loadPriorities();
+
+    return () => {
+      active = false;
+    };
+  }, [youths]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-red-50 via-yellow-50 to-red-100">
@@ -73,6 +136,53 @@ const MainDashboard = () => {
           {/* Quick Entry */}
           <CollapsibleSection title="Quick Actions">
             <QuickEntryWidgets />
+          </CollapsibleSection>
+
+          <CollapsibleSection title="Today's Priorities">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Card className="border-0 shadow-sm">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm text-gray-700 flex items-center gap-2">
+                    <NotebookPen className="h-4 w-4 text-red-700" />
+                    DPN Coverage
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-red-800">
+                    {prioritySnapshot.loading ? "..." : prioritySnapshot.missingDpn}
+                  </div>
+                  <p className="text-sm text-gray-600 mt-1">Youth still missing a DPN entry today.</p>
+                </CardContent>
+              </Card>
+
+              <Card className="border-0 shadow-sm">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm text-gray-700 flex items-center gap-2">
+                    <FileClock className="h-4 w-4 text-amber-600" />
+                    Case Note Follow-Up
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-red-800">
+                    {prioritySnapshot.loading ? "..." : prioritySnapshot.staleNotes}
+                  </div>
+                  <p className="text-sm text-gray-600 mt-1">Youth with no case note in the last 3 days.</p>
+                </CardContent>
+              </Card>
+
+              <Card className="border-0 shadow-sm">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm text-gray-700 flex items-center gap-2">
+                    <TriangleAlert className="h-4 w-4 text-blue-600" />
+                    Active Census
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-red-800">{youths.length}</div>
+                  <p className="text-sm text-gray-600 mt-1">Active youth currently in the program.</p>
+                </CardContent>
+              </Card>
+            </div>
           </CollapsibleSection>
 
           {/* Youth List */}

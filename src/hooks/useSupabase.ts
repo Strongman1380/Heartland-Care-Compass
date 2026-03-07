@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
-import { 
-  youthService, 
-  behaviorPointsService, 
-  caseNotesService, 
+import {
+  youthService,
+  behaviorPointsService,
+  caseNotesService,
   dailyRatingsService,
   type Youth,
   type YouthInsert,
@@ -16,7 +16,9 @@ import {
 } from '@/integrations/firebase/services'
 import { useToast } from '@/hooks/use-toast'
 
-// Custom hook for youth operations
+// Compatibility hook layer for the Firebase-backed app.
+// The filename is legacy, but these hooks are still the app's primary data API.
+
 export const useYouth = () => {
   const [youths, setYouths] = useState<Youth[]>([])
   const [loading, setLoading] = useState(false)
@@ -70,29 +72,27 @@ export const useYouth = () => {
   const updateYouth = async (id: string, updates: YouthUpdate) => {
     try {
       setLoading(true)
-      // Validate that the youth exists first
       const existingYouth = youths.find(y => y.id === id)
       if (!existingYouth) {
         console.warn('Youth not found in local state, attempting update anyway')
       }
-      
+
       const updatedYouth = await youthService.update(id, updates)
       setYouths(prev => prev.map(y => y.id === id ? updatedYouth : y))
       return updatedYouth
     } catch (err) {
       console.error('Update youth error:', err)
-      
-      // Provide more detailed error information
+
       if (err && typeof err === 'object' && 'message' in err) {
-        const supabaseError = err as { message?: string; details?: string; hint?: string; code?: string }
+        const dataError = err as { message?: string; details?: string; hint?: string; code?: string }
         console.error('Detailed error info:', {
-          message: supabaseError.message,
-          details: supabaseError.details,
-          hint: supabaseError.hint,
-          code: supabaseError.code
+          message: dataError.message,
+          details: dataError.details,
+          hint: dataError.hint,
+          code: dataError.code
         })
       }
-      
+
       const errorMessage = err instanceof Error ? err.message : 'Failed to update youth profile'
       throw new Error(errorMessage)
     } finally {
@@ -237,7 +237,6 @@ export const useYouth = () => {
   }
 }
 
-// Custom hook for behavior points operations
 export const useBehaviorPoints = (youthId?: string) => {
   const [behaviorPoints, setBehaviorPoints] = useState<BehaviorPoints[]>([])
   const [loading, setLoading] = useState(false)
@@ -268,9 +267,8 @@ export const useBehaviorPoints = (youthId?: string) => {
         const existing = prev.find(p => p.youth_id === saved.youth_id && p.date === saved.date)
         if (existing) {
           return prev.map(p => p.id === saved.id ? saved : p)
-        } else {
-          return [saved, ...prev]
         }
+        return [saved, ...prev]
       })
       toast({
         title: "Success",
@@ -338,7 +336,6 @@ export const useBehaviorPoints = (youthId?: string) => {
   }
 }
 
-// Custom hook for case notes operations
 export const useCaseNotes = (youthId?: string) => {
   const [caseNotes, setCaseNotes] = useState<CaseNotes[]>([])
   const [loading, setLoading] = useState(false)
@@ -446,7 +443,6 @@ export const useCaseNotes = (youthId?: string) => {
   }
 }
 
-// Custom hook for daily ratings operations
 export const useDailyRatings = (youthId?: string) => {
   const [dailyRatings, setDailyRatings] = useState<DailyRatings[]>([])
   const [loading, setLoading] = useState(false)
@@ -473,10 +469,7 @@ export const useDailyRatings = (youthId?: string) => {
     try {
       setLoading(true)
       const saved = await dailyRatingsService.upsert(ratingData)
-      setDailyRatings(prev => {
-        // Add new rating to the list (allowing multiple entries per day)
-        return [saved, ...prev]
-      })
+      setDailyRatings(prev => [saved, ...prev])
       toast({
         title: "Success",
         description: "Daily rating has been saved.",
@@ -509,7 +502,6 @@ export const useDailyRatings = (youthId?: string) => {
       setLoading(true)
       await dailyRatingsService.deleteByDateRange(id, startDate, endDate)
 
-      // Update local state by filtering out deleted ratings
       const startDateStr = startDate.toISOString().split('T')[0]
       const endDateStr = endDate.toISOString().split('T')[0]
 
@@ -541,10 +533,7 @@ export const useDailyRatings = (youthId?: string) => {
     try {
       setLoading(true)
       await dailyRatingsService.delete(id)
-
-      // Update local state by removing the deleted rating
       setDailyRatings(prev => prev.filter(rating => rating.id !== id))
-
       toast({
         title: "Success",
         description: "Daily rating has been deleted.",

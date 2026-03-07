@@ -4,6 +4,7 @@ import { Header } from "@/components/layout/Header";
 import { YouthDetailView } from "@/components/home/YouthDetailView";
 import { useYouth } from "@/hooks/useSupabase";
 import type { Youth } from "@/integrations/firebase/services";
+import { BottomNav } from "@/components/layout/BottomNav";
 
 const YouthDetailPage = () => {
   const { id } = useParams<{ id: string }>();
@@ -64,6 +65,7 @@ const YouthDetailPage = () => {
           onYouthUpdated={() => loadYouths()}
         />
       </main>
+      <BottomNav />
     </div>
   );
 };

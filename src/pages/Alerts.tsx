@@ -1,800 +1,305 @@
-
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Header } from "@/components/layout/Header";
-import { AlertTriangle, Clock, User, AlertCircle, Bell, Plus, FileText, Zap, Check } from "lucide-react";
+import { BottomNav } from "@/components/layout/BottomNav";
+import { AIStatusMonitor } from "@/components/admin/AIStatusMonitor";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { alertsService } from '@/integrations/firebase/alertsService'
-import { toast } from "sonner";
-import { useYouth } from "@/hooks/useSupabase";
-import { type Youth, behaviorPointsService, dailyRatingsService, youthService } from "@/integrations/firebase/services";
-import { canLevelUp, getCurrentLevel } from "@/utils/levelSystem";
-import { RefreshCw } from "lucide-react";
+import { collection, collectionGroup, getDocs } from "firebase/firestore";
+import { db } from "@/lib/firebase";
+import { useAuth } from "@/contexts/AuthContext";
+import { alertsService, type AlertRow } from "@/integrations/firebase/alertsService";
+import { caseNotesService, dailyRatingsService, youthService, type Youth } from "@/integrations/firebase/services";
+import { Activity, Database, HardDrive, RefreshCw, Shield, ShieldCheck, Users } from "lucide-react";
+import { logger } from '@/utils/logger';
 
-type Alert = {
-  id: string;
-  type: "warning" | "info" | "urgent";
-  title: string;
-  description: string;
-  timestamp: string;
-  youth?: string;
-  youthId?: string;
-  priority: "high" | "medium" | "low";
-  createdAt: Date;
-  resolved?: boolean;
-  category?: string;
-  link?: string;
+type Snapshot = {
+  activeYouth: number;
+  archivedYouth: number;
+  userRoles: number;
+  adminUsers: number;
+  staffUsers: number;
+  behaviorPointRows: number;
+  caseNoteRows: number;
+  dailyRatingRows: number;
+  systemEvents: number;
+  openSystemEvents: number;
+  warningEvents: number;
+  urgentEvents: number;
+  missingAdmissionDate: number;
+  missingGrade: number;
+  youthsWithoutDpnHistory: number;
+  youthsWithoutCaseNotes: number;
 };
 
-type AlertTemplate = {
-  id: string;
-  name: string;
-  type: "warning" | "info" | "urgent";
-  priority: "high" | "medium" | "low";
-  title: string;
-  description: string;
-  category: string;
-  icon: any;
+const emptySnapshot: Snapshot = {
+  activeYouth: 0,
+  archivedYouth: 0,
+  userRoles: 0,
+  adminUsers: 0,
+  staffUsers: 0,
+  behaviorPointRows: 0,
+  caseNoteRows: 0,
+  dailyRatingRows: 0,
+  systemEvents: 0,
+  openSystemEvents: 0,
+  warningEvents: 0,
+  urgentEvents: 0,
+  missingAdmissionDate: 0,
+  missingGrade: 0,
+  youthsWithoutDpnHistory: 0,
+  youthsWithoutCaseNotes: 0,
 };
 
-const mapAlertType = (level?: string): Alert["type"] =>
-  level === 'urgent' ? 'urgent' : level === 'warning' ? 'warning' : 'info';
+const levelBadgeClass = (level?: string) => {
+  if (level === "urgent") return "bg-red-100 text-red-700 border-red-200";
+  if (level === "warning") return "bg-amber-100 text-amber-800 border-amber-200";
+  return "bg-slate-100 text-slate-700 border-slate-200";
+};
 
-const mapAlertPriority = (level?: string): Alert["priority"] =>
-  level === 'urgent' ? 'high' : 'medium';
+const SystemOps = () => {
+  const { user, role, isAdmin } = useAuth();
+  const [snapshot, setSnapshot] = useState<Snapshot>(emptySnapshot);
+  const [events, setEvents] = useState<AlertRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastRefresh, setLastRefresh] = useState<string>("");
 
-const ALERT_TEMPLATES: AlertTemplate[] = [
-  {
-    id: "behavior-incident",
-    name: "Behavior Incident",
-    type: "warning",
-    priority: "high",
-    title: "Behavior Incident Reported",
-    description: "A significant behavior incident requires immediate attention and documentation.",
-    category: "Behavior",
-    icon: AlertTriangle
-  },
-  {
-    id: "medical-concern",
-    name: "Medical Concern",
-    type: "urgent",
-    priority: "high",
-    title: "Medical Attention Required",
-    description: "Youth requires medical attention or health monitoring.",
-    category: "Medical",
-    icon: AlertCircle
-  },
-  {
-    id: "safety-alert",
-    name: "Safety Alert",
-    type: "urgent",
-    priority: "high",
-    title: "Safety Concern Identified",
-    description: "Potential safety risk identified that requires immediate intervention.",
-    category: "Safety",
-    icon: AlertCircle
-  },
-  {
-    id: "medication-reminder",
-    name: "Medication Reminder",
-    type: "info",
-    priority: "medium",
-    title: "Medication Administration Due",
-    description: "Youth medication administration is due or overdue.",
-    category: "Medical",
-    icon: Clock
-  },
-  {
-    id: "therapy-session",
-    name: "Therapy Session",
-    type: "info",
-    priority: "medium",
-    title: "Therapy Session Scheduled",
-    description: "Reminder for upcoming therapy or counseling session.",
-    category: "Therapy",
-    icon: User
-  },
-  {
-    id: "court-date",
-    name: "Court Date",
-    type: "warning",
-    priority: "high",
-    title: "Court Appearance Scheduled",
-    description: "Youth has an upcoming court date that requires preparation.",
-    category: "Legal",
-    icon: Clock
-  },
-  {
-    id: "educational-concern",
-    name: "Educational Concern",
-    type: "warning",
-    priority: "medium",
-    title: "Educational Issue",
-    description: "Academic performance or school attendance concern requiring attention.",
-    category: "Education",
-    icon: AlertTriangle
-  },
-  {
-    id: "family-contact",
-    name: "Family Contact",
-    type: "info",
-    priority: "medium",
-    title: "Family Contact Scheduled",
-    description: "Scheduled family visit or contact session.",
-    category: "Family",
-    icon: User
-  }
-];
+  const loadSystemData = useCallback(async () => {
+    setRefreshing(true);
 
-const mapRow = (r: import('@/integrations/firebase/alertsService').AlertRow): Alert => ({
-  id: r.id,
-  type: mapAlertType(r.level),
-  title: r.title,
-  description: r.body || '',
-  timestamp: 'Now',
-  priority: mapAlertPriority(r.level),
-  createdAt: new Date(r.created_at),
-  resolved: r.status === 'closed',
-  category: 'System',
-  link: r.link,
-});
-
-const Alerts = () => {
-  const navigate = useNavigate();
-  const [alerts, setAlerts] = useState<Alert[]>([]);
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
-  const [isTemplateDialogOpen, setIsTemplateDialogOpen] = useState(false);
-  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
-  const [selectedTemplate, setSelectedTemplate] = useState<AlertTemplate | null>(null);
-  const [isScanning, setIsScanning] = useState(false);
-  const [newAlert, setNewAlert] = useState<{
-    type: "warning" | "info" | "urgent";
-    title: string;
-    description: string;
-    youth: string;
-    youthId: string;
-    priority: "high" | "medium" | "low";
-    category: string;
-  }>({
-    type: "info",
-    title: "",
-    description: "",
-    youth: "",
-    youthId: "general",
-    priority: "medium",
-    category: ""
-  });
-
-  // Use Supabase hook for youth operations
-  const { youths, loading, loadYouths } = useYouth();
-
-  useEffect(() => {
-    loadYouths();
-    // Check notification permission status
-    if ('Notification' in window) {
-      setNotificationsEnabled(Notification.permission === 'granted');
-    }
-    // Live subscription — updates whenever Firestore changes
-    const unsubscribe = alertsService.subscribe((rows) => {
-      setAlerts(rows.map(mapRow));
-    });
-    return () => unsubscribe();
-  }, [loadYouths]);
-
-  const requestNotificationPermission = async () => {
-    if ('Notification' in window) {
-      try {
-        const permission = await Notification.requestPermission();
-        setNotificationsEnabled(permission === 'granted');
-        
-        if (permission === 'granted') {
-          toast.success('Push notifications enabled!');
-          // Send a test notification
-          new Notification('Heartland Care Compass', {
-            body: 'Notifications are now enabled for alerts and updates.',
-            icon: `${import.meta.env.BASE_URL}favicon.ico`
-          });
-        } else {
-          toast.error('Push notifications denied');
-        }
-      } catch (error) {
-        toast.error('Error requesting notification permission');
-      }
-    } else {
-      toast.error('Notifications not supported in this browser');
-    }
-  };
-
-  const applyTemplate = (template: AlertTemplate) => {
-    setNewAlert({
-      type: template.type,
-      title: template.title,
-      description: template.description,
-      youth: "",
-      youthId: "general",
-      priority: template.priority,
-      category: template.category
-    });
-    setIsTemplateDialogOpen(false);
-    setIsCreateDialogOpen(true);
-  };
-
-  const createAlert = async () => {
-    if (!newAlert.title.trim() || !newAlert.description.trim()) {
-      toast.error('Please fill in all required fields');
-      return;
-    }
-
-    const alert: Alert = {
-      id: Date.now().toString(),
-      ...newAlert,
-      timestamp: 'Just now',
-      createdAt: new Date(),
-      resolved: false
-    };
-
-    // Save to Firestore — subscription will update UI automatically
     try {
-      await alertsService.save({ title: alert.title, body: alert.description, level: alert.type, status: 'open' });
-    } catch (err) {
-      console.error('[Alerts] Failed to save alert:', err);
-      toast.error('Failed to create alert. Please try again.');
-      return;
-    }
+      const [
+        activeYouth,
+        archivedYouth,
+        roleSnapshot,
+        pointRows,
+        noteRows,
+        ratingRows,
+        eventRows,
+      ] = await Promise.all([
+        youthService.getAll(),
+        youthService.getArchived(),
+        getDocs(collection(db, "user_roles")),
+        getDocs(collectionGroup(db, "behavior_points")),
+        getDocs(collectionGroup(db, "case_notes")),
+        getDocs(collectionGroup(db, "daily_ratings")),
+        alertsService.list(),
+      ]);
 
-    // Send push notification if enabled
-    if (notificationsEnabled) {
-      new Notification(`Alert: ${alert.title}`, {
-        body: alert.description,
-        icon: `${import.meta.env.BASE_URL}favicon.ico`,
-        tag: alert.id
-      });
-    }
+      const roleRows = roleSnapshot.docs.map((docSnap) => ({
+        uid: docSnap.id,
+        role: String(docSnap.data().role || "staff"),
+      }));
 
-    toast.success('Alert created successfully!');
-    setIsCreateDialogOpen(false);
-    resetNewAlert();
-  };
+      const integrityChecks = await Promise.all(
+        activeYouth.map(async (youth: Youth) => {
+          const [latestDpn, latestNote] = await Promise.all([
+            dailyRatingsService.getByYouthId(youth.id, 1).catch(() => []),
+            caseNotesService.getByYouthId(youth.id, 1).catch(() => []),
+          ]);
 
-  const resolveAlert = async (alertId: string) => {
-    const updatedAlerts = alerts.map(alert => 
-      alert.id === alertId ? { ...alert, resolved: true } : alert
-    );
-    setAlerts(updatedAlerts);
-    try {
-      await alertsService.save({
-        id: alertId,
-        title: (alerts.find(a => a.id === alertId)?.title) || '',
-        body: (alerts.find(a => a.id === alertId)?.description) || '',
-        level: (alerts.find(a => a.id === alertId)?.type) || 'info',
-        status: 'closed'
-      })
-    } catch {}
-    toast.success('Alert resolved');
-  };
-
-  const resetNewAlert = () => {
-    setNewAlert({
-      type: "info",
-      title: "",
-      description: "",
-      youth: "",
-      youthId: "general",
-      priority: "medium",
-      category: ""
-    });
-  };
-
-  const scanForSystemAlerts = async () => {
-    setIsScanning(true);
-    try {
-      const today = new Date().toISOString().split("T")[0];
-      const allYouths = await youthService.getAll();
-      const generated: Omit<Alert, "id" | "createdAt">[] = [];
-
-      await Promise.all(
-        allYouths.map(async (youth: Youth) => {
-          const name = `${youth.firstName} ${youth.lastName}`;
-          const levelIndex = youth.level ?? 0;
-          const levelData = getCurrentLevel(levelIndex);
-
-          // 1. Missing behavior points today
-          const todayPoints = await behaviorPointsService.getByDate(youth.id, today);
-          if (!todayPoints) {
-            generated.push({
-              type: "info",
-              title: "Missing Daily Points",
-              description: `No behavior points recorded for ${name} today (${today}). Points entry may be overdue.`,
-              timestamp: "Just now",
-              youth: name,
-              youthId: youth.id,
-              priority: "medium",
-              category: "Behavior",
-              resolved: false,
-            });
-          }
-
-          // 2. Low domain score (any domain = 0) in most recent daily rating
-          const recentRatings = await dailyRatingsService.getByYouthId(youth.id, 1);
-          if (recentRatings.length > 0) {
-            const r = recentRatings[0];
-            const zeroDomains: string[] = [];
-            if (r.peerInteraction === 0) zeroDomains.push("Peer Interaction");
-            if (r.adultInteraction === 0) zeroDomains.push("Adult Interaction");
-            if (r.investmentLevel === 0) zeroDomains.push("Investment");
-            if (r.dealAuthority === 0) zeroDomains.push("Authority");
-            if (zeroDomains.length > 0) {
-              generated.push({
-                type: "warning",
-                title: "Zero Domain Score",
-                description: `${name} scored 0 in: ${zeroDomains.join(", ")} on their most recent rating (${r.date ?? "recent"}). Review behavior documentation.`,
-                timestamp: "Just now",
-                youth: name,
-                youthId: youth.id,
-                priority: "high",
-                category: "Behavior",
-                resolved: false,
-              });
-            }
-
-            // 3. Below privilege threshold
-            const totalDomainPoints =
-              (r.peerInteraction ?? 0) +
-              (r.adultInteraction ?? 0) +
-              (r.investmentLevel ?? 0) +
-              (r.dealAuthority ?? 0);
-            const maxDomainPoints = 16;
-            // Estimate daily points as domain average scaled to typical range
-            const dailyPointsEst = Math.round((totalDomainPoints / maxDomainPoints) * (levelData.dailyPointsForPrivileges * 1.5));
-            if (totalDomainPoints < maxDomainPoints * 0.5 && levelData.dailyPointsForPrivileges > 0) {
-              generated.push({
-                type: "info",
-                title: "Below Privilege Threshold",
-                description: `${name} (${levelData.name}) scored ${totalDomainPoints}/16 domain points on their last rating — likely below the ${levelData.dailyPointsForPrivileges}-pt daily privilege requirement for their level.`,
-                timestamp: "Just now",
-                youth: name,
-                youthId: youth.id,
-                priority: "low",
-                category: "Behavior",
-                resolved: false,
-              });
-            }
-          }
-
-          // 4. Level up eligible
-          if (canLevelUp(levelIndex, youth.pointsInCurrentLevel ?? 0)) {
-            generated.push({
-              type: "info",
-              title: "Level Up Eligible",
-              description: `${name} has earned enough points to advance from ${levelData.name}. Review their record and process the level up.`,
-              timestamp: "Just now",
-              youth: name,
-              youthId: youth.id,
-              priority: "medium",
-              category: "Level",
-              resolved: false,
-            });
-          }
-
-          // 5. On subsystem
-          if (youth.subsystemActive) {
-            generated.push({
-              type: "warning",
-              title: "Active Subsystem",
-              description: `${name} is currently on subsystem. Reason: ${youth.subsystemReason ?? "Not specified"}. Points earned: ${youth.subsystemPointsEarned ?? 0}/${youth.subsystemPointsRequired ?? "?"}.`,
-              timestamp: "Just now",
-              youth: name,
-              youthId: youth.id,
-              priority: "high",
-              category: "Behavior",
-              resolved: false,
-            });
-          }
-
-          // 6. On restriction
-          if (youth.restrictionLevel && youth.restrictionLevel > 0) {
-            generated.push({
-              type: "warning",
-              title: "Active Restriction",
-              description: `${name} is on Restriction Level ${youth.restrictionLevel}. Reason: ${youth.restrictionReason ?? "Not specified"}. Progress: ${youth.restrictionPointsEarned ?? 0}/${youth.restrictionPointsRequired ?? "?"} pts.`,
-              timestamp: "Just now",
-              youth: name,
-              youthId: youth.id,
-              priority: "high",
-              category: "Safety",
-              resolved: false,
-            });
-          }
-
-          // 7. High HYRNA risk
-          if (youth.hyrnaRiskLevel && youth.hyrnaRiskLevel.toLowerCase() === "high") {
-            generated.push({
-              type: "urgent",
-              title: "High HYRNA Risk Level",
-              description: `${name} has a HIGH HYRNA risk score (${youth.hyrnaScore ?? "N/A"}). Last assessed: ${youth.hyrnaAssessmentDate ?? "Unknown"}. Ensure treatment plan reflects current risk level.`,
-              timestamp: "Just now",
-              youth: name,
-              youthId: youth.id,
-              priority: "high",
-              category: "Safety",
-              resolved: false,
-            });
-          }
+          return {
+            missingAdmissionDate: !youth.admissionDate,
+            missingGrade: !(youth.currentGrade || youth.grade),
+            noDpnHistory: latestDpn.length === 0,
+            noCaseNotes: latestNote.length === 0,
+          };
         })
       );
 
-      if (generated.length === 0) {
-        toast.success("Scan complete — no issues found across all youth.");
-        return;
-      }
-
-      // Save each generated alert
-      for (const a of generated) {
-        await alertsService.save({ title: a.title, body: a.description, level: a.type, status: "open" });
-      }
-
-      // Subscription will update the list automatically
-      toast.success(`Scan complete — ${generated.length} alert${generated.length !== 1 ? "s" : ""} generated.`);
-    } catch (err) {
-      toast.error("Scan failed: " + (err instanceof Error ? err.message : "Unknown error"));
+      setSnapshot({
+        activeYouth: activeYouth.length,
+        archivedYouth: archivedYouth.length,
+        userRoles: roleRows.length,
+        adminUsers: roleRows.filter((row) => row.role === "admin").length,
+        staffUsers: roleRows.filter((row) => row.role !== "admin").length,
+        behaviorPointRows: pointRows.size,
+        caseNoteRows: noteRows.size,
+        dailyRatingRows: ratingRows.size,
+        systemEvents: eventRows.length,
+        openSystemEvents: eventRows.filter((row) => row.status === "open").length,
+        warningEvents: eventRows.filter((row) => row.level === "warning").length,
+        urgentEvents: eventRows.filter((row) => row.level === "urgent").length,
+        missingAdmissionDate: integrityChecks.filter((row) => row.missingAdmissionDate).length,
+        missingGrade: integrityChecks.filter((row) => row.missingGrade).length,
+        youthsWithoutDpnHistory: integrityChecks.filter((row) => row.noDpnHistory).length,
+        youthsWithoutCaseNotes: integrityChecks.filter((row) => row.noCaseNotes).length,
+      });
+      setEvents(eventRows.slice(0, 8));
+      setLastRefresh(new Date().toLocaleString());
     } finally {
-      setIsScanning(false);
+      setRefreshing(false);
+      setLoading(false);
     }
-  };
+  }, []);
 
-  const deleteAlert = async (alertId: string) => {
-    try { await alertsService.delete(alertId) } catch {}
-    const updatedAlerts = alerts.filter(alert => alert.id !== alertId);
-    setAlerts(updatedAlerts);
-    toast.success('Alert deleted');
-  };
+  useEffect(() => {
+    loadSystemData();
+  }, [loadSystemData]);
 
-  const formatTimestamp = (createdAt: Date) => {
-    const now = new Date();
-    const diff = now.getTime() - new Date(createdAt).getTime();
-    const minutes = Math.floor(diff / (1000 * 60));
-    const hours = Math.floor(diff / (1000 * 60 * 60));
-    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-
-    if (minutes < 60) {
-      return `${minutes} minute${minutes !== 1 ? 's' : ''} ago`;
-    } else if (hours < 24) {
-      return `${hours} hour${hours !== 1 ? 's' : ''} ago`;
-    } else {
-      return `${days} day${days !== 1 ? 's' : ''} ago`;
-    }
-  };
-
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case "high":
-        return "bg-red-100 text-red-800 border-red-200";
-      case "medium":
-        return "bg-yellow-100 text-yellow-800 border-yellow-200";
-      case "low":
-        return "bg-blue-100 text-blue-800 border-blue-200";
-      default:
-        return "bg-gray-100 text-gray-800 border-gray-200";
-    }
-  };
-
-  const getAlertIcon = (type: string) => {
-    switch (type) {
-      case "warning":
-        return <AlertTriangle className="h-5 w-5 text-yellow-600" />;
-      case "urgent":
-        return <AlertCircle className="h-5 w-5 text-red-600" />;
-      default:
-        return <AlertTriangle className="h-5 w-5 text-blue-600" />;
-    }
-  };
+  const securityTone = useMemo(() => {
+    if (snapshot.urgentEvents > 0 || snapshot.openSystemEvents > 10) return "Review recommended";
+    if (snapshot.openSystemEvents > 0 || snapshot.warningEvents > 0) return "Monitor";
+    return "Stable";
+  }, [snapshot.openSystemEvents, snapshot.urgentEvents, snapshot.warningEvents]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-red-50 via-yellow-50 to-red-100">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-stone-50 to-slate-100">
       <Header />
-      <main className="container mx-auto px-4 py-6 pb-24 lg:pb-8">
-        <div className="text-center mb-8">
-          <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold bg-gradient-to-r from-red-800 via-red-700 to-yellow-600 bg-clip-text text-transparent mb-4">
-            Alerts & Notifications
-          </h1>
-          <p className="text-red-700 text-base sm:text-lg">Monitor important events and required actions</p>
-
-          <div className="flex flex-col sm:flex-row justify-center items-stretch sm:items-center gap-3 sm:gap-4 mt-6">
-            <Dialog open={isTemplateDialogOpen} onOpenChange={setIsTemplateDialogOpen}>
-              <DialogTrigger asChild>
-                <Button variant="outline" className="border-red-600 text-red-600 hover:bg-red-50">
-                  <FileText className="h-4 w-4 mr-2" />
-                  Use Template
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[600px]">
-                <DialogHeader>
-                  <DialogTitle>Alert Templates</DialogTitle>
-                  <DialogDescription>
-                    Choose from predefined alert templates for common scenarios.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
-                  {ALERT_TEMPLATES.map((template) => {
-                    const IconComponent = template.icon;
-                    return (
-                      <Card 
-                        key={template.id}
-                        className="cursor-pointer hover:shadow-md transition-shadow border-2 hover:border-red-300"
-                        onClick={() => applyTemplate(template)}
-                      >
-                        <CardHeader className="pb-2">
-                          <div className="flex items-center space-x-2">
-                            <IconComponent className="h-5 w-5 text-red-600" />
-                            <CardTitle className="text-sm">{template.name}</CardTitle>
-                          </div>
-                        </CardHeader>
-                        <CardContent className="pt-0">
-                          <p className="text-xs text-gray-600 mb-2">{template.description}</p>
-                          <div className="flex justify-between items-center">
-                            <Badge className={getPriorityColor(template.priority)}>
-                              {template.priority.toUpperCase()}
-                            </Badge>
-                            <Badge variant="outline" className="text-xs">
-                              {template.category}
-                            </Badge>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    );
-                  })}
-                </div>
-              </DialogContent>
-            </Dialog>
-
-            <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-              <DialogTrigger asChild>
-                <Button className="bg-red-600 hover:bg-red-700">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Create Alert
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[425px]">
-                <DialogHeader>
-                  <DialogTitle>Create New Alert</DialogTitle>
-                  <DialogDescription>
-                    Create a new alert or notification for the system.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="grid gap-4 py-4">
-                  <div className="flex flex-col gap-2">
-                    <Label htmlFor="title">
-                      Title
-                    </Label>
-                    <Input
-                      id="title"
-                      value={newAlert.title}
-                      onChange={(e) => setNewAlert({...newAlert, title: e.target.value})}
-                      placeholder="Alert title"
-                    />
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <Label htmlFor="type">
-                      Type
-                    </Label>
-                    <Select value={newAlert.type} onValueChange={(value) => setNewAlert({...newAlert, type: value as "warning" | "info" | "urgent"})}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="info">Info</SelectItem>
-                        <SelectItem value="warning">Warning</SelectItem>
-                        <SelectItem value="urgent">Urgent</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <Label htmlFor="priority">
-                      Priority
-                    </Label>
-                    <Select value={newAlert.priority} onValueChange={(value) => setNewAlert({...newAlert, priority: value as "high" | "medium" | "low"})}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="low">Low</SelectItem>
-                        <SelectItem value="medium">Medium</SelectItem>
-                        <SelectItem value="high">High</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <Label htmlFor="category">
-                      Category
-                    </Label>
-                    <Input
-                      id="category"
-                      value={newAlert.category}
-                      onChange={(e) => setNewAlert({...newAlert, category: e.target.value})}
-                      placeholder="Alert category (optional)"
-                    />
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <Label htmlFor="youth">
-                      Youth
-                    </Label>
-                    <Select value={newAlert.youthId} onValueChange={(value) => {
-                      const selectedYouth = youths.find(y => y.id === value);
-                      setNewAlert({
-                        ...newAlert,
-                        youthId: value,
-                        youth: selectedYouth ? `${selectedYouth.firstName} ${selectedYouth.lastName}` : ""
-                      });
-                    }}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select youth (optional)" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="general">None - General Alert</SelectItem>
-                        {youths.map((youth) => (
-                          <SelectItem key={youth.id} value={youth.id}>
-                            {youth.firstName} {youth.lastName} - Level {youth.level}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <Label htmlFor="description">
-                      Description
-                    </Label>
-                    <Textarea
-                      id="description"
-                      value={newAlert.description}
-                      onChange={(e) => setNewAlert({...newAlert, description: e.target.value})}
-                      placeholder="Alert description"
-                      rows={3}
-                    />
-                  </div>
-                </div>
-                <div className="flex justify-end space-x-2">
-                  <Button variant="outline" onClick={() => {
-                    setIsCreateDialogOpen(false);
-                    resetNewAlert();
-                  }}>
-                    Cancel
-                  </Button>
-                  <Button onClick={createAlert} className="bg-red-600 hover:bg-red-700">
-                    Create Alert
-                  </Button>
-                </div>
-              </DialogContent>
-            </Dialog>
-            
-            <Button
-              onClick={scanForSystemAlerts}
-              disabled={isScanning}
-              variant="outline"
-              className="border-amber-500 text-amber-700 hover:bg-amber-50"
-            >
-              <RefreshCw className={`h-4 w-4 mr-2 ${isScanning ? "animate-spin" : ""}`} />
-              {isScanning ? "Scanning..." : "Scan for Alerts"}
-            </Button>
-
-            <Button
-              onClick={requestNotificationPermission}
-              variant={notificationsEnabled ? "outline" : "default"}
-              className={notificationsEnabled ? "border-green-500 text-green-600" : "bg-[#823131] hover:bg-[#6b2828] text-white border-[#823131]"}
-            >
-              <Bell className="h-4 w-4 mr-2" />
-              {notificationsEnabled ? "Notifications Enabled" : "Enable Notifications"}
+      <main className="container mx-auto px-4 py-6 pb-24 lg:pb-8 space-y-6">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">System Ops</h1>
+            <p className="text-slate-600 mt-1">
+              Database visibility, security posture, data integrity, and recent system events.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="outline" className="border-slate-300 bg-white text-slate-700">
+              Session role: {role || "unknown"}
+            </Badge>
+            <Badge variant="outline" className="border-slate-300 bg-white text-slate-700">
+              {isAdmin ? "Admin access" : "Read-only staff view"}
+            </Badge>
+            <Button variant="outline" onClick={loadSystemData} disabled={refreshing} className="gap-2">
+              <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+              {refreshing ? "Refreshing..." : "Refresh"}
             </Button>
           </div>
         </div>
-        
-        <div className="space-y-4">
-          {alerts.map((alert) => (
-            <Card 
-              key={alert.id} 
-              className={`border-2 transition-all ${
-                alert.resolved 
-                  ? 'border-green-300 bg-green-50 opacity-75' 
-                  : 'border-yellow-300'
-              }`}
-            >
+
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+          <Card className="border-0 shadow-sm">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm flex items-center gap-2 text-slate-700">
+                <Database className="h-4 w-4 text-slate-900" />
+                Database Footprint
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm">
+              <div className="flex justify-between"><span>Active youth</span><span className="font-semibold">{snapshot.activeYouth}</span></div>
+              <div className="flex justify-between"><span>Archived youth</span><span className="font-semibold">{snapshot.archivedYouth}</span></div>
+              <div className="flex justify-between"><span>Daily ratings</span><span className="font-semibold">{snapshot.dailyRatingRows}</span></div>
+              <div className="flex justify-between"><span>Case notes</span><span className="font-semibold">{snapshot.caseNoteRows}</span></div>
+              <div className="flex justify-between"><span>Behavior points</span><span className="font-semibold">{snapshot.behaviorPointRows}</span></div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-0 shadow-sm">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm flex items-center gap-2 text-slate-700">
+                <Shield className="h-4 w-4 text-slate-900" />
+                Security Snapshot
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm">
+              <div className="flex justify-between"><span>User roles</span><span className="font-semibold">{snapshot.userRoles}</span></div>
+              <div className="flex justify-between"><span>Admin users</span><span className="font-semibold">{snapshot.adminUsers}</span></div>
+              <div className="flex justify-between"><span>Staff users</span><span className="font-semibold">{snapshot.staffUsers}</span></div>
+              <div className="flex justify-between"><span>Security posture</span><span className="font-semibold">{securityTone}</span></div>
+              <div className="flex justify-between"><span>Current user</span><span className="font-semibold truncate max-w-[140px]">{user?.email || "Not signed in"}</span></div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-0 shadow-sm">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm flex items-center gap-2 text-slate-700">
+                <ShieldCheck className="h-4 w-4 text-slate-900" />
+                Data Integrity
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm">
+              <div className="flex justify-between"><span>Missing admission dates</span><span className="font-semibold">{snapshot.missingAdmissionDate}</span></div>
+              <div className="flex justify-between"><span>Missing grade values</span><span className="font-semibold">{snapshot.missingGrade}</span></div>
+              <div className="flex justify-between"><span>No DPN history</span><span className="font-semibold">{snapshot.youthsWithoutDpnHistory}</span></div>
+              <div className="flex justify-between"><span>No case notes</span><span className="font-semibold">{snapshot.youthsWithoutCaseNotes}</span></div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-0 shadow-sm">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm flex items-center gap-2 text-slate-700">
+                <Activity className="h-4 w-4 text-slate-900" />
+                Event Stream
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm">
+              <div className="flex justify-between"><span>Total events</span><span className="font-semibold">{snapshot.systemEvents}</span></div>
+              <div className="flex justify-between"><span>Open events</span><span className="font-semibold">{snapshot.openSystemEvents}</span></div>
+              <div className="flex justify-between"><span>Warnings</span><span className="font-semibold">{snapshot.warningEvents}</span></div>
+              <div className="flex justify-between"><span>Urgent</span><span className="font-semibold">{snapshot.urgentEvents}</span></div>
+              <div className="flex justify-between"><span>Last refresh</span><span className="font-semibold">{lastRefresh || "Loading..."}</span></div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+          <div className="xl:col-span-2">
+            <Card className="border-0 shadow-sm">
               <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center space-x-3">
-                    {alert.resolved ? (
-                      <Check className="h-5 w-5 text-green-600" />
-                    ) : (
-                      getAlertIcon(alert.type)
-                    )}
-                    <div>
-                      <div className="flex items-center space-x-2">
-                        <CardTitle className={`text-lg ${alert.resolved ? 'line-through text-gray-500' : ''}`}>
-                          {alert.link ? (
-                            <button
-                              onClick={() => navigate(alert.link!)}
-                              className="hover:underline text-left"
-                            >
-                              {alert.title}
-                            </button>
-                          ) : alert.title}
-                        </CardTitle>
-                        {alert.resolved && (
-                          <Badge className="bg-green-100 text-green-800 border-green-200">
-                            RESOLVED
-                          </Badge>
-                        )}
-                      </div>
-                      <CardDescription className="flex items-center space-x-4 mt-1">
-                        <div className="flex items-center space-x-1">
-                          {alert.youth && alert.youth !== "general" && (
-                            <>
-                              <User className="h-4 w-4" />
-                              <span>{alert.youth}</span>
-                            </>
-                          )}
-                        </div>
-                        {alert.category && (
-                          <Badge variant="outline" className="text-xs">
-                            {alert.category}
-                          </Badge>
-                        )}
-                        <div className="flex items-center space-x-1">
-                          <Clock className="h-4 w-4" />
-                          <span>{alert.createdAt ? formatTimestamp(alert.createdAt) : alert.timestamp}</span>
-                        </div>
-                      </CardDescription>
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Badge className={getPriorityColor(alert.priority)}>
-                      {alert.priority.toUpperCase()}
-                    </Badge>
-                    {!alert.resolved && (
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        onClick={() => resolveAlert(alert.id)}
-                        className="text-green-600 hover:text-green-800 hover:bg-green-50"
-                      >
-                        <Check className="h-4 w-4" />
-                      </Button>
-                    )}
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      onClick={() => deleteAlert(alert.id)}
-                      className="text-red-600 hover:text-red-800"
-                    >
-                      ×
-                    </Button>
-                  </div>
-                </div>
+                <CardTitle className="text-base flex items-center gap-2 text-slate-900">
+                  <HardDrive className="h-4 w-4" />
+                  Database and System Event Log
+                </CardTitle>
+                <CardDescription>
+                  Recent technical events stored in the backing datastore. Existing event records are surfaced here as system log entries.
+                </CardDescription>
               </CardHeader>
               <CardContent>
-                <p className={`text-gray-700 ${alert.resolved ? 'line-through opacity-60' : ''}`}>
-                  {alert.description}
-                </p>
+                {loading ? (
+                  <p className="text-sm text-slate-500">Loading system events...</p>
+                ) : events.length === 0 ? (
+                  <p className="text-sm text-slate-500">No system events found.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {events.map((event) => (
+                      <div key={event.id} className="rounded-xl border border-slate-200 bg-white p-4">
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                          <div className="min-w-0">
+                            <div className="font-semibold text-slate-900">{event.title}</div>
+                            {event.body && <div className="text-sm text-slate-600 mt-1">{event.body}</div>}
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <Badge variant="outline" className={levelBadgeClass(event.level)}>
+                              {event.level || "info"}
+                            </Badge>
+                            <Badge variant="outline" className="border-slate-200 bg-slate-50 text-slate-700">
+                              {event.status || "open"}
+                            </Badge>
+                          </div>
+                        </div>
+                        <div className="mt-3 text-xs text-slate-500">
+                          Created {event.created_at ? new Date(event.created_at).toLocaleString() : "unknown"}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
-          ))}
-        </div>
-        
-        {alerts.length === 0 && (
-          <div className="bg-white p-4 sm:p-8 rounded-lg shadow-lg text-center border-2 border-yellow-300">
-            <AlertTriangle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <h2 className="text-2xl font-bold text-red-800 mb-4">No Active Alerts</h2>
-            <p className="text-red-600 text-lg">All systems are running smoothly!</p>
           </div>
-        )}
+
+          <div className="space-y-6">
+            <AIStatusMonitor />
+
+            <Card className="border-0 shadow-sm">
+              <CardHeader>
+                <CardTitle className="text-base text-slate-900">Technical Notes</CardTitle>
+                <CardDescription>What this page is intended to monitor.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3 text-sm text-slate-600">
+                <p>Use this area for database visibility, account-role awareness, AI service health, and operational data quality checks.</p>
+                <p>The old end-user alert inbox behavior has been removed from navigation in favor of a technical system view.</p>
+                <p>For incident-driven youth workflow, use the youth workspace, incident reports, case notes, and DPN areas directly.</p>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
       </main>
+      <BottomNav />
     </div>
   );
 };
 
-export default Alerts;
+export default SystemOps;

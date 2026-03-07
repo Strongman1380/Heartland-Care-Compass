@@ -4,10 +4,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   PlusCircle, BarChart3, LogOut, LogIn, BookOpen,
-  ClipboardPaste, ShieldAlert, Home, Star, Bell, FileText,
+  ClipboardPaste, ShieldAlert, Home, Star, Database, FileText,
   ClipboardList, Clock,
   Menu, ChevronDown,
-  Building2, Upload,
+  Building2, Upload, Users,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -22,7 +22,7 @@ import { AddYouthDialog } from "@/components/youth/AddYouthDialog";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
-import { useUnresolvedAlertCount } from "@/hooks/useUnresolvedAlertCount";
+import { ThemeToggle } from "@/components/ui/ThemeToggle";
 
 interface NavGroup {
   label: string;
@@ -41,7 +41,7 @@ const navGroups: NavGroup[] = [
     ],
   },
   {
-    label: "Admin",
+    label: "Operations",
     icon: BarChart3,
     items: [
       { path: "/daily-points", label: "Daily Points", icon: Star },
@@ -50,7 +50,7 @@ const navGroups: NavGroup[] = [
       { path: "/admin/facility", label: "Facility Ops", icon: Building2 },
       { path: "/admin/forms", label: "Forms Library", icon: FileText },
       { path: "/data-upload", label: "Data Upload", icon: Upload },
-      { path: "/alerts", label: "Alerts", icon: Bell },
+      { path: "/alerts", label: "System Ops", icon: Database },
     ],
   },
 ];
@@ -61,7 +61,6 @@ export const Header = () => {
   const { toast } = useToast();
   const location = useLocation();
   const navigate = useNavigate();
-  const unresolvedAlertCount = useUnresolvedAlertCount();
   const { user, signOutUser } = useAuth();
 
   const isActive = (path: string) => {
@@ -103,14 +102,32 @@ export const Header = () => {
 
             {/* Desktop Navigation */}
             <nav className="hidden lg:flex items-center gap-1 flex-1 justify-center">
-              {/* Home direct link */}
+              {/* Dashboard direct link */}
               <Link
                 to="/"
                 className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 whitespace-nowrap
                   ${isActive("/") ? "bg-red-50 text-red-700" : "text-gray-600 hover:text-red-700 hover:bg-red-50"}`}
               >
                 <Home className="h-4 w-4" />
-                <span>Home</span>
+                <span>Dashboard</span>
+              </Link>
+
+              <Link
+                to="/youth-list"
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 whitespace-nowrap
+                  ${isActive("/youth-list") || isActive("/youth/") ? "bg-red-50 text-red-700" : "text-gray-600 hover:text-red-700 hover:bg-red-50"}`}
+              >
+                <Users className="h-4 w-4" />
+                <span>Youth</span>
+              </Link>
+
+              <Link
+                to="/progress-notes"
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 whitespace-nowrap
+                  ${isActive("/progress-notes") ? "bg-red-50 text-red-700" : "text-gray-600 hover:text-red-700 hover:bg-red-50"}`}
+              >
+                <BookOpen className="h-4 w-4" />
+                <span>Notes</span>
               </Link>
 
               {/* Reports direct link */}
@@ -180,15 +197,12 @@ export const Header = () => {
               <button
                 onClick={() => navigate("/alerts")}
                 className="relative p-1.5 rounded-lg text-gray-600 hover:text-red-700 hover:bg-red-50 transition-colors"
-                aria-label="Alerts"
+                aria-label="System Ops"
               >
-                <Bell className="h-4 w-4" />
-                {unresolvedAlertCount > 0 && (
-                  <span className="absolute -top-0.5 -right-0.5 flex items-center justify-center min-w-[16px] h-4 px-0.5 rounded-full bg-red-500 text-white text-[9px] font-bold leading-none">
-                    {unresolvedAlertCount > 99 ? "99+" : unresolvedAlertCount}
-                  </span>
-                )}
+                <Database className="h-4 w-4" />
               </button>
+
+              <ThemeToggle />
 
               {!user ? (
                 <Button onClick={() => navigate("/auth")} variant="ghost" size="sm" className="text-xs h-8 px-2">
@@ -245,7 +259,27 @@ export const Header = () => {
                         ${isActive("/") ? "bg-red-50 text-red-700" : "text-gray-700 hover:bg-gray-50"}`}
                     >
                       <Home className="h-4 w-4" />
-                      Home
+                      Dashboard
+                    </Link>
+
+                    <Link
+                      to="/youth-list"
+                      onClick={() => setMobileMenuOpen(false)}
+                      className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors
+                        ${isActive("/youth-list") || isActive("/youth/") ? "bg-red-50 text-red-700" : "text-gray-700 hover:bg-gray-50"}`}
+                    >
+                      <Users className="h-4 w-4" />
+                      Youth
+                    </Link>
+
+                    <Link
+                      to="/progress-notes"
+                      onClick={() => setMobileMenuOpen(false)}
+                      className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors
+                        ${isActive("/progress-notes") ? "bg-red-50 text-red-700" : "text-gray-700 hover:bg-gray-50"}`}
+                    >
+                      <BookOpen className="h-4 w-4" />
+                      Notes
                     </Link>
 
                     {/* Reports direct link */}

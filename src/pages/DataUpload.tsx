@@ -1,4 +1,4 @@
-import React, { useCallback, useState, useRef } from 'react'
+import React, { useCallback, useEffect, useState, useRef } from 'react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Header } from '@/components/layout/Header'
 import { CsvUploader, type ParsedRow, type ColumnDef, type ImportResult } from '@/components/common/CsvUploader'
@@ -19,7 +19,7 @@ import { useToast } from '@/hooks/use-toast'
 
 type WeeklyRow = { youthName: string; youthId: string; weekDate: string; peer: number; adult: number; investment: number; authority: number }
 type DailyShiftRow = { youthName: string; youthId: string; date: string; shift: string; peer: number; adult: number; investment: number; authority: number }
-type PointsRow = { youthName: string; youthId: string; date: string; morningPoints: number | null; afternoonPoints: number | null; eveningPoints: number | null; totalPoints: number; notes: string }
+type PointsRow = { youthName: string; youthId: string; date: string; totalPoints: number | null; notes: string }
 type RatingsRow = { youthName: string; youthId: string; date: string; peer: number; adult: number; investment: number; authority: number; staff: string; comments: string }
 type ReferralRow = { referralName: string; referralSource: string; referralDate: string; staffName: string; status: string; priority: string; summary: string }
 type CaseNoteRow = { youthName: string; youthId: string; date: string; summary: string; note: string; staff: string }
@@ -48,10 +48,7 @@ const dailyShiftColumns: ColumnDef[] = [
 const pointsColumns: ColumnDef[] = [
   { key: 'youthName', label: 'Youth' },
   { key: 'date', label: 'Date' },
-  { key: 'morningPoints', label: 'Morning' },
-  { key: 'afternoonPoints', label: 'Afternoon' },
-  { key: 'eveningPoints', label: 'Evening' },
-  { key: 'totalPoints', label: 'Total' },
+  { key: 'totalPoints', label: 'Points' },
   { key: 'notes', label: 'Notes' },
 ]
 
@@ -128,7 +125,7 @@ const VALID_STATUSES = ['pending', 'screening', 'interviewed', 'accepted', 'deni
 const VALID_PRIORITIES = ['low', 'medium', 'high', 'urgent']
 
 const DataUpload: React.FC = () => {
-  const { youths } = useYouth()
+  const { youths, loadYouths } = useYouth()
   const { toast } = useToast()
   const [dpnText, setDpnText] = useState('')
   const [dpnEntries, setDpnEntries] = useState<DpnShiftEntry[]>([])
@@ -146,6 +143,10 @@ const DataUpload: React.FC = () => {
     firstName: y.firstName || '',
     lastName: y.lastName || '',
   }))
+
+  useEffect(() => {
+    loadYouths()
+  }, [loadYouths])
 
   // ── Weekly Eval Parser ──
   const parseWeeklyRows = useCallback((rows: string[][]): ParsedRow<WeeklyRow>[] => {
@@ -224,48 +225,28 @@ const DataUpload: React.FC = () => {
 
     const nameIdx = hasHeader ? findColumnIndex(header, 'name', 'youth') : 0
     const dateIdx = hasHeader ? findColumnIndex(header, 'date') : 1
-    const morningIdx = hasHeader ? findColumnIndex(header, 'morning') : 2
-    const afternoonIdx = hasHeader ? findColumnIndex(header, 'afternoon') : 3
-    const eveningIdx = hasHeader ? findColumnIndex(header, 'evening') : 4
-    const totalIdx = hasHeader ? findColumnIndex(header, 'total', 'points') : -1
-    const notesIdx = hasHeader ? findColumnIndex(header, 'note') : 5
-
-    const parseNullableInt = (cols: string[], idx: number): number | null => {
-      if (idx < 0 || !cols[idx]?.trim()) return null
-      const v = parseInt(cols[idx], 10)
-      return isNaN(v) ? null : Math.max(0, v)
-    }
+    const pointsIdx = hasHeader ? findColumnIndex(header, 'point', 'total') : 2
+    const notesIdx = hasHeader ? findColumnIndex(header, 'note') : 3
 
     return dataRows.map(cols => {
       const errors: string[] = []
       const nameVal = cols[nameIdx] || ''
       const matched = matchYouth(nameVal, youthList)
       if (!matched) errors.push(`Youth "${nameVal}" not found`)
-      const { date, error: dateErr } = normalizeDate(cols[dateIdx] || '')
+      const { date, error: dateErr } = normalizeDate(cols[dateIdx] || '', true)
       if (dateErr) errors.push(dateErr)
 
-      const morning = parseNullableInt(cols, morningIdx)
-      const afternoon = parseNullableInt(cols, afternoonIdx)
-      const evening = parseNullableInt(cols, eveningIdx)
-      const explicitTotal = parseNullableInt(cols, totalIdx)
+      const rawPoints = cols[pointsIdx >= 0 ? pointsIdx : 2]?.trim()
+      const totalPoints = rawPoints ? Math.max(0, parseInt(rawPoints, 10)) : null
 
-      const hasShifts = morning !== null || afternoon !== null || evening !== null
-      const total = hasShifts
-        ? (morning ?? 0) + (afternoon ?? 0) + (evening ?? 0)
-        : (explicitTotal ?? 0)
-
-      const notesCol = notesIdx >= 0 ? notesIdx : 5
-      const notes = cols[notesCol] || ''
+      const notes = (cols[notesIdx >= 0 ? notesIdx : 3] || '').trim()
 
       return {
         data: {
           youthName: matched ? `${matched.firstName} ${matched.lastName}` : nameVal,
           youthId: matched?.id || '',
           date,
-          morningPoints: morning,
-          afternoonPoints: afternoon,
-          eveningPoints: evening,
-          totalPoints: total,
+          totalPoints: isNaN(totalPoints as number) ? null : totalPoints,
           notes,
         },
         valid: errors.length === 0,
@@ -352,10 +333,10 @@ const DataUpload: React.FC = () => {
         await behaviorPointsService.upsert({
           youth_id: row.youthId,
           date: row.date,
-          morningPoints: row.morningPoints,
-          afternoonPoints: row.afternoonPoints,
-          eveningPoints: row.eveningPoints,
-          totalPoints: row.totalPoints,
+          morningPoints: null,
+          afternoonPoints: null,
+          eveningPoints: null,
+          totalPoints: row.totalPoints ?? 0,
           comments: row.notes || null,
           createdAt: new Date().toISOString(),
         })

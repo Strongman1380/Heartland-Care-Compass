@@ -21,10 +21,10 @@ export default defineConfig(({ mode }) => {
     server: {
       host: "::",
       port: 8080,
-      // Proxy API requests to Firebase emulator during dev
+      // Proxy API requests to local Express server
       proxy: {
         '/api': {
-          target: 'http://127.0.0.1:5001/heartland-boys-home-data/us-central1/api',
+          target: 'http://127.0.0.1:3001',
           changeOrigin: true,
         },
       },

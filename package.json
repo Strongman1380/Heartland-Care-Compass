@@ -11,12 +11,14 @@
     "@swc/core-linux-x64-gnu": "^1.4.0"
   },
   "scripts": {
-    "dev": "vite",
+    "dev": "concurrently -n server,web -c yellow,cyan \"PORT=3001 node server-new.js\" \"vite --port 8080\"",
+    "dev:vite": "vite",
+    "dev:server": "PORT=3001 node server-new.js",
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview",
-    "dev:full": "concurrently -n emulator,web -c magenta,cyan \"firebase emulators:start --only functions,firestore\" \"vite --port 8080\"",
+    "dev:full": "concurrently -n emulator,server,web -c magenta,yellow,cyan \"firebase emulators:start --only functions,firestore\" \"PORT=3001 node server-new.js\" \"vite --port 8080\"",
     "start": "firebase emulators:start",
     "predeploy": "npm run build",
     "deploy": "npm run build && firebase deploy",

@@ -136,7 +136,7 @@ export const SECTION_CONFIG = [
   },
 ];
 
-export const UNKNOWN_VALUE_RE = /^(n\/a|na|none|unknown|not provided|not documented|unspecified|-|—)$/i;
+export const UNKNOWN_VALUE_RE = /^(n\/a|na|none|unknown|not provided|not documented|unspecified|-|—|click or tap here to enter text|click here|tap here)$/i;
 
 export const LINE_MARKER_RE = /^Line\s+(\d+):\s*$/i;
 

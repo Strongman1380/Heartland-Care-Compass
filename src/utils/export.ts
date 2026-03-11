@@ -3,11 +3,18 @@
 // Lazy load html2pdf to avoid MIME type errors during module resolution
 async function getHtml2Pdf() {
   try {
-    const mod: any = await import(/* @vite-ignore */ 'html2pdf.js');
+    // Try standard import first
+    const mod: any = await import('html2pdf.js');
     return mod.default || mod;
   } catch (error: any) {
-    console.error('Failed to load html2pdf.js:', error);
-    throw new Error(`html2pdf.js not available: ${error.message}`);
+    try {
+      // Fallback: try with @vite-ignore for dynamic import
+      const mod: any = await import(/* @vite-ignore */ 'html2pdf.js');
+      return mod.default || mod;
+    } catch (fallbackError) {
+      console.error('Failed to load html2pdf.js:', error, fallbackError);
+      throw new Error(`html2pdf.js library not available. Please ensure html2pdf.js is installed.`);
+    }
   }
 }
 
@@ -49,11 +56,24 @@ export async function exportElementToPDF(element: HTMLElement, filename: string)
 // Lazy load html-to-docx to avoid MIME type errors during module resolution
 async function getHtmlToDocx() {
   try {
-    const mod: any = await import(/* @vite-ignore */ 'html-to-docx');
+    // Try standard import first
+    const mod: any = await import('html-to-docx');
+    if (!mod || (!mod.default && typeof mod !== 'function')) {
+      throw new Error('Invalid module export');
+    }
     return mod.default || mod;
   } catch (error: any) {
-    console.error('Failed to load html-to-docx:', error);
-    throw new Error(`html-to-docx not available: ${error.message}`);
+    try {
+      // Fallback: try with @vite-ignore for dynamic import
+      const mod: any = await import(/* @vite-ignore */ 'html-to-docx');
+      if (!mod || (!mod.default && typeof mod !== 'function')) {
+        throw new Error('Invalid module export');
+      }
+      return mod.default || mod;
+    } catch (fallbackError) {
+      console.error('Failed to load html-to-docx:', error, fallbackError);
+      throw new Error(`html-to-docx library not available. Please ensure html-to-docx is installed.`);
+    }
   }
 }
 

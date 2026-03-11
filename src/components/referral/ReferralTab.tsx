@@ -2788,6 +2788,26 @@ export const ReferralTab = () => {
                         {isExpanded ? <ChevronUp className="h-4 w-4 text-muted-foreground shrink-0" /> : <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />}
                       </div>
 
+                      {/* Referral Notes — always visible for quick access */}
+                      {item.referralNotes && (
+                        <div className="mt-2 pt-2 border-t text-xs">
+                          <p className="text-amber-700 font-medium mb-1">Note:</p>
+                          <p className="text-gray-700 break-words">{item.referralNotes}</p>
+                        </div>
+                      )}
+
+                      {/* Notes input — quick edit without expanding */}
+                      <div className="mt-2 pt-2 border-t">
+                        <textarea
+                          placeholder="Add note..."
+                          value={item.referralNotes || ""}
+                          onBlur={(e) => handleSetReferralNotes(item, e.target.value)}
+                          onChange={(e) => setHistory((prev) => prev.map((h) => sameReferral(h, item) ? { ...h, referralNotes: e.target.value } : h))}
+                          onClick={(e) => e.stopPropagation()}
+                          className="w-full h-14 rounded border border-amber-300 px-2 py-1 text-xs text-gray-800 focus:outline-none focus:ring-1 focus:ring-amber-400 bg-white resize-none placeholder:text-gray-400"
+                        />
+                      </div>
+
                       {/* Expanded content — shown on click */}
                       {isExpanded && (
                       <>

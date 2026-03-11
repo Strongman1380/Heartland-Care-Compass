@@ -38,15 +38,33 @@ async function extractFromDocx(file: File): Promise<string> {
  */
 async function extractFromPdf(file: File): Promise<string> {
   try {
-    // Dynamically import pdfjs
-    const pdfjsModule = await import('pdfjs-dist');
-    const pdfjsWorker = await import('pdfjs-dist/build/pdf.worker');
+    // Dynamically import pdfjs-dist
+    const pdfjsLib = await import('pdfjs-dist');
+    const { getDocument, GlobalWorkerOptions } = pdfjsLib;
 
-    const pdfjs = pdfjsModule.default;
-    pdfjs.GlobalWorkerOptions.workerSrc = pdfjsWorker.default || pdfjsWorker;
+    // Set the worker source for PDF.js
+    // Try to use the compiled worker module first, then fall back to URL
+    try {
+      const workerModule: any = await import(
+        'pdfjs-dist/build/pdf.worker.mjs'
+      );
+      GlobalWorkerOptions.workerSrc = workerModule.default;
+    } catch (e) {
+      // Fallback: construct worker URL for Vite
+      try {
+        const workerUrl = new URL(
+          '../../../node_modules/pdfjs-dist/build/pdf.worker.js',
+          import.meta.url
+        ).href;
+        GlobalWorkerOptions.workerSrc = workerUrl;
+      } catch (urlError) {
+        // Last resort: use absolute path
+        GlobalWorkerOptions.workerSrc = '/pdf.worker.js';
+      }
+    }
 
     const arrayBuffer = await file.arrayBuffer();
-    const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
+    const pdf = await getDocument({ data: arrayBuffer }).promise;
 
     let fullText = '';
 

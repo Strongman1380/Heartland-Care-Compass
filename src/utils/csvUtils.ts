@@ -249,19 +249,19 @@ export const CSV_TEMPLATES: Record<CsvTemplateType, CsvTemplate> = {
   },
   behavior_points: {
     label: 'Behavior Points',
-    description: 'Daily behavior point totals per shift for each youth.',
-    headers: 'Youth Name,Date,Morning Points,Afternoon Points,Evening Points,Notes',
+    description: 'Daily behavior point totals for each youth.',
+    headers: 'Youth Name,Date,Points,Notes',
     sampleRows: [
-      'Chance Thaller,2026-01-15,700,800,600,Good day overall',
-      'Dagen Dickey,2026-01-15,650,750,500,',
-      'Chance Thaller,2026-01-16,0,900,700,Incident in morning',
+      'Chance Thaller,2026-01-15,58000,',
+      'Dagen Dickey,2026-01-15,195000,L6',
+      'Chance Thaller,2026-01-16,,RI',
+      'Dagen Dickey,2026-01-16,,Pass',
     ],
     notes: [
       'Youth Name: First name, last name, or full name (case-insensitive)',
       'Date: YYYY-MM-DD or MM/DD/YYYY',
-      'Morning/Afternoon/Evening Points: Non-negative integers — Total is auto-calculated from these',
-      'Leave a shift column empty or 0 if that shift did not occur',
-      'Notes: Optional comments for the day',
+      'Points: Daily total point count (leave empty if no card was earned)',
+      'Notes: Optional status or comments (e.g. RI, RII, SS, Pass, No Card, L1, L2 Pass)',
     ],
   },
   daily_ratings: {

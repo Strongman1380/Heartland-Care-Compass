@@ -10,6 +10,7 @@ import {
   ResponsiveContainer,
   LineChart,
   Line,
+  ComposedChart,
   BarChart,
   Bar,
   PieChart,
@@ -105,6 +106,17 @@ const formatWeekLabel = (key: string): string => {
   const d = parseDate(key);
   if (!d) return key;
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+};
+
+const formatSignedDelta = (current: number, previous?: number): string => {
+  if (typeof previous !== 'number') return 'No prior period';
+  const delta = current - previous;
+  return `${delta > 0 ? '+' : ''}${delta.toFixed(2)} vs prior`;
+};
+
+const getDeltaTone = (current: number, previous?: number): string => {
+  if (typeof previous !== 'number' || current === previous) return 'text-muted-foreground';
+  return current > previous ? 'text-emerald-700' : 'text-red-700';
 };
 
 const extractRealColors = (value: unknown): string[] => {
@@ -311,27 +323,30 @@ const AssessmentKPIDashboard = () => {
       .map(([name, value]) => ({ name, value }))
       .filter((x) => x.value > 0);
 
-    const docsByMonth: Record<string, { notes: number; ratings: number; points: number }> = {};
+    const docsByMonth: Record<string, { notes: number; ratings: number; points: number; youthIds: Set<string> }> = {};
     filteredNotes.forEach((item) => {
       const d = parseDate(item.date || item.createdAt);
       if (!d) return;
       const key = monthKey(d);
-      docsByMonth[key] = docsByMonth[key] || { notes: 0, ratings: 0, points: 0 };
+      docsByMonth[key] = docsByMonth[key] || { notes: 0, ratings: 0, points: 0, youthIds: new Set<string>() };
       docsByMonth[key].notes += 1;
+      if (item.youth_id) docsByMonth[key].youthIds.add(item.youth_id);
     });
     filteredRatings.forEach((item) => {
       const d = parseDate(item.date || item.createdAt);
       if (!d) return;
       const key = monthKey(d);
-      docsByMonth[key] = docsByMonth[key] || { notes: 0, ratings: 0, points: 0 };
+      docsByMonth[key] = docsByMonth[key] || { notes: 0, ratings: 0, points: 0, youthIds: new Set<string>() };
       docsByMonth[key].ratings += 1;
+      if (item.youth_id) docsByMonth[key].youthIds.add(item.youth_id);
     });
     filteredPoints.forEach((item) => {
       const d = parseDate(item.date || item.createdAt);
       if (!d) return;
       const key = monthKey(d);
-      docsByMonth[key] = docsByMonth[key] || { notes: 0, ratings: 0, points: 0 };
+      docsByMonth[key] = docsByMonth[key] || { notes: 0, ratings: 0, points: 0, youthIds: new Set<string>() };
       docsByMonth[key].points += 1;
+      if (item.youth_id) docsByMonth[key].youthIds.add(item.youth_id);
     });
 
     const documentationTrend = Object.entries(docsByMonth)
@@ -342,6 +357,9 @@ const AssessmentKPIDashboard = () => {
         notes: counts.notes,
         ratings: counts.ratings,
         points: counts.points,
+        totalEntries: counts.notes + counts.ratings + counts.points,
+        documentedYouth: counts.youthIds.size,
+        coveragePercent: youths.length ? Math.round((counts.youthIds.size / youths.length) * 100) : 0,
       }));
 
     const pointsByMonth: Record<string, { total: number; count: number }> = {};
@@ -359,6 +377,7 @@ const AssessmentKPIDashboard = () => {
       .map(([month, data]) => ({
         month: formatMonthLabel(month),
         averagePoints: data.count ? Number((data.total / data.count).toFixed(1)) : 0,
+        entries: data.count,
       }));
 
     const ratingsByWeek: Record<string, { peer: number; adult: number; investment: number; authority: number; count: number }> = {};
@@ -383,6 +402,10 @@ const AssessmentKPIDashboard = () => {
         adult: data.count ? Number((data.adult / data.count).toFixed(2)) : 0,
         investment: data.count ? Number((data.investment / data.count).toFixed(2)) : 0,
         authority: data.count ? Number((data.authority / data.count).toFixed(2)) : 0,
+        overall: data.count
+          ? Number((((data.peer + data.adult + data.investment + data.authority) / data.count) / 4).toFixed(2))
+          : 0,
+        entries: data.count,
       }));
 
     const admissionsInWindow = youths.filter((y) => isInRange(parseDate(y.admissionDate), startDate)).length;
@@ -603,6 +626,21 @@ const AssessmentKPIDashboard = () => {
     if (historyView === 'archived') return kpiReports.filter((x) => x.archived);
     return kpiReports.filter((x) => !x.archived);
   }, [kpiReports, historyView]);
+
+  const latestDomainTrend = analytics.domainTrend[analytics.domainTrend.length - 1];
+  const previousDomainTrend = analytics.domainTrend[analytics.domainTrend.length - 2];
+  const latestDocumentationTrend = analytics.documentationTrend[analytics.documentationTrend.length - 1];
+  const previousDocumentationTrend = analytics.documentationTrend[analytics.documentationTrend.length - 2];
+  const latestPointsTrend = analytics.pointsTrend[analytics.pointsTrend.length - 1];
+  const previousPointsTrend = analytics.pointsTrend[analytics.pointsTrend.length - 2];
+
+  const domainTrendSummary = [
+    { key: 'overall', label: 'Overall', current: latestDomainTrend?.overall ?? 0, previous: previousDomainTrend?.overall },
+    { key: 'peer', label: 'Peer', current: latestDomainTrend?.peer ?? 0, previous: previousDomainTrend?.peer },
+    { key: 'adult', label: 'Adult', current: latestDomainTrend?.adult ?? 0, previous: previousDomainTrend?.adult },
+    { key: 'investment', label: 'Investment', current: latestDomainTrend?.investment ?? 0, previous: previousDomainTrend?.investment },
+    { key: 'authority', label: 'Authority', current: latestDomainTrend?.authority ?? 0, previous: previousDomainTrend?.authority },
+  ];
 
   if (isLoading) {
     return (
@@ -854,8 +892,9 @@ const AssessmentKPIDashboard = () => {
         </Card>
 
         <Tabs defaultValue="domains" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 h-auto gap-2">
             <TabsTrigger value="domains">Behavior Domains</TabsTrigger>
+            <TabsTrigger value="documentation">Documentation</TabsTrigger>
             <TabsTrigger value="risk">Risk & Levels</TabsTrigger>
             <TabsTrigger value="points">Points Trend</TabsTrigger>
           </TabsList>
@@ -865,20 +904,92 @@ const AssessmentKPIDashboard = () => {
               <CardHeader>
                 <CardTitle>Behavior Domain Trend (Weekly Averages)</CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-6">
+                <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+                  {domainTrendSummary.map((item) => (
+                    <div key={item.key} className="rounded-lg border bg-muted/20 p-3">
+                      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{item.label}</p>
+                      <p className="mt-2 text-2xl font-bold">{item.current.toFixed(2)}</p>
+                      <p className={`text-xs mt-1 ${getDeltaTone(item.current, item.previous)}`}>
+                        {formatSignedDelta(item.current, item.previous)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
                 <ResponsiveContainer width="100%" height={320}>
                   <LineChart data={analytics.domainTrend}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="week" />
-                    <YAxis domain={[0, 4]} />
-                    <Tooltip />
-                    <Legend />
-                    <Line type="monotone" dataKey="peer" stroke={HEARTLAND_CHART_COLORS.burgundy} name="Peer" strokeWidth={2} />
-                    <Line type="monotone" dataKey="adult" stroke={HEARTLAND_CHART_COLORS.amber} name="Adult" strokeWidth={2} />
-                    <Line type="monotone" dataKey="investment" stroke={HEARTLAND_CHART_COLORS.slate} name="Investment" strokeWidth={2} />
-                    <Line type="monotone" dataKey="authority" stroke={HEARTLAND_CHART_COLORS.burgundyDark} name="Authority" strokeWidth={2} />
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                    <XAxis dataKey="week" tick={{ fontSize: 12 }} tickLine={false} axisLine={false} />
+                    <YAxis domain={[0, 4]} tick={{ fontSize: 12 }} tickLine={false} axisLine={false} width={36} />
+                    <Tooltip
+                      formatter={(value: number, name: string) => [Number(value).toFixed(2), name]}
+                      labelFormatter={(label) => `Week of ${label}`}
+                    />
+                    <Legend verticalAlign="top" height={36} />
+                    <Line type="monotone" dataKey="overall" stroke={HEARTLAND_CHART_COLORS.neutral} name="Overall" strokeWidth={3} dot={false} />
+                    <Line type="monotone" dataKey="peer" stroke={HEARTLAND_CHART_COLORS.burgundy} name="Peer" strokeWidth={2.5} dot={false} />
+                    <Line type="monotone" dataKey="adult" stroke={HEARTLAND_CHART_COLORS.amber} name="Adult" strokeWidth={2.5} dot={false} />
+                    <Line type="monotone" dataKey="investment" stroke={HEARTLAND_CHART_COLORS.slate} name="Investment" strokeWidth={2.5} dot={false} />
+                    <Line type="monotone" dataKey="authority" stroke={HEARTLAND_CHART_COLORS.burgundyDark} name="Authority" strokeWidth={2.5} dot={false} />
                   </LineChart>
                 </ResponsiveContainer>
+                <p className="text-xs text-muted-foreground">
+                  Weekly averages from daily ratings. Overall is the composite of peer, adult, investment, and authority.
+                </p>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="documentation">
+            <Card>
+              <CardHeader>
+                <CardTitle>Documentation Volume and Coverage</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="rounded-lg border bg-muted/20 p-3">
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Current Coverage</p>
+                    <p className="mt-2 text-2xl font-bold">{latestDocumentationTrend?.coveragePercent ?? 0}%</p>
+                    <p className={`text-xs mt-1 ${getDeltaTone(latestDocumentationTrend?.coveragePercent ?? 0, previousDocumentationTrend?.coveragePercent)}`}>
+                      {formatSignedDelta(latestDocumentationTrend?.coveragePercent ?? 0, previousDocumentationTrend?.coveragePercent)}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border bg-muted/20 p-3">
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Documented Youth</p>
+                    <p className="mt-2 text-2xl font-bold">{latestDocumentationTrend?.documentedYouth ?? 0}</p>
+                    <p className="text-xs mt-1 text-muted-foreground">Youth with at least one note, rating, or points entry</p>
+                  </div>
+                  <div className="rounded-lg border bg-muted/20 p-3">
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Total Entries</p>
+                    <p className="mt-2 text-2xl font-bold">{latestDocumentationTrend?.totalEntries ?? 0}</p>
+                    <p className={`text-xs mt-1 ${getDeltaTone(latestDocumentationTrend?.totalEntries ?? 0, previousDocumentationTrend?.totalEntries)}`}>
+                      {formatSignedDelta(latestDocumentationTrend?.totalEntries ?? 0, previousDocumentationTrend?.totalEntries)}
+                    </p>
+                  </div>
+                </div>
+
+                <ResponsiveContainer width="100%" height={340}>
+                  <ComposedChart data={analytics.documentationTrend}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                    <XAxis dataKey="month" tick={{ fontSize: 12 }} tickLine={false} axisLine={false} />
+                    <YAxis yAxisId="entries" tick={{ fontSize: 12 }} tickLine={false} axisLine={false} allowDecimals={false} width={40} />
+                    <YAxis yAxisId="coverage" orientation="right" domain={[0, 100]} tickFormatter={(value) => `${value}%`} tick={{ fontSize: 12 }} tickLine={false} axisLine={false} width={46} />
+                    <Tooltip
+                      formatter={(value: number, name: string) => {
+                        if (name === 'Coverage') return [`${value}%`, name];
+                        return [value, name];
+                      }}
+                    />
+                    <Legend verticalAlign="top" height={36} />
+                    <Bar yAxisId="entries" dataKey="notes" stackId="docs" fill={HEARTLAND_CHART_COLORS.burgundy} name="Case Notes" radius={[4, 4, 0, 0]} />
+                    <Bar yAxisId="entries" dataKey="ratings" stackId="docs" fill={HEARTLAND_CHART_COLORS.amber} name="Daily Ratings" radius={[4, 4, 0, 0]} />
+                    <Bar yAxisId="entries" dataKey="points" stackId="docs" fill={HEARTLAND_CHART_COLORS.slate} name="Behavior Points" radius={[4, 4, 0, 0]} />
+                    <Line yAxisId="coverage" type="monotone" dataKey="coveragePercent" stroke={HEARTLAND_CHART_COLORS.burgundyDeep} name="Coverage" strokeWidth={3} dot={false} />
+                  </ComposedChart>
+                </ResponsiveContainer>
+                <p className="text-xs text-muted-foreground">
+                  Coverage shows the percent of active youth with any documentation activity in that month.
+                </p>
               </CardContent>
             </Card>
           </TabsContent>
@@ -939,17 +1050,39 @@ const AssessmentKPIDashboard = () => {
 
           <TabsContent value="points">
             <Card>
-              <CardHeader><CardTitle>Average Behavior Points by Month</CardTitle></CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={320}>
-                  <LineChart data={analytics.pointsTrend}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="month" />
-                    <YAxis />
-                    <Tooltip />
-                    <Line type="monotone" dataKey="averagePoints" stroke={HEARTLAND_CHART_COLORS.amberSoft} strokeWidth={3} name="Avg Points" />
-                  </LineChart>
+              <CardHeader><CardTitle>Behavior Points Trend</CardTitle></CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="rounded-lg border bg-muted/20 p-3">
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Current Monthly Average</p>
+                    <p className="mt-2 text-2xl font-bold">{latestPointsTrend?.averagePoints ?? 0}</p>
+                    <p className={`text-xs mt-1 ${getDeltaTone(latestPointsTrend?.averagePoints ?? 0, previousPointsTrend?.averagePoints)}`}>
+                      {formatSignedDelta(latestPointsTrend?.averagePoints ?? 0, previousPointsTrend?.averagePoints)}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border bg-muted/20 p-3">
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Entries Behind Average</p>
+                    <p className="mt-2 text-2xl font-bold">{latestPointsTrend?.entries ?? 0}</p>
+                    <p className={`text-xs mt-1 ${getDeltaTone(latestPointsTrend?.entries ?? 0, previousPointsTrend?.entries)}`}>
+                      {formatSignedDelta(latestPointsTrend?.entries ?? 0, previousPointsTrend?.entries)}
+                    </p>
+                  </div>
+                </div>
+                <ResponsiveContainer width="100%" height={340}>
+                  <ComposedChart data={analytics.pointsTrend}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                    <XAxis dataKey="month" tick={{ fontSize: 12 }} tickLine={false} axisLine={false} />
+                    <YAxis yAxisId="entries" allowDecimals={false} tick={{ fontSize: 12 }} tickLine={false} axisLine={false} width={40} />
+                    <YAxis yAxisId="avg" orientation="right" tick={{ fontSize: 12 }} tickLine={false} axisLine={false} width={52} />
+                    <Tooltip formatter={(value: number, name: string) => [value, name === 'entries' ? 'Entries' : 'Average Points']} />
+                    <Legend verticalAlign="top" height={36} />
+                    <Bar yAxisId="entries" dataKey="entries" fill={HEARTLAND_CHART_COLORS.neutral} name="Entries" radius={[4, 4, 0, 0]} />
+                    <Line yAxisId="avg" type="monotone" dataKey="averagePoints" stroke={HEARTLAND_CHART_COLORS.amberSoft} strokeWidth={3} name="Average Points" dot={false} />
+                  </ComposedChart>
                 </ResponsiveContainer>
+                <p className="text-xs text-muted-foreground">
+                  Entry count is shown with the average so point swings can be read in context.
+                </p>
               </CardContent>
             </Card>
           </TabsContent>

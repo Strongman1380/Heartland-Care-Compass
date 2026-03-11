@@ -19,6 +19,7 @@ import {
   ClipboardPaste,
   Copy,
   Eye,
+  FileText,
   Home,
   Loader2,
   Mail,
@@ -31,6 +32,7 @@ import {
   Send,
   Shield,
   Sparkles,
+  Upload,
   User,
 } from "lucide-react";
 import { format, isValid } from "date-fns";
@@ -38,6 +40,7 @@ import { toast } from "sonner";
 import { referralNotesService, type ReferralNoteRow, type POContactEntry } from "@/integrations/firebase/referralNotesService";
 import { alertService } from "@/utils/alertService";
 import { exportHTMLToDocx, exportHTMLToPDF } from "@/utils/export";
+import { extractTextFromDocument, getSupportedFormatsDescription } from "@/utils/documentExtractor";
 import { InterviewReportForm } from "./InterviewReportForm";
 import { ReferralFieldRow } from "./ReferralFieldRow";
 import { KeyInformationCard } from "./KeyInformationCard";
@@ -535,6 +538,9 @@ export const ReferralTab = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [isParsing, setIsParsing] = useState(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [isExtractingDocument, setIsExtractingDocument] = useState(false);
+  const [documentError, setDocumentError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [historyFilter, setHistoryFilter] = useState("all");
   const [archiveView, setArchiveView] = useState("active");
@@ -890,6 +896,42 @@ export const ReferralTab = () => {
     window.addEventListener("scroll", handleScroll, { passive: true });
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setDocumentError(null);
+    setIsExtractingDocument(true);
+
+    try {
+      const result = await extractTextFromDocument(file);
+
+      if (result.error) {
+        setDocumentError(result.error);
+        toast.error(result.error);
+      } else if (result.isBlank) {
+        setDocumentError("The document appears to be blank or has no extractable text.");
+        toast.error("Document is blank");
+      } else {
+        // Successfully extracted text
+        setRawText(result.text);
+        setParsed(null);
+        setParsedEntries([]);
+        toast.success(`Extracted text from ${result.format.toUpperCase()} (${file.name})`);
+      }
+    } catch (error: any) {
+      const errorMsg = error.message || "Failed to process document";
+      setDocumentError(errorMsg);
+      toast.error(errorMsg);
+    } finally {
+      setIsExtractingDocument(false);
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  };
 
   const handleParse = () => {
     if (!rawText.trim()) {
@@ -2165,16 +2207,48 @@ export const ReferralTab = () => {
                 </p>
               )}
               <div className="flex gap-2 items-start">
-                <Textarea
-                  value={rawText}
-                  onChange={(e) => {
-                    setRawText(e.target.value);
-                    setParsed(null);
-                  }}
-                  rows={5}
-                  placeholder="Paste referral text here..."
-                  className="font-mono text-sm flex-1"
-                />
+                <div className="flex-1 space-y-2">
+                  <Textarea
+                    value={rawText}
+                    onChange={(e) => {
+                      setRawText(e.target.value);
+                      setParsed(null);
+                      setDocumentError(null);
+                    }}
+                    rows={5}
+                    placeholder="Paste referral text here..."
+                    className="font-mono text-sm"
+                  />
+                  <div className="flex gap-2 items-center">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".pdf,.docx,.doc,.txt"
+                      onChange={handleFileUpload}
+                      disabled={isExtractingDocument}
+                      className="hidden"
+                      aria-label="Upload referral document"
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={isExtractingDocument}
+                      className="whitespace-nowrap"
+                    >
+                      {isExtractingDocument ? (
+                        <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" />Extracting...</>
+                      ) : (
+                        <><Upload className="h-4 w-4 mr-1.5" />Upload {getSupportedFormatsDescription()}</>
+                      )}
+                    </Button>
+                  </div>
+                  {documentError && (
+                    <div className="text-sm text-red-600 bg-red-50 p-2 rounded border border-red-200">
+                      <span className="font-medium">⚠️ Document Error:</span> {documentError}
+                    </div>
+                  )}
+                </div>
                 <div className="flex flex-col gap-2 shrink-0">
                   <Button onClick={handleParse} disabled={!rawText.trim() || isParsing} className="whitespace-nowrap">
                     {isParsing ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Parsing...</> : "Parse Referral"}

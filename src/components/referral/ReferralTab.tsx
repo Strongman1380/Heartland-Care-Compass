@@ -39,6 +39,11 @@ import { referralNotesService, type ReferralNoteRow, type POContactEntry } from 
 import { alertService } from "@/utils/alertService";
 import { exportHTMLToDocx, exportHTMLToPDF } from "@/utils/export";
 import { InterviewReportForm } from "./InterviewReportForm";
+import { ReferralFieldRow } from "./ReferralFieldRow";
+import { KeyInformationCard } from "./KeyInformationCard";
+import { ReferralSectionCard } from "./ReferralSectionCard";
+import { DataDensityBadge } from "./DataDensityBadge";
+import { calculateFieldCompletion } from "@/utils/referralUtils";
 import { alertsService } from "@/integrations/firebase/alertsService";
 import { screenReferralIntake } from "@/services/aiService";
 import {
@@ -541,6 +546,12 @@ export const ReferralTab = () => {
   const [visibleCount, setVisibleCount] = useState(15);
 
   const [expandedReferralId, setExpandedReferralId] = useState<string | null>(null);
+  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
+  const [expandedReferralHeaderSticky, setExpandedReferralHeaderSticky] = useState(false);
+  const expandedContentRef = useRef<HTMLDivElement>(null);
+  const [referralSearchQuery, setReferralSearchQuery] = useState("");
+  const [referralFilterSection, setReferralFilterSection] = useState<"all" | keyof ParsedReferral>("all");
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [editingInterviewTarget, setEditingInterviewTarget] = useState<ReferralHistoryItem | null>(null);
   const [interviewReport, setInterviewReport] = useState("");
@@ -863,6 +874,21 @@ export const ReferralTab = () => {
     return () => {
       if (parseTimerRef.current) clearTimeout(parseTimerRef.current);
     };
+  }, []);
+
+  // Handle sticky header on scroll for expanded referral
+  useEffect(() => {
+    if (!expandedContentRef.current) return;
+
+    const handleScroll = () => {
+      const rect = expandedContentRef.current?.getBoundingClientRect();
+      if (rect) {
+        setExpandedReferralHeaderSticky(rect.top < 100);
+      }
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
   const handleParse = () => {
@@ -1689,6 +1715,69 @@ export const ReferralTab = () => {
     };
   }, [history]);
 
+  // Helper function to filter parsed data based on search query and section filter
+  const filterParsedData = (
+    parsedData: ParsedReferral | null,
+    query: string,
+    sectionFilter: "all" | keyof ParsedReferral
+  ) => {
+    if (!parsedData || !query.trim()) {
+      if (sectionFilter === "all") return parsedData;
+      return { [sectionFilter]: parsedData[sectionFilter] } as ParsedReferral;
+    }
+
+    const queryLower = query.toLowerCase();
+    const filtered: Partial<ParsedReferral> = {};
+
+    Object.entries(parsedData).forEach(([sectionKey, sectionData]) => {
+      if (sectionFilter !== "all" && sectionKey !== sectionFilter) return;
+      if (typeof sectionData !== "object" || sectionData === null) return;
+
+      const filteredSection: Record<string, any> = {};
+      Object.entries(sectionData as Record<string, any>).forEach(([fieldKey, fieldValue]) => {
+        const fieldLower = fieldKey.toLowerCase();
+        const valueLower = String(fieldValue || "").toLowerCase();
+        if (fieldLower.includes(queryLower) || valueLower.includes(queryLower)) {
+          filteredSection[fieldKey] = fieldValue;
+        }
+      });
+
+      if (Object.keys(filteredSection).length > 0) {
+        (filtered as any)[sectionKey] = filteredSection;
+      }
+    });
+
+    return Object.keys(filtered).length > 0 ? (filtered as ParsedReferral) : null;
+  };
+
+  // Helper function to highlight matching text
+  const highlightText = (text: string, query: string) => {
+    if (!query.trim()) return text;
+    const queryLower = query.toLowerCase();
+    const textLower = text.toLowerCase();
+
+    if (!textLower.includes(queryLower)) return text;
+
+    const parts: (string | React.ReactNode)[] = [];
+    let lastIndex = 0;
+    const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "gi");
+
+    let match;
+    while ((match = regex.exec(text)) !== null) {
+      if (match.index > lastIndex) {
+        parts.push(text.substring(lastIndex, match.index));
+      }
+      parts.push(<mark key={match.index} className="bg-yellow-200 font-semibold">{match[0]}</mark>);
+      lastIndex = regex.lastIndex;
+    }
+
+    if (lastIndex < text.length) {
+      parts.push(text.substring(lastIndex));
+    }
+
+    return parts.length > 0 ? parts : text;
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -2200,44 +2289,75 @@ export const ReferralTab = () => {
             ))}
           </div>
 
+          <KeyInformationCard parsedData={parsed} />
+
           {SECTION_CONFIG_UI.map((sectionDef) => {
             const data = parsed[sectionDef.key];
             if (!sectionHasContent(data)) return null;
             const Icon = sectionDef.icon;
+            const fieldCount = Object.keys(data).length;
+            const { completed, percentage } = calculateFieldCompletion(data);
+            const isSectionCollapsed = collapsedSections.has(sectionDef.key);
+
             return (
-              <Card key={sectionDef.key} className={`border ${colorMap[sectionDef.color].split(" ").slice(1).join(" ")}`}>
-                <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><Icon className="h-4 w-4" />{sectionDef.label}</CardTitle></CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 gap-1.5">
-                    {Object.entries(data).map(([key, val]) => (
-                      <div key={key} className="flex gap-2 text-sm">
-                        <span className="font-medium text-gray-600 min-w-[140px] shrink-0">{key}:</span>
-                        <span className="text-gray-900">{val}</span>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
+              <ReferralSectionCard
+                key={sectionDef.key}
+                title={sectionDef.label}
+                icon={Icon}
+                fieldCount={fieldCount}
+                completionPercentage={percentage}
+                defaultOpen={true}
+                borderColor={`border ${colorMap[sectionDef.color].split(" ").slice(1).join(" ")}`}
+                backgroundColor={colorMap[sectionDef.color]}
+                onOpenChange={(open) => {
+                  if (!open) {
+                    setCollapsedSections(new Set([...collapsedSections, sectionDef.key]));
+                  } else {
+                    setCollapsedSections(new Set([...collapsedSections].filter(k => k !== sectionDef.key)));
+                  }
+                }}
+              >
+                <div className={`grid ${fieldCount >= 6 ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1"} gap-2`}>
+                  {Object.entries(data).map(([key, val]) => (
+                    <ReferralFieldRow key={key} label={key} value={val} />
+                  ))}
+                </div>
+              </ReferralSectionCard>
             );
           })}
 
           {sectionHasContent(parsed.other) && (
-            <Card className="border border-gray-200">
-              <CardHeader className="pb-2"><CardTitle className="text-sm">Other Information</CardTitle></CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 gap-1.5">
-                  {Object.entries(parsed.other).map(([key, val]) => (
-                    <div key={key} className="text-sm">
-                      {key === "Referral Notes" ? (
-                        <div className="whitespace-pre-wrap text-gray-800">{val}</div>
-                      ) : (
-                        <div className="flex gap-2"><span className="font-medium text-gray-600 min-w-[140px] shrink-0">{key}:</span><span className="text-gray-900">{val}</span></div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+            <ReferralSectionCard
+              title="Other Information"
+              icon={() => <span></span>}
+              fieldCount={Object.keys(parsed.other).length}
+              completionPercentage={100}
+              defaultOpen={true}
+              borderColor="border-gray-200"
+              backgroundColor="bg-white"
+              onOpenChange={(open) => {
+                if (!open) {
+                  setCollapsedSections(new Set([...collapsedSections, "other"]));
+                } else {
+                  setCollapsedSections(new Set([...collapsedSections].filter(k => k !== "other")));
+                }
+              }}
+            >
+              <div className={`grid ${Object.keys(parsed.other).length >= 6 ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1"} gap-2`}>
+                {Object.entries(parsed.other).map(([key, val]) => (
+                  <div key={key}>
+                    {key === "Referral Notes" ? (
+                      <div className="text-sm col-span-full">
+                        <span className="font-medium text-gray-600">{key}:</span>
+                        <div className="whitespace-pre-wrap text-gray-800 mt-1">{val}</div>
+                      </div>
+                    ) : (
+                      <ReferralFieldRow label={key} value={val} />
+                    )}
+                  </div>
+                ))}
+              </div>
+            </ReferralSectionCard>
           )}
         </>
       )}
@@ -2494,7 +2614,59 @@ export const ReferralTab = () => {
 
                       {/* Expanded content — shown on click */}
                       {isExpanded && (
-                      <div className="mt-3 pt-3 border-t space-y-3">
+                      <>
+                        {/* Sticky header for mobile/desktop */}
+                        {expandedReferralHeaderSticky && (
+                          <div className="sticky top-0 z-10 -mx-3 -mt-3 px-3 py-2 bg-white border-b border-blue-200 flex items-center justify-between gap-2 flex-wrap">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <h4 className="font-semibold text-sm text-gray-900 truncate">{item.referralName || "Referral"}</h4>
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${STATUS_COLORS[item.status] || STATUS_COLORS.new} flex-shrink-0`}>
+                                {STATUS_LABELS[item.status] || item.status}
+                              </span>
+                            </div>
+                            <span className="text-xs text-gray-500 flex-shrink-0">{formattedDate}</span>
+                          </div>
+                        )}
+                      <div ref={expandedContentRef} className="mt-3 pt-3 border-t space-y-3">
+                      {/* Search and filter UI */}
+                      <div className="flex flex-col gap-2 p-2 bg-gray-50 rounded-md border border-gray-200">
+                        <Input
+                          type="text"
+                          placeholder="Search fields..."
+                          value={referralSearchQuery}
+                          onChange={(e) => {
+                            setReferralSearchQuery(e.target.value);
+                            if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+                          }}
+                          className="h-8 text-sm"
+                        />
+                        <div className="flex gap-1 flex-wrap">
+                          <button
+                            onClick={() => setReferralFilterSection("all")}
+                            className={`px-2 py-1 text-xs rounded border transition-colors ${
+                              referralFilterSection === "all"
+                                ? "bg-blue-600 text-white border-blue-600"
+                                : "bg-white text-gray-700 border-gray-300 hover:bg-gray-100"
+                            }`}
+                          >
+                            All
+                          </button>
+                          {SECTION_CONFIG_UI.filter(s => item.parsedData?.[s.key]).map((section) => (
+                            <button
+                              key={section.key}
+                              onClick={() => setReferralFilterSection(section.key as any)}
+                              className={`px-2 py-1 text-xs rounded border transition-colors ${
+                                referralFilterSection === section.key
+                                  ? "bg-blue-600 text-white border-blue-600"
+                                  : "bg-white text-gray-700 border-gray-300 hover:bg-gray-100"
+                              }`}
+                            >
+                              {section.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
                       {extractProbationOfficer(item).length > 0 && (
                         <p className="text-xs text-muted-foreground">PO: <span className="font-medium text-foreground">{extractProbationOfficer(item).join(", ")}</span></p>
                       )}
@@ -2865,47 +3037,92 @@ export const ReferralTab = () => {
                       {/* Parsed data sections */}
                           {item.parsedData && Object.values(item.parsedData).some((section: any) => section && typeof section === "object" && Object.keys(section).length > 0) ? (
                             <>
+                              <KeyInformationCard parsedData={item.parsedData} item={item} />
                               {SECTION_CONFIG_UI.map((sectionDef) => {
-                                const data = item.parsedData?.[sectionDef.key];
+                                const filteredData = filterParsedData(item.parsedData, referralSearchQuery, referralFilterSection);
+                                const data = filteredData?.[sectionDef.key];
                                 if (!data || typeof data !== "object" || Object.keys(data).length === 0) return null;
                                 const Icon = sectionDef.icon;
+                                const fieldCount = Object.keys(data).length;
+                                const { percentage } = calculateFieldCompletion(data);
+                                const rowKey = `${item.id || item.createdAt}`;
+
                                 return (
-                                  <div key={sectionDef.key} className={`rounded-md border p-3 ${colorMap[sectionDef.color]}`}>
-                                    <div className="flex items-center gap-2 mb-2">
-                                      <Icon className="h-4 w-4" />
-                                      <span className="text-sm font-semibold">{sectionDef.label}</span>
-                                      <Badge variant="outline" className="text-xs">{Object.keys(data).length}</Badge>
-                                    </div>
-                                    <div className="grid grid-cols-1 gap-1">
+                                  <ReferralSectionCard
+                                    key={sectionDef.key}
+                                    title={sectionDef.label}
+                                    icon={Icon}
+                                    fieldCount={fieldCount}
+                                    completionPercentage={percentage}
+                                    defaultOpen={true}
+                                    borderColor={`border ${colorMap[sectionDef.color].split(" ").slice(1).join(" ")}`}
+                                    backgroundColor={colorMap[sectionDef.color]}
+                                    onOpenChange={(open) => {
+                                      const sectionKey = `${rowKey}-${sectionDef.key}`;
+                                      if (!open) {
+                                        setCollapsedSections(new Set([...collapsedSections, sectionKey]));
+                                      } else {
+                                        setCollapsedSections(new Set([...collapsedSections].filter(k => k !== sectionKey)));
+                                      }
+                                    }}
+                                  >
+                                    <div className={`grid ${fieldCount >= 6 ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1"} gap-2`}>
                                       {Object.entries(data).map(([key, val]) => (
-                                        <div key={key} className="flex gap-2 text-sm">
-                                          <span className="font-medium text-gray-600 min-w-[120px] shrink-0">{key}:</span>
-                                          <span className="text-gray-900 break-words">{val as string}</span>
+                                        <div key={key}>
+                                          <ReferralFieldRow
+                                            key={key}
+                                            label={highlightText(key, referralSearchQuery) as string}
+                                            value={highlightText(val as string, referralSearchQuery)}
+                                          />
                                         </div>
                                       ))}
                                     </div>
-                                  </div>
+                                  </ReferralSectionCard>
                                 );
                               })}
-                              {item.parsedData?.other && typeof item.parsedData.other === "object" && Object.keys(item.parsedData.other).length > 0 && (
-                                <div className="rounded-md border border-gray-200 p-3">
-                                  <span className="text-sm font-semibold mb-2 block">Other Information</span>
-                                  <div className="grid grid-cols-1 gap-1">
-                                    {Object.entries(item.parsedData.other).map(([key, val]) => (
-                                      <div key={key} className="text-sm">
-                                        {key === "Referral Notes" ? (
-                                          <div className="whitespace-pre-wrap text-gray-800">{val as string}</div>
-                                        ) : (
-                                          <div className="flex gap-2">
-                                            <span className="font-medium text-gray-600 min-w-[120px] shrink-0">{key}:</span>
-                                            <span className="text-gray-900 break-words">{val as string}</span>
-                                          </div>
-                                        )}
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
+                              {(() => {
+                                const filteredData = filterParsedData(item.parsedData, referralSearchQuery, referralFilterSection);
+                                if (!filteredData?.other || typeof filteredData.other !== "object" || Object.keys(filteredData.other).length === 0) return null;
+                                const otherData = filteredData.other;
+                                return (
+                                  <ReferralSectionCard
+                                    title="Other Information"
+                                    icon={() => <span></span>}
+                                    fieldCount={Object.keys(otherData).length}
+                                    completionPercentage={100}
+                                    defaultOpen={true}
+                                    borderColor="border-gray-200"
+                                    backgroundColor="bg-white"
+                                    onOpenChange={(open) => {
+                                      const rowKey = `${item.id || item.createdAt}`;
+                                      const sectionKey = `${rowKey}-other`;
+                                      if (!open) {
+                                        setCollapsedSections(new Set([...collapsedSections, sectionKey]));
+                                      } else {
+                                        setCollapsedSections(new Set([...collapsedSections].filter(k => k !== sectionKey)));
+                                      }
+                                    }}
+                                  >
+                                    <div className={`grid ${Object.keys(otherData).length >= 6 ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1"} gap-2`}>
+                                      {Object.entries(otherData).map(([key, val]) => (
+                                        <div key={key}>
+                                          {key === "Referral Notes" ? (
+                                            <div className="text-sm col-span-full">
+                                              <span className="font-medium text-gray-600">{key}:</span>
+                                              <div className="whitespace-pre-wrap text-gray-800 mt-1">{highlightText(val as string, referralSearchQuery)}</div>
+                                            </div>
+                                          ) : (
+                                            <ReferralFieldRow
+                                              label={highlightText(key, referralSearchQuery) as string}
+                                              value={highlightText(val as string, referralSearchQuery)}
+                                            />
+                                          )}
+                                        </div>
+                                      ))}
+                                    </div>
+                                </ReferralSectionCard>
+                                );
+                              })()}
                             </>
                           ) : item.rawText ? (
                             <div className="rounded-md border border-gray-200 bg-gray-50 p-3">
@@ -2958,7 +3175,8 @@ export const ReferralTab = () => {
                             </div>
                           )}
                         </div>
-                      )}
+                      </>
+                    )}
                     </div>
                   );
                   })}

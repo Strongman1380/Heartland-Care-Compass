@@ -1,3 +1,6 @@
+import { auth } from '@/lib/firebase';
+import { buildApiUrl } from '@/utils/apiUrl';
+
 export interface AISummaryRequest {
   youth: any;
   reportType: string;
@@ -221,7 +224,7 @@ export async function summarizeReport(payload: AISummaryRequest): Promise<string
       }
     }
 
-    const res = await fetch('/api/ai/summarize-report', {
+    const res = await fetch(buildApiUrl('/api/ai/summarize-report'), {
       method: 'POST',
       headers,
       body: JSON.stringify(payload),
@@ -287,7 +290,7 @@ export async function generateBehavioralInsights(behaviorData: any[], youth: any
       }
     }
 
-    const res = await fetch('/api/ai/behavioral-insights', {
+    const res = await fetch(buildApiUrl('/api/ai/behavioral-insights'), {
       method: 'POST',
       headers,
       body: JSON.stringify({ behaviorData, youth, period }),
@@ -430,7 +433,7 @@ export const enhanceReportWithAI = async (reportContent: string, reportType: str
       }
     }
 
-    const res = await fetch('/api/ai/enhance-report', {
+    const res = await fetch(buildApiUrl('/api/ai/enhance-report'), {
       method: 'POST',
       headers,
       body: JSON.stringify({ reportContent, reportType, youth }),
@@ -450,7 +453,7 @@ export const enhanceReportWithAI = async (reportContent: string, reportType: str
 // AI Status Checker
 export const checkAIServiceStatus = async (): Promise<{ available: boolean; error?: string }> => {
   try {
-    const res = await fetch('/api/ai/status', {
+    const res = await fetch(buildApiUrl('/api/ai/status'), {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' },
     });
@@ -465,4 +468,3 @@ export const checkAIServiceStatus = async (): Promise<{ available: boolean; erro
     return { available: false, error: 'Network error' };
   }
 };
-import { auth } from '@/lib/firebase';

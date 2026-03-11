@@ -14,6 +14,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { useCaseNotes, useYouth } from "@/hooks/useSupabase";
 import { caseNotesService, type CaseNotes as CaseNote, type Youth } from "@/integrations/firebase/services";
 import { exportElementToPDF } from "@/utils/export";
+import { buildApiUrl } from "@/utils/apiUrl";
 import { buildReportFilename } from "@/utils/reportFilenames";
 
 interface EnhancedCaseNotesProps {
@@ -530,7 +531,7 @@ export const EnhancedCaseNotes = ({ youthId, youth }: EnhancedCaseNotesProps) =>
       const ext = mimeType.includes("mp4") || mimeType.includes("m4a") ? "m4a" : "webm";
       fd.append("audio", blob, `recording.${ext}`);
       const transcriptRequest = createRequestTimeout();
-      const transcriptRes = await fetch("/api/ai/transcribe-audio", {
+      const transcriptRes = await fetch(buildApiUrl("/api/ai/transcribe-audio"), {
         method: "POST",
         body: fd,
         signal: transcriptRequest.controller.signal,
@@ -543,7 +544,7 @@ export const EnhancedCaseNotes = ({ youthId, youth }: EnhancedCaseNotesProps) =>
 
       setIsOrganizing(true);
       const organizeRequest = createRequestTimeout();
-      const organizeRes = await fetch("/api/ai/organize-meeting-notes", {
+      const organizeRes = await fetch(buildApiUrl("/api/ai/organize-meeting-notes"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ transcript, youthName }),

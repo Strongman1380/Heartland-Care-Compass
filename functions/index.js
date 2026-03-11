@@ -1,7 +1,9 @@
 import { onRequest } from 'firebase-functions/v2/https';
 import { defineString } from 'firebase-functions/params';
+import { File } from 'node:buffer';
 import express from 'express';
 import cors from 'cors';
+import multer from 'multer';
 import OpenAI from 'openai';
 
 // Define config params
@@ -284,6 +286,130 @@ const logAIUsage = (success, tokens = 0, error = null) => {
   }
   aiUsageStats.lastUsed = new Date().toISOString();
 };
+
+const audioUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 30 * 1024 * 1024 },
+});
+
+const parseJSONContent = (rawContent = '{}') => {
+  const cleaned = String(rawContent || '')
+    .replace(/^```json\s*/i, '')
+    .replace(/^```\s*/i, '')
+    .replace(/\s*```$/i, '')
+    .trim();
+
+  if (!cleaned) return {};
+
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    const firstBrace = cleaned.indexOf('{');
+    const lastBrace = cleaned.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace > firstBrace) {
+      return JSON.parse(cleaned.slice(firstBrace, lastBrace + 1));
+    }
+    throw new Error('AI returned an invalid JSON payload');
+  }
+};
+
+const mapAIError = (error, fallbackMessage) => {
+  const errorCode = error?.code || error?.error?.code;
+  const statusCode = error?.status || error?.statusCode || error?.response?.status;
+
+  if (errorCode === 'insufficient_quota') {
+    return { status: 402, message: 'OpenAI API quota exceeded', code: errorCode, retryable: false };
+  }
+  if (errorCode === 'invalid_api_key') {
+    return { status: 401, message: 'Invalid OpenAI API key', code: errorCode, retryable: false };
+  }
+  if (statusCode === 429 || errorCode === 'rate_limit_exceeded') {
+    return { status: 429, message: 'OpenAI rate limit exceeded. Try again shortly.', code: errorCode, retryable: true };
+  }
+  if (errorCode === 'model_not_found') {
+    return { status: 400, message: 'Configured OpenAI model was not found', code: errorCode, retryable: false };
+  }
+  if (statusCode >= 500) {
+    return { status: 503, message: 'OpenAI service temporarily unavailable', code: errorCode, retryable: true };
+  }
+
+  return {
+    status: statusCode && statusCode >= 400 ? statusCode : 500,
+    message: error?.message || fallbackMessage,
+    code: errorCode || 'ai_request_failed',
+    retryable: false,
+  };
+};
+
+const handleAIError = (res, error, fallbackMessage) => {
+  console.error(fallbackMessage, error);
+  logAIUsage(false, 0, error);
+  const mapped = mapAIError(error, fallbackMessage);
+  return res.status(mapped.status).json({
+    error: mapped.message,
+    code: mapped.code,
+    retryable: mapped.retryable,
+    fallback: true,
+  });
+};
+
+async function completeTextPrompt({
+  tier = 'standard',
+  systemPrompt,
+  userPrompt,
+  maxTokens = 800,
+  temperature = 0.2,
+}) {
+  const client = getOpenAI();
+  if (!client) return { unavailable: true };
+
+  const completion = await client.chat.completions.create({
+    model: selectModel(tier),
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ],
+    max_tokens: maxTokens,
+    temperature,
+  });
+
+  logAIUsage(true, completion.usage?.total_tokens || 0);
+  return {
+    content: completion.choices[0]?.message?.content || '',
+    usage: completion.usage,
+    model: completion.model,
+  };
+}
+
+async function completeJSONPrompt({
+  tier = 'standard',
+  systemPrompt,
+  userPrompt,
+  maxTokens = 800,
+  temperature = 0.2,
+}) {
+  const client = getOpenAI();
+  if (!client) return { unavailable: true };
+
+  const completion = await client.chat.completions.create({
+    model: selectModel(tier),
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ],
+    max_tokens: maxTokens,
+    temperature,
+    response_format: { type: 'json_object' },
+  });
+
+  const parsed = parseJSONContent(completion.choices[0]?.message?.content || '{}');
+  logAIUsage(true, completion.usage?.total_tokens || 0);
+  return {
+    parsed,
+    usage: completion.usage,
+    model: completion.model,
+  };
+}
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -739,6 +865,555 @@ app.post('/api/ai/parse-youth-profile', async (req, res) => {
       fallback: true,
       code: errorCode || 'parse_failed',
     });
+  }
+});
+
+app.post('/api/ai/query-stream', async (req, res) => {
+  try {
+    const { question, context } = req.body || {};
+    if (!question || typeof question !== 'string') {
+      return res.status(400).json({ error: 'Question is required', code: 'question_required' });
+    }
+
+    const isTextExpansion = context?.fieldType || context?.currentText;
+    const result = await completeTextPrompt({
+      tier: isTextExpansion ? 'premium' : 'standard',
+      systemPrompt: isTextExpansion
+        ? 'Expand brief notes into professional clinical paragraphs.'
+        : 'Help with clinical data analysis.',
+      userPrompt: isTextExpansion
+        ? question
+        : `Question: "${question}"\nData: ${JSON.stringify(context || {})}`,
+      maxTokens: isTextExpansion ? 420 : 1100,
+      temperature: isTextExpansion ? 0.45 : 0.2,
+    });
+
+    if (result.unavailable) {
+      return res.status(503).json({ error: 'OpenAI not configured', fallback: true });
+    }
+
+    res.json({
+      answer: result.content || '',
+      usage: result.usage,
+      model: result.model,
+      cached: false,
+    });
+  } catch (error) {
+    return handleAIError(res, error, 'Failed to process streaming query');
+  }
+});
+
+app.post('/api/ai/suggest-note', async (req, res) => {
+  try {
+    const { youthId, noteType, recentData } = req.body || {};
+    const result = await completeJSONPrompt({
+      tier: 'standard',
+      systemPrompt: 'Create clinically appropriate drafting suggestions for youth case notes.',
+      userPrompt: `Generate structured case note drafting support.
+Return JSON:
+{
+  "summary":"string",
+  "keyPoints":["string"],
+  "suggestedInterventions":["string"],
+  "followUpItems":["string"]
+}
+
+Context:
+- youthId: ${youthId || 'unknown'}
+- noteType: ${noteType || 'case-note'}
+- recentData: ${JSON.stringify(recentData || {}, null, 2)}`,
+      maxTokens: 700,
+      temperature: 0.25,
+    });
+
+    if (result.unavailable) {
+      return res.status(503).json({ error: 'OpenAI not configured', fallback: true });
+    }
+
+    const parsed = result.parsed || {};
+    res.json({
+      summary: parsed.summary || '',
+      keyPoints: Array.isArray(parsed.keyPoints) ? parsed.keyPoints : [],
+      suggestedInterventions: Array.isArray(parsed.suggestedInterventions) ? parsed.suggestedInterventions : [],
+      followUpItems: Array.isArray(parsed.followUpItems) ? parsed.followUpItems : [],
+      usage: result.usage,
+      model: result.model,
+    });
+  } catch (error) {
+    return handleAIError(res, error, 'Failed to suggest case note content');
+  }
+});
+
+app.post('/api/ai/search', async (req, res) => {
+  try {
+    const { query, dataTypes, youthId, dateRange, limit = 10, contextData } = req.body || {};
+    const result = await completeJSONPrompt({
+      tier: 'standard',
+      systemPrompt: 'Act as a clinical search planner and semantic matcher for treatment documentation.',
+      userPrompt: `Interpret and resolve this semantic search request.
+Return JSON:
+{
+  "results":[{"type":"string","id":"string","relevance":0.0,"summary":"string","data":{}}],
+  "queryPlan":{"intent":"string","suggestedFilters":["string"]},
+  "notes":"string"
+}
+If no real dataset is supplied, return an empty results array and provide best filter guidance.
+
+Request:
+- query: ${query || ''}
+- dataTypes: ${JSON.stringify(dataTypes || [])}
+- youthId: ${youthId || 'any'}
+- dateRange: ${JSON.stringify(dateRange || null)}
+- contextData: ${JSON.stringify(contextData || null)}
+- limit: ${limit}`,
+      maxTokens: 900,
+      temperature: 0.15,
+    });
+
+    if (result.unavailable) {
+      return res.status(503).json({ error: 'OpenAI not configured', fallback: true });
+    }
+
+    const parsed = result.parsed || {};
+    const results = Array.isArray(parsed.results) ? parsed.results.slice(0, limit) : [];
+    res.json({
+      results,
+      queryPlan: parsed.queryPlan || { intent: 'general-search', suggestedFilters: [] },
+      notes: parsed.notes || '',
+      usage: result.usage,
+      model: result.model,
+    });
+  } catch (error) {
+    return handleAIError(res, error, 'Failed to process semantic search');
+  }
+});
+
+app.post('/api/ai/youth-insights', async (req, res) => {
+  try {
+    const { youthId, analysisType, youth, contextData } = req.body || {};
+    const result = await completeJSONPrompt({
+      tier: 'premium',
+      systemPrompt: 'Summarize youth progress with balanced strengths, concerns, and pragmatic recommendations.',
+      userPrompt: `Generate concise youth insights.
+Return JSON:
+{
+  "summary":"string",
+  "strengths":["string"],
+  "concerns":["string"],
+  "recommendations":["string"]
+}
+
+Inputs:
+- youthId: ${youthId || youth?.id || 'unknown'}
+- analysisType: ${analysisType || 'general'}
+- youth: ${JSON.stringify(youth || {}, null, 2)}
+- contextData: ${JSON.stringify(contextData || {}, null, 2)}`,
+      maxTokens: 900,
+      temperature: 0.2,
+    });
+
+    if (result.unavailable) {
+      return res.status(503).json({ error: 'OpenAI not configured', fallback: true });
+    }
+
+    const parsed = result.parsed || {};
+    res.json({
+      summary: parsed.summary || '',
+      strengths: Array.isArray(parsed.strengths) ? parsed.strengths : [],
+      concerns: Array.isArray(parsed.concerns) ? parsed.concerns : [],
+      recommendations: Array.isArray(parsed.recommendations) ? parsed.recommendations : [],
+      usage: result.usage,
+      model: result.model,
+    });
+  } catch (error) {
+    return handleAIError(res, error, 'Failed to generate youth insights');
+  }
+});
+
+app.post('/api/ai/incident-patterns', async (req, res) => {
+  try {
+    const { youthId, timeframe, incidentHistory } = req.body || {};
+    const result = await completeJSONPrompt({
+      tier: 'standard',
+      systemPrompt: 'Identify repeat incident trends, trigger clusters, and prevention recommendations.',
+      userPrompt: `Analyze incident patterns from historical records.
+Return JSON:
+{
+  "patterns":[{"pattern":"string","frequency":0,"severity":"low|medium|high|critical","recommendation":"string"}],
+  "triggers":["string"],
+  "trends":"string"
+}
+
+Inputs:
+- youthId: ${youthId || 'unknown'}
+- timeframe: ${JSON.stringify(timeframe || null)}
+- incidentHistory: ${JSON.stringify(incidentHistory || [], null, 2)}`,
+      maxTokens: 900,
+      temperature: 0.2,
+    });
+
+    if (result.unavailable) {
+      return res.status(503).json({ error: 'OpenAI not configured', fallback: true });
+    }
+
+    const parsed = result.parsed || {};
+    res.json({
+      patterns: Array.isArray(parsed.patterns) ? parsed.patterns : [],
+      triggers: Array.isArray(parsed.triggers) ? parsed.triggers : [],
+      trends: parsed.trends || 'No clear trend available.',
+      usage: result.usage,
+      model: result.model,
+    });
+  } catch (error) {
+    return handleAIError(res, error, 'Failed to analyze incident patterns');
+  }
+});
+
+app.post('/api/ai/assess-risk', async (req, res) => {
+  try {
+    const { youthId, assessmentData, historicalData } = req.body || {};
+    const result = await completeJSONPrompt({
+      tier: 'premium',
+      systemPrompt: 'Provide a trauma-informed risk stratification and intervention priorities.',
+      userPrompt: `Assess youth risk profile from assessment and historical context.
+Return JSON:
+{
+  "overallRisk":"low|moderate|high|very-high",
+  "domains":{"domainName":{"score":0,"trend":"improving|stable|declining","recommendation":"string"}},
+  "protectiveFactors":["string"],
+  "riskFactors":["string"],
+  "interventionPriorities":[{"priority":1,"domain":"string","target":"string","rationale":"string"}]
+}
+
+Inputs:
+- youthId: ${youthId || 'unknown'}
+- assessmentData: ${JSON.stringify(assessmentData || {}, null, 2)}
+- historicalData: ${JSON.stringify(historicalData || {}, null, 2)}`,
+      maxTokens: 1100,
+      temperature: 0.15,
+    });
+
+    if (result.unavailable) {
+      return res.status(503).json({ error: 'OpenAI not configured', fallback: true });
+    }
+
+    const parsed = result.parsed || {};
+    res.json({
+      overallRisk: parsed.overallRisk || 'moderate',
+      domains: parsed.domains || {},
+      protectiveFactors: Array.isArray(parsed.protectiveFactors) ? parsed.protectiveFactors : [],
+      riskFactors: Array.isArray(parsed.riskFactors) ? parsed.riskFactors : [],
+      interventionPriorities: Array.isArray(parsed.interventionPriorities) ? parsed.interventionPriorities : [],
+      usage: result.usage,
+      model: result.model,
+    });
+  } catch (error) {
+    return handleAIError(res, error, 'Failed to assess risk');
+  }
+});
+
+app.post('/api/ai/suggest-interventions', async (req, res) => {
+  try {
+    const { assessmentData, youth } = req.body || {};
+    const result = await completeJSONPrompt({
+      tier: 'premium',
+      systemPrompt: 'Recommend practical interventions with rationale and expected outcomes.',
+      userPrompt: `Generate intervention suggestions from assessment profile.
+Return JSON:
+{"interventions":[{"intervention":"string","rationale":"string","expectedOutcome":"string","evidenceBase":"string","priority":"high|medium|low"}]}
+
+Inputs:
+- youth: ${JSON.stringify(youth || {}, null, 2)}
+- assessmentData: ${JSON.stringify(assessmentData || {}, null, 2)}`,
+      maxTokens: 900,
+      temperature: 0.2,
+    });
+
+    if (result.unavailable) {
+      return res.status(503).json({ error: 'OpenAI not configured', fallback: true });
+    }
+
+    const parsed = result.parsed || {};
+    res.json({
+      interventions: Array.isArray(parsed.interventions) ? parsed.interventions : [],
+      usage: result.usage,
+      model: result.model,
+    });
+  } catch (error) {
+    return handleAIError(res, error, 'Failed to suggest interventions');
+  }
+});
+
+app.post('/api/ai/behavioral-warnings', async (req, res) => {
+  try {
+    const { youthId, recentData } = req.body || {};
+    const result = await completeJSONPrompt({
+      tier: 'standard',
+      systemPrompt: 'Detect early warning signs and classify urgency for staff follow-up.',
+      userPrompt: `Evaluate early warning indicators from recent behavior data.
+Return JSON:
+{
+  "warnings":[{"type":"string","severity":"low|medium|high","indicator":"string","recommendation":"string"}],
+  "urgency":"routine|elevated|immediate"
+}
+
+Inputs:
+- youthId: ${youthId || 'unknown'}
+- recentData: ${JSON.stringify(recentData || {}, null, 2)}`,
+      maxTokens: 750,
+      temperature: 0.2,
+    });
+
+    if (result.unavailable) {
+      return res.status(503).json({ error: 'OpenAI not configured', fallback: true });
+    }
+
+    const parsed = result.parsed || {};
+    res.json({
+      warnings: Array.isArray(parsed.warnings) ? parsed.warnings : [],
+      urgency: parsed.urgency || 'routine',
+      usage: result.usage,
+      model: result.model,
+    });
+  } catch (error) {
+    return handleAIError(res, error, 'Failed to evaluate behavioral warnings');
+  }
+});
+
+app.post('/api/ai/intervention-effectiveness', async (req, res) => {
+  try {
+    const { youthId, interventionHistory, outcomeData } = req.body || {};
+    const result = await completeJSONPrompt({
+      tier: 'standard',
+      systemPrompt: 'Rank intervention effectiveness using available outcome signals and explain uncertainty.',
+      userPrompt: `Assess intervention effectiveness.
+Return JSON:
+{
+  "effectiveInterventions":[{"intervention":"string","effectiveness":0,"context":"string"}],
+  "ineffectiveInterventions":["string"],
+  "recommendations":["string"]
+}
+
+Inputs:
+- youthId: ${youthId || 'unknown'}
+- interventionHistory: ${JSON.stringify(interventionHistory || [], null, 2)}
+- outcomeData: ${JSON.stringify(outcomeData || [], null, 2)}`,
+      maxTokens: 850,
+      temperature: 0.2,
+    });
+
+    if (result.unavailable) {
+      return res.status(503).json({ error: 'OpenAI not configured', fallback: true });
+    }
+
+    const parsed = result.parsed || {};
+    res.json({
+      effectiveInterventions: Array.isArray(parsed.effectiveInterventions) ? parsed.effectiveInterventions : [],
+      ineffectiveInterventions: Array.isArray(parsed.ineffectiveInterventions) ? parsed.ineffectiveInterventions : [],
+      recommendations: Array.isArray(parsed.recommendations) ? parsed.recommendations : [],
+      usage: result.usage,
+      model: result.model,
+    });
+  } catch (error) {
+    return handleAIError(res, error, 'Failed to analyze intervention effectiveness');
+  }
+});
+
+app.post('/api/ai/compare-progress', async (req, res) => {
+  try {
+    const { youthId, comparisonCriteria, cohortData } = req.body || {};
+    const result = await completeJSONPrompt({
+      tier: 'standard',
+      systemPrompt: 'Provide benchmark-oriented interpretation while clearly noting missing comparative data.',
+      userPrompt: `Compare youth progress to available benchmarks.
+Return JSON:
+{
+  "comparison":"string",
+  "benchmarks":[{"metric":"string","youthScore":0,"averageScore":0,"percentile":0}],
+  "insights":["string"]
+}
+
+Inputs:
+- youthId: ${youthId || 'unknown'}
+- comparisonCriteria: ${JSON.stringify(comparisonCriteria || {}, null, 2)}
+- cohortData: ${JSON.stringify(cohortData || [], null, 2)}`,
+      maxTokens: 850,
+      temperature: 0.2,
+    });
+
+    if (result.unavailable) {
+      return res.status(503).json({ error: 'OpenAI not configured', fallback: true });
+    }
+
+    const parsed = result.parsed || {};
+    res.json({
+      comparison: parsed.comparison || '',
+      benchmarks: Array.isArray(parsed.benchmarks) ? parsed.benchmarks : [],
+      insights: Array.isArray(parsed.insights) ? parsed.insights : [],
+      usage: result.usage,
+      model: result.model,
+    });
+  } catch (error) {
+    return handleAIError(res, error, 'Failed to compare progress');
+  }
+});
+
+app.post('/api/ai/screen-referral', async (req, res) => {
+  try {
+    const { referralText } = req.body || {};
+    if (!referralText || !String(referralText).trim()) {
+      return res.status(400).json({ error: 'Referral text is required' });
+    }
+
+    const result = await completeTextPrompt({
+      tier: 'standard',
+      systemPrompt: `You are the Heartland Boys Home Referral Screening Engine.
+
+MISSION: Run a 5-step screening process on the referral and return a structured JSON recommendation.
+
+PROGRAM SCOPE
+Heartland Group Home A provides: 24/7 monitoring (rooms and facility), on-site substance abuse counseling, on-site mental health counseling, on-site skill-building programs, medication management support.
+Heartland does NOT provide: PRTF-level clinical containment or secure/locked programming, hands-on physical intervention (hands-off facility), 1:1 staffing as a standard baseline.
+
+STEP 1 - PARSE + NORMALIZE
+Extract key fields. Set null for missing data and add field name to missing_info array.
+Fields to extract: youth basics (name, DOB/age, gender, county/jurisdiction, legal status), current placement + timeline (where now, how long, why moved), referral ask (treatment vs non-treatment, short vs long term), legal team (PO, judge, attorney, GAL/CASA), risk tools (YLS/CMI overall risk score, date completed, top drivers), safety risks (violence history, weapons, fire setting, elopement, gang, sexual behavior issues), clinical risks (psychosis, suicidality, recent hospitalization, med status/compliance), developmental (ASD/FASD/IQ/DD flags, IEP/504), substance use (substances, frequency, last use, UA history), family system (guardians, engagement, conflicts, contact restrictions), strengths + motivators, discharge constraints.
+
+STEP 2 - HARD SCREENS
+Auto-decline - set recommendation=DECLINE if ANY of these are explicitly present:
+- Active gang involvement, affiliation, or credible current gang-related behavior/pressure
+- Recent serious violence toward people/animals with pattern, escalation, weapon use, or predatory aggression that cannot be safely managed in a hands-off group home
+- PRTF-level psychiatric profile: recent psych hospitalization/hold, active psychosis/hallucinations not stabilized, or severe suicidal behavior requiring intensive containment
+- Any factor making 24/7 group home supervision without 1:1 staffing unsafe or operationally unmanageable
+
+IMPORTANT nuances (do NOT auto-decline for these):
+- Absconding/running away: assess context (frequency, duration, reasons, risk while gone). Leaving is straightforward in Lincoln/Omaha. Not an auto-decline.
+- Prior detention: does NOT mean higher LOC is needed unless explicitly mandated OR there is a documented history of severe persistent non-compliance with MH/SA/medication interventions.
+- General negative behavior, defiance, or attitude: expected in this population. Do not penalize.
+- General mental health or substance abuse diagnoses: with on-site MH/SA counseling available, many therapeutic needs can be met directly.
+
+Conditional flag - set screen_status=CONDITIONAL (NOT auto-decline) if:
+- Suspected or diagnosed ASD/FASD/DD/IQ limitations are present -> flag for accommodation planning, confirm functioning level, school/IEP plan, and behavior support needs
+
+STEP 3 - HOUSE-FIT CHECK
+Evaluate fit_rating as STRONG, MIXED, or POOR based on:
+- Peer contagion risk: will this youth escalate others (gang talk, defiance culture, sexually reactive behavior, intimidation)?
+- Victimization risk: will this youth be targeted, bullied, or exploited by current residents?
+- Operational fit: can staff manage predictable behaviors within group home schedule/level system without constant 1:1?
+- Programming fit: can the youth tolerate structure, school, chores, groups, supervision, and correction?
+- "What works" alignment: does referral indicate structure/consistency helps? Do they respond to firm limits?
+
+STEP 4 - NEEDS-TO-SERVICES MATCH
+Map needs into buckets: behavioral (defiance, aggression, impulsivity, authority issues), clinical (therapy type needed, medication management, crisis history), educational (IEP/504, classroom tolerance, credit recovery), family (contact plan, reunification feasibility, guardianship), substance (prevention vs active SUD needs, UA expectations). Assess whether each need is within Heartland scope and whether aggregate needs can be handled without turning placement into a clinical containment unit.
+
+STEP 5 - DECISION
+Apply exactly one recommendation label:
+- INTERVIEW: Hard screens pass, fit is MIXED or STRONG, services can meet needs
+- INTERVIEW_WITH_CONDITIONS: Hard screens pass but missing critical info or conditional flags require resolution first - list specific conditions that must be met
+- DECLINE: Hard screen triggered, fit is clearly unsafe, or needs exceed scope
+
+OUTPUT: Return ONLY valid JSON - no preamble, no markdown fences, no text outside the JSON object.
+
+{
+  "youth_profile": { "name": null, "dob": null, "age": null, "gender": null, "county": null, "legal_status": null },
+  "legal_team": { "po": null, "judge": null, "attorney": null },
+  "placement_request": { "type": null, "duration": null, "current_placement": null },
+  "risk_summary": { "yls_score": null, "yls_date": null, "top_drivers": [] },
+  "behavioral_flags": { "violence": null, "gang": null, "weapons": null, "elopement": null, "fire": null, "sexual_behavior": null },
+  "clinical_flags": { "psychosis": null, "suicidality": null, "hospitalizations": null, "meds": null },
+  "developmental_flags": { "asd_fasd_dd": null, "iq": null, "iep_504": null },
+  "substance_flags": { "substances": null, "frequency": null, "last_use": null },
+  "family_flags": { "guardians": null, "engagement": null, "contact_restrictions": null },
+  "strengths": [],
+  "barriers": [],
+  "missing_info": [],
+  "screen_status": "PASS",
+  "fit_rating": "MIXED",
+  "recommendation": "INTERVIEW",
+  "conditions": [],
+  "rationale_bullets": [],
+  "questions_for_referral_source": []
+}
+
+RULES: Do not invent facts. Only use what is explicitly in the referral. If a hard-no item is explicitly present, recommendation MUST be DECLINE. If suspected but not explicit, set screen_status=CONDITIONAL and ask targeted questions. Be blunt, operational, specific. No moralizing.`,
+      userPrompt: String(referralText).trim(),
+      maxTokens: 2500,
+      temperature: 0.1,
+    });
+
+    if (result.unavailable) {
+      return res.status(503).json({ error: 'OpenAI not configured', fallback: true });
+    }
+
+    res.json({
+      screening: result.content || '',
+      usage: result.usage,
+      model: result.model,
+    });
+  } catch (error) {
+    return handleAIError(res, error, 'Failed to screen referral');
+  }
+});
+
+app.post('/api/ai/transcribe-audio', audioUpload.single('audio'), async (req, res) => {
+  try {
+    const client = getOpenAI();
+    if (!client) {
+      return res.status(503).json({ error: 'OpenAI not configured', fallback: true });
+    }
+    if (!req.file) {
+      return res.status(400).json({ error: 'No audio file provided' });
+    }
+
+    const mimeType = req.file.mimetype || 'audio/webm';
+    const ext = mimeType.includes('mp4') || mimeType.includes('m4a')
+      ? 'm4a'
+      : mimeType.includes('ogg')
+        ? 'ogg'
+        : 'webm';
+
+    const audioFile = new File([req.file.buffer], `recording.${ext}`, { type: mimeType });
+    const transcription = await client.audio.transcriptions.create({
+      file: audioFile,
+      model: 'whisper-1',
+    });
+
+    res.json({ transcript: transcription.text || '' });
+  } catch (error) {
+    return handleAIError(res, error, 'Transcription failed');
+  }
+});
+
+app.post('/api/ai/organize-meeting-notes', async (req, res) => {
+  try {
+    const { transcript, youthName } = req.body || {};
+    if (!transcript || !String(transcript).trim()) {
+      return res.status(400).json({ error: 'No transcript provided' });
+    }
+
+    const result = await completeJSONPrompt({
+      tier: 'standard',
+      systemPrompt: 'You organize Family Team Meeting transcripts into structured clinical documentation for a youth residential program. Return a JSON object with exactly these four keys: "attendees" (comma-separated list of names and roles mentioned), "objectives" (bullet points of stated meeting goals or purpose), "discussion" (clear paragraph summary of what was discussed), "actionItems" (numbered list of concrete next steps, responsibilities, or follow-ups). Be concise and professional. Do not use markdown formatting characters like ** or #. Plain prose only.',
+      userPrompt: `Youth: ${youthName || 'Unknown'}\n\nMeeting transcript:\n${String(transcript).trim()}`,
+      maxTokens: 1200,
+      temperature: 0.2,
+    });
+
+    if (result.unavailable) {
+      return res.status(503).json({ error: 'OpenAI not configured', fallback: true });
+    }
+
+    const parsed = result.parsed || {};
+    res.json({
+      attendees: parsed.attendees || '',
+      objectives: parsed.objectives || '',
+      discussion: parsed.discussion || '',
+      actionItems: parsed.actionItems || '',
+      usage: result.usage,
+      model: result.model,
+    });
+  } catch (error) {
+    return handleAIError(res, error, 'Failed to organize meeting notes');
   }
 });
 

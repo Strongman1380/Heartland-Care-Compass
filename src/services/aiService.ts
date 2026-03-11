@@ -4,6 +4,7 @@
  */
 
 import { auth } from '@/lib/firebase';
+import { buildApiUrl } from '@/utils/apiUrl';
 import { logger } from '@/utils/logger';
 
 // ============================================================================
@@ -121,7 +122,7 @@ async function makeAIRequest<T>(
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), timeout);
 
-      const response = await fetch(endpoint, {
+      const response = await fetch(buildApiUrl(endpoint), {
         method: 'POST',
         headers,
         body: JSON.stringify(payload),
@@ -225,7 +226,7 @@ export async function queryDataStream(
     }
   }
 
-  const response = await fetch('/api/ai/query-stream', {
+  const response = await fetch(buildApiUrl('/api/ai/query-stream'), {
     method: 'POST',
     headers,
     body: JSON.stringify({ question, context }),
@@ -782,7 +783,7 @@ export interface AIServiceStatus {
  */
 export async function checkAIStatus(): Promise<AIServiceStatus> {
   try {
-    const response = await fetch('/api/ai/status', {
+    const response = await fetch(buildApiUrl('/api/ai/status'), {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' },
     });

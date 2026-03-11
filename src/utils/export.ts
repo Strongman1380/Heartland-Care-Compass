@@ -1,20 +1,30 @@
 // Utilities to export a DOM element to PDF or Word DOCX from the browser
 
+// Lazy load html2pdf to avoid MIME type errors during module resolution
+async function getHtml2Pdf() {
+  try {
+    const mod: any = await import(/* @vite-ignore */ 'html2pdf.js');
+    return mod.default || mod;
+  } catch (error: any) {
+    console.error('Failed to load html2pdf.js:', error);
+    throw new Error(`html2pdf.js not available: ${error.message}`);
+  }
+}
+
 export async function exportElementToPDF(element: HTMLElement, filename: string) {
   try {
-    const mod: any = await import('html2pdf.js');
-    const html2pdf: any = mod.default || mod;
-    
+    const html2pdf = await getHtml2Pdf();
+
     if (!html2pdf) {
       throw new Error('html2pdf.js failed to load');
     }
-    
+
     const opt = {
       margin: 36, // Match CSS @page margin: 36pt (~0.5 inch)
       filename,
       image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { 
-        scale: 2, 
+      html2canvas: {
+        scale: 2,
         useCORS: true,
         allowTaint: true,
         backgroundColor: '#ffffff',
@@ -36,9 +46,19 @@ export async function exportElementToPDF(element: HTMLElement, filename: string)
   }
 }
 
+// Lazy load html-to-docx to avoid MIME type errors during module resolution
+async function getHtmlToDocx() {
+  try {
+    const mod: any = await import(/* @vite-ignore */ 'html-to-docx');
+    return mod.default || mod;
+  } catch (error: any) {
+    console.error('Failed to load html-to-docx:', error);
+    throw new Error(`html-to-docx not available: ${error.message}`);
+  }
+}
+
 export async function exportElementToDocx(element: HTMLElement, filename: string) {
-  const mod: any = await import('html-to-docx');
-  const htmlToDocx: any = mod.default || mod;
+  const htmlToDocx = await getHtmlToDocx();
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8" /></head><body>${element.outerHTML}</body></html>`;
 
   const blob: Blob = await htmlToDocx(html, undefined, {
@@ -60,19 +80,18 @@ export async function exportElementToDocx(element: HTMLElement, filename: string
 // export container is off-screen or hidden.
 export async function exportHTMLToPDF(content: string | HTMLElement, filename: string) {
   try {
-    const mod: any = await import('html2pdf.js');
-    const html2pdf: any = mod.default || mod;
-    
+    const html2pdf = await getHtml2Pdf();
+
     if (!html2pdf) {
       throw new Error('html2pdf.js failed to load');
     }
-    
+
     const opt = {
       margin: 36, // Match CSS @page margin: 36pt (~0.5 inch)
       filename,
       image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { 
-        scale: 2, 
+      html2canvas: {
+        scale: 2,
         useCORS: true,
         allowTaint: true,
         backgroundColor: '#ffffff',
@@ -98,7 +117,7 @@ export async function exportHTMLToPDF(content: string | HTMLElement, filename: s
       tempContainer.style.opacity = '1'; // Ensure it's fully opaque for html2canvas
       tempContainer.style.backgroundColor = '#ffffff'; // Ensure white background
       tempContainer.innerHTML = content;
-      
+
       try {
         document.body.appendChild(tempContainer);
 
@@ -121,8 +140,7 @@ export async function exportHTMLToPDF(content: string | HTMLElement, filename: s
 }
 
 export async function exportHTMLToDocx(htmlBody: string, filename: string) {
-  const mod: any = await import('html-to-docx');
-  const htmlToDocx: any = mod.default || mod;
+  const htmlToDocx = await getHtmlToDocx();
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8" /></head><body>${htmlBody}</body></html>`;
   const blob: Blob = await htmlToDocx(html, undefined, {
     orientation: 'portrait',

@@ -37,6 +37,7 @@ import { format, isValid } from "date-fns";
 import { toast } from "sonner";
 import { referralNotesService, type ReferralNoteRow, type POContactEntry } from "@/integrations/firebase/referralNotesService";
 import { alertService } from "@/utils/alertService";
+import { exportHTMLToDocx, exportHTMLToPDF } from "@/utils/export";
 import { InterviewReportForm } from "./InterviewReportForm";
 import { alertsService } from "@/integrations/firebase/alertsService";
 import { screenReferralIntake } from "@/services/aiService";
@@ -163,6 +164,13 @@ const PENDING_REFERRAL_STATUSES = new Set([
   "new",
 ]);
 
+const CLOSED_REFERRAL_STATUSES = new Set([
+  "denied",
+  "already_found_placement",
+  "interviewed_no",
+  "accepted",
+]);
+
 const colorMap: Record<string, string> = {
   blue: "bg-blue-50 border-blue-200 text-blue-800",
   amber: "bg-amber-50 border-amber-200 text-amber-800",
@@ -184,6 +192,115 @@ const badgeColorMap: Record<string, string> = {
   orange: "bg-orange-100 text-orange-700",
   red: "bg-red-100 text-red-700",
 };
+
+const isActivePipelineReferral = (item: ReferralHistoryItem): boolean => {
+  return !item.archived && !CLOSED_REFERRAL_STATUSES.has(item.status || "");
+};
+
+const escapeHtml = (value: string): string =>
+  value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+
+const prettifyFieldLabel = (value: string): string =>
+  value
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+
+const buildReferralExportFilename = (item: ReferralHistoryItem, suffix: string): string => {
+  const baseName = (item.referralName || "referral")
+    .replace(/[^a-z0-9]+/gi, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 60);
+  const datePart = format(new Date(), "yyyy-MM-dd");
+  return `${baseName || "referral"}_${suffix}_${datePart}`;
+};
+
+const buildReferralExportShell = (title: string, item: ReferralHistoryItem, body: string): string => {
+  const createdDate = isValid(new Date(item.createdAt)) ? format(new Date(item.createdAt), "MMMM d, yyyy") : item.createdAt || "-";
+  return `
+    <div style="font-family: Georgia, 'Times New Roman', serif; color: #111827; background: #ffffff; padding: 24px; line-height: 1.5;">
+      <div style="border-bottom: 2px solid #7c3aed; padding-bottom: 12px; margin-bottom: 20px;">
+        <div style="font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: #6b7280;">Heartland Care Compass</div>
+        <h1 style="margin: 8px 0 4px; font-size: 26px;">${escapeHtml(title)}</h1>
+        <div style="font-size: 14px; color: #374151;">
+          <strong>Youth:</strong> ${escapeHtml(item.referralName || "-")}<br />
+          <strong>Status:</strong> ${escapeHtml(STATUS_LABELS[item.status] || item.status || "-")}<br />
+          <strong>Referral source:</strong> ${escapeHtml(item.referralSource || "-")}<br />
+          <strong>Created:</strong> ${escapeHtml(createdDate)}
+        </div>
+      </div>
+      ${body}
+    </div>
+  `;
+};
+
+const buildParsedReferralExportHtml = (item: ReferralHistoryItem): string => {
+  if (item.parsedData && Object.values(item.parsedData).some((section) => section && typeof section === "object" && Object.keys(section).length > 0)) {
+    const sections = SECTION_CONFIG_UI
+      .map((sectionDef) => {
+        const data = item.parsedData?.[sectionDef.key];
+        if (!data || typeof data !== "object" || Object.keys(data).length === 0) return "";
+        const rows = Object.entries(data)
+          .map(
+            ([key, val]) => `
+              <tr>
+                <td style="width: 220px; vertical-align: top; padding: 8px 10px; border: 1px solid #d1d5db; font-weight: 600; background: #f8fafc;">${escapeHtml(prettifyFieldLabel(key))}</td>
+                <td style="padding: 8px 10px; border: 1px solid #d1d5db;">${escapeHtml(String(val ?? ""))}</td>
+              </tr>
+            `
+          )
+          .join("");
+
+        return `
+          <section style="margin-bottom: 20px;">
+            <h2 style="font-size: 18px; margin: 0 0 10px; color: #1f2937;">${escapeHtml(sectionDef.label)}</h2>
+            <table style="width: 100%; border-collapse: collapse; font-size: 13px;">${rows}</table>
+          </section>
+        `;
+      })
+      .join("");
+
+    const otherSection =
+      item.parsedData?.other && typeof item.parsedData.other === "object" && Object.keys(item.parsedData.other).length > 0
+        ? `
+          <section style="margin-bottom: 20px;">
+            <h2 style="font-size: 18px; margin: 0 0 10px; color: #1f2937;">Other Information</h2>
+            ${Object.entries(item.parsedData.other)
+              .map(
+                ([key, val]) => `
+                  <div style="margin-bottom: 10px;">
+                    <div style="font-weight: 600; color: #374151; margin-bottom: 4px;">${escapeHtml(prettifyFieldLabel(key))}</div>
+                    <div style="white-space: pre-wrap; border: 1px solid #d1d5db; padding: 10px; background: #ffffff;">${escapeHtml(String(val ?? ""))}</div>
+                  </div>
+                `
+              )
+              .join("")}
+          </section>
+        `
+        : "";
+
+    return buildReferralExportShell("Parsed Referral Document", item, sections + otherSection);
+  }
+
+  return buildReferralExportShell(
+    "Referral Document",
+    item,
+    `<section><h2 style="font-size: 18px; margin: 0 0 10px; color: #1f2937;">Raw Referral Text</h2><div style="white-space: pre-wrap; border: 1px solid #d1d5db; padding: 12px;">${escapeHtml(item.rawText || "No referral text available.")}</div></section>`
+  );
+};
+
+const buildPlainTextExportHtml = (title: string, item: ReferralHistoryItem, content: string): string =>
+  buildReferralExportShell(
+    title,
+    item,
+    `<section><div style="white-space: pre-wrap; border: 1px solid #d1d5db; padding: 12px; font-size: 13px;">${escapeHtml(content)}</div></section>`
+  );
 
 const normalizeEntityValue = (value: string): string => {
   return value
@@ -453,6 +570,8 @@ export const ReferralTab = () => {
   const [isScreeningNew, setIsScreeningNew] = useState(false);
   const [aiScreeningResults, setAiScreeningResults] = useState<Record<string, string>>({});
   const [aiScreeningLoading, setAiScreeningLoading] = useState<Set<string>>(new Set());
+  const [isBulkAIScreening, setIsBulkAIScreening] = useState(false);
+  const [exportingKey, setExportingKey] = useState<string | null>(null);
 
   const parseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -500,6 +619,35 @@ export const ReferralTab = () => {
       } else {
         setIsScreeningNew(false);
       }
+    }
+  };
+
+  const screenHistoryReferral = async (item: ReferralHistoryItem) => {
+    const rowKey = referralRowKey(item);
+    const text = item.rawText || JSON.stringify(item.parsedData || {});
+    if (!text.trim()) {
+      throw new Error(`No referral text available for ${item.referralName || "this referral"}`);
+    }
+
+    setAiScreeningLoading((prev) => new Set(prev).add(rowKey));
+    try {
+      const result = await screenReferralIntake(text);
+      if (result.error) {
+        throw new Error(result.error);
+      }
+      const screeningText = result.data?.screening || "";
+      setAiScreeningResults((prev) => ({ ...prev, [rowKey]: screeningText }));
+      await referralNotesService.update(toReferralLookup(item), { screening_result: screeningText });
+      setHistory((prev) =>
+        prev.map((h) => (referralRowKey(h) === rowKey ? { ...h, screeningResult: screeningText } : h))
+      );
+      return rowKey;
+    } finally {
+      setAiScreeningLoading((prev) => {
+        const next = new Set(prev);
+        next.delete(rowKey);
+        return next;
+      });
     }
   };
 
@@ -1187,6 +1335,87 @@ export const ReferralTab = () => {
     } finally {
       setIsBulkApplying(false);
     }
+  };
+
+  const handleBulkAIScreen = async () => {
+    const screenableItems = selectedItems.filter(isActivePipelineReferral);
+    if (screenableItems.length === 0) {
+      toast.error("Select active pending or interview-stage referrals to re-screen");
+      return;
+    }
+
+    try {
+      setIsBulkAIScreening(true);
+      let successCount = 0;
+
+      for (const item of screenableItems) {
+        try {
+          await screenHistoryReferral(item);
+          successCount += 1;
+        } catch (error) {
+          const msg = error instanceof Error ? error.message : "AI screening failed";
+          toast.error(`${item.referralName || "Referral"}: ${msg}`);
+        }
+      }
+
+      if (successCount > 0) {
+        toast.success(`Re-screened ${successCount} active referral${successCount === 1 ? "" : "s"}`);
+      }
+    } finally {
+      setIsBulkAIScreening(false);
+    }
+  };
+
+  const runReferralExport = async (
+    item: ReferralHistoryItem,
+    kind: "pdf" | "docx",
+    suffix: string,
+    title: string,
+    content: string
+  ) => {
+    const exportKey = `${referralRowKey(item)}:${suffix}:${kind}`;
+    try {
+      setExportingKey(exportKey);
+      const filename = buildReferralExportFilename(item, suffix);
+      if (kind === "pdf") {
+        await exportHTMLToPDF(content, `${filename}.pdf`);
+      } else {
+        await exportHTMLToDocx(content, `${filename}.docx`);
+      }
+      toast.success(`${title} exported`);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : `Failed to export ${title.toLowerCase()}`;
+      toast.error(msg);
+    } finally {
+      setExportingKey(null);
+    }
+  };
+
+  const handleExportParsedReferral = async (item: ReferralHistoryItem, kind: "pdf" | "docx") => {
+    await runReferralExport(item, kind, "parsed_referral", "Parsed referral", buildParsedReferralExportHtml(item));
+  };
+
+  const handleExportAIScreen = async (item: ReferralHistoryItem, kind: "pdf" | "docx") => {
+    const screeningText = item.screeningResult || aiScreeningResults[referralRowKey(item)] || "";
+    if (!screeningText.trim()) {
+      toast.error("No AI screen available to export");
+      return;
+    }
+    await runReferralExport(item, kind, "ai_screen", "AI screen", buildPlainTextExportHtml("AI Screening Result", item, screeningText));
+  };
+
+  const handleExportInterviewReport = async (item: ReferralHistoryItem, kind: "pdf" | "docx") => {
+    if (!item.interviewReport.trim()) {
+      toast.error("No interview report available to export");
+      return;
+    }
+    await runReferralExport(
+      item,
+      kind,
+      "interview_report",
+      "Interview report",
+      buildPlainTextExportHtml("Interview Report", item, item.interviewReport)
+    );
   };
 
   const handleStaffRecommendation = async (item: ReferralHistoryItem, recommendation: "yes" | "maybe" | "no") => {
@@ -2063,7 +2292,7 @@ export const ReferralTab = () => {
               </div>
               <div className="flex items-center justify-between mb-3">
                 <p className="text-xs text-muted-foreground">
-                  Bulk actions support archive, edit, and delete only. Interview report and view details are single-referral actions.
+                  Bulk actions support re-screening active pipeline referrals, plus archive, edit, and delete. Interview report and view details remain single-referral actions.
                 </p>
                 <Button
                   size="sm"
@@ -2129,7 +2358,7 @@ export const ReferralTab = () => {
                           </SelectContent>
                         </Select>
                       </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
                         <Button
                           variant="outline"
                           onClick={handleBulkEdit}
@@ -2137,6 +2366,14 @@ export const ReferralTab = () => {
                           className="w-full min-w-0"
                         >
                           {isBulkApplying ? <Loader2 className="h-4 w-4 animate-spin" /> : "Apply Updates"}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onClick={handleBulkAIScreen}
+                          disabled={isBulkApplying || isBulkAIScreening || selectedReferralKeys.size === 0}
+                          className="w-full min-w-0 border-purple-200 text-purple-700 hover:text-purple-800 hover:bg-purple-50"
+                        >
+                          {isBulkAIScreening ? <Loader2 className="h-4 w-4 animate-spin" /> : "Re-screen Active Selected"}
                         </Button>
                         <Button
                           variant="outline"
@@ -2158,6 +2395,11 @@ export const ReferralTab = () => {
                     </div>
                     {selectedReferralKeys.size === 0 && (
                       <p className="mt-2 text-xs text-slate-500">Select one or more referrals to enable bulk actions.</p>
+                    )}
+                    {selectedReferralKeys.size > 0 && (
+                      <p className="mt-2 text-xs text-slate-500">
+                        Re-screen only applies to active pipeline referrals, not archived, denied, already placed, interviewed no, or accepted records.
+                      </p>
                     )}
                   </div>
 
@@ -2526,6 +2768,66 @@ export const ReferralTab = () => {
                             : <><Sparkles className="h-3.5 w-3.5 mr-1" />{(item.screeningResult || aiScreeningResults[rowKey]) ? "Re-screen" : "AI Screen"}</>
                           }
                         </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleExportParsedReferral(item, "pdf")}
+                          disabled={exportingKey === `${rowKey}:parsed_referral:pdf`}
+                        >
+                          {exportingKey === `${rowKey}:parsed_referral:pdf` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Parsed PDF"}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleExportParsedReferral(item, "docx")}
+                          disabled={exportingKey === `${rowKey}:parsed_referral:docx`}
+                        >
+                          {exportingKey === `${rowKey}:parsed_referral:docx` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Parsed DOCX"}
+                        </Button>
+                        {(item.screeningResult || aiScreeningResults[rowKey]) && (
+                          <>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="border-purple-200 text-purple-700 hover:bg-purple-50"
+                              onClick={() => handleExportAIScreen(item, "pdf")}
+                              disabled={exportingKey === `${rowKey}:ai_screen:pdf`}
+                            >
+                              {exportingKey === `${rowKey}:ai_screen:pdf` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "AI Screen PDF"}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="border-purple-200 text-purple-700 hover:bg-purple-50"
+                              onClick={() => handleExportAIScreen(item, "docx")}
+                              disabled={exportingKey === `${rowKey}:ai_screen:docx`}
+                            >
+                              {exportingKey === `${rowKey}:ai_screen:docx` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "AI Screen DOCX"}
+                            </Button>
+                          </>
+                        )}
+                        {item.interviewReport.trim() && (
+                          <>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="border-blue-200 text-blue-700 hover:bg-blue-50"
+                              onClick={() => handleExportInterviewReport(item, "pdf")}
+                              disabled={exportingKey === `${rowKey}:interview_report:pdf`}
+                            >
+                              {exportingKey === `${rowKey}:interview_report:pdf` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Interview PDF"}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="border-blue-200 text-blue-700 hover:bg-blue-50"
+                              onClick={() => handleExportInterviewReport(item, "docx")}
+                              disabled={exportingKey === `${rowKey}:interview_report:docx`}
+                            >
+                              {exportingKey === `${rowKey}:interview_report:docx` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Interview DOCX"}
+                            </Button>
+                          </>
+                        )}
                         {!item.archived && (
                           <Button
                             size="sm"

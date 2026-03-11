@@ -23,7 +23,7 @@ export async function exportElementToPDF(element: HTMLElement, filename: string)
     const html2pdf = await getHtml2Pdf();
 
     if (!html2pdf) {
-      throw new Error('html2pdf.js failed to load');
+      throw new Error('html2pdf.js library is not available');
     }
 
     const opt = {
@@ -49,7 +49,8 @@ export async function exportElementToPDF(element: HTMLElement, filename: string)
     await (html2pdf() as any).set(opt).from(element).save();
   } catch (error: any) {
     console.error('PDF Export Error:', error);
-    throw new Error(`Failed to generate PDF: ${error.message || 'Unknown error'}`);
+    const message = error.message || 'Unknown error';
+    throw new Error(`PDF export not available: ${message}`);
   }
 }
 
@@ -78,22 +79,32 @@ async function getHtmlToDocx() {
 }
 
 export async function exportElementToDocx(element: HTMLElement, filename: string) {
-  const htmlToDocx = await getHtmlToDocx();
-  const html = `<!DOCTYPE html><html><head><meta charset="utf-8" /></head><body>${element.outerHTML}</body></html>`;
+  try {
+    const htmlToDocx = await getHtmlToDocx();
+    if (!htmlToDocx || typeof htmlToDocx !== 'function') {
+      throw new Error('html-to-docx library is not available');
+    }
 
-  const blob: Blob = await htmlToDocx(html, undefined, {
-    orientation: 'portrait',
-    margins: { top: 720, right: 720, bottom: 720, left: 720 }, // half inch margins (twentieths of a point)
-  });
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8" /></head><body>${element.outerHTML}</body></html>`;
 
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename.endsWith('.docx') ? filename : `${filename}.docx`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+    const blob: Blob = await htmlToDocx(html, undefined, {
+      orientation: 'portrait',
+      margins: { top: 720, right: 720, bottom: 720, left: 720 }, // half inch margins (twentieths of a point)
+    });
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename.endsWith('.docx') ? filename : `${filename}.docx`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch (error: any) {
+    console.error('DOCX Export Error:', error);
+    const message = error.message || 'Unknown error';
+    throw new Error(`Word document export not available: ${message}`);
+  }
 }
 
 // Prefer exporting from an HTML string to avoid layout/visibility issues when the
@@ -103,7 +114,7 @@ export async function exportHTMLToPDF(content: string | HTMLElement, filename: s
     const html2pdf = await getHtml2Pdf();
 
     if (!html2pdf) {
-      throw new Error('html2pdf.js failed to load');
+      throw new Error('html2pdf.js library is not available');
     }
 
     const opt = {
@@ -155,23 +166,34 @@ export async function exportHTMLToPDF(content: string | HTMLElement, filename: s
     }
   } catch (error: any) {
     console.error('PDF Export Error:', error);
-    throw new Error(`Failed to generate PDF: ${error.message || 'Unknown error'}`);
+    const message = error.message || 'Unknown error';
+    throw new Error(`PDF export not available: ${message}`);
   }
 }
 
 export async function exportHTMLToDocx(htmlBody: string, filename: string) {
-  const htmlToDocx = await getHtmlToDocx();
-  const html = `<!DOCTYPE html><html><head><meta charset="utf-8" /></head><body>${htmlBody}</body></html>`;
-  const blob: Blob = await htmlToDocx(html, undefined, {
-    orientation: 'portrait',
-    margins: { top: 720, right: 720, bottom: 720, left: 720 },
-  });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename.endsWith('.docx') ? filename : `${filename}.docx`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  try {
+    const htmlToDocx = await getHtmlToDocx();
+    if (!htmlToDocx || typeof htmlToDocx !== 'function') {
+      throw new Error('html-to-docx library is not available');
+    }
+
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8" /></head><body>${htmlBody}</body></html>`;
+    const blob: Blob = await htmlToDocx(html, undefined, {
+      orientation: 'portrait',
+      margins: { top: 720, right: 720, bottom: 720, left: 720 },
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename.endsWith('.docx') ? filename : `${filename}.docx`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch (error: any) {
+    console.error('DOCX Export Error:', error);
+    const message = error.message || 'Unknown error';
+    throw new Error(`Word document export not available: ${message}`);
+  }
 }

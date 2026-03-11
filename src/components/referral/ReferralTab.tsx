@@ -533,7 +533,41 @@ export const ReferralTab = () => {
     };
 
     const profile = data.youth_profile || {};
+    const legalTeam = data.legal_team || {};
+    const familyContacts = data.family_contacts || {};
+    const placementContact = data.current_placement_contact || {};
     const profileParts = [profile.name, profile.age && `Age ${profile.age}`, profile.gender, profile.county].filter(Boolean);
+    const guardianNames = Array.isArray(familyContacts.guardians) ? familyContacts.guardians.filter(Boolean).join(", ") : "";
+    const familyDemographics = Array.isArray(familyContacts.demographics) ? familyContacts.demographics.filter(Boolean).join(", ") : "";
+    const topCards = [
+      {
+        label: "Probation Officer",
+        value: legalTeam.po,
+        extras: [legalTeam.po_phone].filter(Boolean),
+      },
+      {
+        label: "Family / Guardian",
+        value: guardianNames || familyContacts.primary_contact,
+        extras: [
+          familyContacts.relationship,
+          familyContacts.phone,
+          familyContacts.alternate_phone,
+          familyContacts.address,
+          familyContacts.city_state_zip,
+          familyDemographics,
+        ].filter(Boolean),
+      },
+      {
+        label: "Current Placement",
+        value: placementContact.facility_name || data.placement_request?.current_placement,
+        extras: [
+          placementContact.contact_name,
+          placementContact.phone,
+          placementContact.address,
+          placementContact.city_state,
+        ].filter(Boolean),
+      },
+    ].filter((item) => item.value || item.extras.length > 0);
 
     return (
       <div className="space-y-3 text-sm">
@@ -556,6 +590,28 @@ export const ReferralTab = () => {
             <span className="text-xs text-gray-500 italic">{profileParts.join(" · ")}</span>
           )}
         </div>
+
+        {topCards.length > 0 && (
+          <div className="grid gap-2 md:grid-cols-3">
+            {topCards.map((card) => (
+              <div key={card.label} className="rounded-md border border-gray-200 bg-gray-50 p-2.5">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">{card.label}</p>
+                {card.value ? (
+                  <p className="mt-1 text-sm font-medium text-gray-900">{card.value}</p>
+                ) : (
+                  <p className="mt-1 text-sm text-gray-400">Not documented</p>
+                )}
+                {card.extras.length > 0 && (
+                  <div className="mt-1 space-y-0.5">
+                    {card.extras.map((extra) => (
+                      <p key={extra} className="text-xs text-gray-600">{extra}</p>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Rationale */}
         {Array.isArray(data.rationale_bullets) && data.rationale_bullets.length > 0 && (

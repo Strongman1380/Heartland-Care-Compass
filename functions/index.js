@@ -16,6 +16,17 @@ const openaiMaxTokens = defineString('OPENAI_MAX_TOKENS', { default: '2000' });
 const app = express();
 app.use(cors({ origin: true }));
 app.use(express.json({ limit: '10mb' }));
+app.use((req, res, next) => {
+  if (req.url === '/api' || req.url.startsWith('/api/')) {
+    return next();
+  }
+
+  if (req.url === '/' || req.url.startsWith('/ai/') || req.url === '/health') {
+    req.url = req.url === '/' ? '/api' : `/api${req.url}`;
+  }
+
+  next();
+});
 
 // Lazy-init OpenAI
 let openai = null;
@@ -1277,7 +1288,7 @@ Heartland does NOT provide: PRTF-level clinical containment or secure/locked pro
 
 STEP 1 - PARSE + NORMALIZE
 Extract key fields. Set null for missing data and add field name to missing_info array.
-Fields to extract: youth basics (name, DOB/age, gender, county/jurisdiction, legal status), current placement + timeline (where now, how long, why moved), referral ask (treatment vs non-treatment, short vs long term), legal team (PO, judge, attorney, GAL/CASA), risk tools (YLS/CMI overall risk score, date completed, top drivers), safety risks (violence history, weapons, fire setting, elopement, gang, sexual behavior issues), clinical risks (psychosis, suicidality, recent hospitalization, med status/compliance), developmental (ASD/FASD/IQ/DD flags, IEP/504), substance use (substances, frequency, last use, UA history), family system (guardians, engagement, conflicts, contact restrictions), strengths + motivators, discharge constraints.
+Fields to extract: youth basics (name, DOB/age, gender, county/jurisdiction, legal status), current placement + timeline (where now, how long, why moved), referral ask (treatment vs non-treatment, short vs long term), legal team (PO, PO phone, judge, attorney, GAL/CASA), family demographics and contacts (guardian names, relationships, address, city/state/zip, phone numbers, household context if explicitly stated), current placement contact details (facility name, address, city/state, phone number, contact person if explicitly stated), risk tools (YLS/CMI overall risk score, date completed, top drivers), safety risks (violence history, weapons, fire setting, elopement, gang, sexual behavior issues), clinical risks (psychosis, suicidality, recent hospitalization, med status/compliance), developmental (ASD/FASD/IQ/DD flags, IEP/504), substance use (substances, frequency, last use, UA history), family system (guardians, engagement, conflicts, contact restrictions), strengths + motivators, discharge constraints.
 
 STEP 2 - HARD SCREENS
 Auto-decline - set recommendation=DECLINE if ANY of these are explicitly present:
@@ -1315,9 +1326,43 @@ Apply exactly one recommendation label:
 OUTPUT: Return ONLY valid JSON - no preamble, no markdown fences, no text outside the JSON object.
 
 {
-  "youth_profile": { "name": null, "dob": null, "age": null, "gender": null, "county": null, "legal_status": null },
-  "legal_team": { "po": null, "judge": null, "attorney": null },
-  "placement_request": { "type": null, "duration": null, "current_placement": null },
+  "youth_profile": {
+    "name": null,
+    "dob": null,
+    "age": null,
+    "gender": null,
+    "county": null,
+    "legal_status": null
+  },
+  "legal_team": {
+    "po": null,
+    "po_phone": null,
+    "judge": null,
+    "attorney": null,
+    "gal_casa": null
+  },
+  "family_contacts": {
+    "guardians": [],
+    "primary_contact": null,
+    "relationship": null,
+    "phone": null,
+    "alternate_phone": null,
+    "address": null,
+    "city_state_zip": null,
+    "demographics": []
+  },
+  "placement_request": {
+    "type": null,
+    "duration": null,
+    "current_placement": null
+  },
+  "current_placement_contact": {
+    "facility_name": null,
+    "address": null,
+    "city_state": null,
+    "phone": null,
+    "contact_name": null
+  },
   "risk_summary": { "yls_score": null, "yls_date": null, "top_drivers": [] },
   "behavioral_flags": { "violence": null, "gang": null, "weapons": null, "elopement": null, "fire": null, "sexual_behavior": null },
   "clinical_flags": { "psychosis": null, "suicidality": null, "hospitalizations": null, "meds": null },
@@ -1335,7 +1380,7 @@ OUTPUT: Return ONLY valid JSON - no preamble, no markdown fences, no text outsid
   "questions_for_referral_source": []
 }
 
-RULES: Do not invent facts. Only use what is explicitly in the referral. If a hard-no item is explicitly present, recommendation MUST be DECLINE. If suspected but not explicit, set screen_status=CONDITIONAL and ask targeted questions. Be blunt, operational, specific. No moralizing.`,
+RULES: Do not invent facts. Only use what is explicitly in the referral. If contact, address, demographic, or placement fields are present anywhere in the referral packet, extract them into the header objects above. If a hard-no item is explicitly present, recommendation MUST be DECLINE. If suspected but not explicit, set screen_status=CONDITIONAL and ask targeted questions. Be blunt, operational, specific. No moralizing.`,
       userPrompt: String(referralText).trim(),
       maxTokens: 2500,
       temperature: 0.1,

@@ -7,6 +7,12 @@ export interface ParsedReferral {
   legal: Record<string, string>;
   behavioral: Record<string, string>;
   placement: Record<string, string>;
+  assessment: Record<string, string>;
+  strengths: Record<string, string>;
+  serviceHistory: Record<string, string>;
+  goals: Record<string, string>;
+  insurance: Record<string, string>;
+  restrictions: Record<string, string>;
   other: Record<string, string>;
 }
 
@@ -16,43 +22,117 @@ export const SECTION_CONFIG = [
     keywords: [
       "first name", "last name", "name", "dob", "date of birth", "age", "sex", "gender",
       "race", "ethnicity", "religion", "place of birth", "address", "city", "state", "zip",
+      "current placement", "length of stay", "phone number", "contact",
     ],
     label: "Demographics",
   },
   {
     key: "family" as const,
-    keywords: ["mother", "father", "parent", "guardian", "sibling", "family", "caregiver", "custody"],
+    keywords: [
+      "mother", "father", "parent", "guardian", "sibling", "family", "caregiver", "custody",
+      "contact information", "engagement level", "primary guardian", "household",
+    ],
     label: "Family & Contacts",
   },
   {
     key: "education" as const,
-    keywords: ["school", "grade", "iep", "academic", "education", "teacher", "attendance"],
+    keywords: [
+      "school", "grade", "iep", "academic", "education", "teacher", "attendance",
+      "credits", "graduation", "alternative learning", "special education",
+    ],
     label: "Education",
   },
   {
     key: "medical" as const,
-    keywords: ["medication", "allergy", "doctor", "medical", "health", "hospital", "clinic"],
+    keywords: [
+      "medication", "allergy", "doctor", "medical", "health", "hospital", "clinic",
+      "physician", "provider", "prescription", "compliance",
+    ],
     label: "Medical",
   },
   {
     key: "mentalHealth" as const,
-    keywords: ["diagnosis", "therapy", "counseling", "trauma", "anxiety", "depression", "adhd"],
+    keywords: [
+      "diagnosis", "therapy", "counseling", "trauma", "anxiety", "depression", "adhd",
+      "oppositional defiant", "odd", "mental health", "behavioral health", "clinical",
+    ],
     label: "Mental Health",
   },
   {
     key: "legal" as const,
-    keywords: ["court", "judge", "attorney", "probation", "caseworker", "case worker", "offense", "charge", "legal", "probation officer", "parole officer", "po "],
+    keywords: [
+      "court", "judge", "attorney", "probation", "caseworker", "case worker", "offense",
+      "charge", "legal", "probation officer", "parole officer", "po ", "judicial", "violation",
+      "dui", "court order", "committed", "jurisdiction",
+    ],
     label: "Legal & Court",
   },
   {
     key: "behavioral" as const,
-    keywords: ["behavior", "aggression", "anger", "violence", "substance", "runaway", "fighting"],
+    keywords: [
+      "behavior", "aggression", "anger", "violence", "substance", "runaway", "fighting",
+      "impulsivity", "risk factor", "thc", "cannabis", "drug use", "alcohol", "threatening",
+    ],
     label: "Behavioral History",
   },
   {
     key: "placement" as const,
-    keywords: ["referral", "placement", "admission", "intake", "discharge", "group home", "estimated stay"],
+    keywords: [
+      "referral", "placement", "admission", "intake", "discharge", "group home",
+      "estimated stay", "prtf", "foster care", "higher level of care", "duration",
+      "out of state", "reason for seeking",
+    ],
     label: "Placement & Referral",
+  },
+  {
+    key: "assessment" as const,
+    keywords: [
+      "assessment", "yls-cmi", "yls cmi", "risk level", "risk domain", "domain",
+      "prior offenses", "school work", "coping", "self-control", "friends", "peers",
+      "thoughts", "beliefs", "high risk",
+    ],
+    label: "Risk Assessment",
+  },
+  {
+    key: "strengths" as const,
+    keywords: [
+      "strength", "interest", "hobby", "talent", "strong", "skilled", "enjoys",
+      "pro-social", "prosocial", "success", "resources", "visual learner", "goal",
+    ],
+    label: "Strengths & Interests",
+  },
+  {
+    key: "serviceHistory" as const,
+    keywords: [
+      "service history", "community-based", "out-of-home", "therapeutic",
+      "prior placement", "detention", "boys home", "youth center", "mst", "art",
+      "previous service", "discharged", "completed",
+    ],
+    label: "Service History",
+  },
+  {
+    key: "goals" as const,
+    keywords: [
+      "goal", "objective", "outcome", "discharge", "projected", "independent living",
+      "treatment", "long term", "will address", "needs to develop",
+    ],
+    label: "Discharge Goals",
+  },
+  {
+    key: "insurance" as const,
+    keywords: [
+      "insurance", "medicaid", "policy", "coverage", "active", "medical coverage",
+      "substance use coverage", "mental health coverage",
+    ],
+    label: "Insurance & Coverage",
+  },
+  {
+    key: "restrictions" as const,
+    keywords: [
+      "restriction", "contact restriction", "restricted", "no contact", "probation",
+      "court order", "authorized", "placement restriction",
+    ],
+    label: "Restrictions",
   },
 ];
 
@@ -157,6 +237,12 @@ export const parseProbationStyleBlock = (raw: string): ParsedReferral | null => 
     legal: {},
     behavioral: {},
     placement: {},
+    assessment: {},
+    strengths: {},
+    serviceHistory: {},
+    goals: {},
+    insurance: {},
+    restrictions: {},
     other: {},
   };
 
@@ -201,6 +287,12 @@ export const parseReferralText = (raw: string): ParsedReferral => {
     legal: {},
     behavioral: {},
     placement: {},
+    assessment: {},
+    strengths: {},
+    serviceHistory: {},
+    goals: {},
+    insurance: {},
+    restrictions: {},
     other: {},
   };
 

@@ -12,6 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   AlertTriangle,
+  Award,
+  BarChart3,
   BookOpen,
   Brain,
   ChevronDown,
@@ -20,7 +22,9 @@ import {
   Copy,
   Eye,
   FileText,
+  Heart,
   Home,
+  Lock,
   Loader2,
   Mail,
   Pill,
@@ -32,6 +36,7 @@ import {
   Send,
   Shield,
   Sparkles,
+  Target,
   Upload,
   User,
 } from "lucide-react";
@@ -104,8 +109,38 @@ interface ParsedEntry {
 
 const SECTION_CONFIG_UI = SECTION_CONFIG.map((s, i) => ({
   ...s,
-  icon: [User, Home, BookOpen, Pill, Brain, Scale, AlertTriangle, Shield][i],
-  color: ["blue", "amber", "purple", "green", "pink", "slate", "orange", "red"][i],
+  icon: [
+    User,           // demographics
+    Home,           // family
+    BookOpen,       // education
+    Pill,           // medical
+    Brain,          // mentalHealth
+    Scale,          // legal
+    AlertTriangle,  // behavioral
+    Shield,         // placement
+    BarChart3,      // assessment
+    Award,          // strengths
+    FileText,       // serviceHistory
+    Target,         // goals
+    Heart,          // insurance
+    Lock,           // restrictions
+  ][i],
+  color: [
+    "blue",     // demographics
+    "amber",    // family
+    "purple",   // education
+    "green",    // medical
+    "pink",     // mentalHealth
+    "slate",    // legal
+    "orange",   // behavioral
+    "red",      // placement
+    "indigo",   // assessment
+    "emerald",  // strengths
+    "cyan",     // serviceHistory
+    "fuchsia",  // goals
+    "rose",     // insurance
+    "gray",     // restrictions
+  ][i],
 }));
 
 const sectionHasContent = (section: Record<string, string>): boolean => Object.keys(section).length > 0;
@@ -188,6 +223,12 @@ const colorMap: Record<string, string> = {
   slate: "bg-slate-50 border-slate-200 text-slate-800",
   orange: "bg-orange-50 border-orange-200 text-orange-800",
   red: "bg-red-50 border-red-200 text-red-800",
+  indigo: "bg-indigo-50 border-indigo-200 text-indigo-800",
+  emerald: "bg-emerald-50 border-emerald-200 text-emerald-800",
+  cyan: "bg-cyan-50 border-cyan-200 text-cyan-800",
+  fuchsia: "bg-fuchsia-50 border-fuchsia-200 text-fuchsia-800",
+  rose: "bg-rose-50 border-rose-200 text-rose-800",
+  gray: "bg-gray-50 border-gray-200 text-gray-800",
 };
 
 const badgeColorMap: Record<string, string> = {
@@ -199,6 +240,12 @@ const badgeColorMap: Record<string, string> = {
   slate: "bg-slate-100 text-slate-700",
   orange: "bg-orange-100 text-orange-700",
   red: "bg-red-100 text-red-700",
+  indigo: "bg-indigo-100 text-indigo-700",
+  emerald: "bg-emerald-100 text-emerald-700",
+  cyan: "bg-cyan-100 text-cyan-700",
+  fuchsia: "bg-fuchsia-100 text-fuchsia-700",
+  rose: "bg-rose-100 text-rose-700",
+  gray: "bg-gray-100 text-gray-700",
 };
 
 const isActivePipelineReferral = (item: ReferralHistoryItem): boolean => {

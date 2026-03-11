@@ -40,6 +40,7 @@ export type ReferralNoteRow = {
   screening_result?: string | null;
   staff_recommendation?: "yes" | "maybe" | "no" | null;
   po_contact_log?: POContactEntry[];
+  referral_notes?: string | null;
   archived?: boolean;
   archived_at?: string | null;
   archive_reason?: string | null;

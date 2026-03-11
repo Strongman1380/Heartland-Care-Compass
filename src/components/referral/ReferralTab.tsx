@@ -97,6 +97,7 @@ interface ReferralHistoryItem {
   interviewScheduledDate: string;
   interviewTime: string;
   interviewPlace: string;
+  referralNotes: string;
 }
 
 interface ParsedEntry {
@@ -568,6 +569,7 @@ const toHistoryItem = (row: ReferralNoteRow): ReferralHistoryItem => {
     interviewScheduledDate: row.interview_scheduled_date || "",
     interviewTime: (row as any).interview_time || "",
     interviewPlace: (row as any).interview_place || "",
+    referralNotes: row.referral_notes || "",
   };
 };
 
@@ -1573,6 +1575,15 @@ export const ReferralTab = () => {
       setHistory((prev) => prev.map((h) => sameReferral(h, item) ? { ...h, interviewPlace: place } : h));
     } catch (error) {
       toast.error("Failed to save interview place");
+    }
+  };
+
+  const handleSetReferralNotes = async (item: ReferralHistoryItem, notes: string) => {
+    try {
+      await referralNotesService.update(toReferralLookup(item), { referral_notes: notes || null });
+      setHistory((prev) => prev.map((h) => sameReferral(h, item) ? { ...h, referralNotes: notes } : h));
+    } catch (error) {
+      toast.error("Failed to save referral notes");
     }
   };
 
@@ -2786,6 +2797,18 @@ export const ReferralTab = () => {
                             </button>
                           ))}
                         </div>
+                      </div>
+
+                      {/* Referral Notes */}
+                      <div className="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-md">
+                        <label className="text-xs text-gray-600 font-medium block mb-1">Referral Notes</label>
+                        <textarea
+                          placeholder="Document what happened with this referral (e.g., 'Parent stated they don't want placement', 'Scheduled interview for 3/15', etc.)"
+                          value={item.referralNotes || ""}
+                          onBlur={(e) => handleSetReferralNotes(item, e.target.value)}
+                          onChange={(e) => setHistory((prev) => prev.map((h) => sameReferral(h, item) ? { ...h, referralNotes: e.target.value } : h))}
+                          className="w-full h-20 rounded-md border border-amber-300 px-2 py-1 text-xs text-gray-800 focus:outline-none focus:ring-1 focus:ring-amber-400 bg-white resize-none"
+                        />
                       </div>
 
                       {extractProbationOfficer(item).length > 0 && (

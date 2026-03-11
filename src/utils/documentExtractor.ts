@@ -43,24 +43,46 @@ async function extractFromPdf(file: File): Promise<string> {
     const { getDocument, GlobalWorkerOptions } = pdfjsLib;
 
     // Set the worker source for PDF.js
-    // Try to use the compiled worker module first, then fall back to URL
-    try {
-      const workerModule: any = await import(
-        'pdfjs-dist/build/pdf.worker.mjs'
-      );
-      GlobalWorkerOptions.workerSrc = workerModule.default;
-    } catch (e) {
-      // Fallback: construct worker URL for Vite
+    // Strategy: Try multiple approaches to set up the worker
+    let workerSet = false;
+
+    // Try 1: Use the module import (works in dev)
+    if (!workerSet) {
+      try {
+        const workerModule: any = await import(
+          'pdfjs-dist/build/pdf.worker.mjs'
+        );
+        if (workerModule && workerModule.default) {
+          GlobalWorkerOptions.workerSrc = workerModule.default;
+          workerSet = true;
+        }
+      } catch (e) {
+        // Continue to next strategy
+      }
+    }
+
+    // Try 2: Use relative URL from node_modules (works in some builds)
+    if (!workerSet) {
       try {
         const workerUrl = new URL(
           '../../../node_modules/pdfjs-dist/build/pdf.worker.js',
           import.meta.url
         ).href;
-        GlobalWorkerOptions.workerSrc = workerUrl;
+        // Test if URL is valid by checking it starts with http or file
+        if (workerUrl.startsWith('http') || workerUrl.startsWith('file')) {
+          GlobalWorkerOptions.workerSrc = workerUrl;
+          workerSet = true;
+        }
       } catch (urlError) {
-        // Last resort: use absolute path
-        GlobalWorkerOptions.workerSrc = '/pdf.worker.js';
+        // Continue to next strategy
       }
+    }
+
+    // Try 3: Use CDN-hosted worker (reliable on Vercel)
+    if (!workerSet) {
+      // Use unpkg CDN for PDF.js worker - version should match pdfjs-dist version
+      GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+      workerSet = true;
     }
 
     const arrayBuffer = await file.arrayBuffer();
@@ -80,12 +102,20 @@ async function extractFromPdf(file: File): Promise<string> {
     return fullText;
   } catch (error: any) {
     // If pdfjs-dist is not available, provide helpful message
-    if (error.message.includes('Cannot find module')) {
+    if (error.message && error.message.includes('Cannot find module')) {
       throw new Error(
-        'PDF parsing not currently available. Please paste the text directly or convert to text format.'
+        'PDF parsing requires additional setup. Please paste the text directly or convert to text format.'
       );
     }
-    throw new Error(`Failed to extract PDF: ${error.message}`);
+
+    // Check if it's a worker loading issue
+    if (error.message && (error.message.includes('worker') || error.message.includes('Worker'))) {
+      throw new Error(
+        'PDF parsing is temporarily unavailable. Please try pasting the text directly instead.'
+      );
+    }
+
+    throw new Error(`Failed to extract PDF: ${error.message || 'Unknown error'}`);
   }
 }
 

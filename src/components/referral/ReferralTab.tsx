@@ -637,6 +637,7 @@ export const ReferralTab = () => {
   const [aiScreeningResults, setAiScreeningResults] = useState<Record<string, string>>({});
   const [aiScreeningLoading, setAiScreeningLoading] = useState<Set<string>>(new Set());
   const [isBulkAIScreening, setIsBulkAIScreening] = useState(false);
+  const [isBulkReparsing, setIsBulkReparsing] = useState(false);
   const [exportingKey, setExportingKey] = useState<string | null>(null);
 
   const parseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1480,6 +1481,41 @@ export const ReferralTab = () => {
       }
     } finally {
       setIsBulkAIScreening(false);
+    }
+  };
+
+  const handleBulkReparse = async () => {
+    const itemsToReparse = selectedItems.filter((item) => item.rawText && item.rawText.trim());
+    if (itemsToReparse.length === 0) {
+      toast.error("Select referrals with raw text to re-parse");
+      return;
+    }
+
+    try {
+      setIsBulkReparsing(true);
+      let successCount = 0;
+
+      for (const item of itemsToReparse) {
+        try {
+          const newParsed = parseReferralText(item.rawText);
+          await referralNotesService.update(toReferralLookup(item), { parsed_data: newParsed });
+          setHistory((prev) =>
+            prev.map((h) =>
+              sameReferral(h, item) ? { ...h, parsedData: newParsed } : h
+            )
+          );
+          successCount += 1;
+        } catch (error) {
+          const msg = error instanceof Error ? error.message : "Re-parse failed";
+          toast.error(`${item.referralName || "Referral"}: ${msg}`);
+        }
+      }
+
+      if (successCount > 0) {
+        toast.success(`Re-parsed ${successCount} referral${successCount === 1 ? "" : "s"} with new methodology`);
+      }
+    } finally {
+      setIsBulkReparsing(false);
     }
   };
 
@@ -2626,6 +2662,14 @@ export const ReferralTab = () => {
                           className="w-full min-w-0 border-purple-200 text-purple-700 hover:text-purple-800 hover:bg-purple-50"
                         >
                           {isBulkAIScreening ? <Loader2 className="h-4 w-4 animate-spin" /> : "Re-screen Active Selected"}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onClick={handleBulkReparse}
+                          disabled={isBulkApplying || isBulkReparsing || selectedReferralKeys.size === 0}
+                          className="w-full min-w-0 border-blue-200 text-blue-700 hover:text-blue-800 hover:bg-blue-50"
+                        >
+                          {isBulkReparsing ? <Loader2 className="h-4 w-4 animate-spin" /> : "Re-parse Selected"}
                         </Button>
                         <Button
                           variant="outline"

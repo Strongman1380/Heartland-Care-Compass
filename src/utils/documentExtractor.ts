@@ -3,8 +3,6 @@
  * Supports Word docs (.docx), PDFs (.pdf), and plain text
  */
 
-import * as XLSX from 'xlsx';
-
 export interface ExtractionResult {
   text: string;
   format: 'pdf' | 'docx' | 'text' | 'xlsx';
@@ -45,7 +43,7 @@ async function extractFromPdf(file: File): Promise<string> {
     const pdfjsWorker = await import('pdfjs-dist/build/pdf.worker');
 
     const pdfjs = pdfjsModule.default;
-    pdfjs.GlobalWorkerOptions.workerSrc = pdfjsWorker;
+    pdfjs.GlobalWorkerOptions.workerSrc = pdfjsWorker.default || pdfjsWorker;
 
     const arrayBuffer = await file.arrayBuffer();
     const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
@@ -106,7 +104,15 @@ export async function extractTextFromDocument(file: File): Promise<ExtractionRes
     if (fileExtension === 'pdf') {
       text = await extractFromPdf(file);
       format = 'pdf';
-    } else if (fileExtension === 'docx' || fileExtension === 'doc') {
+    } else if (fileExtension === 'doc') {
+      return {
+        text: '',
+        format: 'text',
+        fileName,
+        isBlank: true,
+        error: 'Legacy .doc files are not supported. Please convert to .docx or PDF and try again.',
+      };
+    } else if (fileExtension === 'docx') {
       text = await extractFromDocx(file);
       format = 'docx';
     } else if (['txt', 'text'].includes(fileExtension)) {

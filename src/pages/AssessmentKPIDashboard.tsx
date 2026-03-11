@@ -1061,7 +1061,7 @@ const AssessmentKPIDashboard = () => {
                     </p>
                   </div>
                   <div className="rounded-lg border bg-muted/20 p-3">
-                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Entries Behind Average</p>
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Monthly Entries</p>
                     <p className="mt-2 text-2xl font-bold">{latestPointsTrend?.entries ?? 0}</p>
                     <p className={`text-xs mt-1 ${getDeltaTone(latestPointsTrend?.entries ?? 0, previousPointsTrend?.entries)}`}>
                       {formatSignedDelta(latestPointsTrend?.entries ?? 0, previousPointsTrend?.entries)}
@@ -1074,7 +1074,7 @@ const AssessmentKPIDashboard = () => {
                     <XAxis dataKey="month" tick={{ fontSize: 12 }} tickLine={false} axisLine={false} />
                     <YAxis yAxisId="entries" allowDecimals={false} tick={{ fontSize: 12 }} tickLine={false} axisLine={false} width={40} />
                     <YAxis yAxisId="avg" orientation="right" tick={{ fontSize: 12 }} tickLine={false} axisLine={false} width={52} />
-                    <Tooltip formatter={(value: number, name: string) => [value, name === 'entries' ? 'Entries' : 'Average Points']} />
+                    <Tooltip formatter={(value: number, name: string) => [value, name === 'Entries' ? 'Entries' : 'Average Points']} />
                     <Legend verticalAlign="top" height={36} />
                     <Bar yAxisId="entries" dataKey="entries" fill={HEARTLAND_CHART_COLORS.neutral} name="Entries" radius={[4, 4, 0, 0]} />
                     <Line yAxisId="avg" type="monotone" dataKey="averagePoints" stroke={HEARTLAND_CHART_COLORS.amberSoft} strokeWidth={3} name="Average Points" dot={false} />

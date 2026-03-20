@@ -1,199 +1,119 @@
-// Utilities to export a DOM element to PDF or Word DOCX from the browser
+// Utilities to export a DOM element to PDF or Word document from the browser.
+//
+// PDF approach: opens the content in a new browser tab/window with print CSS,
+// then calls window.print(). The user's browser print dialog lets them save as
+// PDF or send to a physical printer. This avoids the unreliable html2pdf.js
+// dynamic-import issues with Vite.
+//
+// DOCX approach: packages the HTML as an application/vnd.ms-word blob with a
+// .doc extension. Word, LibreOffice, and Google Docs all open these files.
+// html-to-docx cannot run in the browser (it imports Node.js built-ins like
+// fs, crypto, stream) so it has been replaced with this approach.
 
-// Lazy load html2pdf to avoid MIME type errors during module resolution
-async function getHtml2Pdf() {
-  try {
-    // Try standard import first
-    const mod: any = await import('html2pdf.js');
-    return mod.default || mod;
-  } catch (error: any) {
-    try {
-      // Fallback: try with @vite-ignore for dynamic import
-      const mod: any = await import(/* @vite-ignore */ 'html2pdf.js');
-      return mod.default || mod;
-    } catch (fallbackError) {
-      console.error('Failed to load html2pdf.js:', error, fallbackError);
-      throw new Error(`html2pdf.js library not available. Please ensure html2pdf.js is installed.`);
-    }
+const PRINT_STYLES = `
+  @page { margin: 0.5in; size: letter portrait; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 0; background: #fff; color: #111; }
+  @media print {
+    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   }
+`;
+
+function buildPrintDocument(bodyHtml: string, title: string): string {
+  return `<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>${title.replace(/</g, '&lt;')}</title>
+    <style>${PRINT_STYLES}</style>
+  </head>
+  <body>${bodyHtml}</body>
+</html>`;
+}
+
+function openPrintWindow(html: string): void {
+  const win = window.open('', '_blank');
+  if (!win) {
+    throw new Error('Could not open print window. Please allow pop-ups for this site and try again.');
+  }
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
+  // Trigger print once the new window has finished loading
+  win.addEventListener('load', () => {
+    win.focus();
+    win.print();
+  });
+}
+
+function downloadWordDoc(htmlBody: string, filename: string): void {
+  // Build a minimal Word-compatible HTML document
+  const doc = `<html xmlns:o='urn:schemas-microsoft-com:office:office'
+     xmlns:w='urn:schemas-microsoft-com:office:word'
+     xmlns='http://www.w3.org/TR/REC-html40'>
+  <head>
+    <meta charset="utf-8">
+    <meta name="ProgId" content="Word.Document">
+    <!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View></w:WordDocument></xml><![endif]-->
+    <style>
+      @page WordSection1 { size: 8.5in 11in; margin: 0.75in; }
+      body { font-family: 'Times New Roman', serif; font-size: 12pt; }
+      div.WordSection1 { page: WordSection1; }
+    </style>
+  </head>
+  <body><div class="WordSection1">${htmlBody}</div></body>
+</html>`;
+
+  const blob = new Blob([doc], { type: 'application/vnd.ms-word;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  // Use .doc — Word/LibreOffice open HTML wrapped in .doc natively
+  const base = filename.replace(/\.(docx?|pdf)$/i, '');
+  a.download = `${base}.doc`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 export async function exportElementToPDF(element: HTMLElement, filename: string) {
   try {
-    const html2pdf = await getHtml2Pdf();
-
-    if (!html2pdf) {
-      throw new Error('html2pdf.js library is not available');
-    }
-
-    const opt = {
-      margin: 36, // Match CSS @page margin: 36pt (~0.5 inch)
-      filename,
-      image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: {
-        scale: 2,
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: '#ffffff',
-        logging: false,
-        windowWidth: element.scrollWidth || 816,
-        windowHeight: element.scrollHeight || 1056
-      },
-      jsPDF: { unit: 'pt', format: 'letter', orientation: 'portrait' },
-      pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
-    } as any;
-
-    // Wait a tiny bit for any pending renders
-    await new Promise(resolve => setTimeout(resolve, 100));
-
-    await (html2pdf() as any).set(opt).from(element).save();
+    const title = filename.replace(/\.[^.]+$/, '').replace(/[_-]/g, ' ');
+    openPrintWindow(buildPrintDocument(element.outerHTML, title));
   } catch (error: any) {
     console.error('PDF Export Error:', error);
-    const message = error.message || 'Unknown error';
-    throw new Error(`PDF export not available: ${message}`);
-  }
-}
-
-// Lazy load html-to-docx to avoid MIME type errors during module resolution
-async function getHtmlToDocx() {
-  try {
-    // Try standard import first
-    const mod: any = await import('html-to-docx');
-    if (!mod || (!mod.default && typeof mod !== 'function')) {
-      throw new Error('Invalid module export');
-    }
-    return mod.default || mod;
-  } catch (error: any) {
-    try {
-      // Fallback: try with @vite-ignore for dynamic import
-      const mod: any = await import(/* @vite-ignore */ 'html-to-docx');
-      if (!mod || (!mod.default && typeof mod !== 'function')) {
-        throw new Error('Invalid module export');
-      }
-      return mod.default || mod;
-    } catch (fallbackError) {
-      console.error('Failed to load html-to-docx:', error, fallbackError);
-      throw new Error(`html-to-docx library not available. Please ensure html-to-docx is installed.`);
-    }
+    throw new Error(error.message || 'PDF export failed');
   }
 }
 
 export async function exportElementToDocx(element: HTMLElement, filename: string) {
   try {
-    const htmlToDocx = await getHtmlToDocx();
-    if (!htmlToDocx || typeof htmlToDocx !== 'function') {
-      throw new Error('html-to-docx library is not available');
-    }
-
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8" /></head><body>${element.outerHTML}</body></html>`;
-
-    const blob: Blob = await htmlToDocx(html, undefined, {
-      orientation: 'portrait',
-      margins: { top: 720, right: 720, bottom: 720, left: 720 }, // half inch margins (twentieths of a point)
-    });
-
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename.endsWith('.docx') ? filename : `${filename}.docx`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    downloadWordDoc(element.outerHTML, filename);
   } catch (error: any) {
     console.error('DOCX Export Error:', error);
-    const message = error.message || 'Unknown error';
-    throw new Error(`Word document export not available: ${message}`);
+    throw new Error(error.message || 'Word document export failed');
   }
 }
 
-// Prefer exporting from an HTML string to avoid layout/visibility issues when the
-// export container is off-screen or hidden.
 export async function exportHTMLToPDF(content: string | HTMLElement, filename: string) {
   try {
-    const html2pdf = await getHtml2Pdf();
-
-    if (!html2pdf) {
-      throw new Error('html2pdf.js library is not available');
-    }
-
-    const opt = {
-      margin: 36, // Match CSS @page margin: 36pt (~0.5 inch)
-      filename,
-      image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: {
-        scale: 2,
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: '#ffffff',
-        logging: false,
-        windowWidth: typeof content === 'string' ? 816 : ((content as HTMLElement).scrollWidth || 816), // 816px is roughly 8.5 inches at 96dpi
-        windowHeight: typeof content === 'string' ? undefined : ((content as HTMLElement).scrollHeight || 1056)
-      },
-      jsPDF: { unit: 'pt', format: 'letter', orientation: 'portrait' },
-      pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
-    } as any;
-
-    if (typeof content === 'string') {
-      // Use absolute positioning with opacity:0 so html2canvas can measure layout
-      // (position:fixed at -9999px causes html2canvas to render a blank canvas)
-      const tempContainer = document.createElement('div');
-      tempContainer.style.position = 'absolute';
-      tempContainer.style.left = '0';
-      tempContainer.style.top = '0';
-      tempContainer.style.width = '612pt';
-      tempContainer.style.zIndex = '-9999';
-      tempContainer.style.pointerEvents = 'none';
-      tempContainer.style.overflow = 'visible';
-      tempContainer.style.opacity = '1'; // Ensure it's fully opaque for html2canvas
-      tempContainer.style.backgroundColor = '#ffffff'; // Ensure white background
-      tempContainer.innerHTML = content;
-
-      try {
-        document.body.appendChild(tempContainer);
-
-        // Wait a tiny bit for the DOM to fully render the new element before capturing
-        await new Promise(resolve => setTimeout(resolve, 100));
-
-        await (html2pdf() as any).set(opt).from(tempContainer).save();
-      } finally {
-        if (tempContainer.parentNode) {
-          document.body.removeChild(tempContainer);
-        }
-      }
-    } else {
-      await (html2pdf() as any).set(opt).from(content).save();
-    }
+    const title = (typeof filename === 'string' ? filename : 'Document')
+      .replace(/\.[^.]+$/, '')
+      .replace(/[_-]/g, ' ');
+    const bodyHtml = typeof content === 'string' ? content : content.outerHTML;
+    openPrintWindow(buildPrintDocument(bodyHtml, title));
   } catch (error: any) {
     console.error('PDF Export Error:', error);
-    const message = error.message || 'Unknown error';
-    throw new Error(`PDF export not available: ${message}`);
+    throw new Error(error.message || 'PDF export failed');
   }
 }
 
 export async function exportHTMLToDocx(htmlBody: string, filename: string) {
   try {
-    const htmlToDocx = await getHtmlToDocx();
-    if (!htmlToDocx || typeof htmlToDocx !== 'function') {
-      throw new Error('html-to-docx library is not available');
-    }
-
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8" /></head><body>${htmlBody}</body></html>`;
-    const blob: Blob = await htmlToDocx(html, undefined, {
-      orientation: 'portrait',
-      margins: { top: 720, right: 720, bottom: 720, left: 720 },
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename.endsWith('.docx') ? filename : `${filename}.docx`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    downloadWordDoc(htmlBody, filename);
   } catch (error: any) {
     console.error('DOCX Export Error:', error);
-    const message = error.message || 'Unknown error';
-    throw new Error(`Word document export not available: ${message}`);
+    throw new Error(error.message || 'Word document export failed');
   }
 }

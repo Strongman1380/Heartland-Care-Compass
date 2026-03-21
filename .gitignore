@@ -29,6 +29,8 @@ dist-ssr
 .env.development.local
 .env.test.local
 .env.production.local
+functions/.env
+functions/.env.local
 
 # Firebase
 .firebase/

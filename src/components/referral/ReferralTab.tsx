@@ -42,7 +42,7 @@ import {
 } from "lucide-react";
 import { format, isValid } from "date-fns";
 import { toast } from "sonner";
-import { referralNotesService, type ReferralNoteRow, type POContactEntry } from "@/integrations/firebase/referralNotesService";
+import { referralNotesService, type ReferralNoteRow, type POContactEntry, type NotesLogEntry } from "@/integrations/firebase/referralNotesService";
 import { alertService } from "@/utils/alertService";
 import { exportHTMLToDocx, exportHTMLToPDF } from "@/utils/export";
 import { extractTextFromDocument, getSupportedFormatsDescription } from "@/utils/documentExtractor";
@@ -93,6 +93,7 @@ interface ReferralHistoryItem {
   rawText: string;
   staffRecommendation: "yes" | "maybe" | "no" | null;
   poContactLog: POContactEntry[];
+  notesLog: NotesLogEntry[];
   screeningResult: string;
   interviewScheduledDate: string;
   interviewTime: string;
@@ -358,6 +359,166 @@ const buildPlainTextExportHtml = (title: string, item: ReferralHistoryItem, cont
     `<section><div style="white-space: pre-wrap; border: 1px solid #d1d5db; padding: 12px; font-size: 13px;">${escapeHtml(content)}</div></section>`
   );
 
+const buildForm1ExportHtml = (item: ReferralHistoryItem, screeningJson: string): string => {
+  let data: Record<string, any> = {};
+  try {
+    const clean = screeningJson.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
+    data = JSON.parse(clean);
+  } catch {
+    try {
+      const firstBrace = screeningJson.indexOf("{");
+      const lastBrace = screeningJson.lastIndexOf("}");
+      if (firstBrace !== -1 && lastBrace > firstBrace) {
+        data = JSON.parse(screeningJson.slice(firstBrace, lastBrace + 1));
+      } else {
+        return buildPlainTextExportHtml("AI Screening Result", item, screeningJson);
+      }
+    } catch {
+      return buildPlainTextExportHtml("AI Screening Result", item, screeningJson);
+    }
+  }
+
+  const profile = data.youth_profile || {};
+  const legalTeam = data.legal_team || {};
+  const placementReq = data.placement_request || {};
+  const riskSummary = data.risk_summary || {};
+  const domains = data.domain_scores || {};
+  const decision: string = data.screening_decision || "";
+  const narrative: string = data.screening_recommendation_narrative
+    || (Array.isArray(data.rationale_bullets) && data.rationale_bullets.length > 0 ? data.rationale_bullets.join("\n") : "");
+  const questions: string[] = Array.isArray(data.questions_for_referral_source) ? data.questions_for_referral_source : [];
+  const today = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+  const referralDate = item.createdAt && isValid(new Date(item.createdAt))
+    ? format(new Date(item.createdAt), "MMMM d, yyyy")
+    : today;
+
+  const domainDefs = [
+    { key: "safety_supervision_fit",        label: "1. Safety &amp; Supervision Fit" },
+    { key: "behavioral_history_severity",   label: "2. Behavioral History &amp; Severity" },
+    { key: "sexual_behavior_risk",          label: "3. Sexual Behavior Risk" },
+    { key: "mental_health_clinical_stability", label: "4. Mental Health &amp; Clinical Stability" },
+    { key: "substance_use",                 label: "5. Substance Use" },
+    { key: "family_dynamics_support",       label: "6. Family Dynamics &amp; Support" },
+    { key: "educational_engagement",        label: "7. Educational Engagement" },
+    { key: "treatment_history_engagement",  label: "8. Treatment History &amp; Engagement" },
+    { key: "motivation_accountability",     label: "9. Motivation &amp; Accountability" },
+    { key: "program_fit_assessment",        label: "10. Program Fit Assessment" },
+  ];
+
+  const scoreColor = (score: number | null): string => {
+    if (!score) return "#9ca3af";
+    if (score >= 4) return "#15803d";
+    if (score >= 3) return "#b45309";
+    return "#dc2626";
+  };
+
+  const domainHtml = domainDefs.map(({ key, label }) => {
+    const d = (domains[key] || {}) as { score?: number | null; narrative?: string | null };
+    const score = d.score ?? null;
+    const domNarrative = d.narrative || "";
+    const circles = [1, 2, 3, 4, 5].map((n) => {
+      const active = score === n;
+      const bg = active ? scoreColor(score) : "white";
+      const border = active ? scoreColor(score) : "#d1d5db";
+      const color = active ? "white" : "#9ca3af";
+      const fw = active ? "bold" : "normal";
+      return `<span style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;border:2px solid ${border};background:${bg};color:${color};font-size:11px;font-weight:${fw};">${n}</span>`;
+    }).join("&nbsp;");
+    return `
+      <div style="margin-bottom:16px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;background:#f1f5f9;border:1px solid #cbd5e1;border-radius:6px;padding:8px 12px;margin-bottom:6px;">
+          <span style="font-weight:600;font-size:13px;color:#1e293b;">${label}</span>
+          <div style="display:flex;align-items:center;gap:4px;white-space:nowrap;">
+            ${circles}
+            <span style="font-size:12px;color:#64748b;margin-left:8px;">Score: <strong style="color:${scoreColor(score)}">${score ?? "—"}</strong></span>
+          </div>
+        </div>
+        ${domNarrative ? `<div style="border:1px solid #e2e8f0;border-radius:4px;padding:8px 10px;font-size:12px;color:#374151;line-height:1.55;">${escapeHtml(domNarrative)}</div>` : ""}
+      </div>`;
+  }).join("");
+
+  const decisionButtons = [
+    { value: "RECOMMEND_INTERVIEW", label: "RECOMMEND INTERVIEW" },
+    { value: "NEED_MORE_INFO",      label: "NEED MORE INFO" },
+    { value: "CONDITIONAL",         label: "CONDITIONAL" },
+    { value: "DENY_REDIRECT",       label: "DENY / REDIRECT" },
+  ].map(({ value, label }) => {
+    const active = decision === value;
+    return `<div style="flex:1;padding:9px 6px;text-align:center;border:2px solid ${active ? "#1e3a5f" : "#cbd5e1"};border-radius:4px;background:${active ? "#1e3a5f" : "white"};color:${active ? "white" : "#9ca3af"};font-size:11px;font-weight:${active ? "bold" : "normal"};">${label}</div>`;
+  }).join("");
+
+  const questionsHtml = questions.length > 0 ? `
+    <div style="margin-top:24px;">
+      <div style="background:#1e3a5f;color:white;padding:8px 12px;font-size:12px;font-weight:bold;letter-spacing:0.05em;border-radius:4px 4px 0 0;">FOLLOW-UP QUESTIONS FOR REFERRAL SOURCE</div>
+      ${questions.map((q, i) => `
+        <div style="border:1px solid #e2e8f0;border-top:none;padding:10px 12px;">
+          <div style="font-size:12px;font-weight:600;color:#1e293b;">${i + 1}. ${escapeHtml(q)}</div>
+        </div>`).join("")}
+    </div>` : "";
+
+  const esc = escapeHtml;
+  return `<div style="font-family:Arial,sans-serif;padding:32px;color:#1e293b;max-width:750px;margin:0 auto;">
+<div style="background:#1e3a5f;color:white;text-align:center;padding:24px;border-radius:6px 6px 0 0;">
+  <div style="font-size:22px;font-weight:bold;letter-spacing:0.02em;">HEARTLAND BOYS HOME</div>
+  <div style="font-size:18px;font-weight:bold;margin-top:4px;">REFERRAL SCREENING ASSESSMENT</div>
+  <div style="font-size:11px;margin-top:8px;color:#94a3b8;">Step 1 of 2 | Completed before interview | Confidential — Internal Use Only</div>
+</div>
+
+<div style="display:flex;border:1px solid #e2e8f0;margin-bottom:20px;">
+  <div style="flex:1;background:#2d5a8e;color:white;padding:10px 16px;font-size:12px;font-weight:bold;letter-spacing:0.05em;">STEP 1 — REFERRAL SCREENING</div>
+  <div style="flex:1;background:#f8fafc;color:#94a3b8;padding:10px 16px;font-size:12px;font-weight:bold;letter-spacing:0.05em;">STEP 2 — INTERVIEW REPORT</div>
+</div>
+
+<table style="width:100%;border-collapse:collapse;margin-bottom:20px;">
+  <tr>
+    <td style="border:1px solid #e2e8f0;padding:10px 12px;width:33%;"><span style="font-size:11px;font-weight:bold;">Youth Name:</span> <span style="font-size:12px;">${esc(profile.name || item.referralName || "")}</span></td>
+    <td style="border:1px solid #e2e8f0;padding:10px 12px;width:33%;"><span style="font-size:11px;font-weight:bold;">Date of Birth:</span> <span style="font-size:12px;">${esc(profile.dob || "")}</span></td>
+    <td style="border:1px solid #e2e8f0;padding:10px 12px;width:34%;"><span style="font-size:11px;font-weight:bold;">Date of Referral:</span> <span style="font-size:12px;">${esc(referralDate)}</span></td>
+  </tr>
+  <tr>
+    <td style="border:1px solid #e2e8f0;padding:10px 12px;"><span style="font-size:11px;font-weight:bold;">Referring Agency:</span> <span style="font-size:12px;">${esc(item.referralSource || "")}</span></td>
+    <td style="border:1px solid #e2e8f0;padding:10px 12px;"><span style="font-size:11px;font-weight:bold;">Probation Officer:</span> <span style="font-size:12px;">${esc(legalTeam.po || "")}</span></td>
+    <td style="border:1px solid #e2e8f0;padding:10px 12px;"><span style="font-size:11px;font-weight:bold;">Probation District:</span> <span style="font-size:12px;">${esc(profile.county || "")}</span></td>
+  </tr>
+  <tr>
+    <td style="border:1px solid #e2e8f0;padding:10px 12px;"><span style="font-size:11px;font-weight:bold;">Current Placement:</span> <span style="font-size:12px;">${esc(placementReq.current_placement || "")}</span></td>
+    <td style="border:1px solid #e2e8f0;padding:10px 12px;"><span style="font-size:11px;font-weight:bold;">Program Level Requested:</span> <span style="font-size:12px;">${esc(placementReq.type || "")}</span></td>
+    <td style="border:1px solid #e2e8f0;padding:10px 12px;"><span style="font-size:11px;font-weight:bold;">Overall Risk Level:</span> <span style="font-size:12px;">${esc(riskSummary.yls_score ? `YLS: ${riskSummary.yls_score}` : "")}</span></td>
+  </tr>
+</table>
+
+<div style="background:#2d5a8e;color:white;padding:8px 12px;border-radius:4px;margin-bottom:16px;font-size:12px;font-weight:bold;letter-spacing:0.05em;">
+  DOMAIN SCORING | 1 = Poor / High Concern &nbsp;&nbsp;&nbsp; 5 = Strong / Low Concern
+</div>
+
+${domainHtml}
+
+<div style="margin-top:20px;">
+  <div style="background:#2d5a8e;color:white;padding:8px 12px;border-radius:4px 4px 0 0;font-size:12px;font-weight:bold;letter-spacing:0.05em;">SCREENING RECOMMENDATION</div>
+  <div style="border:1px solid #e2e8f0;border-top:none;padding:14px;min-height:80px;font-size:12px;color:#374151;line-height:1.65;">
+    ${esc(narrative || "No screening recommendation documented.")}
+  </div>
+</div>
+
+<div style="margin-top:20px;">
+  <div style="font-size:12px;font-weight:bold;color:#374151;margin-bottom:8px;">Screening Decision:</div>
+  <div style="display:flex;gap:8px;">${decisionButtons}</div>
+</div>
+
+<div style="margin-top:24px;display:flex;gap:24px;">
+  <div style="flex:1;"><div style="font-size:11px;color:#6b7280;">Reviewer Name (Print):</div><div style="border-bottom:1px solid #374151;margin-top:28px;"></div></div>
+  <div style="flex:1;"><div style="font-size:11px;color:#6b7280;">Signature:</div><div style="border-bottom:1px solid #374151;margin-top:28px;"></div></div>
+  <div style="flex:0.5;"><div style="font-size:11px;color:#6b7280;">Date:</div><div style="font-size:12px;margin-top:6px;">${today}</div><div style="border-bottom:1px solid #374151;margin-top:16px;"></div></div>
+</div>
+
+${questionsHtml}
+
+<div style="margin-top:32px;border-top:1px solid #e2e8f0;padding-top:12px;text-align:center;font-size:10px;color:#9ca3af;">
+  CONFIDENTIAL — Heartland Boys Home | Referral Screening Assessment | Step 1 of 2 | This document contains sensitive youth information protected under applicable privacy laws.
+</div>
+</div>`;
+};
+
 const normalizeEntityValue = (value: string): string => {
   return value
     .replace(/\s+/g, " ")
@@ -565,6 +726,7 @@ const toHistoryItem = (row: ReferralNoteRow): ReferralHistoryItem => {
     rawText: row.raw_text || "",
     staffRecommendation: row.staff_recommendation ?? null,
     poContactLog: row.po_contact_log || [],
+    notesLog: (row as any).notes_log || [],
     screeningResult: row.screening_result || "",
     interviewScheduledDate: row.interview_scheduled_date || "",
     interviewTime: (row as any).interview_time || "",
@@ -625,6 +787,9 @@ export const ReferralTab = () => {
 
   const [savingRecommendationId, setSavingRecommendationId] = useState<string | null>(null);
   const [expandedPoLogId, setExpandedPoLogId] = useState<string | null>(null);
+  const [expandedNotesLogId, setExpandedNotesLogId] = useState<string | null>(null);
+  const [notesLogInput, setNotesLogInput] = useState("");
+  const [savingNotesLogId, setSavingNotesLogId] = useState<string | null>(null);
   const [poLogDate, setPoLogDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [poLogNotes, setPoLogNotes] = useState("");
   const [poLogFollowUp, setPoLogFollowUp] = useState("");
@@ -724,181 +889,333 @@ export const ReferralTab = () => {
     let data: any = null;
     try {
       const clean = screeningJson.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
-      data = JSON.parse(clean);
+      let jsonStr = clean;
+      if (!jsonStr.endsWith("}")) {
+        const lastBrace = jsonStr.lastIndexOf("}");
+        if (lastBrace > 0) jsonStr = jsonStr.slice(0, lastBrace + 1);
+        let open = 0;
+        for (const ch of jsonStr) { if (ch === "{") open++; else if (ch === "}") open--; }
+        if (open > 0) jsonStr += "}".repeat(open);
+      }
+      data = JSON.parse(jsonStr);
     } catch {
-      // Fallback: render as plain text
-      return <div className="text-sm text-gray-800 whitespace-pre-wrap font-mono">{screeningJson}</div>;
+      // Try extracting JSON substring from within any surrounding text (preamble, markdown, etc.)
+      try {
+        const firstBrace = screeningJson.indexOf("{");
+        const lastBrace = screeningJson.lastIndexOf("}");
+        if (firstBrace !== -1 && lastBrace > firstBrace) {
+          data = JSON.parse(screeningJson.slice(firstBrace, lastBrace + 1));
+        }
+      } catch { /* fall through to field extraction */ }
+
+      if (!data) {
+        const extract = (key: string) => { const m = screeningJson.match(new RegExp(`"${key}"\\s*:\\s*"([^"]*)"`) ); return m?.[1] || null; };
+        const rec = extract("recommendation") || extract("screening_decision");
+        if (rec) {
+          data = { recommendation: rec, _partial: true };
+        } else {
+          return (
+            <div className="rounded-md bg-gray-50 border border-gray-200 p-3">
+              <p className="text-xs font-semibold text-gray-500 mb-1">AI Screening Result</p>
+              <p className="text-xs text-gray-700 whitespace-pre-wrap">{screeningJson}</p>
+            </div>
+          );
+        }
+      }
     }
 
-    const rec: string = data.recommendation || "";
-    const recStyle: Record<string, string> = {
-      INTERVIEW: "bg-green-100 text-green-800 border-green-400",
-      INTERVIEW_WITH_CONDITIONS: "bg-yellow-100 text-yellow-800 border-yellow-400",
-      DECLINE: "bg-red-100 text-red-800 border-red-400",
-    };
-    const screenStyle: Record<string, string> = {
-      PASS: "bg-green-50 text-green-700 border-green-200",
-      CONDITIONAL: "bg-yellow-50 text-yellow-700 border-yellow-200",
-      FAIL: "bg-red-50 text-red-700 border-red-200",
-    };
-    const fitStyle: Record<string, string> = {
-      STRONG: "bg-green-50 text-green-700 border-green-200",
-      MIXED: "bg-yellow-50 text-yellow-700 border-yellow-200",
-      POOR: "bg-red-50 text-red-700 border-red-200",
-    };
+    // Static domain definitions (label + description prompt)
+    const DOMAIN_DEFS = [
+      { key: "safety_supervision_fit",           label: "Safety & Supervision Fit",          description: "Can Heartland safely supervise this youth given current staffing and peer population?" },
+      { key: "behavioral_history_severity",      label: "Behavioral History & Severity",     description: "Nature, frequency, and severity of behavioral concerns including aggression, self-harm, elopement, and property destruction." },
+      { key: "sexual_behavior_risk",             label: "Sexual Behavior Risk",              description: "Any history of problematic sexual behavior, adjudications, contact restrictions, or treatment requirements." },
+      { key: "mental_health_stability",          label: "Mental Health & Clinical Stability",description: "Current diagnoses, psychiatric history, medication compliance, and whether clinical need exceeds group-home capacity." },
+      { key: "mental_health_clinical_stability", label: "Mental Health & Clinical Stability",description: "Current diagnoses, psychiatric history, medication compliance, and whether clinical need exceeds group-home capacity." },
+      { key: "substance_use",                    label: "Substance Use",                     description: "Current and historical substance use, UA history, and whether use patterns create contraband or supervision risk." },
+      { key: "family_dynamics_support",          label: "Family Dynamics & Support",         description: "Who is engaged, who is undermining, and whether family will support or sabotage placement stability." },
+      { key: "educational_engagement",           label: "Educational Engagement",            description: "Current school status, IEP or 504, behavioral history at school, and compatibility with Heartland's school-day model." },
+      { key: "treatment_history_engagement",     label: "Treatment History & Engagement",    description: "Prior placements, why they ended, what worked, what failed, and current treatment engagement." },
+      { key: "motivation_accountability",        label: "Motivation & Accountability",       description: "Does the youth demonstrate readiness for change? Can he identify goals? Does he accept responsibility?" },
+      { key: "program_fit_assessment",           label: "Program Fit Assessment",            description: "Overall compatibility with Heartland's model, peer population, and staffing capacity." },
+    ];
 
-    const profile = data.youth_profile || {};
-    const legalTeam = data.legal_team || {};
+    // Normalize screening_decision (support old format values)
+    const screeningDecision: string = data.screening_decision
+      || (data.recommendation === "INTERVIEW" ? "RECOMMEND INTERVIEW"
+        : data.recommendation === "INTERVIEW_WITH_CONDITIONS" ? "CONDITIONAL"
+        : data.recommendation === "DECLINE" ? "DENY / REDIRECT"
+        : data.recommendation === "RECOMMEND_INTERVIEW" ? "RECOMMEND INTERVIEW"
+        : "");
+
+    const overallNarrative: string = data.overall_narrative || data.screening_recommendation_narrative || "";
+
+    // Normalize domain rows (new array format or old object format)
+    type DomainRow = { key: string; score: number | null; narrative: string | null; isFlagged: boolean };
+    let domainRows: DomainRow[] = [];
+    if (Array.isArray(data.screening_domains) && data.screening_domains.length > 0) {
+      domainRows = data.screening_domains.map((d: any) => ({
+        key: d.domain_key,
+        score: d.score ?? null,
+        narrative: d.narrative || null,
+        isFlagged: !!d.is_flagged,
+      }));
+    } else if (data.domain_scores && typeof data.domain_scores === "object") {
+      const ordered = ["safety_supervision_fit","behavioral_history_severity","sexual_behavior_risk","mental_health_clinical_stability","substance_use","family_dynamics_support","educational_engagement","treatment_history_engagement","motivation_accountability","program_fit_assessment"];
+      domainRows = ordered.map((key) => {
+        const d = data.domain_scores[key] || {};
+        const score: number | null = d.score ?? null;
+        const autoFlagKeys = ["safety_supervision_fit","sexual_behavior_risk","program_fit_assessment"];
+        return { key, score, narrative: d.narrative || null, isFlagged: autoFlagKeys.includes(key) && score != null && score <= 2 };
+      });
+    }
+
+    // Normalize flags
+    const screeningFlags: string[] = Array.isArray(data.screening_flags)
+      ? data.screening_flags.map((f: any) => typeof f === "string" ? f : (f.flag_text || "")).filter(Boolean)
+      : [];
+    const flagsPresent = data.flags_present || screeningFlags.length > 0;
+
+    // Normalize follow-up questions
+    type FollowupQ = { question: string; why_it_matters?: string };
+    let followupQs: FollowupQ[] = [];
+    if (Array.isArray(data.screening_followup_questions) && data.screening_followup_questions.length > 0) {
+      followupQs = data.screening_followup_questions.map((q: any) =>
+        typeof q === "string" ? { question: q } : { question: q.question || "", why_it_matters: q.why_it_matters }
+      ).filter((q: FollowupQ) => q.question);
+    } else if (Array.isArray(data.questions_for_referral_source)) {
+      followupQs = data.questions_for_referral_source.map((q: any) =>
+        ({ question: typeof q === "string" ? q : (q.question || "") })
+      ).filter((q: FollowupQ) => q.question);
+    }
+
+    // Youth header fields (new flat format or old nested)
+    const youthName = data.youth_name || data.youth_profile?.name || "";
+    const dob = data.date_of_birth || data.youth_profile?.dob || "";
+    const referralDate = data.date_of_referral || "";
+    const referringAgency = data.referring_agency || "";
+    const po = data.probation_officer || data.legal_team?.po || "";
+    const poPhone = data.legal_team?.po_phone || "";
+    const district = data.probation_district || "";
+    const curPlacement = data.current_placement || data.placement_request?.current_placement || data.current_placement_contact?.facility_name || "";
+    const programLevel = data.program_level_requested || "";
+    const overallRisk = data.overall_risk_level || "";
     const familyContacts = data.family_contacts || {};
-    const placementContact = data.current_placement_contact || {};
-    const profileParts = [profile.name, profile.age && `Age ${profile.age}`, profile.gender, profile.county].filter(Boolean);
-    const guardianNames = Array.isArray(familyContacts.guardians) ? familyContacts.guardians.filter(Boolean).join(", ") : "";
-    const familyDemographics = Array.isArray(familyContacts.demographics) ? familyContacts.demographics.filter(Boolean).join(", ") : "";
-    const topCards = [
-      {
-        label: "Probation Officer",
-        value: legalTeam.po,
-        extras: [legalTeam.po_phone].filter(Boolean),
-      },
-      {
-        label: "Family / Guardian",
-        value: guardianNames || familyContacts.primary_contact,
-        extras: [
-          familyContacts.relationship,
-          familyContacts.phone,
-          familyContacts.alternate_phone,
-          familyContacts.address,
-          familyContacts.city_state_zip,
-          familyDemographics,
-        ].filter(Boolean),
-      },
-      {
-        label: "Current Placement",
-        value: placementContact.facility_name || data.placement_request?.current_placement,
-        extras: [
-          placementContact.contact_name,
-          placementContact.phone,
-          placementContact.address,
-          placementContact.city_state,
-        ].filter(Boolean),
-      },
-    ].filter((item) => item.value || item.extras.length > 0);
+    const legalTeam = data.legal_team || {};
+
+    // Decision badge styling
+    const decisionMap: Record<string, { badge: string; bg: string; border: string; text: string; label: string }> = {
+      "RECOMMEND INTERVIEW":     { badge: "bg-green-600 text-white",  bg: "bg-green-50",  border: "border-green-300",  text: "text-green-800",  label: "RECOMMEND INTERVIEW"  },
+      "CONDITIONAL":             { badge: "bg-yellow-500 text-white", bg: "bg-yellow-50", border: "border-yellow-300", text: "text-yellow-900", label: "CONDITIONAL"           },
+      "NEED MORE INFO":          { badge: "bg-blue-500 text-white",   bg: "bg-blue-50",   border: "border-blue-300",   text: "text-blue-800",   label: "NEED MORE INFO"        },
+      "DENY / REDIRECT":         { badge: "bg-red-600 text-white",    bg: "bg-red-50",    border: "border-red-300",    text: "text-red-800",    label: "DENY / REDIRECT"       },
+      "INTERVIEW":               { badge: "bg-green-600 text-white",  bg: "bg-green-50",  border: "border-green-300",  text: "text-green-800",  label: "RECOMMEND INTERVIEW"  },
+      "INTERVIEW_WITH_CONDITIONS":{ badge: "bg-yellow-500 text-white",bg: "bg-yellow-50", border: "border-yellow-300", text: "text-yellow-900", label: "CONDITIONAL"           },
+      "DECLINE":                 { badge: "bg-red-600 text-white",    bg: "bg-red-50",    border: "border-red-300",    text: "text-red-800",    label: "DENY / REDIRECT"       },
+      "RECOMMEND_INTERVIEW":     { badge: "bg-green-600 text-white",  bg: "bg-green-50",  border: "border-green-300",  text: "text-green-800",  label: "RECOMMEND INTERVIEW"  },
+    };
+    const dec = decisionMap[screeningDecision] || decisionMap[data.recommendation] || { badge: "bg-gray-500 text-white", bg: "bg-gray-50", border: "border-gray-300", text: "text-gray-700", label: screeningDecision || "AI Screened" };
+
+    // Deduplicate mental_health display (prefer new key)
+    const hasMhNew = domainRows.some(r => r.key === "mental_health_stability");
+    const displayDomainDefs = DOMAIN_DEFS.filter(d => !(d.key === "mental_health_clinical_stability" && hasMhNew));
 
     return (
-      <div className="space-y-3 text-sm">
-        {/* Header row */}
-        <div className="flex flex-wrap gap-2 items-center">
-          <span className={`px-3 py-1 rounded-full text-sm font-bold border ${recStyle[rec] || "bg-gray-100 text-gray-800 border-gray-300"}`}>
-            {rec.replace(/_/g, " ") || "No Recommendation"}
-          </span>
-          {data.screen_status && (
-            <span className={`px-2 py-0.5 rounded text-xs font-medium border ${screenStyle[data.screen_status] || "bg-gray-100 border-gray-200 text-gray-700"}`}>
-              Screen: {data.screen_status}
-            </span>
+      <div className="rounded-lg border border-gray-300 overflow-hidden text-sm">
+
+        {/* ── Form Header ── */}
+        <div className="bg-gray-700 px-4 py-2.5 flex items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-bold text-white uppercase tracking-wide leading-none">Heartland Boys Home</p>
+            <p className="text-[11px] text-gray-300 mt-0.5">Referral Screening Assessment — Step 1 of 2</p>
+          </div>
+          <span className={`px-3 py-1 rounded text-xs font-bold shrink-0 ${dec.badge}`}>{dec.label}</span>
+        </div>
+
+        {/* ── Youth Info Grid ── */}
+        {(youthName || dob || referralDate || referringAgency || po || curPlacement || programLevel || overallRisk) && (
+          <div className="bg-white px-4 py-3 border-b border-gray-200">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-2.5">
+              {youthName && <div><p className="text-[10px] uppercase font-semibold text-gray-400 leading-none mb-0.5">Youth Name</p><p className="text-sm font-semibold text-gray-900">{youthName}</p></div>}
+              {dob && <div><p className="text-[10px] uppercase font-semibold text-gray-400 leading-none mb-0.5">Date of Birth</p><p className="text-sm text-gray-800">{dob}</p></div>}
+              {referralDate && <div><p className="text-[10px] uppercase font-semibold text-gray-400 leading-none mb-0.5">Date of Referral</p><p className="text-sm text-gray-800">{referralDate}</p></div>}
+              {referringAgency && <div><p className="text-[10px] uppercase font-semibold text-gray-400 leading-none mb-0.5">Referring Agency</p><p className="text-sm text-gray-800">{referringAgency}</p></div>}
+              {po && <div><p className="text-[10px] uppercase font-semibold text-gray-400 leading-none mb-0.5">Probation Officer{poPhone ? ` · ${poPhone}` : ""}</p><p className="text-sm text-gray-800">{po}</p></div>}
+              {district && <div><p className="text-[10px] uppercase font-semibold text-gray-400 leading-none mb-0.5">District</p><p className="text-sm text-gray-800">{district}</p></div>}
+              {legalTeam.judge && <div><p className="text-[10px] uppercase font-semibold text-gray-400 leading-none mb-0.5">Judge</p><p className="text-sm text-gray-800">{legalTeam.judge}</p></div>}
+              {curPlacement && <div><p className="text-[10px] uppercase font-semibold text-gray-400 leading-none mb-0.5">Current Placement</p><p className="text-sm text-gray-800">{curPlacement}</p></div>}
+              {programLevel && <div><p className="text-[10px] uppercase font-semibold text-gray-400 leading-none mb-0.5">Program Level Requested</p><p className="text-sm text-gray-800">{programLevel}</p></div>}
+              {overallRisk && <div><p className="text-[10px] uppercase font-semibold text-gray-400 leading-none mb-0.5">Overall Risk Level</p><p className="text-sm text-gray-800">{overallRisk}</p></div>}
+              {familyContacts.primary_contact && <div><p className="text-[10px] uppercase font-semibold text-gray-400 leading-none mb-0.5">Family Contact</p><p className="text-sm text-gray-800">{familyContacts.primary_contact}{familyContacts.relationship ? ` (${familyContacts.relationship})` : ""}</p></div>}
+              {familyContacts.phone && <div><p className="text-[10px] uppercase font-semibold text-gray-400 leading-none mb-0.5">Family Phone</p><p className="text-sm text-gray-800">{familyContacts.phone}</p></div>}
+            </div>
+          </div>
+        )}
+
+        {/* ── Flags Warning Block ── */}
+        {flagsPresent && screeningFlags.length > 0 && (
+          <div className="bg-red-50 px-4 py-3 border-b border-red-300">
+            <p className="text-xs font-bold text-red-700 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+              <span>⚠</span><span>Red Flags / Screening Concerns</span>
+            </p>
+            <ul className="space-y-1">
+              {screeningFlags.map((flag, i) => (
+                <li key={i} className="text-xs text-red-900 flex gap-2">
+                  <span className="shrink-0 text-red-500 font-bold mt-0.5">•</span>
+                  <span>{flag}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* ── Domain Scoring ── */}
+        {domainRows.length > 0 && (
+          <div>
+            <div className="bg-gray-50 px-4 py-2 border-b border-gray-200">
+              <p className="text-xs font-bold uppercase tracking-wide text-gray-600">
+                Domain Scoring <span className="font-normal text-gray-400 normal-case">— 1 = High Concern · 5 = Low Concern</span>
+              </p>
+            </div>
+            <div className="divide-y divide-gray-100">
+              {displayDomainDefs.map(def => {
+                const row = domainRows.find(r => r.key === def.key);
+                if (!row) return null;
+                const score = row.score;
+                const isFlagged = row.isFlagged;
+                const filledCircle = isFlagged
+                  ? "bg-red-600 border-red-600 text-white"
+                  : score != null && score >= 4 ? "bg-green-500 border-green-500 text-white"
+                  : score != null && score >= 3 ? "bg-amber-400 border-amber-400 text-white"
+                  : "bg-red-500 border-red-500 text-white";
+                const emptyCircle = isFlagged ? "border-red-200 bg-white text-red-200" : "border-gray-300 bg-white text-gray-300";
+                const scoreTextColor = score == null ? "text-gray-400" : score >= 4 ? "text-green-700" : score >= 3 ? "text-amber-600" : "text-red-600";
+                return (
+                  <div key={def.key} className={`px-4 py-3 ${isFlagged ? "bg-red-50" : "bg-white"}`}>
+                    <div className="flex flex-wrap items-start gap-x-4 gap-y-1.5">
+                      <div className="flex-1 min-w-[140px]">
+                        <p className={`text-xs font-bold mb-0.5 ${isFlagged ? "text-red-700" : "text-gray-800"}`}>{def.label}</p>
+                        <p className="text-[11px] italic text-gray-400 leading-snug">{def.description}</p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <div className="flex items-center gap-1">
+                          {[1,2,3,4,5].map(n => (
+                            <div key={n} className={`w-6 h-6 rounded-full border-2 flex items-center justify-center text-[10px] font-bold ${n === score ? filledCircle : emptyCircle}`}>
+                              {n}
+                            </div>
+                          ))}
+                        </div>
+                        <span className={`text-xs font-semibold w-8 ${scoreTextColor}`}>
+                          {score != null ? `${score}/5` : "—"}
+                        </span>
+                      </div>
+                    </div>
+                    {row.narrative && (
+                      <p className={`text-xs mt-2 pl-3 border-l-2 leading-relaxed ${isFlagged ? "text-red-800 border-red-400" : "text-gray-600 border-gray-200"}`}>
+                        {row.narrative}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* ── Recommendation Section ── */}
+        <div className={`px-4 py-3 border-t ${dec.border} ${dec.bg}`}>
+          <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500 mb-2">Screening Recommendation</p>
+          <div className="flex flex-wrap items-center gap-2 mb-2">
+            <span className={`px-3 py-1 rounded text-xs font-bold ${dec.badge}`}>{dec.label}</span>
+            {data.fit_rating && (
+              <span className={`text-xs px-2 py-0.5 rounded border font-semibold ${data.fit_rating === "STRONG" ? "bg-green-50 text-green-700 border-green-300" : data.fit_rating === "POOR" ? "bg-red-50 text-red-700 border-red-300" : "bg-yellow-50 text-yellow-700 border-yellow-300"}`}>
+                House Fit: {data.fit_rating}
+              </span>
+            )}
+          </div>
+          {overallNarrative && (
+            <p className={`text-sm leading-relaxed ${dec.text}`}>{overallNarrative}</p>
           )}
-          {data.fit_rating && (
-            <span className={`px-2 py-0.5 rounded text-xs font-medium border ${fitStyle[data.fit_rating] || "bg-gray-100 border-gray-200 text-gray-700"}`}>
-              Fit: {data.fit_rating}
-            </span>
-          )}
-          {profileParts.length > 0 && (
-            <span className="text-xs text-gray-500 italic">{profileParts.join(" · ")}</span>
+          {Array.isArray(data.conditions) && data.conditions.length > 0 && (
+            <div className="mt-2.5">
+              <p className="text-xs font-semibold text-yellow-800 mb-1">Conditions Required:</p>
+              <ol className="space-y-0.5">
+                {data.conditions.map((c: string, i: number) => (
+                  <li key={i} className="text-xs text-yellow-900 flex gap-2">
+                    <span className="shrink-0 font-bold text-yellow-600">{i+1}.</span><span>{c}</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
           )}
         </div>
 
-        {topCards.length > 0 && (
-          <div className="grid gap-2 md:grid-cols-3">
-            {topCards.map((card) => (
-              <div key={card.label} className="rounded-md border border-gray-200 bg-gray-50 p-2.5">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">{card.label}</p>
-                {card.value ? (
-                  <p className="mt-1 text-sm font-medium text-gray-900">{card.value}</p>
-                ) : (
-                  <p className="mt-1 text-sm text-gray-400">Not documented</p>
-                )}
-                {card.extras.length > 0 && (
-                  <div className="mt-1 space-y-0.5">
-                    {card.extras.map((extra) => (
-                      <p key={extra} className="text-xs text-gray-600">{extra}</p>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Rationale */}
-        {Array.isArray(data.rationale_bullets) && data.rationale_bullets.length > 0 && (
-          <div>
-            <p className="text-xs font-semibold text-gray-700 mb-1">Rationale</p>
-            <ul className="space-y-1">
-              {data.rationale_bullets.map((b: string, i: number) => (
-                <li key={i} className="text-xs text-gray-700 flex gap-1.5"><span className="shrink-0 text-gray-400">•</span><span>{b}</span></li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {/* Conditions (only for INTERVIEW_WITH_CONDITIONS) */}
-        {Array.isArray(data.conditions) && data.conditions.length > 0 && (
-          <div className="rounded-md bg-yellow-50 border border-yellow-200 p-2.5">
-            <p className="text-xs font-semibold text-yellow-800 mb-1">Conditions Required</p>
-            <ul className="space-y-1">
-              {data.conditions.map((c: string, i: number) => (
-                <li key={i} className="text-xs text-yellow-800 flex gap-1.5"><span className="shrink-0">→</span><span>{c}</span></li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {/* Questions for referral source */}
-        {Array.isArray(data.questions_for_referral_source) && data.questions_for_referral_source.length > 0 && (
-          <div className="rounded-md bg-blue-50 border border-blue-200 p-2.5">
-            <p className="text-xs font-semibold text-blue-800 mb-1">Follow-up Questions for Referral Source</p>
-            <ol className="space-y-1 list-none">
-              {data.questions_for_referral_source.map((q: string, i: number) => (
-                <li key={i} className="text-xs text-blue-900 flex gap-1.5"><span className="shrink-0 font-medium text-blue-600">{i + 1}.</span><span>{q}</span></li>
+        {/* ── Follow-up Questions ── */}
+        {followupQs.length > 0 && (
+          <div className="bg-blue-50 px-4 py-3 border-t border-blue-200">
+            <p className="text-xs font-bold uppercase tracking-wide text-blue-700 mb-2">Follow-up Questions for Referral Source</p>
+            <ol className="space-y-2.5">
+              {followupQs.map((q, i) => (
+                <li key={i} className="text-xs text-blue-900">
+                  <p className="font-semibold">{i+1}. {q.question}</p>
+                  {q.why_it_matters && <p className="italic text-blue-600 mt-0.5 pl-3">{q.why_it_matters}</p>}
+                </li>
               ))}
             </ol>
           </div>
         )}
 
-        {/* Missing info */}
+        {/* ── Strengths / Barriers ── */}
+        {((Array.isArray(data.strengths) && data.strengths.length > 0) || (Array.isArray(data.barriers) && data.barriers.length > 0)) && (
+          <div className="bg-white px-4 py-3 border-t border-gray-200">
+            <div className="grid sm:grid-cols-2 gap-3">
+              {Array.isArray(data.strengths) && data.strengths.length > 0 && (
+                <div>
+                  <p className="text-xs font-bold text-green-700 mb-1.5">Strengths</p>
+                  <ul className="space-y-1">
+                    {data.strengths.map((s: string, i: number) => (
+                      <li key={i} className="text-xs text-green-900 flex gap-1.5"><span className="shrink-0 text-green-500">✓</span><span>{s}</span></li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {Array.isArray(data.barriers) && data.barriers.length > 0 && (
+                <div>
+                  <p className="text-xs font-bold text-red-700 mb-1.5">Barriers / Concerns</p>
+                  <ul className="space-y-1">
+                    {data.barriers.map((b: string, i: number) => (
+                      <li key={i} className="text-xs text-red-900 flex gap-1.5"><span className="shrink-0 text-red-400">!</span><span>{b}</span></li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── Clinical Rationale ── */}
+        {Array.isArray(data.rationale_bullets) && data.rationale_bullets.length > 0 && (
+          <div className="bg-gray-50 px-4 py-3 border-t border-gray-200">
+            <p className="text-xs font-bold text-gray-700 mb-1.5">Clinical Rationale</p>
+            <ul className="space-y-1">
+              {data.rationale_bullets.map((b: string, i: number) => (
+                <li key={i} className="text-xs text-gray-700 flex gap-2"><span className="shrink-0 text-gray-400">•</span><span>{b}</span></li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* ── Missing Info ── */}
         {Array.isArray(data.missing_info) && data.missing_info.length > 0 && (
-          <div>
-            <p className="text-xs font-semibold text-orange-700 mb-1">Missing / Not Documented</p>
-            <div className="flex flex-wrap gap-1">
+          <div className="bg-white px-4 py-3 border-t border-gray-200">
+            <p className="text-xs font-semibold text-orange-700 mb-1.5">Missing / Not Documented</p>
+            <div className="flex flex-wrap gap-1.5">
               {data.missing_info.map((m: string, i: number) => (
-                <span key={i} className="text-xs bg-orange-50 text-orange-700 border border-orange-200 px-2 py-0.5 rounded">{m}</span>
+                <span key={i} className="text-xs bg-orange-50 text-orange-700 border border-orange-200 px-2 py-0.5 rounded-full">{m}</span>
               ))}
             </div>
           </div>
         )}
 
-        {/* Barriers */}
-        {Array.isArray(data.barriers) && data.barriers.length > 0 && (
-          <div>
-            <p className="text-xs font-semibold text-red-700 mb-1">Barriers</p>
-            <ul className="space-y-1">
-              {data.barriers.map((b: string, i: number) => (
-                <li key={i} className="text-xs text-red-800 flex gap-1.5"><span className="shrink-0 text-red-400">•</span><span>{b}</span></li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {/* Strengths */}
-        {Array.isArray(data.strengths) && data.strengths.length > 0 && (
-          <div>
-            <p className="text-xs font-semibold text-green-700 mb-1">Strengths</p>
-            <ul className="space-y-1">
-              {data.strengths.map((s: string, i: number) => (
-                <li key={i} className="text-xs text-green-800 flex gap-1.5"><span className="shrink-0 text-green-500">✓</span><span>{s}</span></li>
-              ))}
-            </ul>
-          </div>
-        )}
       </div>
     );
   };
@@ -1554,7 +1871,7 @@ export const ReferralTab = () => {
       toast.error("No AI screen available to export");
       return;
     }
-    await runReferralExport(item, kind, "ai_screen", "AI screen", buildPlainTextExportHtml("AI Screening Result", item, screeningText));
+    await runReferralExport(item, kind, "screening_form", "Screening form", buildForm1ExportHtml(item, screeningText));
   };
 
   const handleExportInterviewReport = async (item: ReferralHistoryItem, kind: "pdf" | "docx") => {
@@ -1620,6 +1937,33 @@ export const ReferralTab = () => {
       setHistory((prev) => prev.map((h) => sameReferral(h, item) ? { ...h, referralNotes: notes } : h));
     } catch (error) {
       toast.error("Failed to save referral notes");
+    }
+  };
+
+  const handleAddNotesEntry = async (item: ReferralHistoryItem) => {
+    if (!notesLogInput.trim()) {
+      toast.error("Note text is required");
+      return;
+    }
+    const rowKey = referralRowKey(item);
+    try {
+      setSavingNotesLogId(rowKey);
+      const { v4: uuidv4 } = await import("uuid");
+      const newEntry: NotesLogEntry = {
+        id: uuidv4(),
+        date: new Date().toISOString(),
+        note: notesLogInput.trim(),
+      };
+      // Prepend so most recent is first
+      const updatedLog = [newEntry, ...(item.notesLog || [])];
+      await referralNotesService.update(toReferralLookup(item), { notes_log: updatedLog } as any);
+      setHistory((prev) => prev.map((h) => sameReferral(h, item) ? { ...h, notesLog: updatedLog } : h));
+      setNotesLogInput("");
+      toast.success("Note logged");
+    } catch {
+      toast.error("Failed to log note");
+    } finally {
+      setSavingNotesLogId(null);
     }
   };
 
@@ -2788,11 +3132,15 @@ export const ReferralTab = () => {
                         {isExpanded ? <ChevronUp className="h-4 w-4 text-muted-foreground shrink-0" /> : <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />}
                       </div>
 
-                      {/* Referral Notes — display on compact view */}
-                      {item.referralNotes && !isExpanded && (
+                      {/* Referral Notes — display most recent on compact view */}
+                      {((item.notesLog && item.notesLog.length > 0) || item.referralNotes) && !isExpanded && (
                         <div className="mt-2 pt-2 border-t text-xs">
                           <p className="text-amber-700 font-medium mb-1">Note:</p>
-                          <p className="text-gray-700 break-words">{item.referralNotes}</p>
+                          <p className="text-gray-700 break-words">
+                            {item.notesLog && item.notesLog.length > 0
+                              ? item.notesLog[0].note
+                              : item.referralNotes}
+                          </p>
                         </div>
                       )}
 
@@ -2829,8 +3177,8 @@ export const ReferralTab = () => {
                             onClick={() => setReferralFilterSection("all")}
                             className={`px-2 py-1 text-xs rounded border transition-colors ${
                               referralFilterSection === "all"
-                                ? "bg-blue-600 text-white border-blue-600"
-                                : "bg-white text-gray-700 border-gray-300 hover:bg-gray-100"
+                                ? "bg-gray-900 text-white border-gray-900"
+                                : "bg-white text-black border-gray-300 hover:bg-gray-50"
                             }`}
                           >
                             All
@@ -2851,16 +3199,56 @@ export const ReferralTab = () => {
                         </div>
                       </div>
 
-                      {/* Referral Notes */}
-                      <div className="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-md">
-                        <label className="text-xs text-gray-600 font-medium block mb-1">Referral Notes</label>
-                        <textarea
-                          placeholder="Document what happened with this referral (e.g., 'Parent stated they don't want placement', 'Scheduled interview for 3/15', etc.)"
-                          value={item.referralNotes || ""}
-                          onBlur={(e) => handleSetReferralNotes(item, e.target.value)}
-                          onChange={(e) => setHistory((prev) => prev.map((h) => sameReferral(h, item) ? { ...h, referralNotes: e.target.value } : h))}
-                          className="w-full h-20 rounded-md border border-amber-300 px-2 py-1 text-xs text-gray-800 focus:outline-none focus:ring-1 focus:ring-amber-400 bg-white resize-none"
-                        />
+                      {/* Referral Notes Log */}
+                      <div className="mt-1">
+                        <button
+                          onClick={() => setExpandedNotesLogId(expandedNotesLogId === rowKey ? null : rowKey)}
+                          className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors shadow-sm"
+                          style={{ backgroundColor: '#d97706', color: '#ffffff' }}
+                        >
+                          <FileText className="h-3 w-3" />
+                          Notes Log ({(item.notesLog || []).length})
+                          {expandedNotesLogId === rowKey ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                        </button>
+                        {expandedNotesLogId === rowKey && (
+                          <div className="mt-2 space-y-2 rounded-md border border-amber-100 bg-amber-50 p-3">
+                            {item.referralNotes && (item.notesLog || []).length === 0 && (
+                              <div className="text-xs bg-white rounded border border-amber-100 p-2 mb-3">
+                                <span className="font-medium text-amber-800">Legacy note</span>
+                                <p className="text-gray-700 mt-0.5">{item.referralNotes}</p>
+                              </div>
+                            )}
+                            {(item.notesLog || []).length > 0 && (
+                              <div className="space-y-1 mb-3">
+                                {(item.notesLog || []).map((entry) => (
+                                  <div key={entry.id} className="text-xs bg-white rounded border border-amber-100 p-2">
+                                    <span className="font-medium text-amber-800">{format(new Date(entry.date), "MMM d, yyyy h:mm a")}</span>
+                                    <p className="text-gray-700 mt-0.5">{entry.note}</p>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            <div className="space-y-2">
+                              <p className="text-xs font-medium text-amber-800">Add note</p>
+                              <Textarea
+                                value={notesLogInput}
+                                onChange={(e) => setNotesLogInput(e.target.value)}
+                                placeholder="Document what happened with this referral..."
+                                rows={2}
+                                className="text-xs"
+                              />
+                              <Button
+                                size="sm"
+                                onClick={() => handleAddNotesEntry(item)}
+                                disabled={savingNotesLogId === rowKey}
+                                className="border-0"
+                                style={{ backgroundColor: '#d97706', color: '#ffffff' }}
+                              >
+                                {savingNotesLogId === rowKey ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <><Plus className="h-3.5 w-3.5 mr-1" />Log Note</>}
+                              </Button>
+                            </div>
+                          </div>
+                        )}
                       </div>
 
                       {extractProbationOfficer(item).length > 0 && (
@@ -3058,25 +3446,25 @@ export const ReferralTab = () => {
                         </span>
                         <a
                           href={hrefCheck}
-                          className="text-xs bg-blue-50 text-blue-700 hover:bg-blue-100 px-2 py-1 rounded border border-blue-200 transition-colors"
+                          className="text-xs bg-sky-100 text-sky-800 hover:bg-sky-200 px-2 py-1 rounded border border-sky-300 transition-colors font-medium"
                         >
                           Check Need
                         </a>
                         <a
                           href={hrefInterviewRequest}
-                          className="text-xs bg-violet-50 text-violet-700 hover:bg-violet-100 px-2 py-1 rounded border border-violet-200 transition-colors"
+                          className="text-xs bg-yellow-100 text-yellow-800 hover:bg-yellow-200 px-2 py-1 rounded border border-yellow-300 transition-colors font-medium"
                         >
                           Request Interview
                         </a>
                         <a
                           href={hrefAccept}
-                          className="text-xs bg-green-50 text-green-700 hover:bg-green-100 px-2 py-1 rounded border border-green-200 transition-colors"
+                          className="text-xs bg-green-100 text-green-800 hover:bg-green-200 px-2 py-1 rounded border border-green-300 transition-colors font-medium"
                         >
                           Accept
                         </a>
                         <a
                           href={hrefDeny}
-                          className="text-xs bg-red-50 text-red-700 hover:bg-red-100 px-2 py-1 rounded border border-red-200 transition-colors"
+                          className="text-xs bg-red-100 text-red-800 hover:bg-red-200 px-2 py-1 rounded border border-red-300 transition-colors font-medium"
                         >
                           Deny
                         </a>
@@ -3114,7 +3502,7 @@ export const ReferralTab = () => {
                           return (
                             <a
                               href={hrefInterview}
-                              className="text-xs bg-purple-50 text-purple-700 hover:bg-purple-100 px-2 py-1 rounded border border-purple-200 transition-colors"
+                              className="text-xs bg-yellow-50 text-yellow-800 hover:bg-yellow-100 px-2 py-1 rounded border border-yellow-300 transition-colors font-medium"
                             >
                               Interview
                             </a>
@@ -3127,7 +3515,7 @@ export const ReferralTab = () => {
                         <Button
                           size="sm"
                           variant="outline"
-                          className="border-purple-300 text-purple-700 hover:bg-purple-50"
+                          className="bg-white border-red-300 text-red-600 hover:bg-red-50"
                           onClick={() => handleAIScreen(item.rawText || JSON.stringify(item.parsedData || {}), rowKey)}
                           disabled={aiScreeningLoading.has(rowKey)}
                         >
@@ -3157,7 +3545,7 @@ export const ReferralTab = () => {
                             <Button
                               size="sm"
                               variant="outline"
-                              className="border-purple-200 text-purple-700 hover:bg-purple-50"
+                              className="bg-white border-red-300 text-red-600 hover:bg-red-50"
                               onClick={() => handleExportAIScreen(item, "pdf")}
                               disabled={exportingKey === `${rowKey}:ai_screen:pdf`}
                             >
@@ -3166,7 +3554,7 @@ export const ReferralTab = () => {
                             <Button
                               size="sm"
                               variant="outline"
-                              className="border-purple-200 text-purple-700 hover:bg-purple-50"
+                              className="bg-white border-red-300 text-red-600 hover:bg-red-50"
                               onClick={() => handleExportAIScreen(item, "docx")}
                               disabled={exportingKey === `${rowKey}:ai_screen:docx`}
                             >

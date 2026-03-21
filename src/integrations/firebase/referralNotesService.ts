@@ -23,6 +23,12 @@ export type POContactEntry = {
   followUpDate: string;
 };
 
+export type NotesLogEntry = {
+  id: string;
+  date: string;
+  note: string;
+};
+
 export type ReferralNoteRow = {
   id: string;
   referral_name: string;
@@ -40,6 +46,7 @@ export type ReferralNoteRow = {
   screening_result?: string | null;
   staff_recommendation?: "yes" | "maybe" | "no" | null;
   po_contact_log?: POContactEntry[];
+  notes_log?: NotesLogEntry[];
   referral_notes?: string | null;
   archived?: boolean;
   archived_at?: string | null;

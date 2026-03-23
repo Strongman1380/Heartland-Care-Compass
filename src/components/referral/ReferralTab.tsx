@@ -804,6 +804,7 @@ export const ReferralTab = () => {
   const [isBulkAIScreening, setIsBulkAIScreening] = useState(false);
   const [isBulkReparsing, setIsBulkReparsing] = useState(false);
   const [exportingKey, setExportingKey] = useState<string | null>(null);
+  const [isExportingNewScreening, setIsExportingNewScreening] = useState<"pdf" | "docx" | null>(null);
 
   const parseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -1874,6 +1875,57 @@ export const ReferralTab = () => {
     await runReferralExport(item, kind, "screening_form", "Screening form", buildForm1ExportHtml(item, screeningText));
   };
 
+  const handleExportNewReferralScreen = async (kind: "pdf" | "docx") => {
+    if (!newReferralScreening.trim()) {
+      toast.error("No AI screen available to export");
+      return;
+    }
+    const tempItem: ReferralHistoryItem = {
+      id: "",
+      createdAt: date || new Date().toISOString(),
+      referralName: referralName || "New Referral",
+      referralSource: referralSource || "",
+      staff: staffName || "",
+      summary: "",
+      fieldCount: 0,
+      sectionCount: 0,
+      status: status || "pending_interview",
+      priority: priority || "routine",
+      interviewReport: "",
+      directorSummary: "",
+      archived: false,
+      archivedAt: "",
+      archiveReason: "",
+      archiveReasonDetail: "",
+      parsedData: parsed,
+      rawText: rawText,
+      staffRecommendation: null,
+      poContactLog: [],
+      notesLog: [],
+      screeningResult: newReferralScreening,
+      interviewScheduledDate: "",
+      interviewTime: "",
+      interviewPlace: "",
+      referralNotes: "",
+    };
+    try {
+      setIsExportingNewScreening(kind);
+      const filename = buildReferralExportFilename(tempItem, "screening_form");
+      const content = buildForm1ExportHtml(tempItem, newReferralScreening);
+      if (kind === "pdf") {
+        await exportHTMLToPDF(content, `${filename}.pdf`);
+      } else {
+        await exportHTMLToDocx(content, `${filename}.docx`);
+      }
+      toast.success("Screening form exported");
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "Failed to export screening form";
+      toast.error(msg);
+    } finally {
+      setIsExportingNewScreening(null);
+    }
+  };
+
   const handleExportInterviewReport = async (item: ReferralHistoryItem, kind: "pdf" | "docx") => {
     if (!item.interviewReport.trim()) {
       toast.error("No interview report available to export");
@@ -2713,8 +2765,30 @@ export const ReferralTab = () => {
       {newReferralScreening && (
         <Card className="border-purple-200 bg-purple-50/40">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-2 text-purple-800">
-              <Sparkles className="h-4 w-4" />AI Screening Result
+            <CardTitle className="text-sm flex items-center justify-between gap-2 text-purple-800">
+              <span className="flex items-center gap-2">
+                <Sparkles className="h-4 w-4" />AI Screening Result
+              </span>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="bg-white border-purple-300 text-purple-700 hover:bg-purple-50"
+                  onClick={() => handleExportNewReferralScreen("pdf")}
+                  disabled={isExportingNewScreening !== null}
+                >
+                  {isExportingNewScreening === "pdf" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Export PDF"}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="bg-white border-purple-300 text-purple-700 hover:bg-purple-50"
+                  onClick={() => handleExportNewReferralScreen("docx")}
+                  disabled={isExportingNewScreening !== null}
+                >
+                  {isExportingNewScreening === "docx" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Export DOCX"}
+                </Button>
+              </div>
             </CardTitle>
           </CardHeader>
           <CardContent>

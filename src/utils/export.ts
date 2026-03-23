@@ -32,19 +32,21 @@ function buildPrintDocument(bodyHtml: string, title: string): string {
 }
 
 function openPrintWindow(html: string): void {
-  const win = window.open('', '_blank');
+  // Use a Blob URL so the browser loads the page normally — this ensures
+  // the load event fires after attachment (unlike document.write which can
+  // fire synchronously before the listener is added).
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const win = window.open(url, '_blank');
   if (!win) {
+    URL.revokeObjectURL(url);
     throw new Error('Could not open print window. Please allow pop-ups for this site and try again.');
   }
-  win.document.open();
-  win.document.write(html);
-  win.document.close();
-  // The load event may already have fired synchronously after document.close(),
-  // so we use setTimeout to ensure the content is fully rendered before printing.
-  win.setTimeout(() => {
+  win.addEventListener('load', () => {
     win.focus();
     win.print();
-  }, 400);
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  });
 }
 
 function downloadWordDoc(htmlBody: string, filename: string): void {

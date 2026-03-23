@@ -39,11 +39,12 @@ function openPrintWindow(html: string): void {
   win.document.open();
   win.document.write(html);
   win.document.close();
-  // Trigger print once the new window has finished loading
-  win.addEventListener('load', () => {
+  // The load event may already have fired synchronously after document.close(),
+  // so we use setTimeout to ensure the content is fully rendered before printing.
+  win.setTimeout(() => {
     win.focus();
     win.print();
-  });
+  }, 400);
 }
 
 function downloadWordDoc(htmlBody: string, filename: string): void {

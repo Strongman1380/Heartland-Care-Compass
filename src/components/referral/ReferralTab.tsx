@@ -378,31 +378,54 @@ const buildForm1ExportHtml = (item: ReferralHistoryItem, screeningJson: string):
     }
   }
 
-  const profile = data.youth_profile || {};
-  const legalTeam = data.legal_team || {};
-  const placementReq = data.placement_request || {};
+  // Map flat top-level fields the AI actually returns
+  const youthName: string = data.youth_name || item.referralName || "";
+  const dob: string = data.date_of_birth || "";
+  const referringAgency: string = data.referring_agency || item.referralSource || "";
+  const po: string = data.probation_officer || "";
+  const probationDistrict: string = data.probation_district || "";
+  const currentPlacement: string = data.current_placement || "";
+  const programLevelRequested: string = data.program_level_requested || "";
   const riskSummary = data.risk_summary || {};
-  const domains = data.domain_scores || {};
-  const decision: string = data.screening_decision || "";
-  const narrative: string = data.screening_recommendation_narrative
+  const overallRiskLevel: string = data.overall_risk_level || (riskSummary.yls_score ? `YLS: ${riskSummary.yls_score}` : "");
+
+  // AI returns screening_domains as an array; build a keyed lookup
+  const domainsArr: Array<{ domain_key: string; score?: number | null; narrative?: string | null }> =
+    Array.isArray(data.screening_domains) ? data.screening_domains : [];
+  const domainsMap: Record<string, { score?: number | null; narrative?: string | null }> = {};
+  for (const d of domainsArr) {
+    if (d.domain_key) domainsMap[d.domain_key] = { score: d.score ?? null, narrative: d.narrative ?? "" };
+  }
+
+  // AI returns "RECOMMEND INTERVIEW" etc. (spaces); buttons compare against underscore versions
+  const decisionValueMap: Record<string, string> = {
+    "RECOMMEND INTERVIEW": "RECOMMEND_INTERVIEW",
+    "NEED MORE INFO": "NEED_MORE_INFO",
+    "CONDITIONAL": "CONDITIONAL",
+    "DENY / REDIRECT": "DENY_REDIRECT",
+  };
+  const rawDecision: string = data.screening_decision || "";
+  const decision: string = decisionValueMap[rawDecision] || rawDecision;
+
+  const narrative: string = data.overall_narrative
     || (Array.isArray(data.rationale_bullets) && data.rationale_bullets.length > 0 ? data.rationale_bullets.join("\n") : "");
-  const questions: string[] = Array.isArray(data.questions_for_referral_source) ? data.questions_for_referral_source : [];
+  const questions: string[] = Array.isArray(data.screening_followup_questions) ? data.screening_followup_questions : [];
   const today = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
   const referralDate = item.createdAt && isValid(new Date(item.createdAt))
     ? format(new Date(item.createdAt), "MMMM d, yyyy")
     : today;
 
   const domainDefs = [
-    { key: "safety_supervision_fit",        label: "1. Safety &amp; Supervision Fit" },
-    { key: "behavioral_history_severity",   label: "2. Behavioral History &amp; Severity" },
-    { key: "sexual_behavior_risk",          label: "3. Sexual Behavior Risk" },
-    { key: "mental_health_clinical_stability", label: "4. Mental Health &amp; Clinical Stability" },
-    { key: "substance_use",                 label: "5. Substance Use" },
-    { key: "family_dynamics_support",       label: "6. Family Dynamics &amp; Support" },
-    { key: "educational_engagement",        label: "7. Educational Engagement" },
-    { key: "treatment_history_engagement",  label: "8. Treatment History &amp; Engagement" },
-    { key: "motivation_accountability",     label: "9. Motivation &amp; Accountability" },
-    { key: "program_fit_assessment",        label: "10. Program Fit Assessment" },
+    { key: "safety_supervision_fit",      label: "1. Safety &amp; Supervision Fit" },
+    { key: "behavioral_history_severity", label: "2. Behavioral History &amp; Severity" },
+    { key: "sexual_behavior_risk",        label: "3. Sexual Behavior Risk" },
+    { key: "mental_health_stability",     label: "4. Mental Health &amp; Clinical Stability" },
+    { key: "substance_use",               label: "5. Substance Use" },
+    { key: "family_dynamics_support",     label: "6. Family Dynamics &amp; Support" },
+    { key: "educational_engagement",      label: "7. Educational Engagement" },
+    { key: "treatment_history_engagement",label: "8. Treatment History &amp; Engagement" },
+    { key: "motivation_accountability",   label: "9. Motivation &amp; Accountability" },
+    { key: "program_fit_assessment",      label: "10. Program Fit Assessment" },
   ];
 
   const scoreColor = (score: number | null): string => {
@@ -413,7 +436,7 @@ const buildForm1ExportHtml = (item: ReferralHistoryItem, screeningJson: string):
   };
 
   const domainHtml = domainDefs.map(({ key, label }) => {
-    const d = (domains[key] || {}) as { score?: number | null; narrative?: string | null };
+    const d = (domainsMap[key] || {}) as { score?: number | null; narrative?: string | null };
     const score = d.score ?? null;
     const domNarrative = d.narrative || "";
     const circles = [1, 2, 3, 4, 5].map((n) => {
@@ -471,19 +494,19 @@ const buildForm1ExportHtml = (item: ReferralHistoryItem, screeningJson: string):
 
 <table style="width:100%;border-collapse:collapse;margin-bottom:20px;">
   <tr>
-    <td style="border:1px solid #e2e8f0;padding:10px 12px;width:33%;"><span style="font-size:11px;font-weight:bold;">Youth Name:</span> <span style="font-size:12px;">${esc(profile.name || item.referralName || "")}</span></td>
-    <td style="border:1px solid #e2e8f0;padding:10px 12px;width:33%;"><span style="font-size:11px;font-weight:bold;">Date of Birth:</span> <span style="font-size:12px;">${esc(profile.dob || "")}</span></td>
+    <td style="border:1px solid #e2e8f0;padding:10px 12px;width:33%;"><span style="font-size:11px;font-weight:bold;">Youth Name:</span> <span style="font-size:12px;">${esc(youthName)}</span></td>
+    <td style="border:1px solid #e2e8f0;padding:10px 12px;width:33%;"><span style="font-size:11px;font-weight:bold;">Date of Birth:</span> <span style="font-size:12px;">${esc(dob)}</span></td>
     <td style="border:1px solid #e2e8f0;padding:10px 12px;width:34%;"><span style="font-size:11px;font-weight:bold;">Date of Referral:</span> <span style="font-size:12px;">${esc(referralDate)}</span></td>
   </tr>
   <tr>
-    <td style="border:1px solid #e2e8f0;padding:10px 12px;"><span style="font-size:11px;font-weight:bold;">Referring Agency:</span> <span style="font-size:12px;">${esc(item.referralSource || "")}</span></td>
-    <td style="border:1px solid #e2e8f0;padding:10px 12px;"><span style="font-size:11px;font-weight:bold;">Probation Officer:</span> <span style="font-size:12px;">${esc(legalTeam.po || "")}</span></td>
-    <td style="border:1px solid #e2e8f0;padding:10px 12px;"><span style="font-size:11px;font-weight:bold;">Probation District:</span> <span style="font-size:12px;">${esc(profile.county || "")}</span></td>
+    <td style="border:1px solid #e2e8f0;padding:10px 12px;"><span style="font-size:11px;font-weight:bold;">Referring Agency:</span> <span style="font-size:12px;">${esc(referringAgency)}</span></td>
+    <td style="border:1px solid #e2e8f0;padding:10px 12px;"><span style="font-size:11px;font-weight:bold;">Probation Officer:</span> <span style="font-size:12px;">${esc(po)}</span></td>
+    <td style="border:1px solid #e2e8f0;padding:10px 12px;"><span style="font-size:11px;font-weight:bold;">Probation District:</span> <span style="font-size:12px;">${esc(probationDistrict)}</span></td>
   </tr>
   <tr>
-    <td style="border:1px solid #e2e8f0;padding:10px 12px;"><span style="font-size:11px;font-weight:bold;">Current Placement:</span> <span style="font-size:12px;">${esc(placementReq.current_placement || "")}</span></td>
-    <td style="border:1px solid #e2e8f0;padding:10px 12px;"><span style="font-size:11px;font-weight:bold;">Program Level Requested:</span> <span style="font-size:12px;">${esc(placementReq.type || "")}</span></td>
-    <td style="border:1px solid #e2e8f0;padding:10px 12px;"><span style="font-size:11px;font-weight:bold;">Overall Risk Level:</span> <span style="font-size:12px;">${esc(riskSummary.yls_score ? `YLS: ${riskSummary.yls_score}` : "")}</span></td>
+    <td style="border:1px solid #e2e8f0;padding:10px 12px;"><span style="font-size:11px;font-weight:bold;">Current Placement:</span> <span style="font-size:12px;">${esc(currentPlacement)}</span></td>
+    <td style="border:1px solid #e2e8f0;padding:10px 12px;"><span style="font-size:11px;font-weight:bold;">Program Level Requested:</span> <span style="font-size:12px;">${esc(programLevelRequested)}</span></td>
+    <td style="border:1px solid #e2e8f0;padding:10px 12px;"><span style="font-size:11px;font-weight:bold;">Overall Risk Level:</span> <span style="font-size:12px;">${esc(overallRiskLevel)}</span></td>
   </tr>
 </table>
 

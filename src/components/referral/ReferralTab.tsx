@@ -3153,26 +3153,34 @@ export const ReferralTab = () => {
 
                     const hrefCheck = `mailto:${mailtoTo}?subject=${encodeURIComponent(`Referral Follow-Up: ${item.referralName || 'the youth'}`)}&body=${encodeURIComponent(`Hi ${poFirstName},\n\nWe are reaching out to check whether ${item.referralName || 'this youth'} still needs placement. If placement is no longer needed or they have already been placed elsewhere, please reply to let us know so we can update our records.\n\nWe apologize if you haven't already heard from us regarding this referral. We've updated our referral process to make sure everything is documented and we can provide answers more quickly. This will help us offer better service times for kids and quicker case management responses for you.\n\nThank you,\nHeartland Admissions\nadmissions@heartlandboyshomenebraska.org`)}`;
 
-                    const hrefInterviewRequest = `mailto:${mailtoTo}?subject=${encodeURIComponent(`Interview Request – ${item.referralName || 'the youth'}`)}&body=${encodeURIComponent(`Hi ${poFirstName},\n\nWe have received the referral for ${item.referralName || 'the youth'} and would like to schedule an interview to further assess placement fit at Heartland Boys Home.\n\nCould you please let us know your availability, or provide the best way to coordinate this with the youth and their family? We want to ensure the process is as smooth as possible for everyone involved.\n\nPlease feel free to reply to this email or contact us directly at admissions@heartlandboyshomenebraska.org.\n\nThank you for your time and for the work you do on behalf of the youth in your care.\n\nSincerely,\nHeartland Admissions\nHeartland Boys Home\nadmissions@heartlandboyshomenebraska.org`)}`;
-
-                    const hrefAccept = `mailto:${mailtoTo}?subject=${encodeURIComponent(`Placement Accepted for ${item.referralName || "the youth"}`)}&body=${encodeURIComponent(`Hi ${poFirstName},\n\nWe can accept ${item.referralName || "the youth"}. We are looking forward for you to reach out and coordinate services. What intake date/time are you aiming for, and who is transporting?\n\nThank you,\nHeartland Admissions\nadmissions@heartlandboyshomenebraska.org`)}`;
-
+                    // Parse AI screening JSON once for use in multiple email templates
                     let denialReasons = "[reason]";
+                    let interviewFollowUpQuestions: string[] = [];
                     const srRaw = item.screeningResult || aiScreeningResults[rowKey] || "";
                     if (srRaw) {
                       try {
-                        const clean = srRaw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
-                        const parsed = JSON.parse(clean);
+                        const srClean = srRaw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
+                        const srParsed = JSON.parse(srClean);
                         const reasons: string[] = [];
-                        if (Array.isArray(parsed.rationale_bullets)) reasons.push(...parsed.rationale_bullets);
-                        if (Array.isArray(parsed.barriers)) reasons.push(...parsed.barriers);
-                        if (reasons.length > 0) {
-                          denialReasons = "\n- " + reasons.join("\n- ");
+                        if (Array.isArray(srParsed.rationale_bullets)) reasons.push(...srParsed.rationale_bullets);
+                        if (Array.isArray(srParsed.barriers)) reasons.push(...srParsed.barriers);
+                        if (reasons.length > 0) denialReasons = "\n- " + reasons.join("\n- ");
+                        if (Array.isArray(srParsed.screening_followup_questions)) {
+                          interviewFollowUpQuestions = srParsed.screening_followup_questions.filter((q: unknown) => typeof q === "string" && q.trim());
                         }
-                      } catch (e) {
-                         // ignore
+                      } catch {
+                        // ignore parse errors
                       }
                     }
+
+                    const followUpSection = interviewFollowUpQuestions.length > 0
+                      ? `\n\nAs we prepare for the interview, we also have a few follow-up questions we would appreciate you looking into ahead of time:\n\n${interviewFollowUpQuestions.map((q, i) => `${i + 1}. ${q}`).join("\n")}`
+                      : "";
+
+                    const hrefInterviewRequest = `mailto:${mailtoTo}?subject=${encodeURIComponent(`Interview Request – ${item.referralName || 'the youth'}`)}&body=${encodeURIComponent(`Hi ${poFirstName},\n\nWe have received the referral for ${item.referralName || 'the youth'} and would like to schedule an interview to further assess placement fit at Heartland Boys Home.\n\nCould you please let us know your availability, or provide the best way to coordinate this with the youth and their family? We want to ensure the process is as smooth as possible for everyone involved.${followUpSection}\n\nPlease feel free to reply to this email or contact us directly at admissions@heartlandboyshomenebraska.org.\n\nThank you for your time and for the work you do on behalf of the youth in your care.\n\nSincerely,\nHeartland Admissions\nHeartland Boys Home\nadmissions@heartlandboyshomenebraska.org`)}`;
+
+                    const hrefAccept = `mailto:${mailtoTo}?subject=${encodeURIComponent(`Placement Accepted for ${item.referralName || "the youth"}`)}&body=${encodeURIComponent(`Hi ${poFirstName},\n\nWe can accept ${item.referralName || "the youth"}. We are looking forward for you to reach out and coordinate services. What intake date/time are you aiming for, and who is transporting?\n\nThank you,\nHeartland Admissions\nadmissions@heartlandboyshomenebraska.org`)}`;
+
 
                     const hrefDeny = `mailto:${mailtoTo}?subject=${encodeURIComponent(`Referral Update for ${item.referralName || "the youth"}`)}&body=${encodeURIComponent(`Hi ${poFirstName},\n\nThanks for the referral for ${item.referralName || "the youth"}. We're not able to accept at this time due to the following concerns:\n${denialReasons}\n\nThank you,\nHeartland Admissions\nadmissions@heartlandboyshomenebraska.org`)}`;
 

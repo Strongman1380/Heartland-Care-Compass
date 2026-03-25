@@ -10,8 +10,10 @@ import { useToast } from "@/hooks/use-toast";
 import { toast } from "sonner";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { logger } from '@/utils/logger';
+import { useGsapReveal } from "@/hooks/useGsap";
 
 const Index = () => {
+  const revealRef = useGsapReveal({ stagger: 0.15 });
   const [selectedYouth, setSelectedYouth] = useState<Youth | null>(null);
   const [activeTab, setActiveTab] = useState("profile");
   const [editingYouth, setEditingYouth] = useState<Youth | null>(null);
@@ -100,11 +102,11 @@ const Index = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-red-50 via-yellow-50 to-red-100">
+    <div className="min-h-screen bg-background" ref={revealRef}>
       <Header />
       <main className="container mx-auto px-4 py-6 pb-24 lg:pb-8">
         {!selectedYouth ? (
-          <>
+          <div className="gsap-reveal">
             <YouthSelectionView
               youths={youths}
               loading={loading}
@@ -114,9 +116,10 @@ const Index = () => {
               formatPoints={formatPoints}
               formatDate={formatDate}
             />
-          </>
+          </div>
         ) : selectedYouth && selectedYouth.id ? (
-          <YouthDetailView
+          <div className="gsap-reveal">
+            <YouthDetailView
             youths={youths}
             selectedYouth={selectedYouth}
             activeTab={activeTab}
@@ -128,8 +131,9 @@ const Index = () => {
               loadYouths();
             }}
           />
+          </div>
         ) : (
-          <div className="text-center py-12 bg-white rounded-lg shadow-lg">
+          <div className="text-center py-12 bg-card rounded-xl shadow-lg gsap-reveal">
             <p className="text-red-600 text-lg font-semibold mb-2">Error: Invalid youth profile</p>
             <p className="text-gray-600 mb-4">The selected youth profile could not be loaded.</p>
             <button

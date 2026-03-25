@@ -48,6 +48,8 @@ export type ReferralNoteRow = {
   po_contact_log?: POContactEntry[];
   notes_log?: NotesLogEntry[];
   referral_notes?: string | null;
+  interview_time?: string | null;
+  interview_place?: string | null;
   archived?: boolean;
   archived_at?: string | null;
   archive_reason?: string | null;
@@ -65,7 +67,7 @@ type ReferralLookup = {
 };
 
 const mapReferralDoc = (
-  snap: { id: string; data: () => Record<string, unknown> | undefined }
+  snap: any
 ): ReferralNoteRow => {
   const data = (snap.data() || {}) as Record<string, unknown>;
   // Always trust Firestore document id over any stored `id` field in data.

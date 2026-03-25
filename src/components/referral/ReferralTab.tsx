@@ -3906,8 +3906,8 @@ export const ReferralTab = () => {
                         setSavingInterview(true);
                         try {
                           const updates: any = {
-                            interviewReport: JSON.stringify(data),
-                            directorSummary: data.sections.directorSummary?.text || directorSummary,
+                            interview_report: JSON.stringify(data),
+                            director_summary: data.sections.directorSummary?.text || directorSummary,
                           };
                           if (newStatus) updates.status = newStatus;
                           await referralNotesService.save({
@@ -3915,7 +3915,7 @@ export const ReferralTab = () => {
                             referral_name: editingInterviewTarget.referralName,
                             ...updates,
                           });
-                          loadHistory();
+                          await loadReferralHistory();
                           setEditingInterviewTarget(null);
                         } finally {
                           setSavingInterview(false);

@@ -119,7 +119,7 @@ export const YouthSelectionView = ({
         ) : youths.length === 0 ? (
           <EmptyYouthState />
         ) : (
-          <Card>
+          <div className="interactive-card border-0 p-0 overflow-hidden">
             <CardContent className="p-0">
               <div className="divide-y divide-border">
                 {sortedYouths.map((youth) => (
@@ -143,18 +143,18 @@ export const YouthSelectionView = ({
                         </h4>
                         <div className="flex items-center gap-2 mt-2 flex-wrap">
                           {/* Age Badge */}
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-gray-100 dark:bg-slate-700 text-gray-800 dark:text-slate-200 border border-gray-300 dark:border-slate-600">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-semibold bg-muted text-foreground border border-border">
                             Age: {youth.age || 'N/A'}
                           </span>
 
                           {/* Level Badge */}
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-secondary/20 text-primary border border-secondary/40">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-semibold bg-secondary/30 text-primary border border-secondary/50">
                             Level {youth.level}
                           </span>
 
                           {/* Grade Badge (show from currentGrade or grade) */}
                           {(youth.currentGrade || youth.grade) && (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-secondary/20 text-primary border border-secondary/40">
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-semibold bg-primary/10 text-primary border border-primary/30">
                               Grade {youth.currentGrade || youth.grade}
                             </span>
                           )}
@@ -176,12 +176,12 @@ export const YouthSelectionView = ({
 
                         <div className="flex items-center gap-2 mt-2 flex-wrap">
                           {parseTopColors(youth.realColorsResult).map((color) => (
-                            <Badge key={`${youth.id}-color-${color}`} variant="secondary" className="bg-white dark:bg-slate-800 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-300">
+                            <Badge key={`${youth.id}-color-${color}`} variant="outline" className="bg-muted/50 border-primary/20 text-primary-dark">
                               {color}
                             </Badge>
                           ))}
                           {loadingAwards && (
-                            <Badge variant="outline" className="bg-white/80 dark:bg-slate-800/80 border-yellow-300 dark:border-yellow-700 text-yellow-800 dark:text-yellow-300">
+                            <Badge variant="outline" className="bg-muted/50 border-yellow-400 text-yellow-900 animate-pulse">
                               Calculating awards...
                             </Badge>
                           )}
@@ -235,7 +235,7 @@ export const YouthSelectionView = ({
                 ))}
               </div>
             </CardContent>
-          </Card>
+          </div>
         )}
       </div>
 

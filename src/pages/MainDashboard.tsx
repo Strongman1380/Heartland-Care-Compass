@@ -14,6 +14,7 @@ import { useYouth } from "@/hooks/useSupabase";
 import { caseNotesService, dailyRatingsService, levelEventService, type LevelEvent } from "@/integrations/firebase/services";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { logger } from '@/utils/logger';
+import { useGsapReveal } from "@/hooks/useGsap";
 
 const CollapsibleSection = ({
   title,
@@ -107,7 +108,6 @@ const MainDashboard = () => {
         }
       }
     };
-
     loadPriorities();
 
     return () => {
@@ -115,118 +115,132 @@ const MainDashboard = () => {
     };
   }, [youths]);
 
+  const revealRef = useGsapReveal({ stagger: 0.15 });
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-red-50 via-yellow-50 to-red-100">
+    <div className="min-h-screen bg-background" ref={revealRef}>
       <Header />
       <main className="container mx-auto px-4 py-6 pb-24 lg:pb-8">
         {/* Title */}
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold bg-gradient-to-r from-red-800 via-red-700 to-yellow-600 bg-clip-text text-transparent">
+        <div className="mb-6 gsap-reveal">
+          <h1 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-primary via-primary-dark to-secondary bg-clip-text text-transparent">
             Dashboard
           </h1>
-          <p className="text-sm text-red-700 mt-1">Heartland Boys Home Overview</p>
+          <p className="text-sm font-medium text-muted-foreground mt-1 px-1">Heartland Boys Home Overview</p>
         </div>
 
-        <div className="space-y-2">
+        <div className="space-y-4">
           {/* KPI Strip */}
-          <CollapsibleSection title="Key Metrics">
-            <DashboardKPIStrip youths={youths} />
-          </CollapsibleSection>
+          <div className="gsap-reveal">
+            <CollapsibleSection title="Key Metrics">
+              <DashboardKPIStrip youths={youths} />
+            </CollapsibleSection>
+          </div>
 
           {/* Quick Entry */}
-          <CollapsibleSection title="Quick Actions">
-            <QuickEntryWidgets />
-          </CollapsibleSection>
+          <div className="gsap-reveal">
+            <CollapsibleSection title="Quick Actions">
+              <QuickEntryWidgets />
+            </CollapsibleSection>
+          </div>
 
-          <CollapsibleSection title="Today's Priorities">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <Card className="border-0 shadow-sm">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm text-gray-700 flex items-center gap-2">
-                    <NotebookPen className="h-4 w-4 text-red-700" />
-                    DPN Coverage
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-red-800">
-                    {prioritySnapshot.loading ? "..." : prioritySnapshot.missingDpn}
-                  </div>
-                  <p className="text-sm text-gray-600 mt-1">Youth still missing a DPN entry today.</p>
-                </CardContent>
-              </Card>
+          <div className="gsap-reveal">
+            <CollapsibleSection title="Today's Priorities">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <Card className="interactive-card border-l-4 border-l-primary/60">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-bold text-muted-foreground flex items-center gap-2">
+                      <NotebookPen className="h-4 w-4 text-primary" />
+                      DPN Coverage
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-3xl font-black text-primary">
+                      {prioritySnapshot.loading ? "..." : prioritySnapshot.missingDpn}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">Youth still missing a DPN entry today.</p>
+                  </CardContent>
+                </Card>
 
-              <Card className="border-0 shadow-sm">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm text-gray-700 flex items-center gap-2">
-                    <FileClock className="h-4 w-4 text-amber-600" />
-                    Case Note Follow-Up
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-red-800">
-                    {prioritySnapshot.loading ? "..." : prioritySnapshot.staleNotes}
-                  </div>
-                  <p className="text-sm text-gray-600 mt-1">Youth with no case note in the last 3 days.</p>
-                </CardContent>
-              </Card>
+                <Card className="interactive-card border-l-4 border-l-secondary/60">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-bold text-muted-foreground flex items-center gap-2">
+                      <FileClock className="h-4 w-4 text-secondary/80" />
+                      Case Note Follow-Up
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-3xl font-black text-primary">
+                      {prioritySnapshot.loading ? "..." : prioritySnapshot.staleNotes}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">Youth with no case note in the last 3 days.</p>
+                  </CardContent>
+                </Card>
 
-              <Card className="border-0 shadow-sm">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm text-gray-700 flex items-center gap-2">
-                    <TriangleAlert className="h-4 w-4 text-blue-600" />
-                    Active Census
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-red-800">{youths.length}</div>
-                  <p className="text-sm text-gray-600 mt-1">Active youth currently in the program.</p>
-                </CardContent>
-              </Card>
-            </div>
-          </CollapsibleSection>
+                <Card className="interactive-card border-l-4 border-l-blue-500/60">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-bold text-muted-foreground flex items-center gap-2">
+                      <TriangleAlert className="h-4 w-4 text-blue-500" />
+                      Active Census
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-3xl font-black text-primary">{youths.length}</div>
+                    <p className="text-xs text-muted-foreground mt-1">Active youth currently in the program.</p>
+                  </CardContent>
+                </Card>
+              </div>
+            </CollapsibleSection>
+          </div>
 
           {/* Youth List */}
-          <CollapsibleSection title="Youth">
-            {loading ? (
-              <p className="text-sm text-muted-foreground py-4">Loading youth...</p>
-            ) : (
-              <QuickAccessYouthList youths={youths} />
-            )}
-          </CollapsibleSection>
+          <div className="gsap-reveal">
+            <CollapsibleSection title="Youth">
+              {loading ? (
+                <p className="text-sm text-muted-foreground py-4">Loading youth...</p>
+              ) : (
+                <QuickAccessYouthList youths={youths} />
+              )}
+            </CollapsibleSection>
+          </div>
 
           {/* Awards */}
-          <CollapsibleSection title="Awards">
-            <AwardsSection />
-          </CollapsibleSection>
+          <div className="gsap-reveal">
+            <CollapsibleSection title="Awards">
+              <AwardsSection />
+            </CollapsibleSection>
+          </div>
 
           {/* School Scores + Level Changes side by side on desktop */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 gsap-reveal">
             <CollapsibleSection title="School Scores">
-              <SchoolScoresSummary youths={youths} />
+              <div className="interactive-card p-0 overflow-hidden">
+                <SchoolScoresSummary youths={youths} />
+              </div>
             </CollapsibleSection>
 
             <CollapsibleSection title="Recent Level Changes">
-              <Card className="border-0 shadow-sm">
+              <Card className="interactive-card overflow-hidden">
                 <CardContent className="p-0">
                   {levelEvents.length === 0 ? (
                     <p className="text-sm text-muted-foreground p-4">No level changes recorded yet.</p>
                   ) : (
-                    <div className="divide-y">
+                    <div className="divide-y divide-border/40">
                       {levelEvents.map((event) => (
-                        <div key={event.id} className="flex items-center gap-3 px-4 py-2">
+                        <div key={event.id} className="flex items-center gap-3 px-4 py-3 hover:bg-muted/50 transition-colors">
                           {event.direction === "level_up" ? (
                             <TrendingUp className="h-4 w-4 text-green-600 flex-shrink-0" />
                           ) : (
                             <TrendingDown className="h-4 w-4 text-red-500 flex-shrink-0" />
                           )}
                           <div className="flex-1 min-w-0">
-                            <span className="font-medium text-sm">{event.youthName}</span>
+                            <span className="font-semibold text-sm text-primary">{event.youthName}</span>
                             <span className="text-sm text-muted-foreground ml-2">
                               Level {event.fromLevel} → {event.toLevel}
                             </span>
                           </div>
                           <div className="text-xs text-muted-foreground flex-shrink-0 text-right">
-                            <div>{event.changedBy}</div>
+                            <div className="font-medium">{event.changedBy}</div>
                             <div>{format(new Date(event.timestamp), "MMM d, h:mm a")}</div>
                           </div>
                         </div>
@@ -239,9 +253,11 @@ const MainDashboard = () => {
           </div>
 
           {/* Navigation Links */}
-          <CollapsibleSection title="Navigate">
-            <NavigationLinks />
-          </CollapsibleSection>
+          <div className="gsap-reveal">
+            <CollapsibleSection title="Navigate">
+              <NavigationLinks />
+            </CollapsibleSection>
+          </div>
         </div>
       </main>
 

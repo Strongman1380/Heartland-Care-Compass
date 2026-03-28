@@ -153,8 +153,8 @@ export const InterviewReportForm = ({ referralName, initialData, onSave, onCance
                       <button
                         key={n}
                         onClick={() => updateSection(section.key, "rating", n)}
-                        className={`w-7 h-7 rounded-full text-xs font-bold transition-colors ${
-                          data.rating === n
+                        className={`w-7 h-7 rounded-full text-xs font-bold transition-colors no-brand-override ${
+                          Number(data.rating) === Number(n)
                             ? n <= 2 ? "bg-red-500 text-white" : n === 3 ? "bg-yellow-500 text-white" : "bg-green-500 text-white"
                             : "bg-gray-100 text-gray-500 hover:bg-gray-200"
                         }`}
@@ -185,10 +185,10 @@ export const InterviewReportForm = ({ referralName, initialData, onSave, onCance
                   variant={recommendation === opt ? "default" : "outline"}
                   size="sm"
                   onClick={() => setRecommendation(opt)}
-                  className={recommendation === opt
-                    ? opt === "accept" ? "bg-green-600 hover:bg-green-700" : opt === "deny" ? "bg-red-600 hover:bg-red-700" : "bg-yellow-600 hover:bg-yellow-700"
+                  className={`no-brand-override ${recommendation === opt
+                    ? opt === "accept" ? "bg-green-600 hover:bg-green-700 text-white" : opt === "deny" ? "bg-red-600 hover:bg-red-700 text-white" : "bg-yellow-600 hover:bg-yellow-700 text-white"
                     : ""
-                  }
+                  }`}
                 >
                   {opt.charAt(0).toUpperCase() + opt.slice(1)}
                 </Button>

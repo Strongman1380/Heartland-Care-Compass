@@ -14,7 +14,8 @@ import {
   writeBatch,
   collectionGroup,
   serverTimestamp,
-  Timestamp
+  Timestamp,
+  getCountFromServer
 } from 'firebase/firestore'
 import { v4 as uuidv4 } from 'uuid'
 import type {
@@ -394,16 +395,16 @@ export const supabaseUtils = {
 
   async getStats() {
     const [youthSnap, bpSnap, cnSnap, drSnap] = await Promise.all([
-      getDocs(collection(db, 'youth')),
-      getDocs(collectionGroup(db, 'behavior_points')),
-      getDocs(collectionGroup(db, 'case_notes')),
-      getDocs(collectionGroup(db, 'daily_ratings'))
+      getCountFromServer(collection(db, 'youth')),
+      getCountFromServer(collectionGroup(db, 'behavior_points')),
+      getCountFromServer(collectionGroup(db, 'case_notes')),
+      getCountFromServer(collectionGroup(db, 'daily_ratings'))
     ])
     return {
-      youth: youthSnap.size,
-      behaviorPoints: bpSnap.size,
-      caseNotes: cnSnap.size,
-      dailyRatings: drSnap.size
+      youth: youthSnap.data().count,
+      behaviorPoints: bpSnap.data().count,
+      caseNotes: cnSnap.data().count,
+      dailyRatings: drSnap.data().count
     }
   }
 }

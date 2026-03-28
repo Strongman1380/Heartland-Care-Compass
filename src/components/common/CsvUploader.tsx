@@ -60,11 +60,12 @@ export function CsvUploader<T>({
   const template = CSV_TEMPLATES[templateType]
 
   const processRows = useCallback((rows: string[][]) => {
-    if (rows.length === 0) {
+    const nonEmpty = rows.filter(cols => cols.some(c => c.trim() !== ''))
+    if (nonEmpty.length === 0) {
       setPreview([])
       return
     }
-    const parsed = parseRows(rows)
+    const parsed = parseRows(nonEmpty)
     setPreview(parsed)
   }, [parseRows])
 

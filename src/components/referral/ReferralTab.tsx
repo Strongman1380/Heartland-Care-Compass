@@ -1028,16 +1028,16 @@ export const ReferralTab = () => {
 
     // Decision badge styling
     const decisionMap: Record<string, { badge: string; bg: string; border: string; text: string; label: string }> = {
-      "RECOMMEND INTERVIEW":     { badge: "bg-green-600 text-white",  bg: "bg-green-50",  border: "border-green-300",  text: "text-green-800",  label: "RECOMMEND INTERVIEW"  },
-      "CONDITIONAL":             { badge: "bg-yellow-500 text-white", bg: "bg-yellow-50", border: "border-yellow-300", text: "text-yellow-900", label: "CONDITIONAL"           },
-      "NEED MORE INFO":          { badge: "bg-blue-500 text-white",   bg: "bg-blue-50",   border: "border-blue-300",   text: "text-blue-800",   label: "NEED MORE INFO"        },
-      "DENY / REDIRECT":         { badge: "bg-red-600 text-white",    bg: "bg-red-50",    border: "border-red-300",    text: "text-red-800",    label: "DENY / REDIRECT"       },
-      "INTERVIEW":               { badge: "bg-green-600 text-white",  bg: "bg-green-50",  border: "border-green-300",  text: "text-green-800",  label: "RECOMMEND INTERVIEW"  },
-      "INTERVIEW_WITH_CONDITIONS":{ badge: "bg-yellow-500 text-white",bg: "bg-yellow-50", border: "border-yellow-300", text: "text-yellow-900", label: "CONDITIONAL"           },
-      "DECLINE":                 { badge: "bg-red-600 text-white",    bg: "bg-red-50",    border: "border-red-300",    text: "text-red-800",    label: "DENY / REDIRECT"       },
-      "RECOMMEND_INTERVIEW":     { badge: "bg-green-600 text-white",  bg: "bg-green-50",  border: "border-green-300",  text: "text-green-800",  label: "RECOMMEND INTERVIEW"  },
+      "RECOMMEND INTERVIEW":     { badge: "bg-green-600 text-white no-brand-override",  bg: "bg-green-50 no-brand-override",  border: "border-green-300",  text: "text-green-800 no-brand-override",  label: "RECOMMEND INTERVIEW"  },
+      "CONDITIONAL":             { badge: "bg-yellow-500 text-white no-brand-override", bg: "bg-yellow-50 no-brand-override", border: "border-yellow-300", text: "text-yellow-900 no-brand-override", label: "CONDITIONAL"           },
+      "NEED MORE INFO":          { badge: "bg-blue-500 text-white no-brand-override",   bg: "bg-blue-50 no-brand-override",   border: "border-blue-300",   text: "text-blue-800 no-brand-override",   label: "NEED MORE INFO"        },
+      "DENY / REDIRECT":         { badge: "bg-red-600 text-white no-brand-override",    bg: "bg-red-50 no-brand-override",    border: "border-red-300",    text: "text-red-800 no-brand-override",    label: "DENY / REDIRECT"       },
+      "INTERVIEW":               { badge: "bg-green-600 text-white no-brand-override",  bg: "bg-green-50 no-brand-override",  border: "border-green-300",  text: "text-green-800 no-brand-override",  label: "RECOMMEND INTERVIEW"  },
+      "INTERVIEW_WITH_CONDITIONS":{ badge: "bg-yellow-500 text-white no-brand-override",bg: "bg-yellow-50 no-brand-override", border: "border-yellow-300", text: "text-yellow-900 no-brand-override", label: "CONDITIONAL"           },
+      "DECLINE":                 { badge: "bg-red-600 text-white no-brand-override",    bg: "bg-red-50 no-brand-override",    border: "border-red-300",    text: "text-red-800 no-brand-override",    label: "DENY / REDIRECT"       },
+      "RECOMMEND_INTERVIEW":     { badge: "bg-green-600 text-white no-brand-override",  bg: "bg-green-50 no-brand-override",  border: "border-green-300",  text: "text-green-800 no-brand-override",  label: "RECOMMEND INTERVIEW"  },
     };
-    const dec = decisionMap[screeningDecision] || decisionMap[data.recommendation] || { badge: "bg-gray-500 text-white", bg: "bg-gray-50", border: "border-gray-300", text: "text-gray-700", label: screeningDecision || "AI Screened" };
+    const dec = decisionMap[screeningDecision] || decisionMap[data.recommendation] || { badge: "bg-gray-500 text-white no-brand-override", bg: "bg-gray-50 no-brand-override", border: "border-gray-300", text: "text-gray-700 no-brand-override", label: screeningDecision || "AI Screened" };
 
     // Deduplicate mental_health display (prefer new key)
     const hasMhNew = domainRows.some(r => r.key === "mental_health_stability");
@@ -1123,7 +1123,7 @@ export const ReferralTab = () => {
                       <div className="flex items-center gap-2 shrink-0">
                         <div className="flex items-center gap-1">
                           {[1,2,3,4,5].map(n => (
-                            <div key={n} className={`w-6 h-6 rounded-full border-2 flex items-center justify-center text-[10px] font-bold ${n === score ? filledCircle : emptyCircle}`}>
+                            <div key={n} className={`w-6 h-6 rounded-full border-2 flex items-center justify-center text-[10px] font-bold no-brand-override ${Number(n) === Number(score) ? filledCircle : emptyCircle}`}>
                               {n}
                             </div>
                           ))}
@@ -1149,9 +1149,9 @@ export const ReferralTab = () => {
         <div className={`px-4 py-3 border-t ${dec.border} ${dec.bg}`}>
           <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500 mb-2">Screening Recommendation</p>
           <div className="flex flex-wrap items-center gap-2 mb-2">
-            <span className={`px-3 py-1 rounded text-xs font-bold ${dec.badge}`}>{dec.label}</span>
+            <span className={`px-3 py-1 rounded text-xs font-bold no-brand-override ${dec.badge}`}>{dec.label}</span>
             {data.fit_rating && (
-              <span className={`text-xs px-2 py-0.5 rounded border font-semibold ${data.fit_rating === "STRONG" ? "bg-green-50 text-green-700 border-green-300" : data.fit_rating === "POOR" ? "bg-red-50 text-red-700 border-red-300" : "bg-yellow-50 text-yellow-700 border-yellow-300"}`}>
+              <span className={`text-xs px-2 py-0.5 rounded border font-semibold no-brand-override ${data.fit_rating === "STRONG" ? "bg-green-50 text-green-700 border-green-300" : data.fit_rating === "POOR" ? "bg-red-50 text-red-700 border-red-300" : "bg-yellow-50 text-yellow-700 border-yellow-300"}`}>
                 House Fit: {data.fit_rating}
               </span>
             )}
@@ -1665,21 +1665,24 @@ export const ReferralTab = () => {
     return [...new Set(allPOs)].sort();
   }, [history]);
 
-  const filteredHistory = history.filter((item) => {
-    if (archiveView === "active" && item.archived) return false;
-    if (archiveView === "archived" && !item.archived) return false;
-    if (historyFilter !== "all" && item.status !== historyFilter) return false;
-    if (poContactFilter && item.poContactLog && item.poContactLog.length > 0) return false;
-    if (poFilter !== "all") {
-      const itemPOs = extractProbationOfficer(item).map((p) => p.toLowerCase());
-      if (!itemPOs.some((p) => p.includes(poFilter.toLowerCase()))) return false;
-    }
-    if (!historySearch.trim()) return true;
-    const poNames = extractProbationOfficer(item).join(" ");
-    const haystack = `${item.referralName} ${item.summary} ${item.staff} ${item.priority} ${item.referralSource} ${poNames}`.toLowerCase();
-    return haystack.includes(historySearch.toLowerCase().trim());
-  });
-  const visibleHistory = filteredHistory.slice(0, visibleCount);
+  const filteredHistory = useMemo(() => {
+    return history.filter((item) => {
+      if (archiveView === "active" && item.archived) return false;
+      if (archiveView === "archived" && !item.archived) return false;
+      if (historyFilter !== "all" && item.status !== historyFilter) return false;
+      if (poContactFilter && item.poContactLog && item.poContactLog.length > 0) return false;
+      if (poFilter !== "all") {
+        const itemPOs = extractProbationOfficer(item).map((p) => p.toLowerCase());
+        if (!itemPOs.some((p) => p.includes(poFilter.toLowerCase()))) return false;
+      }
+      if (!historySearch.trim()) return true;
+      const poNames = extractProbationOfficer(item).join(" ");
+      const haystack = `${item.referralName} ${item.summary} ${item.staff} ${item.priority} ${item.referralSource} ${poNames}`.toLowerCase();
+      return haystack.includes(historySearch.toLowerCase().trim());
+    });
+  }, [history, archiveView, historyFilter, poContactFilter, poFilter, historySearch]);
+
+  const visibleHistory = useMemo(() => filteredHistory.slice(0, visibleCount), [filteredHistory, visibleCount]);
   const selectedItems = history.filter((item) => selectedReferralKeys.has(referralRowKey(item)));
   const selectedVisibleCount = visibleHistory.filter((item) => selectedReferralKeys.has(referralRowKey(item))).length;
 
@@ -3282,7 +3285,7 @@ export const ReferralTab = () => {
                             onClick={() => setReferralFilterSection("all")}
                             className={`px-2 py-1 text-xs rounded border transition-colors ${
                               referralFilterSection === "all"
-                                ? "bg-gray-900 text-white border-gray-900"
+                                ? "bg-gray-900 text-white border-gray-900 no-brand-override"
                                 : "bg-white text-black border-gray-300 hover:bg-gray-50"
                             }`}
                           >
@@ -3294,7 +3297,7 @@ export const ReferralTab = () => {
                               onClick={() => setReferralFilterSection(section.key as any)}
                               className={`px-2 py-1 text-xs rounded border transition-colors ${
                                 referralFilterSection === section.key
-                                  ? "bg-blue-600 text-white border-blue-600"
+                                  ? "bg-blue-600 text-white border-blue-600 no-brand-override"
                                   : "bg-white text-gray-700 border-gray-300 hover:bg-gray-100"
                               }`}
                             >
@@ -3393,7 +3396,7 @@ export const ReferralTab = () => {
                             key={rec}
                             onClick={() => handleStaffRecommendation(item, rec)}
                             disabled={savingRecommendationId === rowKey}
-                            className={`px-2.5 py-0.5 rounded text-xs font-medium border transition-colors ${
+                            className={`px-2.5 py-0.5 rounded text-xs font-medium border transition-colors no-brand-override ${
                               item.staffRecommendation === rec
                                 ? rec === "yes"
                                   ? "bg-green-600 text-white border-green-600"
@@ -3551,25 +3554,25 @@ export const ReferralTab = () => {
                         </span>
                         <a
                           href={hrefCheck}
-                          className="text-xs bg-sky-100 text-sky-800 hover:bg-sky-200 px-2 py-1 rounded border border-sky-300 transition-colors font-medium"
+                          className="text-xs bg-sky-100 text-sky-800 hover:bg-sky-200 px-2 py-1 rounded border border-sky-300 transition-colors font-medium no-brand-override"
                         >
                           Check Need
                         </a>
                         <a
                           href={hrefInterviewRequest}
-                          className="text-xs bg-yellow-100 text-yellow-800 hover:bg-yellow-200 px-2 py-1 rounded border border-yellow-300 transition-colors font-medium"
+                          className="text-xs bg-yellow-100 text-yellow-800 hover:bg-yellow-200 px-2 py-1 rounded border border-yellow-300 transition-colors font-medium no-brand-override"
                         >
                           Request Interview
                         </a>
                         <a
                           href={hrefAccept}
-                          className="text-xs bg-green-100 text-green-800 hover:bg-green-200 px-2 py-1 rounded border border-green-300 transition-colors font-medium"
+                          className="text-xs bg-green-100 text-green-800 hover:bg-green-200 px-2 py-1 rounded border border-green-300 transition-colors font-medium no-brand-override"
                         >
                           Accept
                         </a>
                         <a
                           href={hrefDeny}
-                          className="text-xs bg-red-100 text-red-800 hover:bg-red-200 px-2 py-1 rounded border border-red-300 transition-colors font-medium"
+                          className="text-xs bg-red-100 text-red-800 hover:bg-red-200 px-2 py-1 rounded border border-red-300 transition-colors font-medium no-brand-override"
                         >
                           Deny
                         </a>
@@ -3584,7 +3587,7 @@ export const ReferralTab = () => {
                             accept_message: "We are looking forward for you to reach out and coordinate services. What intake date/time are you aiming for, and who is transporting?"
                           })}
                           disabled={sendingEmailId === rowKey + "accept"}
-                          className="hidden sm:block text-xs bg-green-600 text-white hover:bg-green-700 px-2 py-1 rounded transition-colors disabled:opacity-50"
+                          className="hidden sm:block text-xs bg-green-600 text-white hover:bg-green-700 px-2 py-1 rounded transition-colors disabled:opacity-50 no-brand-override"
                         >
                           {sendingEmailId === rowKey + "accept" ? "Sending..." : "Accept"}
                         </button>
@@ -3593,7 +3596,7 @@ export const ReferralTab = () => {
                             denial_reason: denialReasons.replace("[reason]", "various concerns")
                           })}
                           disabled={sendingEmailId === rowKey + "deny"}
-                          className="hidden sm:block text-xs bg-red-600 text-white hover:bg-red-700 px-2 py-1 rounded transition-colors disabled:opacity-50"
+                          className="hidden sm:block text-xs bg-red-600 text-white hover:bg-red-700 px-2 py-1 rounded transition-colors disabled:opacity-50 no-brand-override"
                         >
                           {sendingEmailId === rowKey + "deny" ? "Sending..." : "Deny"}
                         </button>
@@ -3607,7 +3610,7 @@ export const ReferralTab = () => {
                           return (
                             <a
                               href={hrefInterview}
-                              className="text-xs bg-yellow-50 text-yellow-800 hover:bg-yellow-100 px-2 py-1 rounded border border-yellow-300 transition-colors font-medium"
+                              className="text-xs bg-yellow-50 text-yellow-800 hover:bg-yellow-100 px-2 py-1 rounded border border-yellow-300 transition-colors font-medium no-brand-override"
                             >
                               Interview
                             </a>
@@ -3620,7 +3623,7 @@ export const ReferralTab = () => {
                         <Button
                           size="sm"
                           variant="outline"
-                          className="bg-white border-red-300 text-red-600 hover:bg-red-50"
+                          className="bg-white border-red-300 text-red-600 hover:bg-red-50 no-brand-override"
                           onClick={() => handleAIScreen(item.rawText || JSON.stringify(item.parsedData || {}), rowKey)}
                           disabled={aiScreeningLoading.has(rowKey)}
                         >
@@ -3650,7 +3653,7 @@ export const ReferralTab = () => {
                             <Button
                               size="sm"
                               variant="outline"
-                              className="bg-white border-red-300 text-red-600 hover:bg-red-50"
+                              className="bg-white border-red-300 text-red-600 hover:bg-red-50 no-brand-override"
                               onClick={() => handleExportAIScreen(item, "pdf")}
                               disabled={exportingKey === `${rowKey}:ai_screen:pdf`}
                             >
@@ -3659,7 +3662,7 @@ export const ReferralTab = () => {
                             <Button
                               size="sm"
                               variant="outline"
-                              className="bg-white border-red-300 text-red-600 hover:bg-red-50"
+                              className="bg-white border-red-300 text-red-600 hover:bg-red-50 no-brand-override"
                               onClick={() => handleExportAIScreen(item, "docx")}
                               disabled={exportingKey === `${rowKey}:ai_screen:docx`}
                             >
@@ -3826,7 +3829,7 @@ export const ReferralTab = () => {
                           {(item.screeningResult || aiScreeningResults[rowKey]) && (
                             <div className="rounded-md border border-purple-200 bg-purple-50/50 p-3">
                               <div className="flex items-center justify-between mb-2">
-                                <span className="text-sm font-semibold text-purple-800 flex items-center gap-1.5">
+                                <span className="text-sm font-semibold text-purple-800 flex items-center gap-1.5 no-brand-override">
                                   <Sparkles className="h-4 w-4" />AI Screening Result
                                 </span>
                                 <button
@@ -3946,13 +3949,13 @@ export const ReferralTab = () => {
                     <div className="flex gap-2">
                       <button
                         onClick={() => setBulkOutreachType("check_need")}
-                        className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${bulkOutreachType === "check_need" ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50"}`}
+                        className={`text-xs px-3 py-1.5 rounded-full border transition-colors no-brand-override ${bulkOutreachType === "check_need" ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50"}`}
                       >
                         Check Need
                       </button>
                       <button
                         onClick={() => setBulkOutreachType("interview")}
-                        className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${bulkOutreachType === "interview" ? "bg-violet-600 text-white border-violet-600" : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50"}`}
+                        className={`text-xs px-3 py-1.5 rounded-full border transition-colors no-brand-override ${bulkOutreachType === "interview" ? "bg-violet-600 text-white border-violet-600" : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50"}`}
                       >
                         Request Interview
                       </button>

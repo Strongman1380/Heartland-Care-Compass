@@ -300,7 +300,7 @@ export function CsvUploader<T>({
             <Button
               onClick={handleImport}
               disabled={importing || validCount === 0}
-              className="mt-3 bg-emerald-600 hover:bg-emerald-700 text-white"
+              className="mt-3 !bg-emerald-600 hover:!bg-emerald-700 !text-white !shadow-none"
             >
               {importing
                 ? <><RefreshCw className="w-4 h-4 mr-2 animate-spin" />Importing...</>

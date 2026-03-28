@@ -750,7 +750,7 @@ const DataUpload: React.FC = () => {
                         <Button
                           onClick={handleDpnImport}
                           disabled={dpnImporting}
-                          className="bg-green-600 hover:bg-green-700 text-white"
+                          className="!bg-green-600 hover:!bg-green-700 !text-white !shadow-none"
                         >
                           {dpnImporting ? 'Importing...' : `Import ${dpnEntries.length} Entries`}
                         </Button>

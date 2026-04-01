@@ -869,7 +869,7 @@ OUTPUT: Return ONLY valid JSON - no preamble, no markdown fences, no text outsid
   "current_placement": null,
   "program_level_requested": null,
   "overall_risk_level": null,
-  "family_contacts": { "guardians": [], "primary_contact": null, "relationship": null, "phone": null, "alternate_phone": null, "address": null, "city_state_zip": null },
+  "family_contacts": { "contacts": [ { "name": null, "role": null, "relationship": null, "phone": null, "alt_phone": null, "email": null, "address": null, "city_state_zip": null, "engagement": null } ] },
   "legal_team": { "po_phone": null, "judge": null, "attorney": null, "gal_casa": null },
   "current_placement_contact": { "facility_name": null, "address": null, "city_state": null, "phone": null, "contact_name": null },
   "risk_summary": { "yls_score": null, "yls_date": null, "top_drivers": [] },
@@ -905,7 +905,7 @@ OUTPUT: Return ONLY valid JSON - no preamble, no markdown fences, no text outsid
   "screening_followup_questions": []
 }
 
-RULES: Do not invent facts. Only use what is explicitly in the referral. If contact, address, demographic, or placement fields are present anywhere in the referral packet, extract them into the header fields above. If a hard-no item is explicitly present, recommendation MUST be DECLINE and screening_decision MUST be "DENY / REDIRECT". If suspected but not explicit, set screen_status=CONDITIONAL and ask targeted questions. Be blunt, operational, specific. No moralizing.`,
+RULES: Do not invent facts. Only use what is explicitly in the referral. If contact, address, demographic, or placement fields are present anywhere in the referral packet, extract them into the header fields above. If a hard-no item is explicitly present, recommendation MUST be DECLINE and screening_decision MUST be "DENY / REDIRECT". If suspected but not explicit, set screen_status=CONDITIONAL and ask targeted questions. Be blunt, operational, specific. No moralizing. For family_contacts.contacts: extract EVERY person mentioned as a parent, guardian, caregiver, or emergency contact. For each person include their name, role (Mother/Father/Guardian/etc.), relationship, phone, alt phone, email, address, city_state_zip, and engagement level if mentioned. Each person gets their own object in the contacts array.`,
       userPrompt: String(referralText).trim(),
       maxTokens: 7000,
       temperature: 0.1,

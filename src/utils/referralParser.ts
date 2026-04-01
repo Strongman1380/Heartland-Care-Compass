@@ -31,6 +31,11 @@ export const SECTION_CONFIG = [
     keywords: [
       "mother", "father", "parent", "guardian", "sibling", "family", "caregiver", "custody",
       "contact information", "engagement level", "primary guardian", "household",
+      "mom", "dad", "stepmother", "stepfather", "step mother", "step father",
+      "next of kin", "emergency contact", "foster parent", "grandmother", "grandfather",
+      "grandparent", "aunt", "uncle", "relative", "biological parent",
+      "primary contact", "alternate contact", "second contact",
+      "engagement", "visitation", "custody arrangement",
     ],
     label: "Family & Contacts",
   },
@@ -135,6 +140,47 @@ export const SECTION_CONFIG = [
     label: "Restrictions",
   },
 ];
+
+// Contact person detection — field names that represent a person role
+const CONTACT_PERSON_RE = /^(mother'?s?|father'?s?|parent'?s?|step-?mother|step-?father|legal guardian|primary guardian|secondary guardian|guardian'?s?|caregiver|next of kin|emergency contact|foster parent|relative|aunt|uncle|grandmother|grandfather|grandparent|grandma|grandpa)$/i;
+
+// Generic sub-fields that should inherit the active contact person's prefix
+const CONTACT_SUBFIELD_NAMES = new Set([
+  'phone', 'cell', 'cell phone', 'mobile', 'mobile phone', 'home phone', 'work phone',
+  'phone number', 'telephone', 'contact number', 'alt phone', 'alternate phone', 'pager',
+  'address', 'home address', 'mailing address', 'street', 'street address',
+  'city', 'state', 'zip', 'zip code', 'city/state', 'city, state', 'city state zip',
+  'email', 'email address', 'e-mail',
+  'relationship', 'relation', 'relation to youth', 'relationship to youth',
+  'employer', 'occupation', 'workplace',
+]);
+
+function normalizeContactPersonLabel(fieldName: string): string {
+  const lc = fieldName.toLowerCase().replace(/['']s$/, '').trim();
+  if (lc === 'mother') return 'Mother';
+  if (lc === 'father') return 'Father';
+  if (lc === 'parent' || lc === 'parents') return 'Parent';
+  if (lc.includes('legal guardian') || lc.includes('primary guardian') || lc.includes('secondary guardian')) return 'Guardian';
+  if (lc === 'guardian' || lc === 'guardians') return 'Guardian';
+  if (lc === 'stepmother' || lc === 'step-mother') return 'Stepmother';
+  if (lc === 'stepfather' || lc === 'step-father') return 'Stepfather';
+  if (lc === 'caregiver') return 'Caregiver';
+  if (lc === 'next of kin') return 'Next of Kin';
+  if (lc === 'emergency contact') return 'Emergency Contact';
+  if (lc === 'foster parent') return 'Foster Parent';
+  if (lc === 'relative') return 'Relative';
+  if (lc === 'aunt') return 'Aunt';
+  if (lc === 'uncle') return 'Uncle';
+  if (lc === 'grandmother' || lc === 'grandma') return 'Grandmother';
+  if (lc === 'grandfather' || lc === 'grandpa') return 'Grandfather';
+  if (lc === 'grandparent') return 'Grandparent';
+  return fieldName.charAt(0).toUpperCase() + fieldName.slice(1);
+}
+
+function normalizeFieldName(fieldName: string): string {
+  // Normalize possessive forms: "Mother's Phone" → "Mother Phone"
+  return fieldName.replace(/['']s\s+/g, ' ').replace(/['']s$/g, '').trim();
+}
 
 export const UNKNOWN_VALUE_RE = /^(n\/a|na|none|unknown|not provided|not documented|unspecified|-|—|click or tap here to enter text|click here|tap here)$/i;
 
@@ -303,12 +349,14 @@ export const parseReferralText = (raw: string): ParsedReferral => {
 
   let currentFieldRef: { section: keyof ParsedReferral; fieldName: string } | null = null;
   let activeSection: keyof ParsedReferral = "other";
+  let activeContactPerson: string | null = null;
 
   for (const line of lines) {
     const sectionHeader = detectSectionHeader(line);
     if (sectionHeader) {
       activeSection = sectionHeader;
       currentFieldRef = null;
+      activeContactPerson = null;
       continue;
     }
 
@@ -324,10 +372,38 @@ export const parseReferralText = (raw: string): ParsedReferral => {
       continue;
     }
 
-    const { fieldName, value } = parsedField;
+    const { fieldName: rawFieldName, value } = parsedField;
+    const fieldName = normalizeFieldName(rawFieldName);
     if (!value || UNKNOWN_VALUE_RE.test(value)) continue;
 
-    const section = detectSectionForField(fieldName) || activeSection;
+    const fieldNameLower = fieldName.toLowerCase().trim();
+
+    // Contact person tracking: detect a person role as a "name" field
+    if (CONTACT_PERSON_RE.test(fieldName)) {
+      const personLabel = normalizeContactPersonLabel(fieldName);
+      const compositeKey = `${personLabel} Name`;
+      result.family[compositeKey] = value;
+      currentFieldRef = { section: 'family', fieldName: compositeKey };
+      activeContactPerson = personLabel;
+      continue;
+    }
+
+    // If we have an active contact person and this is a sub-field, prefix it
+    if (activeContactPerson && CONTACT_SUBFIELD_NAMES.has(fieldNameLower)) {
+      const subLabel = fieldName.charAt(0).toUpperCase() + fieldName.slice(1).toLowerCase();
+      const compositeKey = `${activeContactPerson} ${subLabel}`;
+      result.family[compositeKey] = value;
+      currentFieldRef = { section: 'family', fieldName: compositeKey };
+      continue;
+    }
+
+    // Reset contact tracking when hitting a clearly different field
+    const detectedSection = detectSectionForField(fieldName);
+    if (detectedSection && detectedSection !== 'family') {
+      activeContactPerson = null;
+    }
+
+    const section = detectedSection || activeSection;
     result[section][fieldName] = value;
     currentFieldRef = { section, fieldName };
   }

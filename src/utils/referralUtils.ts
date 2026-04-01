@@ -15,6 +15,16 @@ export const KEY_INFORMATION_FIELDS = [
   "Probation Officer Contact",
   "School",
   "Referral Recommendation",
+  "Mother Name",
+  "Father Name",
+  "Guardian Name",
+  "Guardian Phone",
+  "Mother Phone",
+  "Father Phone",
+  "Primary Guardian",
+  "Legal Guardian",
+  "Emergency Contact Name",
+  "Emergency Contact Phone",
 ] as const;
 
 /**
@@ -49,19 +59,22 @@ export function getKeyInformationFields(
   const keyFields: Array<{ label: string; value: string }> = [];
 
   // Search through all sections for key fields
-  Object.entries(parsedData).forEach(([_sectionKey, sectionData]) => {
+  Object.entries(parsedData).forEach(([sectionKey, sectionData]) => {
     if (typeof sectionData !== "object" || sectionData === null) return;
 
     Object.entries(sectionData as Record<string, any>).forEach(([fieldName, fieldValue]) => {
-      if (
-        KEY_INFORMATION_FIELDS.includes(fieldName as any) &&
-        fieldValue &&
-        typeof fieldValue === "string"
-      ) {
-        // Avoid duplicates
-        if (!keyFields.find((f) => f.label === fieldName)) {
-          keyFields.push({ label: fieldName, value: fieldValue });
-        }
+      if (!fieldValue || typeof fieldValue !== "string") return;
+
+      const isExactMatch = KEY_INFORMATION_FIELDS.includes(fieldName as any);
+
+      // Fuzzy lookup: guardian fields in any section, mother/father fields in family section
+      const fieldLower = fieldName.toLowerCase();
+      const isFuzzyMatch =
+        fieldLower.includes("guardian") ||
+        (sectionKey === "family" && (fieldLower.includes("mother") || fieldLower.includes("father")));
+
+      if ((isExactMatch || isFuzzyMatch) && !keyFields.find((f) => f.label === fieldName)) {
+        keyFields.push({ label: fieldName, value: fieldValue });
       }
     });
   });
@@ -152,4 +165,73 @@ export function getStatusBadgeColor(
     case "complete":
       return "text-blue-600";
   }
+}
+
+// ─── Contact Person Grouping ────────────────────────────────────────────────
+
+export interface ContactPersonCard {
+  role: string;
+  fields: Array<{ label: string; value: string }>;
+}
+
+const KNOWN_CONTACT_ROLES = [
+  'Mother', 'Father', 'Parent', 'Guardian', 'Stepmother', 'Stepfather',
+  'Caregiver', 'Next of Kin', 'Emergency Contact', 'Foster Parent',
+  'Relative', 'Aunt', 'Uncle', 'Grandmother', 'Grandfather', 'Grandparent',
+];
+
+/**
+ * Groups family section fields by person prefix into contact cards.
+ * Fields that don't match any known person role go into `ungrouped`.
+ *
+ * @param familySection - Record of field key → value from the family section
+ * @returns contacts array and ungrouped remainder
+ */
+export function groupContactPersons(familySection: Record<string, string>): {
+  contacts: ContactPersonCard[];
+  ungrouped: Record<string, string>;
+} {
+  const personMap = new Map<string, Array<{ label: string; value: string }>>();
+  const ungrouped: Record<string, string> = {};
+
+  for (const [key, value] of Object.entries(familySection)) {
+    if (!value) continue;
+    let matched = false;
+
+    for (const role of KNOWN_CONTACT_ROLES) {
+      const rolePrefix = role + ' ';
+      if (key === role || key.startsWith(rolePrefix)) {
+        const subField = key === role ? 'Name' : key.slice(rolePrefix.length);
+        if (!personMap.has(role)) personMap.set(role, []);
+        personMap.get(role)!.push({ label: subField, value });
+        matched = true;
+        break;
+      }
+      // Handle possessive: "Mother's Phone" → Mother / Phone
+      const possessivePrefix = role + "'s ";
+      if (key.startsWith(possessivePrefix)) {
+        const subField = key.slice(possessivePrefix.length);
+        if (!personMap.has(role)) personMap.set(role, []);
+        personMap.get(role)!.push({ label: subField, value });
+        matched = true;
+        break;
+      }
+    }
+
+    if (!matched) {
+      ungrouped[key] = value;
+    }
+  }
+
+  const fieldOrder: Record<string, number> = {
+    Name: 0, Phone: 1, 'Phone Number': 1, Cell: 1, Mobile: 1, Email: 2,
+    Address: 3, Relationship: 4,
+  };
+
+  const contacts: ContactPersonCard[] = Array.from(personMap.entries()).map(([role, fields]) => ({
+    role,
+    fields: fields.sort((a, b) => (fieldOrder[a.label] ?? 99) - (fieldOrder[b.label] ?? 99)),
+  }));
+
+  return { contacts, ungrouped };
 }

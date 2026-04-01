@@ -51,7 +51,7 @@ import { ReferralFieldRow } from "./ReferralFieldRow";
 import { KeyInformationCard } from "./KeyInformationCard";
 import { ReferralSectionCard } from "./ReferralSectionCard";
 import { DataDensityBadge } from "./DataDensityBadge";
-import { calculateFieldCompletion } from "@/utils/referralUtils";
+import { calculateFieldCompletion, groupContactPersons, type ContactPersonCard } from "@/utils/referralUtils";
 import { alertsService } from "@/integrations/firebase/alertsService";
 import { screenReferralIntake } from "@/services/aiService";
 import {
@@ -1069,8 +1069,25 @@ export const ReferralTab = () => {
               {curPlacement && <div><p className="text-[10px] uppercase font-semibold text-gray-400 leading-none mb-0.5">Current Placement</p><p className="text-sm text-gray-800">{curPlacement}</p></div>}
               {programLevel && <div><p className="text-[10px] uppercase font-semibold text-gray-400 leading-none mb-0.5">Program Level Requested</p><p className="text-sm text-gray-800">{programLevel}</p></div>}
               {overallRisk && <div><p className="text-[10px] uppercase font-semibold text-gray-400 leading-none mb-0.5">Overall Risk Level</p><p className="text-sm text-gray-800">{overallRisk}</p></div>}
-              {familyContacts.primary_contact && <div><p className="text-[10px] uppercase font-semibold text-gray-400 leading-none mb-0.5">Family Contact</p><p className="text-sm text-gray-800">{familyContacts.primary_contact}{familyContacts.relationship ? ` (${familyContacts.relationship})` : ""}</p></div>}
-              {familyContacts.phone && <div><p className="text-[10px] uppercase font-semibold text-gray-400 leading-none mb-0.5">Family Phone</p><p className="text-sm text-gray-800">{familyContacts.phone}</p></div>}
+              {/* family_contacts — supports both old flat structure and new contacts array */}
+              {Array.isArray(familyContacts.contacts) && familyContacts.contacts.length > 0
+                ? familyContacts.contacts.filter((c: any) => c && (c.name || c.phone)).map((c: any, i: number) => (
+                    <div key={i}>
+                      <p className="text-[10px] uppercase font-semibold text-gray-400 leading-none mb-0.5">
+                        {c.role || "Family Contact"}
+                      </p>
+                      <p className="text-sm text-gray-800">
+                        {c.name || ""}
+                        {c.relationship ? ` (${c.relationship})` : ""}
+                        {c.phone ? ` · ${c.phone}` : ""}
+                      </p>
+                    </div>
+                  ))
+                : <>
+                    {familyContacts.primary_contact && <div><p className="text-[10px] uppercase font-semibold text-gray-400 leading-none mb-0.5">Family Contact</p><p className="text-sm text-gray-800">{familyContacts.primary_contact}{familyContacts.relationship ? ` (${familyContacts.relationship})` : ""}</p></div>}
+                    {familyContacts.phone && <div><p className="text-[10px] uppercase font-semibold text-gray-400 leading-none mb-0.5">Family Phone</p><p className="text-sm text-gray-800">{familyContacts.phone}</p></div>}
+                  </>
+              }
             </div>
           </div>
         )}
@@ -2336,6 +2353,26 @@ export const ReferralTab = () => {
     return parts.length > 0 ? parts : text;
   };
 
+  // Renders grouped contact person cards for the family section
+  const renderContactPersonCards = (cards: ContactPersonCard[], searchQuery: string) => (
+    <div className="space-y-2">
+      {cards.map((card) => (
+        <div key={card.role} className="rounded border border-amber-200 bg-amber-50/50 p-2.5">
+          <p className="text-xs font-bold text-amber-800 mb-1.5 uppercase tracking-wide">{card.role}</p>
+          <div className="space-y-1">
+            {card.fields.map(({ label, value }) => (
+              <ReferralFieldRow
+                key={label}
+                label={searchQuery ? highlightText(label, searchQuery) as string : label}
+                value={searchQuery ? highlightText(value, searchQuery) : value}
+              />
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
   return (
     <div className="space-y-6">
       <div>
@@ -2929,11 +2966,30 @@ export const ReferralTab = () => {
                   }
                 }}
               >
-                <div className={`grid ${fieldCount >= 6 ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1"} gap-2`}>
-                  {Object.entries(data).map(([key, val]) => (
-                    <ReferralFieldRow key={key} label={key} value={val} />
-                  ))}
-                </div>
+                {sectionDef.key === 'family' ? (() => {
+                  const { contacts, ungrouped } = groupContactPersons(data as Record<string, string>);
+                  const hasContacts = contacts.length > 0;
+                  return (
+                    <div className="space-y-2">
+                      {hasContacts && renderContactPersonCards(contacts, "")}
+                      {Object.keys(ungrouped).length > 0 && (
+                        <div className={`grid ${Object.keys(ungrouped).length >= 4 ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1"} gap-2 ${hasContacts ? "mt-2 pt-2 border-t border-amber-100" : ""}`}>
+                          {Object.entries(ungrouped).map(([key, val]) => (
+                            <ReferralFieldRow key={key} label={key} value={val} />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })() : (
+                  <div className={`grid ${fieldCount >= 6 ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1"} gap-2`}>
+                    {Object.entries(data).map(([key, val]) => (
+                      <div key={key} className={typeof val === 'string' && val.length > 80 ? "col-span-full" : ""}>
+                        <ReferralFieldRow label={key} value={val} />
+                      </div>
+                    ))}
+                  </div>
+                )}
               </ReferralSectionCard>
             );
           })}
@@ -2955,13 +3011,13 @@ export const ReferralTab = () => {
                 }
               }}
             >
-              <div className={`grid ${Object.keys(parsed.other).length >= 6 ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1"} gap-2`}>
+              <div className="grid grid-cols-1 gap-2">
                 {Object.entries(parsed.other).map(([key, val]) => (
                   <div key={key}>
-                    {key === "Referral Notes" ? (
-                      <div className="text-sm col-span-full">
-                        <span className="font-medium text-gray-600">{key}:</span>
-                        <div className="whitespace-pre-wrap text-gray-800 mt-1">{val}</div>
+                    {key === "Referral Notes" || /^Line\s+\d+$/i.test(key) ? (
+                      <div className="text-sm">
+                        {key !== "Referral Notes" ? null : <span className="font-medium text-gray-600">{key}: </span>}
+                        <div className="whitespace-pre-wrap text-gray-800 mt-0.5">{val}</div>
                       </div>
                     ) : (
                       <ReferralFieldRow label={key} value={val} />
@@ -3758,17 +3814,37 @@ export const ReferralTab = () => {
                                       }
                                     }}
                                   >
-                                    <div className={`grid ${fieldCount >= 6 ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1"} gap-2`}>
-                                      {Object.entries(data).map(([key, val]) => (
-                                        <div key={key}>
-                                          <ReferralFieldRow
-                                            key={key}
-                                            label={highlightText(key, referralSearchQuery) as string}
-                                            value={highlightText(val as string, referralSearchQuery)}
-                                          />
+                                    {sectionDef.key === 'family' ? (() => {
+                                      const { contacts, ungrouped } = groupContactPersons(data as Record<string, string>);
+                                      const hasContacts = contacts.length > 0;
+                                      return (
+                                        <div className="space-y-2">
+                                          {hasContacts && renderContactPersonCards(contacts, referralSearchQuery)}
+                                          {Object.keys(ungrouped).length > 0 && (
+                                            <div className={`grid ${Object.keys(ungrouped).length >= 4 ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1"} gap-2 ${hasContacts ? "mt-2 pt-2 border-t border-amber-100" : ""}`}>
+                                              {Object.entries(ungrouped).map(([key, val]) => (
+                                                <ReferralFieldRow
+                                                  key={key}
+                                                  label={highlightText(key, referralSearchQuery) as string}
+                                                  value={highlightText(val as string, referralSearchQuery)}
+                                                />
+                                              ))}
+                                            </div>
+                                          )}
                                         </div>
-                                      ))}
-                                    </div>
+                                      );
+                                    })() : (
+                                      <div className={`grid ${fieldCount >= 6 ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1"} gap-2`}>
+                                        {Object.entries(data).map(([key, val]) => (
+                                          <div key={key} className={typeof val === 'string' && (val as string).length > 80 ? "col-span-full" : ""}>
+                                            <ReferralFieldRow
+                                              label={highlightText(key, referralSearchQuery) as string}
+                                              value={highlightText(val as string, referralSearchQuery)}
+                                            />
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
                                   </ReferralSectionCard>
                                 );
                               })}
@@ -3795,13 +3871,13 @@ export const ReferralTab = () => {
                                       }
                                     }}
                                   >
-                                    <div className={`grid ${Object.keys(otherData).length >= 6 ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1"} gap-2`}>
+                                    <div className="grid grid-cols-1 gap-2">
                                       {Object.entries(otherData).map(([key, val]) => (
                                         <div key={key}>
-                                          {key === "Referral Notes" ? (
-                                            <div className="text-sm col-span-full">
-                                              <span className="font-medium text-gray-600">{key}:</span>
-                                              <div className="whitespace-pre-wrap text-gray-800 mt-1">{highlightText(val as string, referralSearchQuery)}</div>
+                                          {key === "Referral Notes" || /^Line\s+\d+$/i.test(key) ? (
+                                            <div className="text-sm">
+                                              {key !== "Referral Notes" ? null : <span className="font-medium text-gray-600">{key}: </span>}
+                                              <div className="whitespace-pre-wrap text-gray-800 mt-0.5">{highlightText(val as string, referralSearchQuery)}</div>
                                             </div>
                                           ) : (
                                             <ReferralFieldRow

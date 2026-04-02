@@ -12,26 +12,32 @@ export interface ExtractionResult {
 }
 
 /**
- * Extract text from DOCX file
+ * Extract text from DOCX file using mammoth.
+ * mammoth.extractRawText reads the DOCX ZIP/XML and returns plain text,
+ * with table cells and paragraphs separated by newlines — preserving the
+ * label/value structure the referral parser expects.
  */
 async function extractFromDocx(file: File): Promise<string> {
   try {
-    // Use XLSX to read DOCX (it supports Office Open XML which DOCX is based on)
-    // For proper DOCX support, we'll use a simpler approach with the file
+    const mammoth = await import('mammoth');
     const arrayBuffer = await file.arrayBuffer();
+    const result = await mammoth.extractRawText({ arrayBuffer });
 
-    // Try using a simple regex approach on the XML inside DOCX
-    // DOCX files are ZIP archives containing XML
-    // Since we can't use JSZip directly, we'll try extracting via a library
+    if (result.messages?.length) {
+      // Log non-fatal warnings but don't fail
+      result.messages.forEach((msg: any) => {
+        if (msg.type === 'error') console.warn('[DOCX]', msg.message);
+      });
+    }
 
-    // For now, provide a helpful error message
-    throw new Error(
-      'DOCX parsing requires additional setup. Please convert to PDF or paste text directly.'
-    );
+    const text = result.value?.trim() ?? '';
+    if (!text) throw new Error('DOCX contained no extractable text.');
+    return text;
   } catch (error: any) {
     throw new Error(`Failed to extract DOCX: ${error.message}`);
   }
 }
+
 
 /**
  * Extract text from PDF file

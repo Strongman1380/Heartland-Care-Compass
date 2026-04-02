@@ -93,10 +93,63 @@ async function extractFromPdf(file: File): Promise<string> {
     for (let i = 1; i <= pdf.numPages; i++) {
       const page = await pdf.getPage(i);
       const textContent = await page.getTextContent();
-      const pageText = textContent.items
-        .map((item: any) => item.str || '')
-        .join(' ');
-      fullText += pageText + '\n';
+
+      // Group text items by their Y coordinate to reconstruct lines.
+      // PDF coordinates increase upward, so items with the same (or close) Y
+      // value are on the same visual line.
+      type TextItem = { str: string; x: number; y: number };
+      const items: TextItem[] = textContent.items
+        .filter((item: any) => item.str && item.str.trim())
+        .map((item: any) => ({
+          str: item.str as string,
+          x: item.transform?.[4] ?? 0,
+          y: item.transform?.[5] ?? 0,
+        }));
+
+      if (items.length === 0) continue;
+
+      // Sort by descending Y (top of page first), then ascending X
+      items.sort((a, b) => b.y - a.y || a.x - b.x);
+
+      // Group into lines: items within 2pt vertical tolerance share a line
+      const lines: TextItem[][] = [];
+      let currentLine: TextItem[] = [items[0]];
+      for (let j = 1; j < items.length; j++) {
+        const prev = currentLine[currentLine.length - 1];
+        if (Math.abs(items[j].y - prev.y) <= 2) {
+          currentLine.push(items[j]);
+        } else {
+          lines.push(currentLine);
+          currentLine = [items[j]];
+        }
+      }
+      lines.push(currentLine);
+
+      // For each line, detect whether it's a two-column row by checking if
+      // there are items clustered at two distinct X positions (left & right columns).
+      // If so, join them with a tab so the referral parser's secondaryRaw logic applies.
+      const pageLines: string[] = lines.map((lineItems) => {
+        if (lineItems.length === 1) return lineItems[0].str.trim();
+
+        // Find the median X to detect a left/right column split
+        const xs = lineItems.map(it => it.x).sort((a, b) => a - b);
+        const pageWidth = xs[xs.length - 1] - xs[0];
+
+        if (pageWidth > 100) {
+          // Looks like a multi-column row — split at the midpoint
+          const midX = xs[0] + pageWidth / 2;
+          const leftItems = lineItems.filter(it => it.x < midX);
+          const rightItems = lineItems.filter(it => it.x >= midX);
+          const leftText = leftItems.map(it => it.str).join('').trim();
+          const rightText = rightItems.map(it => it.str).join('').trim();
+          if (leftText && rightText) return `${leftText}\t${rightText}`;
+          return (leftText || rightText).trim();
+        }
+
+        return lineItems.map(it => it.str).join('').trim();
+      });
+
+      fullText += pageLines.filter(Boolean).join('\n') + '\n';
     }
 
     return fullText;

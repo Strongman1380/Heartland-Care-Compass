@@ -178,7 +178,7 @@ export const SECTION_CONFIG = [
 ];
 
 // Contact person detection — field names that represent a person role
-const CONTACT_PERSON_RE = /^(mother'?s?|father'?s?|parent'?s?|parent\/guardian'?s?|parent\/guardians?|step-?mother|step-?father|legal guardian|primary guardian|secondary guardian|guardian'?s?|caregiver|next of kin|emergency contact|foster parent|relative|aunt|uncle|grandmother|grandfather|grandparent|grandma|grandpa)$/i;
+const CONTACT_PERSON_RE = /^(mother'?s?|father'?s?|parent'?s?|parent\/guardian'?s?|parent\/guardians?|step-?mother|step-?father|legal guardian|primary guardian|secondary guardian|guardian'?s?|caregiver|next of kin|emergency contact|foster parent|relative|aunt|uncle|grandmother|grandfather|grandparent|grandma|grandpa|attorney|caseworker|case worker|probation officer|parole officer|gal|casa|judge)$/i;
 
 // Generic sub-fields that should inherit the active contact person's prefix
 const CONTACT_SUBFIELD_NAMES = new Set([
@@ -539,6 +539,26 @@ export const parseReferralText = (raw: string): ParsedReferral => {
 
     const parsedField = parseFieldLine(line);
     if (!parsedField) {
+      // Bare phone number on its own line (e.g. "531-361-4009" after "Parent/Guardian: Carrie Miller")
+      const isBareLikePhone = /^\+?[\d][\d\s\-().]{5,14}$/.test(line.trim());
+      if (isBareLikePhone) {
+        if (activeContactPerson) {
+          const phoneKey = `${activeContactPerson} Phone`;
+          // Only store if not already set
+          if (!result.family[phoneKey]) {
+            result.family[phoneKey] = line.trim();
+            currentFieldRef = { section: 'family', fieldName: phoneKey };
+          }
+        } else if (currentFieldRef) {
+          // Append to previous field only if it doesn't already have a phone-like value
+          const { section, fieldName } = currentFieldRef;
+          const prev = result[section][fieldName] || '';
+          if (!prev) result[section][fieldName] = line.trim();
+          // else: silently skip bare phones with no clear home
+        }
+        continue;
+      }
+      // Non-phone bare line: append as continuation of previous field
       if (currentFieldRef) {
         const { section, fieldName } = currentFieldRef;
         const prev = result[section][fieldName] || "";

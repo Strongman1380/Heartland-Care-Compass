@@ -2983,11 +2983,21 @@ export const ReferralTab = () => {
                   );
                 })() : (
                   <div className={`grid ${fieldCount >= 6 ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1"} gap-2`}>
-                    {Object.entries(data).map(([key, val]) => (
-                      <div key={key} className={typeof val === 'string' && val.length > 80 ? "col-span-full" : ""}>
-                        <ReferralFieldRow label={key} value={val} />
-                      </div>
-                    ))}
+                    {Object.entries(data).map(([key, val]) => {
+                      const isNarrative = typeof val === 'string' && val.length > 120;
+                      return (
+                        <div key={key} className={isNarrative ? "col-span-full" : ""}>
+                          {isNarrative ? (
+                            <div className="space-y-0.5">
+                              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{key}</p>
+                              <p className="text-sm text-gray-900 whitespace-pre-wrap leading-relaxed bg-gray-50 rounded p-2 border border-gray-100">{val}</p>
+                            </div>
+                          ) : (
+                            <ReferralFieldRow label={key} value={val} />
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </ReferralSectionCard>
@@ -3835,14 +3845,24 @@ export const ReferralTab = () => {
                                       );
                                     })() : (
                                       <div className={`grid ${fieldCount >= 6 ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1"} gap-2`}>
-                                        {Object.entries(data).map(([key, val]) => (
-                                          <div key={key} className={typeof val === 'string' && (val as string).length > 80 ? "col-span-full" : ""}>
-                                            <ReferralFieldRow
-                                              label={highlightText(key, referralSearchQuery) as string}
-                                              value={highlightText(val as string, referralSearchQuery)}
-                                            />
-                                          </div>
-                                        ))}
+                                        {Object.entries(data).map(([key, val]) => {
+                                          const isNarrative = typeof val === 'string' && (val as string).length > 120;
+                                          return (
+                                            <div key={key} className={isNarrative ? "col-span-full" : ""}>
+                                              {isNarrative ? (
+                                                <div className="space-y-0.5">
+                                                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{highlightText(key, referralSearchQuery)}</p>
+                                                  <p className="text-sm text-gray-900 whitespace-pre-wrap leading-relaxed bg-gray-50 rounded p-2 border border-gray-100">{highlightText(val as string, referralSearchQuery)}</p>
+                                                </div>
+                                              ) : (
+                                                <ReferralFieldRow
+                                                  label={highlightText(key, referralSearchQuery) as string}
+                                                  value={highlightText(val as string, referralSearchQuery)}
+                                                />
+                                              )}
+                                            </div>
+                                          );
+                                        })}
                                       </div>
                                     )}
                                   </ReferralSectionCard>

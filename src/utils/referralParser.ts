@@ -23,6 +23,8 @@ export const SECTION_CONFIG = [
       "first name", "last name", "name", "dob", "date of birth", "age", "sex", "gender",
       "race", "ethnicity", "religion", "place of birth", "address", "city", "state", "zip",
       "current placement", "length of stay", "phone number", "contact",
+      "date of referral", "referral date", "csp", "comprehensive supervision",
+      "reason for ooh", "out-of-home placement", "placement start",
     ],
     label: "Demographics",
   },
@@ -36,6 +38,9 @@ export const SECTION_CONFIG = [
       "grandparent", "aunt", "uncle", "relative", "biological parent",
       "primary contact", "alternate contact", "second contact",
       "engagement", "visitation", "custody arrangement",
+      "guardian 1", "guardian 2", "crossover", "guardian engagement",
+      "contact plan", "initial contact", "parent education", "extended family",
+      "family visit", "visit plan",
     ],
     label: "Family & Contacts",
   },
@@ -60,6 +65,11 @@ export const SECTION_CONFIG = [
     keywords: [
       "diagnosis", "therapy", "counseling", "trauma", "anxiety", "depression", "adhd",
       "oppositional defiant", "odd", "mental health", "behavioral health", "clinical",
+      "treatment provider", "treatment recommendation", "treatment level",
+      "treatment modality", "prescribed medication", "medication compliant",
+      "iop", "day treatment", "partial care", "thgh", "outpatient",
+      "behavioral health comment", "responsivity", "risk contribution",
+      "current/recent treatment", "most recent treatment",
     ],
     label: "Mental Health",
   },
@@ -69,14 +79,21 @@ export const SECTION_CONFIG = [
       "court", "judge", "attorney", "probation", "caseworker", "case worker", "offense",
       "charge", "legal", "probation officer", "parole officer", "po ", "judicial", "violation",
       "dui", "court order", "committed", "jurisdiction",
+      "gal", "casa", "county", "probation district", "probation email",
+      "po email", "other professional",
     ],
     label: "Legal & Court",
   },
   {
     key: "behavioral" as const,
     keywords: [
-      "behavior", "aggression", "anger", "violence", "substance", "runaway", "fighting",
+      "behavior", "aggression", "anger", "violence", "runaway", "fighting",
       "impulsivity", "risk factor", "thc", "cannabis", "drug use", "alcohol", "threatening",
+      "substance abuse", "substance misuse", "substance use history", "substance use disorder",
+      "drug abuse", "tox screen",
+      "youth responsivity", "family responsivity", "trafficking", "gang", "suicide",
+      "assaultive", "weapons", "fire setting", "missing from home", "problematic sexual",
+      "lgbtq", "teen parent", "victim issues", "dd/iq", "physical disability", "medical needs",
     ],
     label: "Behavioral History",
   },
@@ -86,15 +103,24 @@ export const SECTION_CONFIG = [
       "referral", "placement", "admission", "intake", "discharge", "group home",
       "estimated stay", "prtf", "foster care", "higher level of care", "duration",
       "out of state", "reason for seeking",
+      "service type", "treatment type", "treatment track", "non-treatment",
+      "level of service", "primary service", "secondary service", "accommodation",
+      "date service needed", "service needed", "foster care preferred",
+      "preferred community", "discharge location", "discharge timeframe",
     ],
     label: "Placement & Referral",
   },
   {
     key: "assessment" as const,
     keywords: [
-      "assessment", "yls-cmi", "yls cmi", "risk level", "risk domain", "domain",
+      "assessment", "yls-cmi", "yls cmi", "yls/cmi", "risk level", "risk domain", "domain",
       "prior offenses", "school work", "coping", "self-control", "friends", "peers",
       "thoughts", "beliefs", "high risk",
+      "yls", "overall risk", "life area", "coping/self", "free time", "use of free",
+      "prior/current", "primary driver", "school/work", "iep academic", "iep behavioral",
+      "employment status", "progress toward graduation", "home school", "plan 504",
+      "mdt", "alcohol/drug", "thoughts and beliefs", "thoughts/beliefs",
+      "date completed", "brief summary of circumstances", "key life area",
     ],
     label: "Risk Assessment",
   },
@@ -103,6 +129,7 @@ export const SECTION_CONFIG = [
     keywords: [
       "strength", "interest", "hobby", "talent", "strong", "skilled", "enjoys",
       "pro-social", "prosocial", "success", "resources", "visual learner", "goal",
+      "known risk", "barrier", "prior successful", "positive support", "pro social",
     ],
     label: "Strengths & Interests",
   },
@@ -112,6 +139,8 @@ export const SECTION_CONFIG = [
       "service history", "community-based", "out-of-home", "therapeutic",
       "prior placement", "detention", "boys home", "youth center", "mst", "art",
       "previous service", "discharged", "completed",
+      "services home", "services out", "services therapeutic",
+      "home/community", "home and community",
     ],
     label: "Service History",
   },
@@ -119,7 +148,9 @@ export const SECTION_CONFIG = [
     key: "goals" as const,
     keywords: [
       "goal", "objective", "outcome", "discharge", "projected", "independent living",
-      "treatment", "long term", "will address", "needs to develop",
+      "treatment goal", "treatment objective", "long term", "will address", "needs to develop",
+      "outcome 1", "outcome 2", "outcome 3", "projected discharge", "discharge goal",
+      "placement outcome", "skills to develop", "time frames and other",
     ],
     label: "Discharge Goals",
   },
@@ -128,6 +159,9 @@ export const SECTION_CONFIG = [
     keywords: [
       "insurance", "medicaid", "policy", "coverage", "active", "medical coverage",
       "substance use coverage", "mental health coverage",
+      "policy holder", "policy number", "private insurance",
+      "mental health covered", "substance use covered", "treatment covered",
+      "substance use treatment covered", "mental health treatment covered",
     ],
     label: "Insurance & Coverage",
   },
@@ -136,6 +170,8 @@ export const SECTION_CONFIG = [
     keywords: [
       "restriction", "contact restriction", "restricted", "no contact", "probation",
       "court order", "authorized", "placement restriction",
+      "interpreter", "language", "restriction by", "no contact order",
+      "contact restriction by", "special request",
     ],
     label: "Restrictions",
   },
@@ -178,8 +214,33 @@ function normalizeContactPersonLabel(fieldName: string): string {
 }
 
 function normalizeFieldName(fieldName: string): string {
+  // Strip leading checkbox characters (☒, ☐, and variants)
+  let name = fieldName.replace(/^[\s☒☐✓✗□\u2610\u2611\u2612]+/, "").trim();
   // Normalize possessive forms: "Mother's Phone" → "Mother Phone"
-  return fieldName.replace(/['']s\s+/g, ' ').replace(/['']s$/g, '').trim();
+  name = name.replace(/['']s\s+/g, ' ').replace(/['']s$/g, '').trim();
+  return name;
+}
+
+/**
+ * Normalize checkbox-style values like "☒ Yes ☐ No" → "Yes"
+ * or "☒ Academic ☒ Behavioral" → "Academic, Behavioral"
+ */
+function normalizeCheckboxValue(value: string): string {
+  // If value contains checkbox characters, extract checked items
+  if (/[☒☐\u2610\u2611\u2612]/.test(value)) {
+    const checkedItems: string[] = [];
+    // Match ☒ followed by text (up to next checkbox or end)
+    const checkedRe = /[☒\u2611\u2612]\s*([^☒☐\u2610\u2611\u2612]{1,60}?)(?=[☒☐\u2610\u2611\u2612]|$)/g;
+    let m;
+    while ((m = checkedRe.exec(value)) !== null) {
+      const item = m[1].replace(/\bPlease specify\.?\s*/i, "").trim().replace(/[.,;]+$/, "");
+      if (item) checkedItems.push(item);
+    }
+    if (checkedItems.length > 0) return checkedItems.join(", ");
+    // Fall back to stripping all checkbox chars
+    return value.replace(/[☒☐\u2610\u2611\u2612]/g, "").replace(/\s{2,}/g, " ").trim();
+  }
+  return value;
 }
 
 export const UNKNOWN_VALUE_RE = /^(n\/a|na|none|unknown|not provided|not documented|unspecified|-|—|click or tap here to enter text|click here|tap here)$/i;
@@ -213,9 +274,50 @@ export const detectSectionForField = (field: string): keyof ParsedReferral | nul
   return null;
 };
 
+// OHP referral form section titles → internal section keys
+const OHP_SECTION_HEADER_MAP: Record<string, keyof ParsedReferral> = {
+  "youth information": "demographics",
+  "parent/guardian information": "family",
+  "parent guardian information": "family",
+  "professional team information": "legal",
+  "level of service requested": "placement",
+  "assessment of strengths and needs": "strengths",
+  "responsivity factors": "mentalHealth",
+  "responsivity factors behavioral health needs": "mentalHealth",
+  "behavioral health needs": "mentalHealth",
+  "family visit and contact plan": "family",
+  "current/prior services": "serviceHistory",
+  "current prior services": "serviceHistory",
+  "desired outcomes": "goals",
+  "desired outcomes / discharge goals": "goals",
+  "desired outcomes to achieve successful discharge": "goals",
+  "discharge goals": "goals",
+  "insurance / billing": "insurance",
+  "insurance/billing": "insurance",
+  "final comments": "restrictions",
+  "attachments": "other",
+  "description of key life areas": "assessment",
+  "description of key life areas (domains) and areas of strength": "assessment",
+  "key life areas": "assessment",
+  "youth level of service inventory": "assessment",
+  "youth level of service inventory/case management inventory": "assessment",
+  "yls/cmi": "assessment",
+};
+
 export const detectSectionHeader = (line: string): keyof ParsedReferral | null => {
-  const normalized = line.toLowerCase().replace(/[:\-]+$/g, "").trim();
-  if (!normalized) return null;
+  // Strip leading checkbox characters before testing
+  const stripped = line.replace(/^[\s☒☐✓✗□\u2610\u2611\u2612]+/, "").trim();
+  const normalized = stripped.toLowerCase().replace(/[:\-]+$/g, "").trim();
+  if (!normalized || normalized.length < 4) return null;
+
+  // Check OHP form section titles first (exact or near-exact match)
+  for (const [ohpTitle, sectionKey] of Object.entries(OHP_SECTION_HEADER_MAP)) {
+    if (normalized === ohpTitle || normalized.startsWith(ohpTitle)) {
+      return sectionKey;
+    }
+  }
+
+  // Check internal section labels (existing logic)
   for (const section of SECTION_CONFIG) {
     const label = section.label.toLowerCase();
     if (normalized === label || (normalized.includes(label) && normalized.length <= label.length + 14)) {
@@ -344,7 +446,7 @@ export const parseReferralText = (raw: string): ParsedReferral => {
 
   const lines = raw
     .split(/\r?\n/)
-    .map((l) => l.replace(/^\s*[•\-\u2022\*]\s*/, "").trim())
+    .map((l) => l.replace(/^\s*[•\-\u2022\*☒☐\u2610\u2611\u2612]\s*/, "").trim())
     .filter((l) => l.length > 0);
 
   let currentFieldRef: { section: keyof ParsedReferral; fieldName: string } | null = null;
@@ -372,11 +474,19 @@ export const parseReferralText = (raw: string): ParsedReferral => {
       continue;
     }
 
-    const { fieldName: rawFieldName, value } = parsedField;
+    const { fieldName: rawFieldName, value: rawValue } = parsedField;
     const fieldName = normalizeFieldName(rawFieldName);
+    const value = normalizeCheckboxValue(rawValue);
     if (!value || UNKNOWN_VALUE_RE.test(value)) continue;
 
     const fieldNameLower = fieldName.toLowerCase().trim();
+
+    // "Placement Outcome N" fields belong in goals, not placement
+    if (/^placement outcome\s+\d+/i.test(fieldNameLower)) {
+      result.goals[fieldName] = value;
+      currentFieldRef = { section: 'goals', fieldName };
+      continue;
+    }
 
     // Contact person tracking: detect a person role as a "name" field
     if (CONTACT_PERSON_RE.test(fieldName)) {

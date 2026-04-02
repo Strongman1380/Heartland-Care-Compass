@@ -178,7 +178,7 @@ export const SECTION_CONFIG = [
 ];
 
 // Contact person detection — field names that represent a person role
-const CONTACT_PERSON_RE = /^(mother'?s?|father'?s?|parent'?s?|step-?mother|step-?father|legal guardian|primary guardian|secondary guardian|guardian'?s?|caregiver|next of kin|emergency contact|foster parent|relative|aunt|uncle|grandmother|grandfather|grandparent|grandma|grandpa)$/i;
+const CONTACT_PERSON_RE = /^(mother'?s?|father'?s?|parent'?s?|parent\/guardian'?s?|parent\/guardians?|step-?mother|step-?father|legal guardian|primary guardian|secondary guardian|guardian'?s?|caregiver|next of kin|emergency contact|foster parent|relative|aunt|uncle|grandmother|grandfather|grandparent|grandma|grandpa)$/i;
 
 // Generic sub-fields that should inherit the active contact person's prefix
 const CONTACT_SUBFIELD_NAMES = new Set([
@@ -196,6 +196,7 @@ function normalizeContactPersonLabel(fieldName: string): string {
   if (lc === 'mother') return 'Mother';
   if (lc === 'father') return 'Father';
   if (lc === 'parent' || lc === 'parents') return 'Parent';
+  if (lc === 'parent/guardian' || lc === 'parent/guardians') return 'Guardian';
   if (lc.includes('legal guardian') || lc.includes('primary guardian') || lc.includes('secondary guardian')) return 'Guardian';
   if (lc === 'guardian' || lc === 'guardians') return 'Guardian';
   if (lc === 'stepmother' || lc === 'step-mother') return 'Stepmother';
@@ -476,8 +477,21 @@ export const parseReferralText = (raw: string): ParsedReferral => {
 
     const { fieldName: rawFieldName, value: rawValue } = parsedField;
     const fieldName = normalizeFieldName(rawFieldName);
-    const value = normalizeCheckboxValue(rawValue);
-    if (!value || UNKNOWN_VALUE_RE.test(value)) continue;
+
+    // Split tab-separated two-column values (Word table copy format).
+    // e.g. "Carrie Miller\t531-361-4009" or "John Maser\tProbation District: District 3J"
+    let primaryRaw = rawValue;
+    let secondaryRaw: string | null = null;
+    const tabIdx = rawValue.indexOf('\t');
+    if (tabIdx !== -1) {
+      primaryRaw = rawValue.slice(0, tabIdx).trim();
+      secondaryRaw = rawValue.slice(tabIdx + 1)
+        .replace(/^[\s☒☐\u2610\u2611\u2612]+/, '').trim();
+      if (!secondaryRaw || UNKNOWN_VALUE_RE.test(secondaryRaw)) secondaryRaw = null;
+    }
+
+    const value = normalizeCheckboxValue(primaryRaw);
+    if ((!value || UNKNOWN_VALUE_RE.test(value)) && !secondaryRaw) continue;
 
     const fieldNameLower = fieldName.toLowerCase().trim();
 
@@ -514,8 +528,41 @@ export const parseReferralText = (raw: string): ParsedReferral => {
     }
 
     const section = detectedSection || activeSection;
-    result[section][fieldName] = value;
-    currentFieldRef = { section, fieldName };
+    if (value && !UNKNOWN_VALUE_RE.test(value)) {
+      result[section][fieldName] = value;
+      currentFieldRef = { section, fieldName };
+    }
+
+    // Process tab-split secondary column value
+    if (secondaryRaw) {
+      const secondField = parseFieldLine(secondaryRaw);
+      if (secondField) {
+        // Secondary is a labeled field e.g. "Probation District: District 3J"
+        const sfName = normalizeFieldName(secondField.fieldName);
+        const sfValue = normalizeCheckboxValue(secondField.value);
+        if (sfName && sfValue && !UNKNOWN_VALUE_RE.test(sfValue)) {
+          const sfSection = detectSectionForField(sfName) || section;
+          result[sfSection][sfName] = sfValue;
+          currentFieldRef = { section: sfSection, fieldName: sfName };
+        }
+      } else {
+        // Bare unlabeled value — phone number next to a contact person name
+        const bareVal = normalizeCheckboxValue(secondaryRaw).trim();
+        if (bareVal && !UNKNOWN_VALUE_RE.test(bareVal)) {
+          if (/^\+?[\d][\d\s\-().]{6,14}$/.test(bareVal)) {
+            // It's a phone number
+            const phoneKey = activeContactPerson
+              ? `${activeContactPerson} Phone`
+              : `${fieldName} Phone`;
+            const phoneSection = activeContactPerson ? 'family' : section;
+            result[phoneSection][phoneKey] = bareVal;
+          } else {
+            // Generic unlabeled secondary value
+            result[section][`${fieldName} (additional)`] = bareVal;
+          }
+        }
+      }
+    }
   }
 
   const totalParsed = Object.values(result).reduce((sum, section) => sum + Object.keys(section).length, 0);

@@ -1,6 +1,5 @@
 import { memo } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Star } from "lucide-react";
 import { ReferralFieldRow } from "./ReferralFieldRow";
 import { getKeyInformationFields } from "@/utils/referralUtils";
 import { type ParsedReferral } from "@/utils/referralParser";
@@ -18,52 +17,45 @@ interface KeyInformationCardProps {
 }
 
 /**
- * KeyInformationCard component for displaying critical referral assessment data.
- * Shows key fields in a 2-column grid layout with copy buttons and missing field warnings.
- * Always visible and always expanded.
- * Memoized to prevent unnecessary re-renders.
+ * KeyInformationCard — pinned summary of the most critical referral fields.
+ * Rendered before the section cards, always expanded.
  */
 const KeyInformationCard = memo(function KeyInformationCard({
   parsedData,
-  item,
 }: KeyInformationCardProps) {
   const keyFields = getKeyInformationFields(parsedData);
+  if (keyFields.length === 0) return null;
 
-  if (keyFields.length === 0) {
-    return null;
-  }
-
-  // Check for missing critical fields
   const criticalFields = ["Name", "DOB", "Age", "Sex", "Referral Source"];
   const missingCritical = criticalFields.filter(
     (field) => !keyFields.find((f) => f.label === field && f.value)
   );
 
   return (
-    <Card className="border-blue-200 bg-blue-50/50">
-      <CardHeader className="pb-3">
-        <CardTitle className="text-base flex items-center gap-2">
-          Key Information
-          {missingCritical.length > 0 && (
-            <AlertTriangle className="h-4 w-4 text-yellow-600" title={`Missing: ${missingCritical.join(", ")}`} />
-          )}
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {keyFields.map(({ label, value }) => (
-            <ReferralFieldRow key={label} label={label} value={value} />
-          ))}
+    <div className="rounded-lg border border-blue-200 bg-gradient-to-br from-blue-50 to-slate-50 shadow-sm overflow-hidden">
+      {/* Header stripe */}
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-blue-100 bg-blue-50/80">
+        <div className="flex items-center gap-2">
+          <Star className="h-3.5 w-3.5 text-blue-500" />
+          <span className="text-xs font-bold uppercase tracking-widest text-blue-700">
+            Key Information
+          </span>
         </div>
         {missingCritical.length > 0 && (
-          <div className="mt-3 p-2 rounded bg-yellow-50 border border-yellow-200">
-            <p className="text-xs text-yellow-800">
-              Missing critical fields: {missingCritical.join(", ")}
-            </p>
+          <div className="flex items-center gap-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+            <AlertTriangle className="h-3 w-3" />
+            Missing: {missingCritical.join(", ")}
           </div>
         )}
-      </CardContent>
-    </Card>
+      </div>
+
+      {/* Fields grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-0 divide-x divide-y divide-blue-100/60">
+        {keyFields.map(({ label, value }) => (
+          <ReferralFieldRow key={label} label={label} value={value} />
+        ))}
+      </div>
+    </div>
   );
 });
 

@@ -223,25 +223,42 @@ function normalizeFieldName(fieldName: string): string {
 }
 
 /**
+/**
+ * Strip leading "click or tap here to enter text" placeholder prefix from a value.
+ * Some form fields append real content after the placeholder, e.g.:
+ *   "Click or tap here to enter text. Crossover State Ward ☐ Voluntary ☒N/A"
+ * This removes the placeholder prefix so only the real content remains.
+ */
+const PLACEHOLDER_PREFIX_RE = /^\s*click\s+or\s+tap\s+here\s+to\s+enter\s+text\.?\s*/i;
+
+function stripPlaceholderPrefix(value: string): string {
+  return value.replace(PLACEHOLDER_PREFIX_RE, '').trim();
+}
+
+/**
  * Normalize checkbox-style values like "☒ Yes ☐ No" → "Yes"
  * or "☒ Academic ☒ Behavioral" → "Academic, Behavioral"
  */
 function normalizeCheckboxValue(value: string): string {
+  // Strip leading placeholder text first (before checkbox processing)
+  const stripped = stripPlaceholderPrefix(value);
+  if (!stripped) return '';
+
   // If value contains checkbox characters, extract checked items
-  if (/[☒☐\u2610\u2611\u2612]/.test(value)) {
+  if (/[☒☐\u2610\u2611\u2612]/.test(stripped)) {
     const checkedItems: string[] = [];
     // Match ☒ followed by text (up to next checkbox or end)
     const checkedRe = /[☒\u2611\u2612]\s*([^☒☐\u2610\u2611\u2612]{1,60}?)(?=[☒☐\u2610\u2611\u2612]|$)/g;
     let m;
-    while ((m = checkedRe.exec(value)) !== null) {
-      const item = m[1].replace(/\bPlease specify\.?\s*/i, "").trim().replace(/[.,;]+$/, "");
+    while ((m = checkedRe.exec(stripped)) !== null) {
+      const item = m[1].replace(/\bPlease specify\.?\s*/i, '').trim().replace(/[.,;]+$/, '');
       if (item) checkedItems.push(item);
     }
-    if (checkedItems.length > 0) return checkedItems.join(", ");
+    if (checkedItems.length > 0) return checkedItems.join(', ');
     // Fall back to stripping all checkbox chars
-    return value.replace(/[☒☐\u2610\u2611\u2612]/g, "").replace(/\s{2,}/g, " ").trim();
+    return stripped.replace(/[☒☐\u2610\u2611\u2612]/g, '').replace(/\s{2,}/g, ' ').trim();
   }
-  return value;
+  return stripped;
 }
 
 export const UNKNOWN_VALUE_RE = /^(n\/a|na|none|unknown|not provided|not documented|unspecified|-|—|click or tap here to enter text\.?|click here\.?|tap here\.?)$/i;

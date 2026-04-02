@@ -244,7 +244,7 @@ function normalizeCheckboxValue(value: string): string {
   return value;
 }
 
-export const UNKNOWN_VALUE_RE = /^(n\/a|na|none|unknown|not provided|not documented|unspecified|-|—|click or tap here to enter text|click here|tap here)$/i;
+export const UNKNOWN_VALUE_RE = /^(n\/a|na|none|unknown|not provided|not documented|unspecified|-|—|click or tap here to enter text\.?|click here\.?|tap here\.?)$/i;
 
 export const LINE_MARKER_RE = /^Line\s+(\d+):\s*$/i;
 
@@ -453,6 +453,8 @@ export const parseReferralText = (raw: string): ParsedReferral => {
   let currentFieldRef: { section: keyof ParsedReferral; fieldName: string } | null = null;
   let activeSection: keyof ParsedReferral = "other";
   let activeContactPerson: string | null = null;
+  // Holds a parsed field label that had no value on the same line (label-then-next-line-value format)
+  let pendingLabel: { rawFieldName: string } | null = null;
 
   for (const line of lines) {
     const sectionHeader = detectSectionHeader(line);
@@ -460,6 +462,61 @@ export const parseReferralText = (raw: string): ParsedReferral => {
       activeSection = sectionHeader;
       currentFieldRef = null;
       activeContactPerson = null;
+      pendingLabel = null;
+      continue;
+    }
+
+    // --- Handle pending label (label was on previous line with no value) ---
+    if (pendingLabel) {
+      // This line should be the value for the pending label.
+      // Only treat it as the value if it does NOT itself look like a section header or a new label.
+      const isNewLabel = /^[^:]{2,80}:\s*.+$/.test(line) || /^[^:]{2,80}:\s*$/.test(line);
+      if (!isNewLabel && !detectSectionHeader(line)) {
+        // Synthesize a full "Label: Value" line and process it
+        const syntheticLine = `${pendingLabel.rawFieldName}: ${line.trim()}`;
+        pendingLabel = null;
+        const syntheticParsed = parseFieldLine(syntheticLine);
+        if (syntheticParsed) {
+          const { fieldName: rawFieldName, value: rawValue } = syntheticParsed;
+          const fieldName = normalizeFieldName(rawFieldName);
+          const value = normalizeCheckboxValue(rawValue);
+          if (value && !UNKNOWN_VALUE_RE.test(value)) {
+            const fieldNameLower = fieldName.toLowerCase().trim();
+            if (/^placement outcome\s+\d+/i.test(fieldNameLower)) {
+              result.goals[fieldName] = value;
+              currentFieldRef = { section: 'goals', fieldName };
+            } else if (CONTACT_PERSON_RE.test(fieldName)) {
+              const personLabel = normalizeContactPersonLabel(fieldName);
+              const compositeKey = `${personLabel} Name`;
+              result.family[compositeKey] = value;
+              currentFieldRef = { section: 'family', fieldName: compositeKey };
+              activeContactPerson = personLabel;
+            } else if (activeContactPerson && CONTACT_SUBFIELD_NAMES.has(fieldNameLower)) {
+              const subLabel = fieldName.charAt(0).toUpperCase() + fieldName.slice(1).toLowerCase();
+              const compositeKey = `${activeContactPerson} ${subLabel}`;
+              result.family[compositeKey] = value;
+              currentFieldRef = { section: 'family', fieldName: compositeKey };
+            } else {
+              const detectedSection = detectSectionForField(fieldName);
+              if (detectedSection && detectedSection !== 'family') activeContactPerson = null;
+              const section = detectedSection || activeSection;
+              result[section][fieldName] = value;
+              currentFieldRef = { section, fieldName };
+            }
+          }
+        }
+        continue;
+      } else {
+        // The "pending" label had no value at all — discard it and proceed normally
+        pendingLabel = null;
+      }
+    }
+
+    // --- Check for a label-only line (ends with colon, no value after it) ---
+    const labelOnlyMatch = line.match(/^([^:]{2,80}):\s*$/);
+    if (labelOnlyMatch) {
+      // Save as pending; the next content line will be the value
+      pendingLabel = { rawFieldName: labelOnlyMatch[1].trim() };
       continue;
     }
 

@@ -4,13 +4,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import {
   Plus, Eye, Edit, Trash2, AlertTriangle, Loader2,
-  FileDown, Printer, ArrowLeft,
+  FileDown, Printer, ArrowLeft, Sparkles,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
 import { incidentReportsService } from '@/integrations/firebase/incidentReportsService'
 import FacilityIncidentForm from '@/components/incidents/FacilityIncidentForm'
 import FacilityIncidentPrintView from '@/components/incidents/FacilityIncidentPrintView'
+import { SmartImportDialog } from '@/components/incidents/SmartImportDialog'
 import { exportElementToPDF } from '@/utils/export'
 import type { FacilityIncidentReport, FacilityIncidentFormData } from '@/types/facility-incident-types'
 import { Header } from '@/components/layout/Header'
@@ -26,6 +27,7 @@ export default function IncidentReports() {
   const [selectedIncident, setSelectedIncident] = useState<FacilityIncidentReport | null>(null)
   const printRef = useRef<HTMLDivElement>(null)
   const [isExporting, setIsExporting] = useState(false)
+  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false)
 
   const loadIncidents = useCallback(async () => {
     try {
@@ -192,16 +194,34 @@ export default function IncidentReports() {
           <h1 className="text-2xl font-semibold tracking-tight text-slate-800">
             Incident Reports
           </h1>
-          <Button
-            className="bg-red-600 hover:bg-red-700"
-            onClick={() => {
-              setSelectedIncident(null)
-              setViewMode('form')
-            }}
-          >
-            <Plus className="w-4 h-4 mr-2" /> New Incident Report
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              className="border-blue-200 text-blue-700 hover:bg-blue-50"
+              onClick={() => setIsImportDialogOpen(true)}
+            >
+              <Sparkles className="w-4 h-4 mr-2" /> Smart Import
+            </Button>
+            <Button
+              className="bg-red-600 hover:bg-red-700"
+              onClick={() => {
+                setSelectedIncident(null)
+                setViewMode('form')
+              }}
+            >
+              <Plus className="w-4 h-4 mr-2" /> New Incident Report
+            </Button>
+          </div>
         </div>
+
+        <SmartImportDialog 
+          open={isImportDialogOpen} 
+          onOpenChange={setIsImportDialogOpen}
+          onImport={(data) => {
+            setSelectedIncident(data as FacilityIncidentReport)
+            setViewMode('form')
+          }}
+        />
 
         {isLoading ? (
           <div className="flex items-center justify-center py-12">

@@ -297,14 +297,16 @@ const DataUpload: React.FC = () => {
   const importWeekly = useCallback(async (rows: WeeklyRow[]): Promise<ImportResult> => {
     let imported = 0, skipped = 0
     const errors: string[] = []
-    for (const row of rows) {
-      try {
-        await upsertWeeklyEval(row.youthId, row.weekDate, { peer: row.peer, adult: row.adult, investment: row.investment, authority: row.authority }, 'uploaded')
-        imported++
-      } catch (e) {
-        errors.push(`${row.youthName} ${row.weekDate}: ${e}`)
-        skipped++
-      }
+    const chunkSize = 20
+    for (let i = 0; i < rows.length; i += chunkSize) {
+      const chunk = rows.slice(i, i + chunkSize)
+      const results = await Promise.allSettled(chunk.map(row =>
+        upsertWeeklyEval(row.youthId, row.weekDate, { peer: row.peer, adult: row.adult, investment: row.investment, authority: row.authority }, 'uploaded')
+      ))
+      results.forEach((res, idx) => {
+        if (res.status === 'fulfilled') imported++
+        else { skipped++; errors.push(`${chunk[idx].youthName} ${chunk[idx].weekDate}: ${res.reason}`) }
+      })
     }
     return { imported, skipped, errors }
   }, [])
@@ -312,15 +314,17 @@ const DataUpload: React.FC = () => {
   const importDailyShift = useCallback(async (rows: DailyShiftRow[]): Promise<ImportResult> => {
     let imported = 0, skipped = 0
     const errors: string[] = []
-    for (const row of rows) {
-      try {
+    const chunkSize = 20
+    for (let i = 0; i < rows.length; i += chunkSize) {
+      const chunk = rows.slice(i, i + chunkSize)
+      const results = await Promise.allSettled(chunk.map(row => {
         const shift: ShiftType = row.shift.toLowerCase().startsWith('eve') ? 'evening' : row.shift.toLowerCase().startsWith('nig') ? 'night' : 'day'
-        await upsertDailyShift(row.youthId, row.date, shift, { peer: row.peer, adult: row.adult, investment: row.investment, authority: row.authority })
-        imported++
-      } catch (e) {
-        errors.push(`${row.youthName} ${row.date} ${row.shift}: ${e}`)
-        skipped++
-      }
+        return upsertDailyShift(row.youthId, row.date, shift, { peer: row.peer, adult: row.adult, investment: row.investment, authority: row.authority })
+      }))
+      results.forEach((res, idx) => {
+        if (res.status === 'fulfilled') imported++
+        else { skipped++; errors.push(`${chunk[idx].youthName} ${chunk[idx].date} ${chunk[idx].shift}: ${res.reason}`) }
+      })
     }
     return { imported, skipped, errors }
   }, [])
@@ -328,9 +332,11 @@ const DataUpload: React.FC = () => {
   const importPoints = useCallback(async (rows: PointsRow[]): Promise<ImportResult> => {
     let imported = 0, skipped = 0
     const errors: string[] = []
-    for (const row of rows) {
-      try {
-        await behaviorPointsService.upsert({
+    const chunkSize = 20
+    for (let i = 0; i < rows.length; i += chunkSize) {
+      const chunk = rows.slice(i, i + chunkSize)
+      const results = await Promise.allSettled(chunk.map(row =>
+        behaviorPointsService.upsert({
           youth_id: row.youthId,
           date: row.date,
           morningPoints: null,
@@ -340,11 +346,11 @@ const DataUpload: React.FC = () => {
           comments: row.notes || null,
           createdAt: new Date().toISOString(),
         })
-        imported++
-      } catch (e) {
-        errors.push(`${row.youthName} ${row.date}: ${e}`)
-        skipped++
-      }
+      ))
+      results.forEach((res, idx) => {
+        if (res.status === 'fulfilled') imported++
+        else { skipped++; errors.push(`${chunk[idx].youthName} ${chunk[idx].date}: ${res.reason}`) }
+      })
     }
     return { imported, skipped, errors }
   }, [])
@@ -352,9 +358,11 @@ const DataUpload: React.FC = () => {
   const importRatings = useCallback(async (rows: RatingsRow[]): Promise<ImportResult> => {
     let imported = 0, skipped = 0
     const errors: string[] = []
-    for (const row of rows) {
-      try {
-        await dailyRatingsService.upsert({
+    const chunkSize = 20
+    for (let i = 0; i < rows.length; i += chunkSize) {
+      const chunk = rows.slice(i, i + chunkSize)
+      const results = await Promise.allSettled(chunk.map(row =>
+        dailyRatingsService.upsert({
           youth_id: row.youthId,
           date: row.date,
           peerInteraction: row.peer,
@@ -370,11 +378,11 @@ const DataUpload: React.FC = () => {
           createdAt: null,
           updatedAt: null,
         })
-        imported++
-      } catch (e) {
-        errors.push(`${row.youthName} ${row.date}: ${e}`)
-        skipped++
-      }
+      ))
+      results.forEach((res, idx) => {
+        if (res.status === 'fulfilled') imported++
+        else { skipped++; errors.push(`${chunk[idx].youthName} ${chunk[idx].date}: ${res.reason}`) }
+      })
     }
     return { imported, skipped, errors }
   }, [])
@@ -426,9 +434,11 @@ const DataUpload: React.FC = () => {
   const importReferrals = useCallback(async (rows: ReferralRow[]): Promise<ImportResult> => {
     let imported = 0, skipped = 0
     const errors: string[] = []
-    for (const row of rows) {
-      try {
-        await referralNotesService.save({
+    const chunkSize = 20
+    for (let i = 0; i < rows.length; i += chunkSize) {
+      const chunk = rows.slice(i, i + chunkSize)
+      const results = await Promise.allSettled(chunk.map(row =>
+        referralNotesService.save({
           referral_name: row.referralName,
           referral_source: row.referralSource || null,
           referral_date: row.referralDate || null,
@@ -437,11 +447,11 @@ const DataUpload: React.FC = () => {
           priority: row.priority || 'medium',
           summary: row.summary || null,
         })
-        imported++
-      } catch (e) {
-        errors.push(`${row.referralName}: ${e}`)
-        skipped++
-      }
+      ))
+      results.forEach((res, idx) => {
+        if (res.status === 'fulfilled') imported++
+        else { skipped++; errors.push(`${chunk[idx].referralName}: ${res.reason}`) }
+      })
     }
     return { imported, skipped, errors }
   }, [])
@@ -489,9 +499,11 @@ const DataUpload: React.FC = () => {
   const importCaseNotes = useCallback(async (rows: CaseNoteRow[]): Promise<ImportResult> => {
     let imported = 0, skipped = 0
     const errors: string[] = []
-    for (const row of rows) {
-      try {
-        await caseNotesService.create({
+    const chunkSize = 20
+    for (let i = 0; i < rows.length; i += chunkSize) {
+      const chunk = rows.slice(i, i + chunkSize)
+      const results = await Promise.allSettled(chunk.map(row =>
+        caseNotesService.create({
           youth_id: row.youthId,
           date: row.date,
           summary: row.summary || null,
@@ -499,11 +511,11 @@ const DataUpload: React.FC = () => {
           staff: row.staff || null,
           createdAt: new Date().toISOString(),
         })
-        imported++
-      } catch (e) {
-        errors.push(`${row.youthName} ${row.date}: ${e}`)
-        skipped++
-      }
+      ))
+      results.forEach((res, idx) => {
+        if (res.status === 'fulfilled') imported++
+        else { skipped++; errors.push(`${chunk[idx].youthName} ${chunk[idx].date}: ${res.reason}`) }
+      })
     }
     return { imported, skipped, errors }
   }, [])
@@ -541,26 +553,32 @@ const DataUpload: React.FC = () => {
     let imported = 0, skipped = 0
     const errors: string[] = []
 
+    const validEntries = []
     for (const entry of dpnEntries) {
-      // Match youth by name
       const matched = matchYouth(entry.youthName, youthList)
       if (!matched) {
         errors.push(`${entry.youthName}: Youth not found`)
         skipped++
-        continue
+      } else {
+        validEntries.push({ entry, matchedId: matched.id })
       }
-      try {
-        await upsertDailyShift(matched.id, entry.date, entry.shift, {
+    }
+
+    const chunkSize = 20
+    for (let i = 0; i < validEntries.length; i += chunkSize) {
+      const chunk = validEntries.slice(i, i + chunkSize)
+      const results = await Promise.allSettled(chunk.map(({ entry, matchedId }) =>
+        upsertDailyShift(matchedId, entry.date, entry.shift, {
           peer: entry.peer,
           adult: entry.adult,
           investment: entry.investment,
           authority: entry.authority,
         })
-        imported++
-      } catch (e) {
-        errors.push(`${entry.youthName} ${entry.date} ${entry.shift}: ${e}`)
-        skipped++
-      }
+      ))
+      results.forEach((res, idx) => {
+        if (res.status === 'fulfilled') imported++
+        else { skipped++; errors.push(`${chunk[idx].entry.youthName} ${chunk[idx].entry.date} ${chunk[idx].entry.shift}: ${res.reason}`) }
+      })
     }
 
     setDpnResult({ imported, skipped, errors })

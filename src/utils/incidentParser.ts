@@ -9,6 +9,73 @@ import {
 } from '@/types/facility-incident-types';
 
 const INCIDENT_TYPE_KEYWORDS: Record<string, FacilityIncidentType> = {
+  'verbal altercation': 'Verbal Altercation',
+  'verbal': 'Verbal Altercation',
+  'threat': 'Threats / Intimidation',
+  'intimidation': 'Threats / Intimidation',
+  'defiance': 'Defiance / Noncompliance',
+  'noncompliance': 'Defiance / Noncompliance',
+  'disrespect': 'Disrespect Toward Staff',
+  'bullying': 'Bullying / Harassment',
+  'harassment': 'Bullying / Harassment',
+  'sexual misconduct': 'Sexualized Behavior / Sexual Misconduct',
+  'sexualized': 'Sexualized Behavior / Sexual Misconduct',
+  'self-harm threat': 'Self-Harm Threat',
+  'self harm threat': 'Self-Harm Threat',
+  'self-harm attempt': 'Self-Harm Attempt',
+  'self harm attempt': 'Self-Harm Attempt',
+  'suicidal': 'Suicidal Ideation / Suicide Threat',
+  'suicide threat': 'Suicidal Ideation / Suicide Threat',
+  'mental health crisis': 'Mental Health Crisis',
+  'crisis': 'Mental Health Crisis',
+  'aggression toward staff': 'Aggression Toward Staff',
+  'aggressive staff': 'Aggression Toward Staff',
+  'contraband possession': 'Contraband Possession',
+  'contraband': 'Contraband Possession',
+  'vape': 'Vape / Tobacco Use',
+  'tobacco': 'Vape / Tobacco Use',
+  'smoking': 'Vape / Tobacco Use',
+  'drug': 'Drug / Alcohol Use or Suspicion',
+  'alcohol': 'Drug / Alcohol Use or Suspicion',
+  'intoxicated': 'Drug / Alcohol Use or Suspicion',
+  'ua refusal': 'UA Refusal / Failed UA',
+  'failed ua': 'UA Refusal / Failed UA',
+  'room search': 'Room Search / Contraband Discovery',
+  'boundary violation': 'Boundary Violation',
+  'inappropriate language': 'Inappropriate Language / Slurs',
+  'slurs': 'Inappropriate Language / Slurs',
+  'disorderly': 'Disorderly Conduct / Major Disruption',
+  'disruption': 'Disorderly Conduct / Major Disruption',
+  'elopement attempt': 'Elopement Attempt',
+  'runaway attempt': 'Elopement Attempt',
+  'awol': 'AWOL / Unauthorized Absence',
+  'unauthorized absence': 'AWOL / Unauthorized Absence',
+  'restricted area': 'Restricted Area Violation',
+  'rule violation': 'Rule Violation',
+  'broken rule': 'Rule Violation',
+  'school incident': 'School Incident',
+  'property misuse': 'Property Misuse / Tampering',
+  'tampering': 'Property Misuse / Tampering',
+  'medical concern': 'Medical Concern',
+  'medical': 'Medical Concern',
+  'emergency transport': 'Emergency Medical Transport',
+  'hospital': 'Emergency Medical Transport',
+  'medication error': 'Medication Error',
+  'refusal of care': 'Refusal of Care',
+  'law enforcement': 'Law Enforcement Contact',
+  'police': 'Law Enforcement Contact',
+  'abuse allegation': 'Abuse Allegation',
+  'neglect allegation': 'Neglect Allegation',
+  'peer conflict': 'Peer Conflict',
+  'peer fighting': 'Peer Conflict',
+  'staff concern': 'Staff Concern / Suspicious Behavior',
+  'safety hazard': 'Safety Hazard',
+  'false allegation': 'False Allegation',
+  'technology misuse': 'Technology Misuse',
+  'computer misuse': 'Technology Misuse',
+  'gang': 'Gang-Related Behavior',
+  'weapon': 'Possession of Weapon / Dangerous Item',
+  'dangerous item': 'Possession of Weapon / Dangerous Item',
   'theft': 'Theft',
   'trespasser': 'Trespasser',
   'property damage': 'Property Damage',
@@ -16,7 +83,6 @@ const INCIDENT_TYPE_KEYWORDS: Record<string, FacilityIncidentType> = {
   'physical altercation': 'Physical Altercation',
   'fighting': 'Physical Altercation',
   'medication refusal': 'Medication Refusal',
-  'refused medication': 'Medication Refusal',
   'fire': 'Fire/Alarm',
   'alarm': 'Fire/Alarm',
   'runaway': 'Runaway',
@@ -38,7 +104,7 @@ const NOTIFICATION_KEYWORDS: Record<string, NotificationType> = {
   'probation officer': 'Probation Officer',
   'p.o.': 'Probation Officer',
   'sheriff': 'Sheriff',
-  'police': 'Sheriff',
+  'police notified': 'Sheriff',
 };
 
 const DOCUMENTATION_KEYWORDS: Record<string, DocumentationType> = {
@@ -169,9 +235,6 @@ export function parseIncidentText(text: string): Partial<FacilityIncidentFormDat
     if (field === 'type' || field === 'incident type') {
       const parts = value.split(/[,\s]+/).map(p => p.trim().toLowerCase());
       parts.forEach(p => {
-        if (p === 'property' || p === 'damage') {
-           if (!result.incidentTypes?.includes('Property Damage')) result.incidentTypes?.push('Property Damage');
-        }
         Object.entries(INCIDENT_TYPE_KEYWORDS).forEach(([kw, type]) => {
           if (p.includes(kw) && !result.incidentTypes?.includes(type)) {
             result.incidentTypes?.push(type);
@@ -223,7 +286,6 @@ export function parseIncidentText(text: string): Partial<FacilityIncidentFormDat
     if (st.startsWith('res')) result.subjectType = 'Resident';
     else if (st.startsWith('emp') || st.includes('staff')) result.subjectType = 'Employee';
     else if (st.startsWith('non')) result.subjectType = 'Non-Resident';
-    else result.subjectType = 'Resident'; // Default
   } else {
     result.subjectType = 'Resident';
   }

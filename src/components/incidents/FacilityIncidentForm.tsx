@@ -23,6 +23,46 @@ import type {
 import { useYouth } from '@/hooks/useSupabase'
 
 const INCIDENT_TYPES: FacilityIncidentType[] = [
+  'Verbal Altercation',
+  'Threats / Intimidation',
+  'Defiance / Noncompliance',
+  'Disrespect Toward Staff',
+  'Bullying / Harassment',
+  'Sexualized Behavior / Sexual Misconduct',
+  'Self-Harm Threat',
+  'Self-Harm Attempt',
+  'Suicidal Ideation / Suicide Threat',
+  'Mental Health Crisis',
+  'Aggression Toward Staff',
+  'Contraband Possession',
+  'Vape / Tobacco Use',
+  'Drug / Alcohol Use or Suspicion',
+  'UA Refusal / Failed UA',
+  'Room Search / Contraband Discovery',
+  'Boundary Violation',
+  'Inappropriate Language / Slurs',
+  'Disorderly Conduct / Major Disruption',
+  'Elopement Attempt',
+  'AWOL / Unauthorized Absence',
+  'Restricted Area Violation',
+  'Rule Violation',
+  'School Incident',
+  'Property Misuse / Tampering',
+  'Medical Concern',
+  'Emergency Medical Transport',
+  'Medication Error',
+  'Refusal of Care',
+  'Law Enforcement Contact',
+  'Abuse Allegation',
+  'Neglect Allegation',
+  'Peer Conflict',
+  'Staff Concern / Suspicious Behavior',
+  'Safety Hazard',
+  'False Allegation',
+  'Technology Misuse',
+  'Inappropriate Sexual Comment / Gesture',
+  'Gang-Related Behavior',
+  'Possession of Weapon / Dangerous Item',
   'Theft',
   'Trespasser',
   'Property Damage',
@@ -102,7 +142,7 @@ export default function FacilityIncidentForm({ incident, onSave, onCancel }: Pro
   // Incident types
   const [incidentTypes, setIncidentTypes] = useState<FacilityIncidentType[]>(
     // Normalize legacy 'Fighting' → 'Physical Altercation' from older reports
-    (incident?.incidentTypes ?? []).map((t) => t === 'Fighting' ? 'Physical Altercation' : t)
+    (incident?.incidentTypes ?? []).map((t) => (t as any) === 'Fighting' ? 'Physical Altercation' : t)
   )
   const [otherIncidentType, setOtherIncidentType] = useState(incident?.otherIncidentType ?? '')
 

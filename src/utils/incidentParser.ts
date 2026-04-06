@@ -277,3 +277,23 @@ export function parseIncidentText(text: string): Partial<FacilityIncidentFormDat
 
   return result;
 }
+
+export function parseBulkIncidents(text: string): Partial<FacilityIncidentFormData>[] {
+  // Split on delimiters OR major property markers at the start of lines
+  let sections = text.split(/\n\s*---\s*\n|\n\s*={3,}\s*\n/);
+  
+  // If common delimiters like --- are missing, try to split by Subject Type: or Last Name: at start of lines
+  if (sections.length === 1) {
+    const hits = text.match(/^(Subject Type:|Last Name:|[sS]ubject [tT]ype:|[lL]ast [nN]ame:)/gm);
+    if (hits && hits.length > 1) {
+      // Filter out empty resulting from split at beginning of string
+      sections = text.split(/^(?=Subject Type:|Last Name:|[sS]ubject [tT]ype:|[lL]ast [nN]ame:)/m).filter(s => s.trim().length > 10);
+    }
+  }
+
+  return sections
+    .map(s => s.trim())
+    .filter(s => s.length > 0)
+    .map(s => parseIncidentText(s))
+    .filter(r => Object.keys(r).length > 2); // Ensure it's not an empty result
+}

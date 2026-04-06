@@ -9,41 +9,40 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
-import { parseIncidentText } from '@/utils/incidentParser'
+import { parseIncidentText, parseBulkIncidents } from '@/utils/incidentParser'
 import type { FacilityIncidentFormData } from '@/types/facility-incident-types'
 import { toast } from 'sonner'
-import { FileText, Copy, Sparkles } from 'lucide-react'
+import { FileText, Copy, Sparkles, Layers, CheckCircle2, Loader2 } from 'lucide-react'
+import { incidentReportsService } from '@/integrations/firebase/incidentReportsService'
 
 interface Props {
   open: boolean
   onOpenChange: (open: boolean) => void
   onImport: (data: Partial<FacilityIncidentFormData>) => void
+  onBulkImportSuccess?: () => void
 }
 
 const TEMPLATE_EXAMPLE = `Subject Type: Resident
 Last Name: Doe
 First Name: John
 Incident Date: ${new Date().toISOString().split('T')[0]}
-Incident Time: 14:00
-Location: Common Room
-Incident Type: Verbal Altercation, Disrespect Toward Staff, Defiance / Noncompliance
-Incident Narrative: Youth began yelling at staff and flipped a table. 
-He then walked out of the room and slammed the door. 
-Staff redirected other youth to their rooms to ensure safety.
-Youth Involved: John Doe (primary), Jane Smith (secondary)
-Witnesses: Alice Smith (555-0100)
-Notified: Home Director, Supervisor
-Documentation: Photographs, Physical Inspection
-Staff: Staff Jane
-Submitted By: Staff Jane
-Signature Date: ${new Date().toISOString().split('T')[0]}
-Policy Violation: Damaging facility property
-Staff Action: De-escalated situation`
+Incident Type: Verbal Altercation
+Incident Narrative: First incident details...
+---
+Subject Type: Resident
+Last Name: Smith
+First Name: Jane
+Incident Date: ${new Date().toISOString().split('T')[0]}
+Incident Type: Rule Violation
+Incident Narrative: Second incident details...`
 
-export function SmartImportDialog({ open, onOpenChange, onImport }: Props) {
+export function SmartImportDialog({ open, onOpenChange, onImport, onBulkImportSuccess }: Props) {
   const [text, setText] = useState('')
+  const [isImporting, setIsImporting] = useState(false)
+  
+  const parsedCount = text.trim() ? parseBulkIncidents(text).length : 0
 
-  const handleParse = () => {
+  const handleSingleParse = () => {
     if (!text.trim()) {
       toast.error('Please paste some text first')
       return
@@ -53,9 +52,34 @@ export function SmartImportDialog({ open, onOpenChange, onImport }: Props) {
       onImport(result)
       setText('')
       onOpenChange(false)
-      toast.success('Incidents parsed successfully!')
+      toast.success('Incident parsed successfully!')
     } catch (e) {
       toast.error('Error parsing incident data')
+    }
+  }
+
+  const handleBulkImport = async () => {
+    if (!text.trim()) return
+    try {
+      setIsImporting(true)
+      const reports = parseBulkIncidents(text)
+      if (reports.length === 0) {
+        toast.error('No incidents found in the text')
+        return
+      }
+      
+      await incidentReportsService.saveBulk(reports as FacilityIncidentFormData[])
+      toast.success(`Successfully imported ${reports.length} incidents!`)
+      
+      onBulkImportSuccess?.()
+      
+      setText('')
+      onOpenChange(false)
+    } catch (e) {
+      console.error(e)
+      toast.error('Error during bulk import')
+    } finally {
+      setIsImporting(false)
     }
   }
 
@@ -102,15 +126,39 @@ export function SmartImportDialog({ open, onOpenChange, onImport }: Props) {
           </div>
         </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button 
-            className="bg-blue-600 hover:bg-blue-700"
-            onClick={handleParse}
-            disabled={!text.trim()}
-          >
-            Run Smart Parser
-          </Button>
+        <DialogFooter className="flex-col sm:flex-row gap-2">
+          <div className="flex-1 text-sm text-slate-500 self-center">
+            {parsedCount > 1 && (
+              <span className="flex items-center gap-1.5 text-blue-600 font-medium">
+                <Layers className="w-4 h-4" />
+                Detected {parsedCount} reports
+              </span>
+            )}
+          </div>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isImporting}>Cancel</Button>
+          
+          {parsedCount > 1 ? (
+            <Button 
+              className="bg-blue-600 hover:bg-blue-700"
+              onClick={handleBulkImport}
+              disabled={isImporting}
+            >
+              {isImporting ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <CheckCircle2 className="w-4 h-4 mr-2" />
+              )}
+              Save {parsedCount} Reports to Database
+            </Button>
+          ) : (
+            <Button 
+              className="bg-blue-600 hover:bg-blue-700"
+              onClick={handleSingleParse}
+              disabled={!text.trim() || isImporting}
+            >
+              Run Smart Parser
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -8,6 +8,7 @@ import {
   deleteDoc,
   query,
   orderBy,
+  writeBatch,
 } from 'firebase/firestore'
 import type { FacilityIncidentReport } from '@/types/facility-incident-types'
 
@@ -63,6 +64,28 @@ export const incidentReportsService = {
     await setDoc(doc(db, COLLECTION, id), data, { merge: true })
     const snap = await getDoc(doc(db, COLLECTION, id))
     return { id: snap.id, ...snap.data() } as FacilityIncidentReport
+  },
+
+  async saveBulk(reports: Partial<FacilityIncidentReport>[]): Promise<string[]> {
+    const batch = writeBatch(db)
+    const now = new Date().toISOString()
+    const createdIds: string[] = []
+
+    reports.forEach((report) => {
+      const id = report.id || generateId()
+      const data = stripUndefinedDeep({
+        ...report,
+        id,
+        updatedAt: now,
+        createdAt: report.createdAt || now,
+      })
+      const docRef = doc(db, COLLECTION, id)
+      batch.set(docRef, data, { merge: true })
+      createdIds.push(id)
+    })
+
+    await batch.commit()
+    return createdIds
   },
 
   async delete(id: string): Promise<void> {

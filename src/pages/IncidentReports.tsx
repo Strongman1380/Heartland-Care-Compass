@@ -221,6 +221,7 @@ export default function IncidentReports() {
             setSelectedIncident(data as FacilityIncidentReport)
             setViewMode('form')
           }}
+          onBulkImportSuccess={loadIncidents}
         />
 
         {isLoading ? (

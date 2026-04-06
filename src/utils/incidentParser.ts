@@ -136,6 +136,7 @@ const FIELD_MAP: Record<string, keyof FacilityIncidentFormData> = {
   'location': 'location',
   'narrative': 'narrativeSummary',
   'summary': 'narrativeSummary',
+  'incident summary': 'narrativeSummary',
   'staff': 'staffCompletingReport',
   'staff member': 'staffCompletingReport',
   'reporting staff': 'staffCompletingReport',
@@ -152,12 +153,9 @@ const FIELD_MAP: Record<string, keyof FacilityIncidentFormData> = {
 };
 
 export function parseIncidentText(text: string): Partial<FacilityIncidentFormData> {
-  // 1. Try JSON first
   try {
     const data = JSON.parse(text);
-    if (data && typeof data === 'object') {
-      return data as Partial<FacilityIncidentFormData>;
-    }
+    if (data && typeof data === 'object') return data as Partial<FacilityIncidentFormData>;
   } catch (e) {}
 
   const result: Partial<FacilityIncidentFormData> = {
@@ -177,53 +175,38 @@ export function parseIncidentText(text: string): Partial<FacilityIncidentFormDat
   lines.forEach(line => {
     const colonIndex = line.indexOf(':');
     
-    // Check for drop-down matches in bare lines (no colon)
+    // Multi-line continuation check
     if (colonIndex === -1) {
-      const lower = line.toLowerCase();
-      
-      // Multi-line continuation (narrative/supplementary)
-      if (lastField === 'narrativeSummary' || lastField === 'supplementaryInfo') {
+      if (lastField === 'narrativeSummary' || lastField === 'supplementaryInfo' || lastField === 'incidentDescription') {
         result[lastField] = (result[lastField] || '') + '\n' + line;
         return;
       }
-
-      // Check for keywords in lines that are just types
+      // Check bare line for keywords
+      const lower = line.toLowerCase();
       Object.entries(INCIDENT_TYPE_KEYWORDS).forEach(([kw, type]) => {
-        if (lower.includes(kw) && !result.incidentTypes?.includes(type)) {
-          result.incidentTypes?.push(type);
-        }
-      });
-      Object.entries(DOCUMENTATION_KEYWORDS).forEach(([kw, type]) => {
-        if (lower.includes(kw) && !result.documentation?.includes(type)) {
-          result.documentation?.push(type);
-        }
+        if (lower.includes(kw) && !result.incidentTypes?.includes(type)) result.incidentTypes?.push(type);
       });
       return;
     }
 
-    const field = line.slice(0, colonIndex).toLowerCase().trim();
+    const fieldLabel = line.slice(0, colonIndex).toLowerCase().trim();
     const value = line.slice(colonIndex + 1).trim();
 
-    // Map direct fields
-    const targetField = FIELD_MAP[field];
+    const targetField = FIELD_MAP[fieldLabel];
     if (targetField) {
       lastField = targetField;
-      if (targetField === 'notifications' || field === 'notified') {
+      if (targetField === 'notifications' || fieldLabel === 'notified') {
         const parts = value.split(/[,\s]+/).map(p => p.trim().toLowerCase());
         parts.forEach(p => {
           Object.entries(NOTIFICATION_KEYWORDS).forEach(([kw, type]) => {
-            if (p.includes(kw) && !result.notifications?.includes(type)) {
-              result.notifications?.push(type);
-            }
+            if (p.includes(kw) && !result.notifications?.includes(type)) result.notifications?.push(type);
           });
         });
       } else if (targetField === 'documentation') {
         const parts = value.split(/[,\s]+/).map(p => p.trim().toLowerCase());
         parts.forEach(p => {
           Object.entries(DOCUMENTATION_KEYWORDS).forEach(([kw, type]) => {
-            if (p.includes(kw) && !result.documentation?.includes(type)) {
-              result.documentation?.push(type);
-            }
+            if (p.includes(kw) && !result.documentation?.includes(type)) result.documentation?.push(type);
           });
         });
       } else {
@@ -231,25 +214,23 @@ export function parseIncidentText(text: string): Partial<FacilityIncidentFormDat
       }
     }
 
-    // Special logic for drop-downs
-    if (field === 'type' || field === 'incident type') {
+    // Dropdowns
+    if (fieldLabel === 'type' || fieldLabel === 'incident type') {
       const parts = value.split(/[,\s]+/).map(p => p.trim().toLowerCase());
       parts.forEach(p => {
         Object.entries(INCIDENT_TYPE_KEYWORDS).forEach(([kw, type]) => {
-          if (p.includes(kw) && !result.incidentTypes?.includes(type)) {
-            result.incidentTypes?.push(type);
-          }
+          if (p.includes(kw) && !result.incidentTypes?.includes(type)) result.incidentTypes?.push(type);
         });
       });
     }
 
-    // List categories (Violations, Actions, Follow-up)
-    if (field.includes('violation')) result.policyViolations?.push({ description: value });
-    if (field.includes('action')) result.staffActions?.push({ description: value });
-    if (field.includes('recommend') || field.includes('follow up')) result.followUpRecommendations?.push({ description: value });
+    // Lists
+    if (fieldLabel.includes('violation')) result.policyViolations?.push({ description: value });
+    if (fieldLabel.includes('action')) result.staffActions?.push({ description: value });
+    if (fieldLabel.includes('recommend') || fieldLabel.includes('follow up')) result.followUpRecommendations?.push({ description: value });
 
-    // Youth extraction
-    if (field.includes('youth involved')) {
+    // Extraction for Involved Youth & Witnesses
+    if (fieldLabel.includes('youth involved')) {
       const p = value.split(/[;,]/);
       p.forEach(y => {
         const m = y.match(/^(.*?)(?:\((.*?)\))?$/);
@@ -266,8 +247,7 @@ export function parseIncidentText(text: string): Partial<FacilityIncidentFormDat
       });
     }
 
-    // Witness extraction
-    if (field.includes('witnesses') || field === 'witness') {
+    if (fieldLabel.includes('witnesses') || fieldLabel === 'witness') {
       const p = value.split(/[;,]/);
       p.forEach(w => {
         const m = w.match(/^(.*?)(?:\((.*?)\))?$/);
@@ -280,7 +260,7 @@ export function parseIncidentText(text: string): Partial<FacilityIncidentFormDat
     }
   });
 
-  // Strict Subject Type Normalization
+  // Normalization
   if (result.subjectType) {
     const st = String(result.subjectType).toLowerCase();
     if (st.startsWith('res')) result.subjectType = 'Resident';
@@ -290,7 +270,7 @@ export function parseIncidentText(text: string): Partial<FacilityIncidentFormDat
     result.subjectType = 'Resident';
   }
 
-  // Final scrub to ensure arrays are valid for checkboxes/tabs
+  // Ensure valid arrays
   if (result.incidentTypes?.length === 0) result.incidentTypes = [];
   if (result.notifications?.length === 0) result.notifications = [];
   if (result.documentation?.length === 0) result.documentation = [];

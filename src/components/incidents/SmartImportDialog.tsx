@@ -27,8 +27,9 @@ Incident Date: ${new Date().toISOString().split('T')[0]}
 Incident Time: 14:00
 Location: Common Room
 Incident Type: Verbal Altercation, Disrespect Toward Staff, Defiance / Noncompliance
-Narrative: Youth began yelling at staff and flipped a table. 
-Staff redirected other youth to their rooms.
+Incident Narrative: Youth began yelling at staff and flipped a table. 
+He then walked out of the room and slammed the door. 
+Staff redirected other youth to their rooms to ensure safety.
 Youth Involved: John Doe (primary), Jane Smith (secondary)
 Witnesses: Alice Smith (555-0100)
 Notified: Home Director, Supervisor

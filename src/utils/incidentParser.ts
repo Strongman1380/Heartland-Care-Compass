@@ -1,4 +1,12 @@
-import { FacilityIncidentFormData, FacilityIncidentType, NotificationType, SubjectType, InvolvedYouth, Witness } from '@/types/facility-incident-types';
+import { 
+  FacilityIncidentFormData, 
+  FacilityIncidentType, 
+  NotificationType, 
+  SubjectType, 
+  InvolvedYouth, 
+  Witness,
+  DocumentationType
+} from '@/types/facility-incident-types';
 
 const INCIDENT_TYPE_KEYWORDS: Record<string, FacilityIncidentType> = {
   'theft': 'Theft',
@@ -8,6 +16,7 @@ const INCIDENT_TYPE_KEYWORDS: Record<string, FacilityIncidentType> = {
   'physical altercation': 'Physical Altercation',
   'fighting': 'Physical Altercation',
   'medication refusal': 'Medication Refusal',
+  'refused medication': 'Medication Refusal',
   'fire': 'Fire/Alarm',
   'alarm': 'Fire/Alarm',
   'runaway': 'Runaway',
@@ -27,8 +36,21 @@ const NOTIFICATION_KEYWORDS: Record<string, NotificationType> = {
   'psychiatrist': 'Psychiatrist',
   'family': 'Family',
   'probation officer': 'Probation Officer',
+  'p.o.': 'Probation Officer',
   'sheriff': 'Sheriff',
   'police': 'Sheriff',
+};
+
+const DOCUMENTATION_KEYWORDS: Record<string, DocumentationType> = {
+  'photograph': 'Photographs',
+  'photo': 'Photographs',
+  'physical inspection': 'Physical Inspection',
+  'property inspection': 'Property Inspection',
+  'witness statement': 'Statement of Witness',
+  'statement of witness': 'Statement of Witness',
+  'damage report': 'Property Damage Report',
+  'police report': 'Police Report',
+  'missing person': 'Missing Person Report',
 };
 
 const FIELD_MAP: Record<string, keyof FacilityIncidentFormData> = {
@@ -60,6 +82,7 @@ const FIELD_MAP: Record<string, keyof FacilityIncidentFormData> = {
   'subject phone': 'subjectPhone',
   'supplementary': 'supplementaryInfo',
   'additional info': 'supplementaryInfo',
+  'documentation': 'documentation',
 };
 
 export function parseIncidentText(text: string): Partial<FacilityIncidentFormData> {
@@ -69,9 +92,7 @@ export function parseIncidentText(text: string): Partial<FacilityIncidentFormDat
     if (data && typeof data === 'object') {
       return data as Partial<FacilityIncidentFormData>;
     }
-  } catch (e) {
-    // Not JSON, continue to text parsing
-  }
+  } catch (e) {}
 
   const result: Partial<FacilityIncidentFormData> = {
     incidentTypes: [],
@@ -81,6 +102,7 @@ export function parseIncidentText(text: string): Partial<FacilityIncidentFormDat
     followUpRecommendations: [],
     youthInvolved: [],
     witnesses: [],
+    documentation: [],
   };
 
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
@@ -89,20 +111,25 @@ export function parseIncidentText(text: string): Partial<FacilityIncidentFormDat
   lines.forEach(line => {
     const colonIndex = line.indexOf(':');
     
-    // Handle multiline continuation (for narrative/supplementary)
-    if (colonIndex === -1 && lastField) {
-      if (lastField === 'narrativeSummary' || lastField === 'supplementaryInfo' || lastField === 'incidentDescription') {
+    // Check for drop-down matches in bare lines (no colon)
+    if (colonIndex === -1) {
+      const lower = line.toLowerCase();
+      
+      // Multi-line continuation (narrative/supplementary)
+      if (lastField === 'narrativeSummary' || lastField === 'supplementaryInfo') {
         result[lastField] = (result[lastField] || '') + '\n' + line;
         return;
       }
-    }
 
-    if (colonIndex === -1) {
-      // Check for keywords in bare lines (like incident types)
-      const lowerLine = line.toLowerCase();
+      // Check for keywords in lines that are just types
       Object.entries(INCIDENT_TYPE_KEYWORDS).forEach(([kw, type]) => {
-        if (lowerLine.includes(kw) && !result.incidentTypes?.includes(type)) {
+        if (lower.includes(kw) && !result.incidentTypes?.includes(type)) {
           result.incidentTypes?.push(type);
+        }
+      });
+      Object.entries(DOCUMENTATION_KEYWORDS).forEach(([kw, type]) => {
+        if (lower.includes(kw) && !result.documentation?.includes(type)) {
+          result.documentation?.push(type);
         }
       });
       return;
@@ -111,16 +138,25 @@ export function parseIncidentText(text: string): Partial<FacilityIncidentFormDat
     const field = line.slice(0, colonIndex).toLowerCase().trim();
     const value = line.slice(colonIndex + 1).trim();
 
-    // Direct mapping
+    // Map direct fields
     const targetField = FIELD_MAP[field];
     if (targetField) {
       lastField = targetField;
-      if (targetField === 'notifications') {
-        const parts = value.split(',').map(p => p.trim().toLowerCase());
+      if (targetField === 'notifications' || field === 'notified') {
+        const parts = value.split(/[,\s]+/).map(p => p.trim().toLowerCase());
         parts.forEach(p => {
           Object.entries(NOTIFICATION_KEYWORDS).forEach(([kw, type]) => {
             if (p.includes(kw) && !result.notifications?.includes(type)) {
               result.notifications?.push(type);
+            }
+          });
+        });
+      } else if (targetField === 'documentation') {
+        const parts = value.split(/[,\s]+/).map(p => p.trim().toLowerCase());
+        parts.forEach(p => {
+          Object.entries(DOCUMENTATION_KEYWORDS).forEach(([kw, type]) => {
+            if (p.includes(kw) && !result.documentation?.includes(type)) {
+              result.documentation?.push(type);
             }
           });
         });
@@ -129,10 +165,13 @@ export function parseIncidentText(text: string): Partial<FacilityIncidentFormDat
       }
     }
 
-    // Special handling for incident types
+    // Special logic for drop-downs
     if (field === 'type' || field === 'incident type') {
       const parts = value.split(/[,\s]+/).map(p => p.trim().toLowerCase());
       parts.forEach(p => {
+        if (p === 'property' || p === 'damage') {
+           if (!result.incidentTypes?.includes('Property Damage')) result.incidentTypes?.push('Property Damage');
+        }
         Object.entries(INCIDENT_TYPE_KEYWORDS).forEach(([kw, type]) => {
           if (p.includes(kw) && !result.incidentTypes?.includes(type)) {
             result.incidentTypes?.push(type);
@@ -141,70 +180,58 @@ export function parseIncidentText(text: string): Partial<FacilityIncidentFormDat
       });
     }
 
-    // List items (Violations, Actions, Follow-up)
-    if (field.includes('violation')) {
-      result.policyViolations?.push({ description: value });
-    }
-    if (field.includes('action')) {
-      result.staffActions?.push({ description: value });
-    }
-    if (field.includes('recommend') || field.includes('follow up')) {
-      result.followUpRecommendations?.push({ description: value });
-    }
+    // List categories (Violations, Actions, Follow-up)
+    if (field.includes('violation')) result.policyViolations?.push({ description: value });
+    if (field.includes('action')) result.staffActions?.push({ description: value });
+    if (field.includes('recommend') || field.includes('follow up')) result.followUpRecommendations?.push({ description: value });
 
-    // Youth Involved extraction
-    // Format: "Youth Involved: John Doe (15, primary), Jane Smith (secondary)"
+    // Youth extraction
     if (field.includes('youth involved')) {
-      const youthParts = value.split(';').length > 1 ? value.split(';') : value.split(',');
-      youthParts.forEach(p => {
-        const match = p.match(/^(.*?)(?:\((.*?)\))?$/);
-        if (match) {
-          const name = match[1].trim();
-          const extra = match[2] || '';
+      const p = value.split(/[;,]/);
+      p.forEach(y => {
+        const m = y.match(/^(.*?)(?:\((.*?)\))?$/);
+        if (m) {
+          const name = m[1].trim();
+          const extra = (m[2] || '').toLowerCase();
           const age = extra.match(/\d+/)?.[0] || '';
           let role: any = 'secondary';
-          if (extra.toLowerCase().includes('primary')) role = 'primary';
-          else if (extra.toLowerCase().includes('witness')) role = 'witness';
-          else if (extra.toLowerCase().includes('victim')) role = 'victim';
-
-          if (name) {
-            result.youthInvolved?.push({ name, age, role });
-          }
+          if (extra.includes('primary')) role = 'primary';
+          else if (extra.includes('witness')) role = 'witness';
+          else if (extra.includes('victim')) role = 'victim';
+          if (name) result.youthInvolved?.push({ name, age, role });
         }
       });
     }
 
     // Witness extraction
-    // Format: "Witnesses: Alice Smith, Bob Jones (555-0100)"
-    if (field.includes('witnesses')) {
-      const witnessParts = value.split(/[,;]/);
-      witnessParts.forEach(p => {
-        const match = p.match(/^(.*?)(?:\((.*?)\))?$/);
-        if (match) {
-          const name = match[1].trim();
-          const phone = match[2]?.trim() || '';
-          if (name) {
-            result.witnesses?.push({ name, phone, address: '', cityState: '' });
-          }
+    if (field.includes('witnesses') || field === 'witness') {
+      const p = value.split(/[;,]/);
+      p.forEach(w => {
+        const m = w.match(/^(.*?)(?:\((.*?)\))?$/);
+        if (m) {
+          const name = m[1].trim();
+          const phone = m[2]?.trim() || '';
+          if (name) result.witnesses?.push({ name, phone, address: '', cityState: '' });
         }
       });
     }
   });
 
-  // Normalize Subject Type
+  // Strict Subject Type Normalization
   if (result.subjectType) {
     const st = String(result.subjectType).toLowerCase();
-    if (st.includes('res')) result.subjectType = 'Resident';
-    else if (st.includes('emp')) result.subjectType = 'Employee';
-    else if (st.includes('non')) result.subjectType = 'Non-Resident';
+    if (st.startsWith('res')) result.subjectType = 'Resident';
+    else if (st.startsWith('emp') || st.includes('staff')) result.subjectType = 'Employee';
+    else if (st.startsWith('non')) result.subjectType = 'Non-Resident';
+    else result.subjectType = 'Resident'; // Default
+  } else {
+    result.subjectType = 'Resident';
   }
 
-  // Cleanup lists if they only contain empty objects
-  if (result.policyViolations?.length === 0) delete result.policyViolations;
-  if (result.staffActions?.length === 0) delete result.staffActions;
-  if (result.followUpRecommendations?.length === 0) delete result.followUpRecommendations;
-  if (result.youthInvolved?.length === 0) delete result.youthInvolved;
-  if (result.witnesses?.length === 0) delete result.witnesses;
+  // Final scrub to ensure arrays are valid for checkboxes/tabs
+  if (result.incidentTypes?.length === 0) result.incidentTypes = [];
+  if (result.notifications?.length === 0) result.notifications = [];
+  if (result.documentation?.length === 0) result.documentation = [];
 
   return result;
 }

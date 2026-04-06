@@ -31,6 +31,8 @@ Narrative: Youth began yelling at staff and flipped a table.
 Staff redirected other youth to their rooms.
 Youth Involved: John Doe (primary), Jane Smith (secondary)
 Witnesses: Alice Smith (555-0100)
+Notified: Home Director, Supervisor
+Documentation: Photographs, Physical Inspection
 Staff: Staff Jane
 Submitted By: Staff Jane
 Signature Date: ${new Date().toISOString().split('T')[0]}

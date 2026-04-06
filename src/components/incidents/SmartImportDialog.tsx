@@ -27,9 +27,15 @@ Incident Date: ${new Date().toISOString().split('T')[0]}
 Incident Time: 14:00
 Location: Common Room
 Incident Type: Physical Altercation
-Narrative: Youth began yelling at staff...
-Notifications: Home Director, Supervisor
-Staff: Staff Jane`
+Narrative: Youth began yelling at staff and flipped a table. 
+Staff redirected other youth to their rooms.
+Youth Involved: John Doe (primary), Jane Smith (secondary)
+Witnesses: Alice Smith (555-0100)
+Staff: Staff Jane
+Submitted By: Staff Jane
+Signature Date: ${new Date().toISOString().split('T')[0]}
+Policy Violation: Damaging facility property
+Staff Action: De-escalated situation`
 
 export function SmartImportDialog({ open, onOpenChange, onImport }: Props) {
   const [text, setText] = useState('')

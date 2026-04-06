@@ -29,9 +29,9 @@ const CollapsibleSection = ({
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
       <CollapsibleTrigger className="flex items-center justify-between w-full py-2 group">
-        <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">{title}</h2>
+        <h2 className="text-label text-muted-foreground">{title}</h2>
         <ChevronDown
-          className={`h-4 w-4 text-gray-400 transition-transform duration-200 ${open ? "" : "-rotate-90"}`}
+          className={`h-4 w-4 text-muted-foreground/60 transition-transform duration-200 ${open ? "" : "-rotate-90"}`}
         />
       </CollapsibleTrigger>
       <CollapsibleContent className="pt-1 pb-4">{children}</CollapsibleContent>
@@ -177,10 +177,10 @@ const MainDashboard = () => {
                   </CardContent>
                 </Card>
 
-                <Card className="interactive-card border-l-4 border-l-blue-500/60">
+                <Card className="interactive-card border-l-4 border-l-info/60">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm font-bold text-muted-foreground flex items-center gap-2">
-                      <TriangleAlert className="h-4 w-4 text-blue-500" />
+                      <TriangleAlert className="h-4 w-4 text-info" />
                       Active Census
                     </CardTitle>
                   </CardHeader>
@@ -229,7 +229,7 @@ const MainDashboard = () => {
                       {levelEvents.map((event) => (
                         <div key={event.id} className="flex items-center gap-3 px-4 py-3 hover:bg-muted/50 transition-colors">
                           {event.direction === "level_up" ? (
-                            <TrendingUp className="h-4 w-4 text-green-600 flex-shrink-0" />
+                            <TrendingUp className="h-4 w-4 text-success flex-shrink-0" />
                           ) : (
                             <TrendingDown className="h-4 w-4 text-red-500 flex-shrink-0" />
                           )}

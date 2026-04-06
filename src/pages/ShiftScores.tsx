@@ -69,17 +69,17 @@ const SHIFTS: { key: ShiftType; label: string; icon: React.ReactNode }[] = [
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
 const ratingColor = (val: number) => {
-  if (val >= 3.5) return 'text-green-600'
-  if (val >= 3.0) return 'text-yellow-600'
-  if (val >= 2.0) return 'text-orange-600'
-  return 'text-red-600'
+  if (val >= 3.5) return 'score-high'
+  if (val >= 3.0) return 'score-mid'
+  if (val >= 2.0) return 'score-low'
+  return 'score-critical'
 }
 
 const ratingBgColor = (val: number) => {
-  if (val >= 3.5) return 'bg-green-100 dark:bg-green-900/40'
-  if (val >= 3.0) return 'bg-yellow-100 dark:bg-yellow-900/40'
-  if (val >= 2.0) return 'bg-orange-100 dark:bg-orange-900/40'
-  return 'bg-red-100 dark:bg-red-900/40'
+  if (val >= 3.5) return 'score-bg-high'
+  if (val >= 3.0) return 'score-bg-mid'
+  if (val >= 2.0) return 'score-bg-low'
+  return 'score-bg-critical'
 }
 
 const ratingLabel = (val: number) => {

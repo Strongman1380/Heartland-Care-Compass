@@ -43,6 +43,20 @@
     --sidebar-accent-foreground: 0 45% 25%;
     --sidebar-border: 45 20% 88%;
     --sidebar-ring: 0 45% 35%;
+
+    /* Semantic status colors */
+    --success: 145 55% 36%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 90% 46%;
+    --warning-foreground: 0 0% 100%;
+    --info: 210 65% 45%;
+    --info-foreground: 0 0% 100%;
+
+    /* Score band colors (used in shift scores, daily ratings) */
+    --score-high: 145 55% 36%;
+    --score-mid: 38 90% 46%;
+    --score-low: 25 90% 50%;
+    --score-critical: 0 78% 52%;
   }
 
   .dark {
@@ -81,6 +95,20 @@
     --sidebar-accent-foreground: 45 100% 85%;
     --sidebar-border: 0 30% 18%;
     --sidebar-ring: 45 100% 70%;
+
+    /* Semantic status colors — dark mode */
+    --success: 145 50% 48%;
+    --success-foreground: 0 0% 10%;
+    --warning: 38 85% 55%;
+    --warning-foreground: 0 0% 10%;
+    --info: 210 60% 58%;
+    --info-foreground: 0 0% 10%;
+
+    /* Score band colors — dark mode */
+    --score-high: 145 50% 48%;
+    --score-mid: 38 85% 55%;
+    --score-low: 25 85% 58%;
+    --score-critical: 0 72% 58%;
   }
 }
 
@@ -122,6 +150,30 @@
     opacity: 0;
     visibility: hidden;
   }
+
+  /* Typography scale */
+  .text-display  { font-size: 2.25rem; font-weight: 700; line-height: 1.15; letter-spacing: -0.02em; }
+  .text-heading  { font-size: 1.5rem;  font-weight: 600; line-height: 1.25; letter-spacing: -0.01em; }
+  .text-title    { font-size: 1.125rem; font-weight: 600; line-height: 1.35; }
+  .text-body     { font-size: 0.9375rem; font-weight: 400; line-height: 1.6; }
+  .text-caption  { font-size: 0.8125rem; font-weight: 400; line-height: 1.5; }
+  .text-label    { font-size: 0.75rem;  font-weight: 500; line-height: 1.4; letter-spacing: 0.06em; text-transform: uppercase; }
+
+  /* Semantic score band utilities — exempt from brand overrides */
+  .score-high    { color: hsl(var(--score-high)); }
+  .score-mid     { color: hsl(var(--score-mid)); }
+  .score-low     { color: hsl(var(--score-low)); }
+  .score-critical { color: hsl(var(--score-critical)); }
+
+  .score-bg-high    { background-color: hsl(var(--score-high) / 0.12); }
+  .score-bg-mid     { background-color: hsl(var(--score-mid) / 0.14); }
+  .score-bg-low     { background-color: hsl(var(--score-low) / 0.14); }
+  .score-bg-critical { background-color: hsl(var(--score-critical) / 0.12); }
+
+  /* Semantic status utilities */
+  .text-success  { color: hsl(var(--success)); }
+  .text-warning  { color: hsl(var(--warning)); }
+  .text-info     { color: hsl(var(--info)); }
 }
 
 @layer utilities {
@@ -244,7 +296,7 @@
   
   /* School Print Reports specific styles */
   @page {
-    margin: 0.5in;
+    margin: 1.5cm;
     size: letter;
   }
   

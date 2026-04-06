@@ -1,4 +1,4 @@
-import { FacilityIncidentFormData, FacilityIncidentType, NotificationType, SubjectType } from '@/types/facility-incident-types';
+import { FacilityIncidentFormData, FacilityIncidentType, NotificationType, SubjectType, InvolvedYouth, Witness } from '@/types/facility-incident-types';
 
 const INCIDENT_TYPE_KEYWORDS: Record<string, FacilityIncidentType> = {
   'theft': 'Theft',
@@ -43,6 +43,8 @@ const FIELD_MAP: Record<string, keyof FacilityIncidentFormData> = {
   'incident date': 'dateOfIncident',
   'time': 'timeOfIncident',
   'incident time': 'timeOfIncident',
+  'report date': 'reportDate',
+  'report time': 'reportTime',
   'location': 'location',
   'narrative': 'narrativeSummary',
   'summary': 'narrativeSummary',
@@ -51,6 +53,13 @@ const FIELD_MAP: Record<string, keyof FacilityIncidentFormData> = {
   'reporting staff': 'staffCompletingReport',
   'notifications': 'notifications',
   'notified': 'notifications',
+  'submitted by': 'submittedBy',
+  'reviewed by': 'reviewedBy',
+  'signature date': 'signatureDate',
+  'subject address': 'subjectAddress',
+  'subject phone': 'subjectPhone',
+  'supplementary': 'supplementaryInfo',
+  'additional info': 'supplementaryInfo',
 };
 
 export function parseIncidentText(text: string): Partial<FacilityIncidentFormData> {
@@ -70,12 +79,24 @@ export function parseIncidentText(text: string): Partial<FacilityIncidentFormDat
     policyViolations: [],
     staffActions: [],
     followUpRecommendations: [],
+    youthInvolved: [],
+    witnesses: [],
   };
 
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  let lastField: keyof FacilityIncidentFormData | null = null;
 
   lines.forEach(line => {
     const colonIndex = line.indexOf(':');
+    
+    // Handle multiline continuation (for narrative/supplementary)
+    if (colonIndex === -1 && lastField) {
+      if (lastField === 'narrativeSummary' || lastField === 'supplementaryInfo' || lastField === 'incidentDescription') {
+        result[lastField] = (result[lastField] || '') + '\n' + line;
+        return;
+      }
+    }
+
     if (colonIndex === -1) {
       // Check for keywords in bare lines (like incident types)
       const lowerLine = line.toLowerCase();
@@ -93,6 +114,7 @@ export function parseIncidentText(text: string): Partial<FacilityIncidentFormDat
     // Direct mapping
     const targetField = FIELD_MAP[field];
     if (targetField) {
+      lastField = targetField;
       if (targetField === 'notifications') {
         const parts = value.split(',').map(p => p.trim().toLowerCase());
         parts.forEach(p => {
@@ -102,16 +124,14 @@ export function parseIncidentText(text: string): Partial<FacilityIncidentFormDat
             }
           });
         });
-      } else if (targetField === 'incidentTypes') {
-         // handle separately if needed, but FIELD_MAP doesn't have it yet to avoid conflict
       } else {
         (result as any)[targetField] = value;
       }
     }
 
-    // Special handling for types in "Type: ..."
+    // Special handling for incident types
     if (field === 'type' || field === 'incident type') {
-      const parts = value.split(',').map(p => p.trim().toLowerCase());
+      const parts = value.split(/[,\s]+/).map(p => p.trim().toLowerCase());
       parts.forEach(p => {
         Object.entries(INCIDENT_TYPE_KEYWORDS).forEach(([kw, type]) => {
           if (p.includes(kw) && !result.incidentTypes?.includes(type)) {
@@ -121,7 +141,7 @@ export function parseIncidentText(text: string): Partial<FacilityIncidentFormDat
       });
     }
 
-    // List items
+    // List items (Violations, Actions, Follow-up)
     if (field.includes('violation')) {
       result.policyViolations?.push({ description: value });
     }
@@ -131,15 +151,60 @@ export function parseIncidentText(text: string): Partial<FacilityIncidentFormDat
     if (field.includes('recommend') || field.includes('follow up')) {
       result.followUpRecommendations?.push({ description: value });
     }
+
+    // Youth Involved extraction
+    // Format: "Youth Involved: John Doe (15, primary), Jane Smith (secondary)"
+    if (field.includes('youth involved')) {
+      const youthParts = value.split(';').length > 1 ? value.split(';') : value.split(',');
+      youthParts.forEach(p => {
+        const match = p.match(/^(.*?)(?:\((.*?)\))?$/);
+        if (match) {
+          const name = match[1].trim();
+          const extra = match[2] || '';
+          const age = extra.match(/\d+/)?.[0] || '';
+          let role: any = 'secondary';
+          if (extra.toLowerCase().includes('primary')) role = 'primary';
+          else if (extra.toLowerCase().includes('witness')) role = 'witness';
+          else if (extra.toLowerCase().includes('victim')) role = 'victim';
+
+          if (name) {
+            result.youthInvolved?.push({ name, age, role });
+          }
+        }
+      });
+    }
+
+    // Witness extraction
+    // Format: "Witnesses: Alice Smith, Bob Jones (555-0100)"
+    if (field.includes('witnesses')) {
+      const witnessParts = value.split(/[,;]/);
+      witnessParts.forEach(p => {
+        const match = p.match(/^(.*?)(?:\((.*?)\))?$/);
+        if (match) {
+          const name = match[1].trim();
+          const phone = match[2]?.trim() || '';
+          if (name) {
+            result.witnesses?.push({ name, phone, address: '', cityState: '' });
+          }
+        }
+      });
+    }
   });
 
   // Normalize Subject Type
   if (result.subjectType) {
-    const st = result.subjectType.toLowerCase();
+    const st = String(result.subjectType).toLowerCase();
     if (st.includes('res')) result.subjectType = 'Resident';
     else if (st.includes('emp')) result.subjectType = 'Employee';
     else if (st.includes('non')) result.subjectType = 'Non-Resident';
   }
+
+  // Cleanup lists if they only contain empty objects
+  if (result.policyViolations?.length === 0) delete result.policyViolations;
+  if (result.staffActions?.length === 0) delete result.staffActions;
+  if (result.followUpRecommendations?.length === 0) delete result.followUpRecommendations;
+  if (result.youthInvolved?.length === 0) delete result.youthInvolved;
+  if (result.witnesses?.length === 0) delete result.witnesses;
 
   return result;
 }

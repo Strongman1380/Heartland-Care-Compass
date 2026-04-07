@@ -828,6 +828,7 @@ export const ReferralTab = () => {
   const [isBulkReparsing, setIsBulkReparsing] = useState(false);
   const [exportingKey, setExportingKey] = useState<string | null>(null);
   const [isExportingNewScreening, setIsExportingNewScreening] = useState<"pdf" | "docx" | null>(null);
+  const [interviewedYesSectionOpen, setInterviewedYesSectionOpen] = useState(true);
 
   const parseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -1682,11 +1683,24 @@ export const ReferralTab = () => {
     return [...new Set(allPOs)].sort();
   }, [history]);
 
+  const interviewedYesHistory = useMemo(() => {
+    return history.filter((item) => {
+      if (item.archived) return false;
+      if (item.status !== "interviewed_yes") return false;
+      if (!historySearch.trim()) return true;
+      const poNames = extractProbationOfficer(item).join(" ");
+      const haystack = `${item.referralName} ${item.summary} ${item.staff} ${item.priority} ${item.referralSource} ${poNames}`.toLowerCase();
+      return haystack.includes(historySearch.toLowerCase().trim());
+    });
+  }, [history, historySearch]);
+
   const filteredHistory = useMemo(() => {
     return history.filter((item) => {
       if (archiveView === "active" && item.archived) return false;
       if (archiveView === "archived" && !item.archived) return false;
       if (historyFilter !== "all" && item.status !== historyFilter) return false;
+      // Interviewed-yes referrals are shown in their own section, not in the main pipeline
+      if (historyFilter === "all" && item.status === "interviewed_yes") return false;
       if (poContactFilter && item.poContactLog && item.poContactLog.length > 0) return false;
       if (poFilter !== "all") {
         const itemPOs = extractProbationOfficer(item).map((p) => p.toLowerCase());
@@ -3272,9 +3286,12 @@ export const ReferralTab = () => {
                         {item.staffRecommendation === "yes" && <Badge className="bg-green-100 text-green-800 border-green-300 text-xs">Staff: Yes</Badge>}
                         {item.staffRecommendation === "maybe" && <Badge className="bg-yellow-100 text-yellow-800 border-yellow-300 text-xs">Staff: Maybe</Badge>}
                         {item.staffRecommendation === "no" && <Badge className="bg-red-100 text-red-800 border-red-300 text-xs">Staff: No</Badge>}
-                        {item.interviewScheduledDate && (
+                        {(item.interviewScheduledDate || item.interviewTime || item.interviewPlace) && (
                           <Badge className="bg-blue-100 text-blue-800 border-blue-300 text-xs">
-                            Interview: {format(new Date(item.interviewScheduledDate + "T00:00:00"), "MMM d, yyyy")}
+                            Interview:{" "}
+                            {item.interviewScheduledDate && format(new Date(item.interviewScheduledDate + "T00:00:00"), "MMM d, yyyy")}
+                            {item.interviewTime && ` · ${new Date(`2000-01-01T${item.interviewTime}`).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}`}
+                            {item.interviewPlace && ` · ${item.interviewPlace}`}
                           </Badge>
                         )}
                         {item.archived && <Badge variant="outline" className="text-xs">archived</Badge>}
@@ -3970,6 +3987,79 @@ export const ReferralTab = () => {
                     <Button variant="outline" size="sm" className="w-full" onClick={() => setVisibleCount(15)}>
                       Show less
                     </Button>
+                  )}
+
+                  {/* Interviewed — Yes section */}
+                  {interviewedYesHistory.length > 0 && historyFilter === "all" && (
+                    <div className="mt-4 rounded-lg border border-green-200 bg-green-50/40">
+                      <button
+                        className="w-full flex items-center justify-between px-4 py-3 text-left"
+                        onClick={() => setInterviewedYesSectionOpen((o) => !o)}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-semibold text-green-800">Interviewed — Yes</span>
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 border border-green-300">
+                            {interviewedYesHistory.length}
+                          </span>
+                          <span className="text-xs text-green-700">Awaiting placement decision or further action</span>
+                        </div>
+                        {interviewedYesSectionOpen ? <ChevronUp className="h-4 w-4 text-green-600" /> : <ChevronDown className="h-4 w-4 text-green-600" />}
+                      </button>
+                      {interviewedYesSectionOpen && (
+                        <div className="px-3 pb-3 space-y-2">
+                          {interviewedYesHistory.map((item) => {
+                            const rowKey = referralRowKey(item);
+                            const isExpanded = expandedReferralId === rowKey;
+                            const createdDate = new Date(item.createdAt);
+                            const formattedDate = isValid(createdDate) ? format(createdDate, "MMM d, yyyy") : "-";
+                            return (
+                              <div key={rowKey} className={`rounded-md border transition-colors ${isExpanded ? "p-3 border-green-300 bg-white" : "p-2 hover:bg-green-50 cursor-pointer border-green-100 bg-white"}`}>
+                                <div
+                                  className="flex items-center gap-2 flex-wrap"
+                                  onClick={() => setExpandedReferralId(isExpanded ? null : rowKey)}
+                                >
+                                  <span className="text-sm font-semibold text-foreground truncate max-w-[180px]">{item.referralName}</span>
+                                  {item.referralSource && <span className="text-xs text-muted-foreground truncate max-w-[120px]">{item.referralSource}</span>}
+                                  <Badge className="bg-green-100 text-green-800 border-green-300 text-xs">Interviewed — Yes</Badge>
+                                  <Badge variant="secondary" className="text-xs">{item.priority}</Badge>
+                                  {(item.interviewScheduledDate || item.interviewTime || item.interviewPlace) && (
+                                    <Badge className="bg-blue-100 text-blue-800 border-blue-300 text-xs">
+                                      Interview:{" "}
+                                      {item.interviewScheduledDate && format(new Date(item.interviewScheduledDate + "T00:00:00"), "MMM d, yyyy")}
+                                      {item.interviewTime && ` · ${new Date(`2000-01-01T${item.interviewTime}`).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}`}
+                                      {item.interviewPlace && ` · ${item.interviewPlace}`}
+                                    </Badge>
+                                  )}
+                                  <span className="text-xs text-muted-foreground ml-auto shrink-0">{formattedDate}</span>
+                                  {isExpanded ? <ChevronUp className="h-4 w-4 text-muted-foreground shrink-0" /> : <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />}
+                                </div>
+                                {isExpanded && (
+                                  <div className="mt-3 pt-3 border-t border-green-100 flex flex-wrap gap-2 text-xs text-green-700">
+                                    <button
+                                      className="underline hover:text-green-900"
+                                      onClick={() => setEditingInterviewTarget(item)}
+                                    >
+                                      View Interview Report
+                                    </button>
+                                    <span>·</span>
+                                    <button
+                                      className="underline hover:text-red-600 text-red-500"
+                                      onClick={async () => {
+                                        if (!confirm(`Move "${item.referralName}" back to active pipeline?`)) return;
+                                        await referralNotesService.update(toReferralLookup(item), { status: "pending_interview" });
+                                        await loadReferralHistory();
+                                      }}
+                                    >
+                                      Move back to pipeline
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
               )}

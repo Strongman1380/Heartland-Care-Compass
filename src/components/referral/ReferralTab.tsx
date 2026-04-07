@@ -27,6 +27,7 @@ import {
   Lock,
   Loader2,
   Mail,
+  MapPin,
   Pill,
   Plus,
   Printer,
@@ -758,6 +759,45 @@ const toHistoryItem = (row: ReferralNoteRow): ReferralHistoryItem => {
   };
 };
 
+function extractCurrentPlacement(item: ReferralHistoryItem): string {
+  const d = item.parsedData as any;
+  if (!d) return "";
+  if (d.current_placement) return String(d.current_placement);
+  const sections = [d.demographics, d.placement, d.other, d.legal];
+  for (const section of sections) {
+    if (!section || typeof section !== "object") continue;
+    for (const [key, val] of Object.entries(section)) {
+      if (/current\s*placement/i.test(key)) return String(val);
+    }
+  }
+  return "";
+}
+
+const PLACEMENT_PRIORITY = [
+  "At Home",
+  "Group Home / Residential",
+  "Foster Care",
+  "Shelter / Crisis",
+  "Detention",
+  "Lancaster Detention Center",
+  "Inpatient / Hospital",
+  "Correctional Facility",
+];
+
+function normalizePlacementGroup(raw: string): string {
+  if (!raw.trim()) return "Unknown / Not Specified";
+  const lower = raw.toLowerCase().trim();
+  if (/\bat\s+home\b|family home|home\s*placement|\bin home\b/.test(lower) || lower === "home") return "At Home";
+  if (/lancaster.*detention|ldc\b|lancaster.*county.*det/.test(lower)) return "Lancaster Detention Center";
+  if (/\bdetention\b/.test(lower)) return "Detention";
+  if (/group\s*home|residential\s*treat|residential\s*fac|rtu\b|rtp\b|\brtc\b/.test(lower)) return "Group Home / Residential";
+  if (/foster\s*care|\bfoster\b/.test(lower)) return "Foster Care";
+  if (/\bshelter\b|\bcrisis\s*center\b/.test(lower)) return "Shelter / Crisis";
+  if (/\bhospital\b|\binpatient\b|\bpsychiatric\b/.test(lower)) return "Inpatient / Hospital";
+  if (/\bjail\b|\bprison\b|\bcorrection/.test(lower)) return "Correctional Facility";
+  return raw.trim();
+}
+
 export const ReferralTab = () => {
   const [rawText, setRawText] = useState("");
   const [parsed, setParsed] = useState<ParsedReferral | null>(null);
@@ -829,6 +869,7 @@ export const ReferralTab = () => {
   const [exportingKey, setExportingKey] = useState<string | null>(null);
   const [isExportingNewScreening, setIsExportingNewScreening] = useState<"pdf" | "docx" | null>(null);
   const [interviewedYesSectionOpen, setInterviewedYesSectionOpen] = useState(true);
+  const [collapsedPlacementGroups, setCollapsedPlacementGroups] = useState<Set<string>>(new Set());
 
   const parseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -1714,6 +1755,26 @@ export const ReferralTab = () => {
   }, [history, archiveView, historyFilter, poContactFilter, poFilter, historySearch]);
 
   const visibleHistory = useMemo(() => filteredHistory.slice(0, visibleCount), [filteredHistory, visibleCount]);
+
+  const placementGroupEntries = useMemo(() => {
+    const groups = new Map<string, ReferralHistoryItem[]>();
+    filteredHistory.forEach((item) => {
+      const raw = extractCurrentPlacement(item);
+      const group = normalizePlacementGroup(raw);
+      if (!groups.has(group)) groups.set(group, []);
+      groups.get(group)!.push(item);
+    });
+    return [...groups.entries()].sort(([a], [b]) => {
+      if (a === "Unknown / Not Specified") return 1;
+      if (b === "Unknown / Not Specified") return -1;
+      const ai = PLACEMENT_PRIORITY.indexOf(a);
+      const bi = PLACEMENT_PRIORITY.indexOf(b);
+      if (ai !== -1 && bi !== -1) return ai - bi;
+      if (ai !== -1) return -1;
+      if (bi !== -1) return 1;
+      return a.localeCompare(b);
+    });
+  }, [filteredHistory]);
   const selectedItems = history.filter((item) => selectedReferralKeys.has(referralRowKey(item)));
   const selectedVisibleCount = visibleHistory.filter((item) => selectedReferralKeys.has(referralRowKey(item))).length;
 
@@ -3216,7 +3277,27 @@ export const ReferralTab = () => {
                     )}
                   </div>
 
-                  {visibleHistory.map((item) => {
+                  {placementGroupEntries.flatMap(([groupLabel, groupItems]) => {
+                    const isGroupCollapsed = collapsedPlacementGroups.has(groupLabel);
+                    const toggleGroup = () => setCollapsedPlacementGroups((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(groupLabel)) next.delete(groupLabel); else next.add(groupLabel);
+                      return next;
+                    });
+                    const groupHeader = (
+                      <div
+                        key={`gh-${groupLabel}`}
+                        className="flex items-center gap-2 mt-4 mb-1.5 px-1 pb-1.5 border-b border-slate-200 cursor-pointer select-none hover:bg-slate-50 rounded-sm transition-colors"
+                        onClick={toggleGroup}
+                      >
+                        <MapPin className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                        <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide flex-1">{groupLabel}</span>
+                        <span className="text-xs text-slate-400 font-normal">{groupItems.length} referral{groupItems.length !== 1 ? "s" : ""}</span>
+                        {isGroupCollapsed ? <ChevronDown className="h-3.5 w-3.5 text-slate-400" /> : <ChevronUp className="h-3.5 w-3.5 text-slate-400" />}
+                      </div>
+                    );
+                    if (isGroupCollapsed) return [groupHeader];
+                    return [groupHeader, ...groupItems.map((item) => {
                     const createdDate = new Date(item.createdAt);
                     const formattedDate = isValid(createdDate) ? format(createdDate, "MMM d, yyyy") : "-";
                     const rowKey = referralRowKey(item);
@@ -3977,17 +4058,8 @@ export const ReferralTab = () => {
                     )}
                     </div>
                   );
+                  })];
                   })}
-                  {filteredHistory.length > visibleCount && (
-                    <Button variant="outline" size="sm" className="w-full" onClick={() => setVisibleCount((prev) => prev + 15)}>
-                      Show more ({filteredHistory.length - visibleCount} remaining)
-                    </Button>
-                  )}
-                  {visibleCount > 15 && filteredHistory.length <= visibleCount && (
-                    <Button variant="outline" size="sm" className="w-full" onClick={() => setVisibleCount(15)}>
-                      Show less
-                    </Button>
-                  )}
 
                   {/* Interviewed — Yes section */}
                   {interviewedYesHistory.length > 0 && historyFilter === "all" && (

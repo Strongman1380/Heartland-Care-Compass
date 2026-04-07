@@ -270,9 +270,10 @@ export default function IncidentReports() {
                         {inc.youthName || 'Unnamed Report'}
                       </div>
                       <div className="flex items-center gap-4 text-xs text-slate-500">
-                        {inc.dateOfIncident && (
-                          <span>{format(new Date(inc.dateOfIncident + 'T00:00:00'), 'MMM d, yyyy')}</span>
-                        )}
+                        {inc.dateOfIncident && (() => {
+                          const d = new Date(inc.dateOfIncident + 'T00:00:00');
+                          return !isNaN(d.getTime()) ? <span>{format(d, 'MMM d, yyyy')}</span> : <span>{inc.dateOfIncident}</span>;
+                        })()}
                         {inc.timeOfIncident && <span>{inc.timeOfIncident}</span>}
                         {inc.location && <span>&bull; {inc.location}</span>}
                         {inc.staffCompletingReport && (

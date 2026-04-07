@@ -152,6 +152,21 @@ const FIELD_MAP: Record<string, keyof FacilityIncidentFormData> = {
   'documentation': 'documentation',
 };
 
+function normalizeDate(value: string): string {
+  if (!value) return value;
+  // Already ISO yyyy-MM-dd
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  // MM/DD/YYYY or M/D/YYYY
+  const mdy = value.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (mdy) return `${mdy[3]}-${mdy[1].padStart(2, '0')}-${mdy[2].padStart(2, '0')}`;
+  // Try native Date parse as last resort
+  const d = new Date(value);
+  if (!isNaN(d.getTime())) {
+    return d.toISOString().slice(0, 10);
+  }
+  return value;
+}
+
 export function parseIncidentText(text: string): Partial<FacilityIncidentFormData> {
   try {
     const data = JSON.parse(text);
@@ -210,7 +225,11 @@ export function parseIncidentText(text: string): Partial<FacilityIncidentFormDat
           });
         });
       } else {
-        (result as any)[targetField] = value;
+        const normalized =
+          (targetField === 'dateOfIncident' || targetField === 'reportDate' || targetField === 'signatureDate')
+            ? normalizeDate(value)
+            : value;
+        (result as any)[targetField] = normalized;
       }
     }
 

@@ -780,6 +780,8 @@ const PLACEMENT_PRIORITY = [
   "Shelter / Crisis",
   "Detention",
   "Lancaster Detention Center",
+  "Lancaster County Youth Services Center",
+  "Douglas County Youth Center",
   "Inpatient / Hospital",
   "Correctional Facility",
 ];
@@ -789,6 +791,8 @@ function normalizePlacementGroup(raw: string): string {
   const lower = raw.toLowerCase().trim();
   if (/\bat\s+home\b|family home|home\s*placement|\bin home\b/.test(lower) || lower === "home") return "At Home";
   if (/lancaster.*detention|ldc\b|lancaster.*county.*det/.test(lower)) return "Lancaster Detention Center";
+  if (/lcysc\b|lancaster.*county.*youth.*serv|lancaster.*youth.*serv/.test(lower)) return "Lancaster County Youth Services Center";
+  if (/dcyc\b|douglas.*county.*youth.*cent|douglas.*youth.*cent/.test(lower)) return "Douglas County Youth Center";
   if (/\bdetention\b/.test(lower)) return "Detention";
   if (/group\s*home|residential\s*treat|residential\s*fac|rtu\b|rtp\b|\brtc\b/.test(lower)) return "Group Home / Residential";
   if (/foster\s*care|\bfoster\b/.test(lower)) return "Foster Care";

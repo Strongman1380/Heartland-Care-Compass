@@ -929,6 +929,10 @@ export async function screenReferralIntake(referralText: string): Promise<AIResp
   return makeAIRequest('/api/ai/screen-referral', { referralText }, { timeout: 60000 });
 }
 
+export async function extractReferralFields(referralText: string): Promise<AIResponse<Record<string, Record<string, string>>>> {
+  return makeAIRequest('/api/ai/extract-referral-fields', { referralText }, { timeout: 45000 });
+}
+
 // ============================================================================
 // EXPORT ALL SERVICES
 // ============================================================================
@@ -970,6 +974,7 @@ export const aiService = {
 
   // Referral Intake Screener
   screenReferralIntake,
+  extractReferralFields,
 
   // Utilities
   checkAIStatus,

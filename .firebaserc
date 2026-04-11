@@ -1,5 +1,7 @@
 {
   "projects": {
     "default": "heartland-boys-home-data"
-  }
+  },
+  "targets": {},
+  "etags": {}
 }

@@ -926,11 +926,11 @@ export async function parseYouthProfileText(
  * with risk screens, violence assessment, house-fit analysis, and clarification questions.
  */
 export async function screenReferralIntake(referralText: string): Promise<AIResponse<{ screening: string }>> {
-  return makeAIRequest('/api/ai/screen-referral', { referralText }, { timeout: 60000 });
+  return makeAIRequest('/api/ai/screen-referral', { referralText }, { timeout: 90000, maxRetries: 0 });
 }
 
 export async function extractReferralFields(referralText: string): Promise<AIResponse<Record<string, Record<string, string>>>> {
-  return makeAIRequest('/api/ai/extract-referral-fields', { referralText }, { timeout: 45000 });
+  return makeAIRequest('/api/ai/extract-referral-fields', { referralText }, { timeout: 45000, maxRetries: 0 });
 }
 
 // ============================================================================

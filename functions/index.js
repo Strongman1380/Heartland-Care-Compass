@@ -8,7 +8,7 @@ import Anthropic from '@anthropic-ai/sdk';
 
 // Config params
 const anthropicApiKey = defineString('ANTHROPIC_API_KEY', { default: '' });
-const anthropicModel = defineString('ANTHROPIC_MODEL', { default: 'claude-haiku-4-5-20251001' });
+const anthropicModel = defineString('ANTHROPIC_MODEL', { default: 'claude-sonnet-4-6' });
 
 // Express app
 const app = express();

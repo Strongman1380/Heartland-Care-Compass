@@ -810,17 +810,18 @@ export const ReferralTab = () => {
   const [parsedEntries, setParsedEntries] = useState<ParsedEntry[]>([]);
   const [referralName, setReferralName] = useState("");
   const [referralSource, setReferralSource] = useState("");
-  const [staffName, setStaffName] = useState(() => user?.displayName || "");
+  const [staffName, setStaffName] = useState(() => user?.displayName || user?.email || "");
   const [date, setDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [status, setStatus] = useState("pending_interview");
   const [priority, setPriority] = useState("routine");
 
   // Pre-fill staff name from logged-in user once auth resolves
   useEffect(() => {
-    if (user?.displayName && !staffName) {
-      setStaffName(user.displayName);
+    const defaultStaff = user?.displayName || user?.email || "";
+    if (defaultStaff && !staffName) {
+      setStaffName(defaultStaff);
     }
-  }, [user?.displayName]);
+  }, [user?.displayName, user?.email]);
 
   const [isSaving, setIsSaving] = useState(false);
   const [isParsing, setIsParsing] = useState(false);
@@ -1416,7 +1417,13 @@ export const ReferralTab = () => {
     if (globalSource && !referralSource.trim()) setReferralSource(globalSource);
     if (globalStaff && !staffName.trim()) setStaffName(globalStaff);
 
-    if (entries.length > 1) {
+    // Guard against false-positive splits: if multiple blocks were found but fewer than
+    // 2 of them have a real inferred youth name, the splitter broke a single document
+    // into sections (e.g. a multi-section Word form). Collapse back to one unit.
+    const namedEntries = entries.filter((e) => e.referralName.trim());
+    const isTrueMultiReferral = entries.length > 1 && namedEntries.length >= 2;
+
+    if (isTrueMultiReferral) {
       setParsed(null);
       setParsedEntries(entries);
       if (!referralSource.trim()) {
@@ -1424,25 +1431,28 @@ export const ReferralTab = () => {
         if (globalSource) setReferralSource(globalSource);
         else if (firstDetectedSource) setReferralSource(firstDetectedSource);
       }
-    } else {
-      const single = entries[0];
-      setParsedEntries([]);
-      setParsed(single.parsed);
-      if (single.referralName && !referralName.trim()) setReferralName(single.referralName);
-      if (single.referralSource && !referralSource.trim()) setReferralSource(single.referralSource);
-      if (!single.referralSource && globalSource && !referralSource.trim()) setReferralSource(globalSource);
-    }
-
-    const totalFields = entries.reduce(
-      (sum, entry) => sum + Object.values(entry.parsed).reduce((inner, section) => inner + Object.keys(section).length, 0),
-      0
-    );
-    if (entries.length > 1) {
+      const totalFields = entries.reduce(
+        (sum, entry) => sum + Object.values(entry.parsed).reduce((inner, section) => inner + Object.keys(section).length, 0),
+        0
+      );
       toast.success(`Detected ${entries.length} referrals with ${totalFields} total parsed fields`);
-    } else if (totalFields > 0) {
-      toast.success(`Parsed ${totalFields} fields into ${Object.values(entries[0].parsed).filter(sectionHasContent).length} sections`);
     } else {
-      toast.warning("Could not parse structured fields. The full text will be saved as-is.");
+      // Single referral path (or false-positive split collapsed to one)
+      const singleParsed = entries.length === 1 ? entries[0].parsed : parseReferralText(text);
+      const singleName = entries.length === 1 ? entries[0].referralName : inferReferralName(singleParsed);
+      const singleSource = entries.length === 1 ? entries[0].referralSource : inferReferralSource(singleParsed);
+      setParsedEntries([]);
+      setParsed(singleParsed);
+      if (singleName && !referralName.trim()) setReferralName(singleName);
+      if (singleSource && !referralSource.trim()) setReferralSource(singleSource);
+      if (!singleSource && globalSource && !referralSource.trim()) setReferralSource(globalSource);
+      const totalFields = Object.values(singleParsed).reduce((sum, section) => sum + Object.keys(section).length, 0);
+      if (totalFields > 0) {
+        const sectionCount = Object.values(singleParsed).filter(sectionHasContent).length;
+        toast.success(`Parsed ${totalFields} fields into ${sectionCount} sections`);
+      } else {
+        toast.warning("Could not parse structured fields. The full text will be saved as-is.");
+      }
     }
   };
 
@@ -1454,49 +1464,10 @@ export const ReferralTab = () => {
 
     setIsParsing(true);
     try {
-      // AI-powered extraction (primary path)
-      const aiResult = await extractReferralFields(rawText);
-      if (!aiResult.success) {
-        console.warn("[ReferralTab] AI extraction returned failure:", aiResult.error);
-      }
-      if (aiResult.success && aiResult.data && typeof aiResult.data === "object") {
-        const fields = (aiResult.data as any).fields ?? aiResult.data;
-        const SECTIONS = ["demographics","family","legal","placement","assessment","behavioral","mentalHealth","education","medical","strengths","serviceHistory","goals","insurance","restrictions","other"] as const;
-        // Build a ParsedReferral-shaped object from AI response
-        const parsed: any = Object.fromEntries(SECTIONS.map((s) => [s, {}]));
-        for (const section of SECTIONS) {
-          const sectionData = fields[section];
-          if (sectionData && typeof sectionData === "object") {
-            parsed[section] = Object.fromEntries(
-              Object.entries(sectionData).filter(([, v]) => v && String(v).trim())
-            );
-          }
-        }
-        // Infer name from AI-extracted demographics — try common key variations
-        const demo = parsed.demographics || {};
-        const firstName = demo["First Name"] || demo["First"] || "";
-        const lastName = demo["Last Name"] || demo["Last"] || "";
-        const combinedName = firstName && lastName ? `${firstName} ${lastName}` : (firstName || lastName);
-        const demoName =
-          demo["Name"] ||
-          demo["Youth Name"] ||
-          demo["Youth"] ||
-          demo["Full Name"] ||
-          combinedName ||
-          "";
-        setParsedEntries([]);
-        setParsed(parsed);
-        if (demoName && !referralName.trim()) setReferralName(demoName);
-        const totalFields = SECTIONS.reduce((sum, s) => sum + Object.keys(parsed[s] || {}).length, 0);
-        toast.success(`AI extracted ${totalFields} fields — all checkboxes and sections captured`);
-        return;
-      }
-    } catch (aiError) {
-      console.warn("[ReferralTab] AI extraction failed, falling back to regex parser:", aiError);
+      runRegexParse(rawText);
+    } finally {
+      setIsParsing(false);
     }
-
-    // Fallback: regex/heuristic parser
-    runRegexParse(rawText);
   };
 
   const handleReset = () => {
@@ -1512,11 +1483,11 @@ export const ReferralTab = () => {
 
   const handleSave = async () => {
     if (!staffName.trim()) {
-      toast.error("Staff name is required");
+      toast.error("Staff name is required", { duration: 8000 });
       return;
     }
     if (!rawText.trim()) {
-      toast.error("No referral text to save");
+      toast.error("No referral text to save", { duration: 8000 });
       return;
     }
 
@@ -1559,7 +1530,7 @@ export const ReferralTab = () => {
       }
 
       if (!referralName.trim()) {
-        toast.error("Referral name is required");
+        toast.error("Referral name is required — enter the youth's name in the Name field before saving", { duration: 8000 });
         return;
       }
 
@@ -1610,7 +1581,8 @@ export const ReferralTab = () => {
       setPriority("routine");
     } catch (error) {
       const msg = error instanceof Error ? error.message : "Failed to save referral note";
-      toast.error(msg);
+      console.error("[ReferralTab] Save failed:", error);
+      toast.error(msg, { duration: 8000 });
     } finally {
       setIsSaving(false);
     }

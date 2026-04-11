@@ -764,11 +764,22 @@ export const inferReferralName = (parsed: ParsedReferral): string => {
 };
 
 export const inferReferralSource = (parsed: ParsedReferral): string => {
-  const sections = [parsed.placement, parsed.legal, parsed.other];
+  const sections = [parsed.placement, parsed.legal, parsed.other, parsed.demographics];
   for (const section of sections) {
     for (const [k, v] of Object.entries(section)) {
       const lk = k.toLowerCase();
-      if (lk.includes("referral source") || lk === "source" || lk.includes("placing agency") || lk.includes("county")) {
+      if (
+        lk.includes("referral source") ||
+        lk === "source" ||
+        lk.includes("placing agency") ||
+        lk.includes("referring agency") ||
+        lk.includes("sending agency") ||
+        lk.includes("probation district") ||
+        lk === "district" ||
+        lk.includes("county/district") ||
+        lk.includes("county") ||
+        lk === "agency"
+      ) {
         if (v.trim()) return v.trim();
       }
     }

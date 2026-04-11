@@ -1463,8 +1463,18 @@ export const ReferralTab = () => {
             );
           }
         }
-        // Infer name from AI-extracted demographics
-        const demoName = parsed.demographics?.["Name"] || parsed.demographics?.["Youth Name"] || "";
+        // Infer name from AI-extracted demographics — try common key variations
+        const demo = parsed.demographics || {};
+        const firstName = demo["First Name"] || demo["First"] || "";
+        const lastName = demo["Last Name"] || demo["Last"] || "";
+        const combinedName = firstName && lastName ? `${firstName} ${lastName}` : (firstName || lastName);
+        const demoName =
+          demo["Name"] ||
+          demo["Youth Name"] ||
+          demo["Youth"] ||
+          demo["Full Name"] ||
+          combinedName ||
+          "";
         setParsedEntries([]);
         setParsed(parsed);
         if (demoName && !referralName.trim()) setReferralName(demoName);

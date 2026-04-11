@@ -2104,7 +2104,7 @@ RULES:
 9. Return ONLY valid JSON — no markdown, no explanation, no code fences.
 
 Section assignment guide:
-- demographics: name, DOB, age, gender, current placement, length of stay, reason for OOH, date of referral, crossover status
+- demographics: use key "Name" for the youth's full name (combine first+last if separate), DOB, age, gender, current placement, length of stay, reason for OOH, date of referral, crossover status
 - family: all parent/guardian info, contact plan, sibling plan, engagement level, parent education needs
 - legal: probation officer, district, phone, email, judge, county, attorney, GAL, CASA, offenses, court orders
 - placement: level of service requested (treatment/non-treatment), short/long term, primary/secondary service types, special accommodations

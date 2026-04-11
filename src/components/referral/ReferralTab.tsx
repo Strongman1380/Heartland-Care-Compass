@@ -1828,35 +1828,22 @@ export const ReferralTab = () => {
       return a.localeCompare(b);
     });
   }, [filteredHistory]);
-  const STATUS_GROUP_ORDER = [
-    "pending_interview",
-    "schedule_interview",
-    "waiting_for_response",
-    "interview_scheduled",
-    "interviewed_yes",
-    "contacted_po",
-    "contacted_caseworker",
-    "requested_more_info",
-    "waitlisted",
-    "interviewed_no",
-    "already_found_placement",
-    "accepted",
-    "denied",
-    "new",
-    "reviewed",
-    "actioned",
-  ];
+  // Only these statuses get their own group header; everything else is "Active Pipeline"
+  const STATUS_PINNED_GROUPS = ["interviewed_yes", "waitlisted"] as const;
+  const STATUS_PINNED_GROUP_ORDER = ["Active Pipeline", "interviewed_yes", "waitlisted"];
 
   const statusGroupEntries = useMemo(() => {
     const groups = new Map<string, ReferralHistoryItem[]>();
     filteredHistory.forEach((item) => {
-      const key = item.status || "new";
+      const key = (STATUS_PINNED_GROUPS as readonly string[]).includes(item.status || "")
+        ? item.status!
+        : "Active Pipeline";
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key)!.push(item);
     });
     return [...groups.entries()].sort(([a], [b]) => {
-      const ai = STATUS_GROUP_ORDER.indexOf(a);
-      const bi = STATUS_GROUP_ORDER.indexOf(b);
+      const ai = STATUS_PINNED_GROUP_ORDER.indexOf(a);
+      const bi = STATUS_PINNED_GROUP_ORDER.indexOf(b);
       if (ai !== -1 && bi !== -1) return ai - bi;
       if (ai !== -1) return -1;
       if (bi !== -1) return 1;
@@ -3390,8 +3377,9 @@ export const ReferralTab = () => {
                     const isStatusMode = pipelineGroupMode === "status";
                     const collapsedSet = isStatusMode ? collapsedStatusGroups : collapsedPlacementGroups;
                     const setCollapsedSet = isStatusMode ? setCollapsedStatusGroups : setCollapsedPlacementGroups;
+                    const isActivePipelineGroup = isStatusMode && groupLabel === "Active Pipeline";
                     const displayLabel = isStatusMode ? (STATUS_LABELS[groupLabel] || groupLabel) : groupLabel;
-                    const statusColor = isStatusMode ? (STATUS_COLORS[groupLabel] || "bg-gray-100 text-gray-800 border-gray-300") : null;
+                    const statusColor = isStatusMode && !isActivePipelineGroup ? (STATUS_COLORS[groupLabel] || "bg-gray-100 text-gray-800 border-gray-300") : null;
                     const isGroupCollapsed = collapsedSet.has(groupLabel);
                     const toggleGroup = () => setCollapsedSet((prev) => {
                       const next = new Set(prev);
@@ -3405,10 +3393,11 @@ export const ReferralTab = () => {
                         onClick={toggleGroup}
                       >
                         {isStatusMode
-                          ? <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${statusColor}`}>{displayLabel}</span>
+                          ? isActivePipelineGroup
+                            ? <><BarChart3 className="h-3.5 w-3.5 text-slate-400 shrink-0" /><span className="text-xs font-semibold text-slate-600 uppercase tracking-wide flex-1">Active Pipeline</span></>
+                            : <><span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${statusColor}`}>{displayLabel}</span><span className="flex-1" /></>
                           : <><MapPin className="h-3.5 w-3.5 text-slate-400 shrink-0" /><span className="text-xs font-semibold text-slate-600 uppercase tracking-wide flex-1">{displayLabel}</span></>
                         }
-                        {isStatusMode && <span className="flex-1" />}
                         <span className="text-xs text-slate-400 font-normal">{groupItems.length} referral{groupItems.length !== 1 ? "s" : ""}</span>
                         {isGroupCollapsed ? <ChevronDown className="h-3.5 w-3.5 text-slate-400" /> : <ChevronUp className="h-3.5 w-3.5 text-slate-400" />}
                       </div>

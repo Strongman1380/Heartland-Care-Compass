@@ -55,6 +55,7 @@ import { DataDensityBadge } from "./DataDensityBadge";
 import { calculateFieldCompletion, groupContactPersons, type ContactPersonCard } from "@/utils/referralUtils";
 import { alertsService } from "@/integrations/firebase/alertsService";
 import { screenReferralIntake, extractReferralFields } from "@/services/aiService";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   type ParsedReferral,
   SECTION_CONFIG,
@@ -803,15 +804,23 @@ function normalizePlacementGroup(raw: string): string {
 }
 
 export const ReferralTab = () => {
+  const { user } = useAuth();
   const [rawText, setRawText] = useState("");
   const [parsed, setParsed] = useState<ParsedReferral | null>(null);
   const [parsedEntries, setParsedEntries] = useState<ParsedEntry[]>([]);
   const [referralName, setReferralName] = useState("");
   const [referralSource, setReferralSource] = useState("");
-  const [staffName, setStaffName] = useState("");
+  const [staffName, setStaffName] = useState(() => user?.displayName || "");
   const [date, setDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [status, setStatus] = useState("pending_interview");
   const [priority, setPriority] = useState("routine");
+
+  // Pre-fill staff name from logged-in user once auth resolves
+  useEffect(() => {
+    if (user?.displayName && !staffName) {
+      setStaffName(user.displayName);
+    }
+  }, [user?.displayName]);
 
   const [isSaving, setIsSaving] = useState(false);
   const [isParsing, setIsParsing] = useState(false);

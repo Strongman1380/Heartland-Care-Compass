@@ -874,6 +874,8 @@ export const ReferralTab = () => {
   const [isExportingNewScreening, setIsExportingNewScreening] = useState<"pdf" | "docx" | null>(null);
   const [interviewedYesSectionOpen, setInterviewedYesSectionOpen] = useState(true);
   const [collapsedPlacementGroups, setCollapsedPlacementGroups] = useState<Set<string>>(new Set());
+  const [pipelineGroupMode, setPipelineGroupMode] = useState<"placement" | "status">("placement");
+  const [collapsedStatusGroups, setCollapsedStatusGroups] = useState<Set<string>>(new Set());
 
   const parseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -1445,6 +1447,9 @@ export const ReferralTab = () => {
     try {
       // AI-powered extraction (primary path)
       const aiResult = await extractReferralFields(rawText);
+      if (!aiResult.success) {
+        console.warn("[ReferralTab] AI extraction returned failure:", aiResult.error);
+      }
       if (aiResult.success && aiResult.data && typeof aiResult.data === "object") {
         const fields = (aiResult.data as any).fields ?? aiResult.data;
         const SECTIONS = ["demographics","family","legal","placement","assessment","behavioral","mentalHealth","education","medical","strengths","serviceHistory","goals","insurance","restrictions","other"] as const;
@@ -1467,8 +1472,8 @@ export const ReferralTab = () => {
         toast.success(`AI extracted ${totalFields} fields — all checkboxes and sections captured`);
         return;
       }
-    } catch {
-      // Fall through to regex parser
+    } catch (aiError) {
+      console.warn("[ReferralTab] AI extraction failed, falling back to regex parser:", aiError);
     }
 
     // Fallback: regex/heuristic parser
@@ -1804,6 +1809,42 @@ export const ReferralTab = () => {
       return a.localeCompare(b);
     });
   }, [filteredHistory]);
+  const STATUS_GROUP_ORDER = [
+    "pending_interview",
+    "schedule_interview",
+    "waiting_for_response",
+    "interview_scheduled",
+    "interviewed_yes",
+    "contacted_po",
+    "contacted_caseworker",
+    "requested_more_info",
+    "waitlisted",
+    "interviewed_no",
+    "already_found_placement",
+    "accepted",
+    "denied",
+    "new",
+    "reviewed",
+    "actioned",
+  ];
+
+  const statusGroupEntries = useMemo(() => {
+    const groups = new Map<string, ReferralHistoryItem[]>();
+    filteredHistory.forEach((item) => {
+      const key = item.status || "new";
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(item);
+    });
+    return [...groups.entries()].sort(([a], [b]) => {
+      const ai = STATUS_GROUP_ORDER.indexOf(a);
+      const bi = STATUS_GROUP_ORDER.indexOf(b);
+      if (ai !== -1 && bi !== -1) return ai - bi;
+      if (ai !== -1) return -1;
+      if (bi !== -1) return 1;
+      return a.localeCompare(b);
+    });
+  }, [filteredHistory]);
+
   const selectedItems = history.filter((item) => selectedReferralKeys.has(referralRowKey(item)));
   const selectedVisibleCount = visibleHistory.filter((item) => selectedReferralKeys.has(referralRowKey(item))).length;
 
@@ -3189,15 +3230,35 @@ export const ReferralTab = () => {
                 <p className="text-xs text-muted-foreground">
                   Bulk actions support re-screening active pipeline referrals, plus archive, edit, and delete. Interview report and view details remain single-referral actions.
                 </p>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="shrink-0 ml-3 text-violet-700 border-violet-300 hover:bg-violet-50"
-                  onClick={() => setBulkOutreachOpen(true)}
-                >
-                  <Mail className="h-3.5 w-3.5 mr-1" />
-                  Bulk Outreach
-                </Button>
+                <div className="flex items-center gap-2 shrink-0 ml-3">
+                  <div className="flex items-center rounded-md border border-slate-200 overflow-hidden text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setPipelineGroupMode("placement")}
+                      className={`px-2.5 py-1 flex items-center gap-1 transition-colors ${pipelineGroupMode === "placement" ? "bg-slate-700 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
+                    >
+                      <MapPin className="h-3 w-3" />
+                      Placement
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPipelineGroupMode("status")}
+                      className={`px-2.5 py-1 flex items-center gap-1 transition-colors ${pipelineGroupMode === "status" ? "bg-slate-700 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
+                    >
+                      <BarChart3 className="h-3 w-3" />
+                      Status
+                    </button>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="text-violet-700 border-violet-300 hover:bg-violet-50"
+                    onClick={() => setBulkOutreachOpen(true)}
+                  >
+                    <Mail className="h-3.5 w-3.5 mr-1" />
+                    Bulk Outreach
+                  </Button>
+                </div>
               </div>
 
               {isLoadingHistory ? (
@@ -3306,9 +3367,14 @@ export const ReferralTab = () => {
                     )}
                   </div>
 
-                  {placementGroupEntries.flatMap(([groupLabel, groupItems]) => {
-                    const isGroupCollapsed = collapsedPlacementGroups.has(groupLabel);
-                    const toggleGroup = () => setCollapsedPlacementGroups((prev) => {
+                  {(pipelineGroupMode === "status" ? statusGroupEntries : placementGroupEntries).flatMap(([groupLabel, groupItems]) => {
+                    const isStatusMode = pipelineGroupMode === "status";
+                    const collapsedSet = isStatusMode ? collapsedStatusGroups : collapsedPlacementGroups;
+                    const setCollapsedSet = isStatusMode ? setCollapsedStatusGroups : setCollapsedPlacementGroups;
+                    const displayLabel = isStatusMode ? (STATUS_LABELS[groupLabel] || groupLabel) : groupLabel;
+                    const statusColor = isStatusMode ? (STATUS_COLORS[groupLabel] || "bg-gray-100 text-gray-800 border-gray-300") : null;
+                    const isGroupCollapsed = collapsedSet.has(groupLabel);
+                    const toggleGroup = () => setCollapsedSet((prev) => {
                       const next = new Set(prev);
                       if (next.has(groupLabel)) next.delete(groupLabel); else next.add(groupLabel);
                       return next;
@@ -3319,8 +3385,11 @@ export const ReferralTab = () => {
                         className="flex items-center gap-2 mt-4 mb-1.5 px-1 pb-1.5 border-b border-slate-200 cursor-pointer select-none hover:bg-slate-50 rounded-sm transition-colors"
                         onClick={toggleGroup}
                       >
-                        <MapPin className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                        <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide flex-1">{groupLabel}</span>
+                        {isStatusMode
+                          ? <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${statusColor}`}>{displayLabel}</span>
+                          : <><MapPin className="h-3.5 w-3.5 text-slate-400 shrink-0" /><span className="text-xs font-semibold text-slate-600 uppercase tracking-wide flex-1">{displayLabel}</span></>
+                        }
+                        {isStatusMode && <span className="flex-1" />}
                         <span className="text-xs text-slate-400 font-normal">{groupItems.length} referral{groupItems.length !== 1 ? "s" : ""}</span>
                         {isGroupCollapsed ? <ChevronDown className="h-3.5 w-3.5 text-slate-400" /> : <ChevronUp className="h-3.5 w-3.5 text-slate-400" />}
                       </div>

@@ -2077,6 +2077,75 @@ RULES: Do not invent facts. Only use what is explicitly in the referral. If a ha
   }
 });
 
+// Referral Field Extraction — AI-powered structured extraction from pasted Word/text referral documents
+app.post('/api/ai/extract-referral-fields', async (req, res) => {
+  try {
+    const { referralText } = req.body || {};
+    if (!referralText || !String(referralText).trim()) {
+      return res.status(400).json({ error: 'Referral text is required', fallback: true });
+    }
+
+    const systemPrompt = `You are a structured data extractor for youth residential care Out-of-Home (OOH) referral documents from Nebraska probation offices.
+
+Extract every field from the referral text and return a single JSON object with these exact top-level keys:
+demographics, family, legal, placement, assessment, behavioral, mentalHealth, education, medical, strengths, serviceHistory, goals, insurance, restrictions, other
+
+Each key maps to a flat object of string key-value pairs.
+
+RULES:
+1. Checkboxes: ☒ = checked (include), ☐ = unchecked (skip). For a group of checkboxes on one line, return only the checked labels as a comma-separated string.
+2. Checkboxes on separate lines before a field name (e.g. "☒ High\\n☐ Strength\\n☒ Driver\\nSchool/Work:") — combine into the field value as "High, Driver".
+3. Skip values that are exactly: "Click or tap here to enter text.", "Choose an item.", or blank/empty.
+4. YLS/CMI domains: for each domain (Prior Offense, School/Work, Alcohol/Drug Use, Coping/Self Control, Family/Relationships, Friends, Use of Free Time, Thoughts/Beliefs) capture: which of High/Strength/Driver are checked, and the narrative description. Store as e.g. {"School Work Rating": "High, Driver", "School Work Notes": "Arrives late to school often..."}.
+5. Responsivity factors: "Family" and "Youth" checkbox groups — list only checked items per group.
+6. Multiple parents/guardians: number them (Parent Guardian 1, Parent Guardian 1 Phone, Parent Guardian 1 Address, Parent Guardian 2, etc.).
+7. Placement Outcomes: capture each numbered outcome and its "Skills to Develop" value.
+8. Free-text narrative paragraphs (not associated with a labeled field) go into "other" as "Additional Notes".
+9. Return ONLY valid JSON — no markdown, no explanation, no code fences.
+
+Section assignment guide:
+- demographics: name, DOB, age, gender, current placement, length of stay, reason for OOH, date of referral, crossover status
+- family: all parent/guardian info, contact plan, sibling plan, engagement level, parent education needs
+- legal: probation officer, district, phone, email, judge, county, attorney, GAL, CASA, offenses, court orders
+- placement: level of service requested (treatment/non-treatment), short/long term, primary/secondary service types, special accommodations
+- assessment: YLS/CMI overall risk, date completed, all domain ratings and notes
+- behavioral: behavioral risk factors, barriers, prior strategies, responsivity youth factors
+- mentalHealth: diagnosis, treatment provider, treatment recommendations (MH/SA/type), medication status, responsivity family factors, behavioral health comments
+- education: school name, grade, IEP/MDT/504 status, attendance, progress toward graduation, employment
+- medical: medical needs, allergies, medications (use medical section only if explicitly medical)
+- strengths: strengths, interests, pro-social activities, positive supports, known risk factors
+- serviceHistory: home/community-based services, out-of-home services, therapeutic services
+- goals: placement outcomes with skills to develop, time frames, projected discharge location
+- insurance: Medicaid status, private insurance, policy details, MH/SA coverage
+- restrictions: contact restrictions, interpreter needs, special requests, attachments checklist
+- other: final comments, narrative paragraphs, date service needed, preferred community for foster care`;
+
+    const result = await aiCompletion({
+      req,
+      endpoint: 'extract-referral-fields',
+      tier: 'standard',
+      systemPrompt,
+      userPrompt: String(referralText).trim(),
+      maxTokens: 4000,
+      temperature: 0.1,
+      json: true,
+    });
+
+    if (result.unavailable) {
+      return res.status(503).json({ error: 'AI service not configured', fallback: true });
+    }
+    if (!result.parsed) {
+      console.warn('[extract-referral-fields] JSON parse failed. Raw response length:', result.content?.length ?? 0, 'First 500 chars:', result.content?.slice(0, 500));
+      return res.status(422).json({ error: 'Could not parse AI response as JSON', fallback: true });
+    }
+
+    res.json({ fields: result.parsed, usage: result.usage, requestId: result.requestId, model: result.model });
+  } catch (error) {
+    console.error('[extract-referral-fields] error:', error);
+    res.status(500).json({ error: 'Failed to extract referral fields', fallback: true });
+  }
+});
+
 // API Routes - All other data operations are handled by Supabase client in the frontend
 app.all('/api/*', (req, res) => {
   res.json({

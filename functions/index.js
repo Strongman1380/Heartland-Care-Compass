@@ -986,12 +986,15 @@ Section assignment guide:
 - restrictions: contact restrictions, interpreter needs, special requests, attachments checklist
 - other: final comments, narrative paragraphs, date service needed, preferred community for foster care`,
       userPrompt: String(referralText).trim(),
-      maxTokens: 2000,
+      maxTokens: 4000,
       temperature: 0.1,
     });
 
     if (result.unavailable) return res.status(503).json({ error: 'AI service not configured', fallback: true });
-    if (!result.parsed) return res.status(422).json({ error: 'Could not parse AI response', fallback: true });
+    if (!result.parsed) {
+      console.warn('[extract-referral-fields] JSON parse failed. Raw response length:', result.content?.length ?? 0, 'First 500 chars:', result.content?.slice(0, 500));
+      return res.status(422).json({ error: 'Could not parse AI response as JSON', fallback: true });
+    }
 
     res.json({ fields: result.parsed, usage: result.usage, model: result.model });
   } catch (error) {

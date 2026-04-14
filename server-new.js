@@ -15,7 +15,13 @@ import { getAuth } from 'firebase-admin/auth';
 dotenv.config();
 
 if (getApps().length === 0) {
-  initializeApp();
+  const projectId = process.env.FIREBASE_PROJECT_ID || process.env.GCLOUD_PROJECT;
+  console.log(`[Firebase Admin] Initializing for project: ${projectId || 'default/auto'}`);
+  if (projectId) {
+    initializeApp({ projectId });
+  } else {
+    initializeApp();
+  }
 }
 
 const adminAuth = getAuth();

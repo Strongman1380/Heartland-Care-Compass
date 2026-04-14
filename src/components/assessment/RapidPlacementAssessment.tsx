@@ -224,9 +224,7 @@ export const RapidPlacementAssessment = () => {
         timestamp: Date.now()
       };
 
-      const draftKey = getDraftKey();
-      try { await draftsService.save(selectedYouthId || null, 'rapid_placement', (user as any)?.id || null, draftData) } catch {}
-      localStorage.setItem(draftKey, JSON.stringify(draftData));
+      try { await draftsService.save(selectedYouthId || null, 'rapid_placement', user?.uid || null, draftData) } catch {}
 
       setHasUnsavedChanges(false);
 
@@ -262,7 +260,7 @@ export const RapidPlacementAssessment = () => {
   const loadDraft = async () => {
     try {
       try {
-        const remote = await draftsService.get(selectedYouthId || null, 'rapid_placement', (user as any)?.id || null)
+        const remote = await draftsService.get(selectedYouthId || null, 'rapid_placement', user?.uid || null)
         if (remote?.data) {
           const parsed: any = remote.data
           setAssessmentType(parsed.assessmentType || '');
@@ -273,37 +271,13 @@ export const RapidPlacementAssessment = () => {
           return
         }
       } catch {}
-      const draftKey = getDraftKey();
-      const draftData = localStorage.getItem(draftKey);
-
-      if (draftData) {
-        const parsed = JSON.parse(draftData);
-
-        // Only load draft if it's less than 24 hours old
-        const dayInMs = 24 * 60 * 60 * 1000;
-        if (parsed.timestamp && (Date.now() - parsed.timestamp < dayInMs)) {
-          setAssessmentType(parsed.assessmentType || '');
-          setYouthSelection(parsed.youthSelection || '');
-          setSelectedYouthId(parsed.selectedYouthId || '');
-          setAssessmentData(parsed.assessmentData || initialData);
-          setShowAssessment(parsed.showAssessment || false);
-          setHasUnsavedChanges(true);
-
-          toast({
-            title: "Draft loaded",
-            description: "Your previous assessment has been restored",
-          });
-        }
-      }
     } catch (error) {
       console.error("Failed to load draft:", error);
     }
   };
 
   const clearDraft = () => {
-    const draftKey = getDraftKey();
-    try { void draftsService.delete(selectedYouthId || null, 'rapid_placement', (user as any)?.id || null) } catch {}
-    localStorage.removeItem(draftKey);
+    try { void draftsService.delete(selectedYouthId || null, 'rapid_placement', user?.uid || null) } catch {}
   };
 
   const handleStartAssessment = () => {
@@ -418,7 +392,7 @@ export const RapidPlacementAssessment = () => {
 
   const handleSave = () => {
     // Here you would typically save to database
-    localStorage.setItem('rpat-assessment', JSON.stringify(assessmentData));
+    sessionStorage.setItem('rpat-assessment', JSON.stringify(assessmentData));
     setHasUnsavedChanges(false);
     clearDraft();
     toast({

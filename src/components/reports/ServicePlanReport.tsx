@@ -177,20 +177,6 @@ export const ServicePlanReport = ({ youth }: ServicePlanReportProps) => {
         logger.warn('Firebase draft load failed:', error);
       }
 
-      // Fallback: check localStorage
-      try {
-        const localKey = `service-plan-${youth.id}`;
-        const saved = localStorage.getItem(localKey);
-        if (saved) {
-          const savedData = JSON.parse(saved) as ServicePlanData;
-          setReportData(prev => ({ ...prev, ...savedData }));
-          setIsLoadingDraft(false);
-          return;
-        }
-      } catch (error) {
-        logger.warn('localStorage load failed:', error);
-      }
-
       setIsLoadingDraft(false);
     };
 
@@ -205,17 +191,14 @@ export const ServicePlanReport = ({ youth }: ServicePlanReportProps) => {
     const dataToSave = { ...reportData, lastSavedAt: now };
 
     try {
-      // Save to localStorage first
-      localStorage.setItem(`service-plan-${youth.id}`, JSON.stringify(dataToSave));
-
       // Save to Firebase
       await draftsService.save(youth.id, 'service_plan', user?.uid || null, dataToSave);
 
       setReportData(prev => ({ ...prev, lastSavedAt: now }));
       toast({ title: "Saved", description: "Service plan saved successfully" });
     } catch (error) {
-      logger.warn('Firebase save failed, saved locally:', error);
-      toast({ title: "Saved Locally", description: "Saved to local storage. Cloud sync failed." });
+      logger.warn('Firebase save failed:', error);
+      toast({ title: "Save Failed", description: "Cloud sync failed. Please try again." });
     } finally {
       setIsSaving(false);
     }
@@ -618,7 +601,6 @@ ${caseNotesText}`;
 
     // Clear saved data
     if (youth?.id) {
-      localStorage.removeItem(`service-plan-${youth.id}`);
       try {
         await draftsService.delete(youth.id, 'service_plan', user?.uid || null);
       } catch (error) {

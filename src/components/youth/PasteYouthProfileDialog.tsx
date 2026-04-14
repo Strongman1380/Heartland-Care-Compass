@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import type { Youth } from '@/types/app-types';
@@ -424,6 +424,9 @@ export function PasteYouthProfileDialog({ onImported }: { onImported?: () => voi
       <DialogContent className="max-w-3xl">
         <DialogHeader>
           <DialogTitle>Paste Youth Profile</DialogTitle>
+          <DialogDescription className="sr-only">
+            Paste a youth profile block to create a new record or update a matching existing profile.
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           <p className="text-sm text-gray-600">Paste the youth information block here. The system will parse it and update the existing profile if the name matches, or create a new one.</p>

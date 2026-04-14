@@ -7,9 +7,44 @@ import dotenv from 'dotenv';
 import OpenAI from 'openai';
 import crypto from 'crypto';
 import multer from 'multer';
+import helmet from 'helmet';
+import { initializeApp, getApps } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
 
 // Load environment variables
 dotenv.config();
+
+if (getApps().length === 0) {
+  initializeApp();
+}
+
+const adminAuth = getAuth();
+
+const DEFAULT_ALLOWED_ORIGINS = [
+  'http://localhost:8080',
+  'http://127.0.0.1:8080',
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+  'https://heartland-care-compass.vercel.app',
+];
+
+const allowedOrigins = new Set(
+  (process.env.ALLOWED_ORIGINS || '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean)
+    .concat(DEFAULT_ALLOWED_ORIGINS)
+);
+
+const corsOptions = {
+  origin(origin, callback) {
+    if (!origin || allowedOrigins.has(origin)) {
+      return callback(null, true);
+    }
+    return callback(new Error('Origin not allowed by CORS'));
+  },
+  credentials: true,
+};
 
 // Initialize OpenAI client
 const openai = process.env.OPENAI_API_KEY ? new OpenAI({
@@ -164,6 +199,29 @@ const enforceAILimits = (req, res, next) => {
 
   incrementRequestUsage(req);
   return next();
+};
+
+const requireFirebaseAuth = async (req, res, next) => {
+  const authorization = req.headers.authorization || '';
+  const match = authorization.match(/^Bearer\s+(.+)$/i);
+
+  if (!match) {
+    return res.status(401).json({
+      error: 'Authentication required',
+      code: 'missing_auth_token',
+    });
+  }
+
+  try {
+    req.user = await adminAuth.verifyIdToken(match[1]);
+    return next();
+  } catch (error) {
+    console.error('Firebase auth verification failed:', error);
+    return res.status(401).json({
+      error: 'Invalid authentication token',
+      code: 'invalid_auth_token',
+    });
+  }
 };
 
 const stableStringify = (value) => {
@@ -590,9 +648,11 @@ const aiCompletion = async ({
 
 // Create Express app
 const app = express();
-app.use(cors());
+app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
+app.use(cors(corsOptions));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use('/api/ai', requireFirebaseAuth);
 app.use('/api/ai', enforceAILimits);
 
 // Multer for audio file uploads (in-memory, max 30 MB)
@@ -1385,14 +1445,20 @@ Return a JSON object with the following structure (use null for missing fields):
   "religion": string,
   "placeOfBirth": string,
   "socialSecurityNumber": string,
-  "address": string (full address as single string),
+  "address": string (full street address, city, state, zip as single string),
   "height": string,
   "weight": string,
   "hairColor": string,
   "eyeColor": string,
   "tattoosScars": string,
   "admissionDate": string (YYYY-MM-DD format),
-  "level": number (1-5),
+  "admissionTime": string,
+  "dischargeDate": string (YYYY-MM-DD format),
+  "dischargeTime": string,
+  "rcsIn": string,
+  "rcsOut": string,
+  "level": number (1-10),
+  "guardianLanguage": string (language the legal guardian speaks),
   "legalGuardian": string,
   "guardianRelationship": string,
   "guardianContact": string,
@@ -1401,14 +1467,33 @@ Return a JSON object with the following structure (use null for missing fields):
   "probationOfficer": string,
   "probationContact": string,
   "probationPhone": string,
-  "placementAuthority": string,
+  "probationEmail": string,
+  "mother": { "name": string, "phone": string },
+  "father": { "name": string, "phone": string },
+  "nextOfKin": { "name": string, "relationship": string, "phone": string },
+  "placingAgencyCounty": string,
+  "district": string (e.g. District 3J),
+  "caseworker": { "name": string, "phone": string, "email": string },
+  "caseworkerEmail": string,
+  "guardianAdLitem": { "name": string, "phone": string },
+  "guardianAdLitemPhone": string,
+  "attorney": string,
+  "judge": string,
+  "placementAuthority": array of strings,
   "estimatedStay": string,
   "referralSource": string,
   "referralReason": string,
+  "reasonForPlacement": string (reason for emergency or initial placement),
+  "parentsNotifiedOfPlacement": boolean,
+  "immediateNeeds": string,
+  "intakeObservation": string (intake worker's observation of child's condition),
+  "orientationCompletedBy": string (staff who completed orientation),
+  "dischargePlan": string,
   "priorPlacements": array of strings,
   "numPriorPlacements": string,
   "lengthRecentPlacement": string,
   "courtInvolvement": array of strings,
+  "lastSchoolAttended": string,
   "currentSchool": string,
   "grade": string,
   "hasIEP": boolean,
@@ -1422,6 +1507,8 @@ Return a JSON object with the following structure (use null for missing fields):
   "insuranceProvider": string,
   "policyNumber": string,
   "allergies": string,
+  "currentMedications": string,
+  "significantHealthConditions": string,
   "medicalConditions": string,
   "medicalRestrictions": string,
   "currentDiagnoses": string,
@@ -1433,20 +1520,63 @@ Return a JSON object with the following structure (use null for missing fields):
   "sessionFrequency": string,
   "sessionTime": string,
   "selfHarmHistory": array of strings,
-  "lastIncidentDate": string,
+  "lastIncidentDate": string (YYYY-MM-DD),
   "hasSafetyPlan": boolean,
+  "tobaccoPast6To12Months": boolean (tobacco use in past 6-12 months),
+  "alcoholPast6To12Months": boolean (alcohol use in past 6-12 months),
+  "drugsVapingMarijuanaPast6To12Months": boolean (vaping/drug/marijuana use in past 6-12 months),
+  "drugUATesting": string (UA testing notes),
+  "gangInvolvement": boolean,
+  "historyPhysicallyHurting": boolean (ever physically hurt anyone),
+  "historyVandalism": boolean (ever vandalized property),
+  "familyViolentCrimes": boolean (family history of violent crimes),
+  "getAlongWithOthers": string (how youth gets along with others),
+  "strengthsTalents": string,
+  "interests": string,
+  "behaviorProblems": string (behavior problems to disclose),
+  "dislikesAboutSelf": string,
+  "angerTriggers": string (what makes the resident angry),
+  "communityResources": {
+    "dayTreatmentServices": boolean,
+    "intensiveInHomeServices": boolean,
+    "daySchoolPlacement": boolean,
+    "oneOnOneSchoolCounselor": boolean,
+    "mentalHealthSupportServices": boolean,
+    "other": string
+  },
+  "treatmentFocus": {
+    "excessiveDependency": boolean,
+    "withdrawalIsolation": boolean,
+    "parentChildRelationship": boolean,
+    "peerRelationship": boolean,
+    "acceptanceOfAuthority": boolean,
+    "lying": boolean,
+    "poorAcademicAchievement": boolean,
+    "poorSelfEsteem": boolean,
+    "manipulative": boolean,
+    "propertyDestruction": boolean,
+    "hyperactivity": boolean,
+    "anxiety": boolean,
+    "verbalAggression": boolean,
+    "assaultive": boolean,
+    "depression": boolean,
+    "stealing": boolean
+  },
   "hyrnaRiskLevel": string,
   "hyrnaScore": number,
-  "hyrnaAssessmentDate": string
+  "hyrnaAssessmentDate": string (YYYY-MM-DD)
 }
 
 Important:
 - Extract dates in YYYY-MM-DD format
 - Convert age to number if found
-- Convert level to number (1-5) if found
+- Convert level to number (1-10) if found
 - Arrays should contain strings
 - Use null for any field not found in the text
-- Be intelligent about parsing - look for common variations of field names`;
+- For treatmentFocus and communityResources: return null if the section is absent; if present, set each checkbox field to true if checked/marked (X or checked), false if blank
+- For boolean fields like tobaccoPast6To12Months: true=Yes, false=No, null=not mentioned
+- Be intelligent about parsing - look for common variations of field names
+- "Intake Form (1)" header sections: Page 1 has personal/contact info, Page 2 has emergency shelter info, Page 2 (labeled INTAKE PAGE 2) has legal/health/behavior info, substance abuse page has treatment focus checkboxes`;
 
     const result = await aiCompletion({
       req,
@@ -1457,7 +1587,7 @@ Important:
         { json: true }
       ),
       userPrompt: prompt,
-      maxTokens: 2000,
+      maxTokens: 3500,
       temperature: 0.1,
       json: true,
       cachePayload: { profileText },
@@ -1983,70 +2113,60 @@ app.post('/api/ai/screen-referral', async (req, res) => {
 MISSION: Run a 5-step screening process on the referral and return a structured JSON recommendation.
 
 PROGRAM SCOPE
-Heartland Group Home A provides: 24/7 monitoring (rooms and facility), on-site substance abuse counseling, on-site mental health counseling, on-site skill-building programs, medication management support.
-Heartland does NOT provide: PRTF-level clinical containment or secure/locked programming, hands-on physical intervention (hands-off facility), 1:1 staffing as a standard baseline.
+Heartland Boys Home provides: 24/7 monitoring, on-site substance abuse and mental health counseling, skill-building, and medication management.
+Heartland DOES NOT provide: Secure/locked clinical containment (PRTF), hands-on physical intervention, or standard 1:1 staffing.
 
-STEP 1 — PARSE + NORMALIZE
-Extract key fields. Set null for missing data and add field name to missing_info array.
-Fields to extract: youth basics (name, DOB/age, gender, county/jurisdiction, legal status), current placement + timeline (where now, how long, why moved), referral ask (treatment vs non-treatment, short vs long term), legal team (PO, judge, attorney, GAL/CASA), risk tools (YLS/CMI overall risk score, date completed, top drivers), safety risks (violence history, weapons, fire setting, elopement, gang, sexual behavior issues), clinical risks (psychosis, suicidality, recent hospitalization, med status/compliance), developmental (ASD/FASD/IQ/DD flags, IEP/504), substance use (substances, frequency, last use, UA history), family system (guardians, engagement, conflicts, contact restrictions), strengths + motivators, discharge constraints.
+STEP 1 — DATA EXTRACTION
+Extract: Youth Name, DOB, Referral Date, Referring Agency, Probation Officer, District, Current Placement, Program Level Requested, and Overall Risk Level (YLS/CMI).
 
-STEP 2 — HARD SCREENS
-Auto-decline — set recommendation=DECLINE if ANY of these are explicitly present:
-- Active gang involvement, affiliation, or credible current gang-related behavior/pressure
-- Recent serious violence toward people/animals with pattern, escalation, weapon use, or predatory aggression that cannot be safely managed in a hands-off group home
-- PRTF-level psychiatric profile: recent psych hospitalization/hold, active psychosis/hallucinations not stabilized, or severe suicidal behavior requiring intensive containment
-- Any factor making 24/7 group home supervision without 1:1 staffing unsafe or operationally unmanageable
+STEP 2 — DOMAIN SCORING (1-5 Scale: 1=Poor/High Risk, 5=Strong/Low Risk)
+Score each domain based strictly on provided text:
+1. safety_supervision_fit: Can we safely supervise them?
+2. behavioral_history_severity: Aggression, running away, fire setting.
+3. sexual_behavior_risk: problematic sexual behavior.
+4. mental_health_stability: Psychosis, medications, stability.
+5. substance_use: Frequency, type, impact.
+6. family_dynamics_support: Guardian engagement/conflict.
+7. educational_engagement: School behavior, IEP/504.
+8. treatment_history_engagement: Prior placement results.
+9. motivation_accountability: Readiness for change.
+10. program_fit_assessment: Alignment with our model.
 
-IMPORTANT nuances (do NOT auto-decline for these):
-- Absconding/running away: assess context (frequency, duration, reasons, risk while gone). Leaving is straightforward in Lincoln/Omaha. Not an auto-decline.
-- Prior detention: does NOT mean higher LOC is needed unless explicitly mandated OR there is a documented history of severe persistent non-compliance with MH/SA/medication interventions.
-- General negative behavior, defiance, or attitude: expected in this population. Do not penalize.
-- General mental health or substance abuse diagnoses: with on-site MH/SA counseling available, many therapeutic needs can be met directly.
+STEP 3 — HARD SCREENS (Recommend DENY if any present)
+- Active gang affiliation/pressure.
+- Escalating predatory violence that cannot be managed in a hands-off facility.
+- Active psychosis or PRTF-level clinical needs.
 
-Conditional flag — set screen_status=CONDITIONAL (NOT auto-decline) if:
-- Suspected or diagnosed ASD/FASD/DD/IQ limitations are present → flag for accommodation planning, confirm functioning level, school/IEP plan, and behavior support needs
+STEP 4 — DECISION
+- RECOMMEND INTERVIEW: Pass screens, fit is MIXED or STRONG.
+- CONDITIONAL: Pass screens but missing info or specific needs require clarification.
+- NEED MORE INFO: Critical documentation missing.
+- DENY / REDIRECT: Fails screens or clearly outside scope.
 
-STEP 3 — HOUSE-FIT CHECK
-Evaluate fit_rating as STRONG, MIXED, or POOR based on:
-- Peer contagion risk: will this youth escalate others (gang talk, defiance culture, sexually reactive behavior, intimidation)?
-- Victimization risk: will this youth be targeted, bullied, or exploited by current residents?
-- Operational fit: can staff manage predictable behaviors within group home schedule/level system without constant 1:1?
-- Programming fit: can the youth tolerate structure, school, chores, groups, supervision, and correction?
-- "What works" alignment: does referral indicate structure/consistency helps? Do they respond to firm limits?
-
-STEP 4 — NEEDS-TO-SERVICES MATCH
-Map needs into buckets: behavioral (defiance, aggression, impulsivity, authority issues), clinical (therapy type needed, medication management, crisis history), educational (IEP/504, classroom tolerance, credit recovery), family (contact plan, reunification feasibility, guardianship), substance (prevention vs active SUD needs, UA expectations). Assess whether each need is within Heartland scope and whether aggregate needs can be handled without turning placement into a clinical containment unit.
-
-STEP 5 — DECISION
-Apply exactly one recommendation label:
-- INTERVIEW: Hard screens pass, fit is MIXED or STRONG, services can meet needs
-- INTERVIEW_WITH_CONDITIONS: Hard screens pass but missing critical info or conditional flags require resolution first — list specific conditions that must be met
-- DECLINE: Hard screen triggered, fit is clearly unsafe, or needs exceed scope
-
-OUTPUT: Return ONLY valid JSON — no preamble, no markdown fences, no text outside the JSON object.
-
+OUTPUT: Return ONLY valid JSON.
 {
-  "youth_profile": { "name": null, "dob": null, "age": null, "gender": null, "county": null, "legal_status": null },
-  "legal_team": { "po": null, "judge": null, "attorney": null },
-  "placement_request": { "type": null, "duration": null, "current_placement": null },
-  "risk_summary": { "yls_score": null, "yls_date": null, "top_drivers": [] },
-  "behavioral_flags": { "violence": null, "gang": null, "weapons": null, "elopement": null, "fire": null, "sexual_behavior": null },
-  "clinical_flags": { "psychosis": null, "suicidality": null, "hospitalizations": null, "meds": null },
-  "developmental_flags": { "asd_fasd_dd": null, "iq": null, "iep_504": null },
-  "substance_flags": { "substances": null, "frequency": null, "last_use": null },
-  "family_flags": { "guardians": null, "engagement": null, "contact_restrictions": null },
+  "youth_name": null,
+  "date_of_birth": null,
+  "date_of_referral": null,
+  "referring_agency": null,
+  "probation_officer": null,
+  "probation_district": null,
+  "current_placement": null,
+  "program_level_requested": null,
+  "overall_risk_level": null,
+  "screening_decision": "RECOMMEND INTERVIEW",
+  "overall_narrative": "...",
+  "fit_rating": "STRONG",
+  "screening_domains": [
+    { "domain_key": "safety_supervision_fit", "score": 3, "narrative": "...", "is_flagged": false }
+  ],
+  "screening_flags": [],
+  "screening_followup_questions": [],
+  "conditions": [],
   "strengths": [],
   "barriers": [],
-  "missing_info": [],
-  "screen_status": "PASS",
-  "fit_rating": "MIXED",
-  "recommendation": "INTERVIEW",
-  "conditions": [],
-  "rationale_bullets": [],
-  "questions_for_referral_source": []
-}
-
-RULES: Do not invent facts. Only use what is explicitly in the referral. If a hard-no item is explicitly present, recommendation MUST be DECLINE. If suspected but not explicit, set screen_status=CONDITIONAL and ask targeted questions. Be blunt, operational, specific. No moralizing.`;
+  "missing_info": []
+}`;
 
     const result = await aiCompletion({
       req,
@@ -2054,9 +2174,11 @@ RULES: Do not invent facts. Only use what is explicitly in the referral. If a ha
       tier: 'standard',
       systemPrompt,
       userPrompt: String(referralText).trim(),
-      maxTokens: 2500,
+      maxTokens: 1400,
       temperature: 0.1,
-      json: false,
+      json: true,
+      cachePayload: { referralText: String(referralText).trim() },
+      cacheTtlMs: 15 * 60 * 1000,
     });
 
     if (result.unavailable) {

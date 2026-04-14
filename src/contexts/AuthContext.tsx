@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import {
   onAuthStateChanged,
+  signInWithRedirect,
   signInWithPopup,
   GoogleAuthProvider,
   signOut,
@@ -62,7 +63,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       await signInWithPopup(auth, googleProvider);
       return {};
     } catch (error) {
-      return { error: error as Error };
+      const authError = error as Error & { code?: string };
+      const shouldFallbackToRedirect = [
+        'auth/popup-blocked',
+        'auth/popup-closed-by-user',
+        'auth/cancelled-popup-request',
+      ].includes(authError.code || '');
+
+      if (shouldFallbackToRedirect) {
+        await signInWithRedirect(auth, googleProvider);
+        return {};
+      }
+
+      return { error: authError };
     }
   };
 

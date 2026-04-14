@@ -5,14 +5,58 @@ import express from 'express';
 import cors from 'cors';
 import multer from 'multer';
 import Anthropic from '@anthropic-ai/sdk';
+import { initializeApp } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
+import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 
 // Config params
 const anthropicApiKey = defineString('ANTHROPIC_API_KEY', { default: '' });
 const anthropicModel = defineString('ANTHROPIC_MODEL', { default: 'claude-sonnet-4-6' });
+const openaiApiKey = defineString('OPENAI_API_KEY', { default: '' });
+const openaiModel = defineString('OPENAI_MODEL', { default: 'gpt-4o-mini' });
+const allowedOriginsParam = defineString('ALLOWED_ORIGINS', { default: '' });
+const PUBLIC_PO_RESPONSE_LABELS = {
+  still_needed: 'Still needs placement',
+  not_needed: 'No longer needs placement',
+  already_placed: 'Already placed elsewhere',
+};
+
+initializeApp();
+const adminAuth = getAuth();
+const adminDb = getFirestore();
+
+const DEFAULT_ALLOWED_ORIGINS = [
+  'http://localhost:8080',
+  'http://127.0.0.1:8080',
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+  'https://heartland-care-compass.vercel.app',
+];
+
+function getAllowedOrigins() {
+  return new Set(
+    allowedOriginsParam.value()
+      .split(',')
+      .map((origin) => origin.trim())
+      .filter(Boolean)
+      .concat(DEFAULT_ALLOWED_ORIGINS)
+  );
+}
+
+const corsOptions = {
+  origin(origin, callback) {
+    const allowedOrigins = getAllowedOrigins();
+    if (!origin || allowedOrigins.has(origin)) {
+      return callback(null, true);
+    }
+    return callback(new Error('Origin not allowed by CORS'));
+  },
+  credentials: true,
+};
 
 // Express app
 const app = express();
-app.use(cors({ origin: true }));
+app.use(cors(corsOptions));
 app.use(express.json({ limit: '10mb' }));
 app.use((req, res, next) => {
   if (req.url === '/api' || req.url.startsWith('/api/')) return next();
@@ -21,6 +65,23 @@ app.use((req, res, next) => {
   }
   next();
 });
+
+async function requireFirebaseAuth(req, res, next) {
+  const authorization = req.headers.authorization || '';
+  const match = authorization.match(/^Bearer\s+(.+)$/i);
+
+  if (!match) {
+    return res.status(401).json({ error: 'Authentication required', code: 'missing_auth_token' });
+  }
+
+  try {
+    req.user = await adminAuth.verifyIdToken(match[1]);
+    return next();
+  } catch (error) {
+    console.error('Firebase auth verification failed:', error);
+    return res.status(401).json({ error: 'Invalid authentication token', code: 'invalid_auth_token' });
+  }
+}
 
 // Lazy-init Anthropic
 let anthropicClient = null;
@@ -32,8 +93,60 @@ function getAnthropic() {
   return anthropicClient;
 }
 
-// Core Claude completion
+function getConfiguredAIProvider() {
+  if (anthropicApiKey.value()) return 'anthropic';
+  if (openaiApiKey.value()) return 'openai';
+  return null;
+}
+
+async function completeOpenAIPrompt({ systemPrompt, userPrompt, maxTokens = 1000, temperature = 0.2 }) {
+  const key = openaiApiKey.value();
+  if (!key) return { unavailable: true };
+
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${key}`,
+    },
+    body: JSON.stringify({
+      model: openaiModel.value(),
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+      max_tokens: maxTokens,
+      temperature,
+    }),
+  });
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    const error = new Error(payload?.error?.message || 'OpenAI request failed');
+    error.code = payload?.error?.code || `openai_${response.status}`;
+    error.status = response.status;
+    throw error;
+  }
+
+  const data = await response.json();
+  const content = data?.choices?.[0]?.message?.content || '';
+  const tokens = data?.usage?.total_tokens || 0;
+  logAIUsage(true, tokens);
+  return {
+    content,
+    usage: { total_tokens: tokens },
+    model: data?.model || openaiModel.value(),
+    provider: 'openai',
+  };
+}
+
+// Core AI completion
 async function completeClaudePrompt({ systemPrompt, userPrompt, maxTokens = 1000, temperature = 0.2 }) {
+  const provider = getConfiguredAIProvider();
+  if (provider === 'openai') {
+    return completeOpenAIPrompt({ systemPrompt, userPrompt, maxTokens, temperature });
+  }
+
   const client = getAnthropic();
   if (!client) return { unavailable: true };
 
@@ -52,6 +165,7 @@ async function completeClaudePrompt({ systemPrompt, userPrompt, maxTokens = 1000
     content,
     usage: { total_tokens: tokens },
     model: response.model,
+    provider: 'anthropic',
   };
 }
 
@@ -205,7 +319,7 @@ const mapAIError = (error, fallbackMessage) => {
   const errorCode = error?.code || error?.error?.code;
   const statusCode = error?.status || error?.statusCode || error?.response?.status;
   if (statusCode === 429 || errorCode === 'rate_limit_error') return { status: 429, message: 'Rate limit exceeded. Try again shortly.', code: errorCode, retryable: true };
-  if (statusCode === 401 || errorCode === 'authentication_error') return { status: 401, message: 'Invalid API key', code: errorCode, retryable: false };
+  if (statusCode === 401 || errorCode === 'authentication_error') return { status: 401, message: 'AI provider authentication failed', code: errorCode, retryable: false };
   if (statusCode >= 500) return { status: 503, message: 'AI service temporarily unavailable', code: errorCode, retryable: true };
   return { status: statusCode && statusCode >= 400 ? statusCode : 500, message: error?.message || fallbackMessage, code: errorCode || 'ai_request_failed', retryable: false };
 };
@@ -223,22 +337,146 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', database: 'firestore', timestamp: new Date().toISOString() });
 });
 
+app.use('/api/ai', requireFirebaseAuth);
+
+app.get('/api/public/po-response/:token', async (req, res) => {
+  try {
+    const token = String(req.params.token || '').trim();
+    if (!token) {
+      return res.status(400).json({ error: 'Missing response token' });
+    }
+
+    const snap = await adminDb.collection('referral_response_tokens').doc(token).get();
+    if (!snap.exists) {
+      return res.status(404).json({ error: 'Response token not found' });
+    }
+
+    const data = snap.data() || {};
+    const payload = {
+      token,
+      referralId: '',
+      referralName: data.referralName || '',
+      poName: data.poName || '',
+      createdAt: data.createdAt || null,
+      expiresAt: data.expiresAt || null,
+      respondedAt: data.respondedAt || null,
+      response: data.response || null,
+    };
+
+    return res.json(payload);
+  } catch (error) {
+    console.error('Failed to load PO response token:', error);
+    return res.status(500).json({ error: 'Failed to load response token' });
+  }
+});
+
+app.post('/api/public/po-response/:token', async (req, res) => {
+  try {
+    const token = String(req.params.token || '').trim();
+    const response = String(req.body?.response || '').trim();
+    const allowedResponses = new Set(['still_needed', 'not_needed', 'already_placed']);
+
+    if (!token || !allowedResponses.has(response)) {
+      return res.status(400).json({ error: 'Invalid response payload' });
+    }
+
+    const tokenRef = adminDb.collection('referral_response_tokens').doc(token);
+    const tokenSnap = await tokenRef.get();
+    if (!tokenSnap.exists) {
+      return res.status(404).json({ error: 'Response token not found' });
+    }
+
+    const tokenDoc = tokenSnap.data() || {};
+    const responseLabel = PUBLIC_PO_RESPONSE_LABELS[response] || response;
+    if (tokenDoc.respondedAt) {
+      return res.status(409).json({ error: 'This response link has already been used' });
+    }
+
+    if (tokenDoc.expiresAt && new Date(tokenDoc.expiresAt) <= new Date()) {
+      return res.status(410).json({ error: 'This response link has expired' });
+    }
+
+    const now = new Date().toISOString();
+    await tokenRef.update({
+      respondedAt: now,
+      response,
+    });
+
+    if (tokenDoc.referralId) {
+      await adminDb.collection('referral_notes').doc(tokenDoc.referralId).set({
+        updated_at: now,
+        po_contact_log: FieldValue.arrayUnion({
+          id: `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`,
+          date: now.slice(0, 10),
+          notes: `PO Response (via link): ${responseLabel}`,
+          followUpDate: '',
+        }),
+      }, { merge: true });
+    }
+
+    await adminDb.collection('alerts').doc().set({
+      title: 'PO Response Received',
+      body: `${tokenDoc.poName || 'PO'} responded for ${tokenDoc.referralName || 'referral'}: ${responseLabel}`,
+      level: 'info',
+      status: 'open',
+      created_at: now,
+      updated_at: now,
+    });
+
+    return res.json({ success: true, respondedAt: now, response });
+  } catch (error) {
+    console.error('Failed to save PO response:', error);
+    return res.status(500).json({ error: 'Failed to record response' });
+  }
+});
+
 // AI Status
 app.get('/api/ai/status', async (req, res) => {
   try {
-    const client = getAnthropic();
-    if (!client) return res.json({ available: false, error: 'Anthropic API key not configured', configured: false });
+    const provider = getConfiguredAIProvider();
+    if (!provider) {
+      return res.json({
+        available: false,
+        configured: false,
+        provider: null,
+        error: 'No AI provider key configured',
+      });
+    }
 
-    const test = await client.messages.create({
-      model: anthropicModel.value(),
-      messages: [{ role: 'user', content: 'Hi' }],
-      max_tokens: 5,
+    const test = await completeTextPrompt({
+      systemPrompt: 'Reply with exactly: ok',
+      userPrompt: 'ok',
+      maxTokens: 5,
+      temperature: 0,
     });
 
-    res.json({ available: true, configured: true, model: test.model, status: 'operational', usage: aiUsageStats });
+    if (test.unavailable) {
+      return res.json({
+        available: false,
+        configured: false,
+        provider,
+        error: 'AI provider key not configured',
+      });
+    }
+
+    res.json({
+      available: true,
+      configured: true,
+      provider: test.provider || provider,
+      model: test.model,
+      status: 'operational',
+      usage: aiUsageStats,
+    });
   } catch (error) {
     console.error('AI status check failed:', error);
-    res.json({ available: false, configured: true, error: error.message, status: 'error', usage: aiUsageStats });
+    res.json({
+      available: false,
+      configured: true,
+      provider: getConfiguredAIProvider(),
+      error: error.message,
+      status: 'error',
+      usage: aiUsageStats,
+    });
   }
 });
 
@@ -466,12 +704,12 @@ app.post('/api/ai/parse-youth-profile', async (req, res) => {
 
     const deterministicParsed = parseFieldValueCsvImport(profileText);
 
-    const extractionSchema = `{"firstName":string|null,"lastName":string|null,"dob":"YYYY-MM-DD"|null,"age":number|null,"sex":string|null,"race":string|null,"religion":string|null,"placeOfBirth":string|null,"socialSecurityNumber":string|null,"address":string|null,"height":string|null,"weight":string|null,"hairColor":string|null,"eyeColor":string|null,"tattoosScars":string|null,"admissionDate":"YYYY-MM-DD"|null,"level":number|null,"legalGuardian":string|null,"guardianRelationship":string|null,"guardianContact":string|null,"guardianPhone":string|null,"guardianEmail":string|null,"probationOfficer":string|null,"probationContact":string|null,"probationPhone":string|null,"mother":{"name":string|null,"phone":string|null}|null,"father":{"name":string|null,"phone":string|null}|null,"nextOfKin":{"name":string|null,"relationship":string|null,"phone":string|null}|null,"placingAgencyCounty":string|null,"caseworker":{"name":string|null,"phone":string|null}|null,"guardianAdLitem":{"name":string|null}|null,"attorney":string|null,"judge":string|null,"placementAuthority":string[]|null,"estimatedStay":string|null,"referralSource":string|null,"referralReason":string|null,"priorPlacements":string[]|null,"numPriorPlacements":string|null,"lengthRecentPlacement":string|null,"courtInvolvement":string[]|null,"currentSchool":string|null,"grade":string|null,"currentGrade":string|null,"hasIEP":boolean|null,"academicStrengths":string|null,"academicChallenges":string|null,"educationGoals":string|null,"schoolContact":string|null,"schoolPhone":string|null,"physician":string|null,"physicianPhone":string|null,"insuranceProvider":string|null,"policyNumber":string|null,"allergies":string|null,"medicalConditions":string|null,"medicalRestrictions":string|null,"currentDiagnoses":string|null,"diagnoses":string|null,"traumaHistory":string[]|null,"previousTreatment":string|null,"currentCounseling":string[]|null,"therapistName":string|null,"therapistContact":string|null,"sessionFrequency":string|null,"sessionTime":string|null,"selfHarmHistory":string[]|null,"lastIncidentDate":"YYYY-MM-DD"|null,"hasSafetyPlan":boolean|null,"onSubsystem":boolean|null,"pointsInCurrentLevel":number|null,"dailyPointsForPrivileges":number|null,"hyrnaRiskLevel":string|null,"hyrnaScore":number|string|null,"hyrnaAssessmentDate":"YYYY-MM-DD"|null,"warnings":string[],"confidence":number}`;
+    const extractionSchema = `{"firstName":string|null,"lastName":string|null,"dob":"YYYY-MM-DD"|null,"age":number|null,"sex":string|null,"race":string|null,"religion":string|null,"placeOfBirth":string|null,"socialSecurityNumber":string|null,"address":string|null,"height":string|null,"weight":string|null,"hairColor":string|null,"eyeColor":string|null,"tattoosScars":string|null,"admissionDate":"YYYY-MM-DD"|null,"admissionTime":string|null,"dischargeDate":"YYYY-MM-DD"|null,"dischargeTime":string|null,"rcsIn":string|null,"rcsOut":string|null,"level":number|null,"guardianLanguage":string|null,"legalGuardian":string|null,"guardianRelationship":string|null,"guardianContact":string|null,"guardianPhone":string|null,"guardianEmail":string|null,"probationOfficer":string|null,"probationContact":string|null,"probationPhone":string|null,"probationEmail":string|null,"mother":{"name":string|null,"phone":string|null}|null,"father":{"name":string|null,"phone":string|null}|null,"nextOfKin":{"name":string|null,"relationship":string|null,"phone":string|null}|null,"placingAgencyCounty":string|null,"district":string|null,"caseworker":{"name":string|null,"phone":string|null,"email":string|null}|null,"caseworkerEmail":string|null,"guardianAdLitem":{"name":string|null,"phone":string|null}|null,"guardianAdLitemPhone":string|null,"attorney":string|null,"judge":string|null,"placementAuthority":string[]|null,"estimatedStay":string|null,"referralSource":string|null,"referralReason":string|null,"reasonForPlacement":string|null,"parentsNotifiedOfPlacement":boolean|null,"immediateNeeds":string|null,"intakeObservation":string|null,"orientationCompletedBy":string|null,"dischargePlan":string|null,"priorPlacements":string[]|null,"numPriorPlacements":string|null,"lengthRecentPlacement":string|null,"courtInvolvement":string[]|null,"lastSchoolAttended":string|null,"currentSchool":string|null,"grade":string|null,"currentGrade":string|null,"hasIEP":boolean|null,"academicStrengths":string|null,"academicChallenges":string|null,"educationGoals":string|null,"schoolContact":string|null,"schoolPhone":string|null,"physician":string|null,"physicianPhone":string|null,"insuranceProvider":string|null,"policyNumber":string|null,"allergies":string|null,"currentMedications":string|null,"significantHealthConditions":string|null,"medicalConditions":string|null,"medicalRestrictions":string|null,"currentDiagnoses":string|null,"diagnoses":string|null,"traumaHistory":string[]|null,"previousTreatment":string|null,"currentCounseling":string[]|null,"therapistName":string|null,"therapistContact":string|null,"sessionFrequency":string|null,"sessionTime":string|null,"selfHarmHistory":string[]|null,"lastIncidentDate":"YYYY-MM-DD"|null,"hasSafetyPlan":boolean|null,"tobaccoPast6To12Months":boolean|null,"alcoholPast6To12Months":boolean|null,"drugsVapingMarijuanaPast6To12Months":boolean|null,"drugUATesting":string|null,"gangInvolvement":boolean|null,"historyPhysicallyHurting":boolean|null,"historyVandalism":boolean|null,"familyViolentCrimes":boolean|null,"getAlongWithOthers":string|null,"strengthsTalents":string|null,"interests":string|null,"behaviorProblems":string|null,"dislikesAboutSelf":string|null,"angerTriggers":string|null,"communityResources":{"dayTreatmentServices":boolean,"intensiveInHomeServices":boolean,"daySchoolPlacement":boolean,"oneOnOneSchoolCounselor":boolean,"mentalHealthSupportServices":boolean,"other":string}|null,"treatmentFocus":{"excessiveDependency":boolean,"withdrawalIsolation":boolean,"parentChildRelationship":boolean,"peerRelationship":boolean,"acceptanceOfAuthority":boolean,"lying":boolean,"poorAcademicAchievement":boolean,"poorSelfEsteem":boolean,"manipulative":boolean,"propertyDestruction":boolean,"hyperactivity":boolean,"anxiety":boolean,"verbalAggression":boolean,"assaultive":boolean,"depression":boolean,"stealing":boolean}|null,"onSubsystem":boolean|null,"pointsInCurrentLevel":number|null,"dailyPointsForPrivileges":number|null,"hyrnaRiskLevel":string|null,"hyrnaScore":number|string|null,"hyrnaAssessmentDate":"YYYY-MM-DD"|null,"warnings":string[],"confidence":number}`;
 
     const result = await completeJSONPrompt({
       systemPrompt: 'You are a clinical data extraction specialist for a youth treatment profile system. Map pasted profile text into the exact target fields with minimal mistakes. Do not invent values. Use null when unknown. Keep booleans as true/false, arrays as arrays, and dates as YYYY-MM-DD. If a value is ambiguous, leave it null and add a warning. Return ONLY a valid JSON object using this schema: ' + extractionSchema,
       userPrompt: `Extract all possible structured profile data from this text and map to the schema fields.\n\nProfile text:\n${profileText}`,
-      maxTokens: 2000,
+      maxTokens: 3500,
       temperature: 0.1,
     });
 
@@ -907,7 +1145,7 @@ OUTPUT: Return ONLY valid JSON - no preamble, no markdown fences, no text outsid
 
 RULES: Do not invent facts. Only use what is explicitly in the referral. If contact, address, demographic, or placement fields are present anywhere in the referral packet, extract them into the header fields above. If a hard-no item is explicitly present, recommendation MUST be DECLINE and screening_decision MUST be "DENY / REDIRECT". If suspected but not explicit, set screen_status=CONDITIONAL and ask targeted questions. Be blunt, operational, specific. No moralizing. For family_contacts.contacts: extract EVERY person mentioned as a parent, guardian, caregiver, or emergency contact. For each person include their name, role (Mother/Father/Guardian/etc.), relationship, phone, alt phone, email, address, city_state_zip, and engagement level if mentioned. Each person gets their own object in the contacts array.`,
       userPrompt: String(referralText).trim(),
-      maxTokens: 7000,
+      maxTokens: 1400,
       temperature: 0.1,
     });
 
@@ -1043,5 +1281,4 @@ Provide statistical insights, patterns, and recommendations.`;
 }
 
 // Export as Firebase Function
-export const api = onRequest({ cors: true, maxInstances: 10 }, app);
-
+export const api = onRequest({ cors: false, maxInstances: 10 }, app);

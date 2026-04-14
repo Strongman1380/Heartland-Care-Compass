@@ -12,11 +12,6 @@ import type { Youth, BehaviorPoints, CaseNotes, DailyRatings } from '@/integrati
 export class ApiClient {
   private token: string | null = null;
 
-  constructor() {
-    // Initialize with token from localStorage if available
-    this.token = localStorage.getItem('auth_token');
-  }
-
   // Get authentication token - now delegates to Firebase Auth
   // Note: Actual authentication is handled by Firebase Auth in AuthContext
   async getAuthToken(): Promise<{ token: string }> {
@@ -29,13 +24,11 @@ export class ApiClient {
   // Set the authentication token
   setToken(token: string): void {
     this.token = token;
-    localStorage.setItem('auth_token', token);
   }
 
   // Clear the authentication token
   clearToken(): void {
     this.token = null;
-    localStorage.removeItem('auth_token');
   }
 
   // Check if client has a valid token

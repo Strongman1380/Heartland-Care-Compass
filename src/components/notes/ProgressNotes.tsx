@@ -198,7 +198,7 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
       
       // Save to localStorage as draft
       const draftKey = `notes-draft-${youthId}`;
-      localStorage.setItem(draftKey, JSON.stringify({
+      sessionStorage.setItem(draftKey, JSON.stringify({
         ...formData,
         savedAt: new Date().toISOString()
       }));
@@ -226,7 +226,7 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
   // Load draft on component mount
   useEffect(() => {
     const draftKey = `notes-draft-${youthId}`;
-    const draft = localStorage.getItem(draftKey);
+    const draft = sessionStorage.getItem(draftKey);
     
     if (draft) {
       try {
@@ -299,7 +299,7 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
 
       // Clear draft and reset form
       const draftKey = `notes-draft-${youthId}`;
-      localStorage.removeItem(draftKey);
+      sessionStorage.removeItem(draftKey);
 
       setFormData({
         date: format(new Date(), 'yyyy-MM-dd'),

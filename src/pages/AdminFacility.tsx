@@ -468,20 +468,9 @@ const AdminFacility = () => {
   };
 
   const handleToggleRole = async (uid: string, currentRole: UserRole) => {
-    const newRole: UserRole = currentRole === 'admin' ? 'staff' : 'admin';
-    try {
-      setIsUpdatingRole(uid);
-      await setDoc(doc(db, 'user_roles', uid), { role: newRole }, { merge: true });
-      setUserRoles((prev) =>
-        prev.map((u) => (u.uid === uid ? { ...u, role: newRole } : u))
-      );
-      toast.success(`Role updated to ${newRole}`);
-    } catch (error) {
-      logger.error('Failed to update role:', error);
-      toast.error('Failed to update role');
-    } finally {
-      setIsUpdatingRole(null);
-    }
+    void uid;
+    void currentRole;
+    toast.error('Role changes are disabled in the client until a secure server-side admin workflow is in place.');
   };
 
   const handleRestoreYouth = async (youthId: string) => {
@@ -800,7 +789,7 @@ const AdminFacility = () => {
           <CardHeader>
             <CardTitle>User Management</CardTitle>
             <CardDescription>
-              Manage staff roles. Toggle between staff and admin access. Users with no role doc default to staff.
+              Role records are visible here, but client-side role changes are disabled until they are moved behind a secure admin-only backend workflow.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -817,12 +806,10 @@ const AdminFacility = () => {
                     <Button
                       size="sm"
                       variant="outline"
-                      disabled={isUpdatingRole === u.uid}
+                      disabled
                       onClick={() => handleToggleRole(u.uid, u.role)}
                     >
-                      {isUpdatingRole === u.uid
-                        ? 'Updating...'
-                        : u.role === 'admin' ? 'Remove Admin' : 'Make Admin'}
+                      {u.role === 'admin' ? 'Admin Locked' : 'Staff Locked'}
                     </Button>
                   </div>
                 ))}

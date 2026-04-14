@@ -665,20 +665,6 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
         }
       } catch {}
 
-      // Try localStorage
-      if (!loaded) {
-        const savedDataStr = localStorage.getItem(`court-report-${youth.id}`);
-        if (savedDataStr) {
-          try {
-            const savedData = JSON.parse(savedDataStr) as CourtReportData;
-            setReportData(savedData);
-            loaded = true;
-          } catch (error) {
-            console.error('Error loading saved court report data:', error);
-          }
-        }
-      }
-
       // Always sync live youth data (name, DOB, level) so reports reflect current status
       const placementParts = ['Heartland Boys Home - Group Home'];
       if (youth.admissionDate) {
@@ -776,20 +762,15 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
   const persistDraft = useCallback(
     async (data: CourtReportData, youthId: string, authorId: string | null) => {
       if (!youthId) {
-        // Supabase table requires youth context, so skip remote draft when missing
-        localStorage.setItem('court-report-user-only', JSON.stringify(data));
         return;
       }
-
-      // Save to localStorage first (always works)
-      localStorage.setItem(`court-report-${youthId}`, JSON.stringify(data));
 
       // Try to save to Supabase (best effort)
       try {
         await draftsService.save(youthId, pendingReportTypeRef.current, authorId, data);
       } catch (error) {
-        // Supabase save failed, but localStorage succeeded
-        console.warn('Supabase save failed, data saved locally only:', error);
+        console.warn('Supabase save failed:', error);
+        throw error;
       }
     },
     []
@@ -1135,7 +1116,6 @@ Write 2-3 paragraphs about discharge planning, transition timeline, aftercare re
         console.error('Failed to remove saved draft:', error);
       }
 
-      localStorage.removeItem(`court-report-${youth.id}`);
       setAutoSaveStatus('idle');
 
       toast({

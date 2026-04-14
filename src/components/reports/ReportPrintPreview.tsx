@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Printer, Download, FileText, Edit, Save, X } from "lucide-react";
 import { exportHTMLToPDF, exportHTMLToDocx } from "@/utils/export";
@@ -64,7 +64,12 @@ export const ReportPrintPreview = ({ open, onClose, html, filename }: ReportPrin
       <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-0">
         <DialogHeader className="px-6 pt-6 pb-3 border-b flex-shrink-0">
           <div className="flex items-center justify-between">
-            <DialogTitle className="text-lg">{filename}</DialogTitle>
+            <div>
+              <DialogTitle className="text-lg">{filename}</DialogTitle>
+              <DialogDescription className="sr-only">
+                Preview, edit, print, or export the generated report.
+              </DialogDescription>
+            </div>
             <div className="flex items-center gap-2">
               <Button size="sm" variant="outline" onClick={handleToggleEdit}>
                 {editing ? <Save className="h-4 w-4 mr-1" /> : <Edit className="h-4 w-4 mr-1" />}

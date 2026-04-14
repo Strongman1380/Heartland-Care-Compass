@@ -20,6 +20,7 @@ import {
   ChevronUp,
   ClipboardPaste,
   Copy,
+  Download,
   Eye,
   FileText,
   Heart,
@@ -56,6 +57,7 @@ import { calculateFieldCompletion, groupContactPersons, type ContactPersonCard }
 import { alertsService } from "@/integrations/firebase/alertsService";
 import { screenReferralIntake, extractReferralFields } from "@/services/aiService";
 import { useAuth } from "@/contexts/AuthContext";
+import { downloadReferralTemplate } from "@/utils/referralTemplate";
 import {
   type ParsedReferral,
   SECTION_CONFIG,
@@ -2917,6 +2919,14 @@ export const ReferralTab = () => {
                       ) : (
                         <><Upload className="h-4 w-4 mr-1.5" />Upload {getSupportedFormatsDescription()}</>
                       )}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={downloadReferralTemplate}
+                      className="whitespace-nowrap text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+                    >
+                      <Download className="h-4 w-4 mr-1.5" />Download Template
                     </Button>
                   </div>
                   {documentError && (

@@ -158,19 +158,6 @@ export const HeartlandMonthlyProgressReport = ({ youth }: HeartlandMonthlyProgre
           hasLoadedData = true;
         }
       } catch {}
-      if (!hasLoadedData) {
-        const savedData = localStorage.getItem(`monthlyProgressReport_${youth.id}`);
-        if (savedData) {
-          try {
-            const parsed = JSON.parse(savedData);
-            setReportData(prev => ({ ...prev, ...parsed }));
-            hasLoadedData = true;
-          } catch (error) {
-            logger.error("Error loading saved report data:", error);
-          }
-        }
-      }
-
       // Always sync live youth data (name, level, ID) so reports reflect current status
       setReportData(prev => ({
         ...prev,
@@ -200,7 +187,6 @@ export const HeartlandMonthlyProgressReport = ({ youth }: HeartlandMonthlyProgre
       try {
         setIsAutoSaving(true);
         await draftsService.save(youth.id, 'monthly_progress_heartland', user?.uid || null, reportData)
-        localStorage.setItem(`monthlyProgressReport_${youth.id}`, JSON.stringify(reportData));
       } catch {}
       setTimeout(() => setIsAutoSaving(false), 500);
     };
@@ -217,7 +203,6 @@ export const HeartlandMonthlyProgressReport = ({ youth }: HeartlandMonthlyProgre
 
   const handleSaveReport = async () => {
     await draftsService.save(youth.id, 'monthly_progress_heartland', user?.uid || null, reportData)
-    localStorage.setItem(`monthlyProgressReport_${youth.id}`, JSON.stringify(reportData));
     toast({
       title: "Report Saved",
       description: "Monthly Progress Report has been saved successfully."
@@ -227,7 +212,6 @@ export const HeartlandMonthlyProgressReport = ({ youth }: HeartlandMonthlyProgre
   const handleResetForm = async () => {
     if (confirm("Are you sure you want to reset the form? All data will be lost.")) {
       try { await draftsService.delete(youth.id, 'monthly_progress_heartland', user?.uid || null) } catch {}
-      localStorage.removeItem(`monthlyProgressReport_${youth.id}`);
       window.location.reload();
     }
   };

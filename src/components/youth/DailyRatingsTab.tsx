@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Calendar, CalendarDays, Upload } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { format, subDays, startOfWeek, startOfMonth } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { CsvUploader, type ParsedRow, type ColumnDef, type ImportResult } from "@/components/common/CsvUploader";
@@ -340,6 +340,9 @@ export const DailyRatingsTab = ({ youth }: DailyRatingsTabProps) => {
               <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>Upload Daily Ratings for {youth.firstName} {youth.lastName}</DialogTitle>
+                  <DialogDescription className="sr-only">
+                    Import daily ratings from a CSV file for this youth only.
+                  </DialogDescription>
                 </DialogHeader>
                 <CsvUploader<YouthRatingRow>
                   templateType="daily_ratings_youth"

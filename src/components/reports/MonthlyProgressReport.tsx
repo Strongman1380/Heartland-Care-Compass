@@ -512,18 +512,6 @@ export const MonthlyProgressReport = ({ youth }: MonthlyProgressReportProps) => 
         logger.warn('Firebase draft load failed:', error);
       }
 
-      // Fallback to localStorage
-      const saveKey = `monthly-progress-${youth.id}-${selectedMonth}`;
-      const saved = localStorage.getItem(saveKey);
-
-      if (saved) {
-        try {
-          const savedData = JSON.parse(saved) as MonthlyReportData;
-          setReportData(prev => ({ ...prev, ...savedData }));
-        } catch (error) {
-          logger.error("Error loading saved data:", error);
-        }
-      }
     };
 
     loadData();
@@ -912,10 +900,6 @@ Discuss behavioral patterns, compliance, response to redirection, and emphasize 
     const dataToSave = { ...reportData, lastSavedAt: now };
 
     try {
-      // Save to localStorage first
-      const saveKey = `monthly-progress-${youth.id}-${selectedMonth}`;
-      localStorage.setItem(saveKey, JSON.stringify(dataToSave));
-
       // Save to Firebase
       const draftType = `monthly_progress_${selectedMonth}`;
       await draftsService.save(youth.id, draftType, user?.uid || null, dataToSave);
@@ -926,10 +910,10 @@ Discuss behavioral patterns, compliance, response to redirection, and emphasize 
         description: "Monthly progress report has been saved successfully",
       });
     } catch (error) {
-      logger.warn('Firebase save failed, saved locally:', error);
+      logger.warn('Firebase save failed:', error);
       toast({
-        title: "Saved Locally",
-        description: "Saved to local storage. Cloud sync failed.",
+        title: "Save Failed",
+        description: "Cloud sync failed. Please try again.",
       });
     } finally {
       setIsSaving(false);
@@ -987,8 +971,6 @@ Discuss behavioral patterns, compliance, response to redirection, and emphasize 
 
     // Clear saved data
     if (youth?.id) {
-      const saveKey = `monthly-progress-${youth.id}-${selectedMonth}`;
-      localStorage.removeItem(saveKey);
       try {
         const draftType = `monthly_progress_${selectedMonth}`;
         await draftsService.delete(youth.id, draftType, user?.uid || null);

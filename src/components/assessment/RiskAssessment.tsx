@@ -413,10 +413,8 @@ export const RiskAssessment = ({ youthId, youth, onAssessmentUpdated }: RiskAsse
     try {
       setIsAutoSaving(true);
       
-      // Save to Supabase draft and local
-      const draftKey = `risk-assessment-draft-${youthId}`;
-      try { await draftsService.save(youthId, 'risk_assessment', (user as any)?.id || null, { ...assessment, questionResponses, savedAt: new Date().toISOString() }) } catch {}
-      localStorage.setItem(draftKey, JSON.stringify({ ...assessment, questionResponses, savedAt: new Date().toISOString() }));
+      // Save to the authenticated remote draft store
+      try { await draftsService.save(youthId, 'risk_assessment', user?.uid || null, { ...assessment, questionResponses, savedAt: new Date().toISOString() }) } catch {}
       
       setHasUnsavedChanges(false);
 
@@ -441,7 +439,7 @@ export const RiskAssessment = ({ youthId, youth, onAssessmentUpdated }: RiskAsse
   useEffect(() => {
     (async () => {
       try {
-        const remote = await draftsService.get(youthId, 'risk_assessment', (user as any)?.id || null)
+        const remote = await draftsService.get(youthId, 'risk_assessment', user?.uid || null)
         if (remote?.data && !isLoading) {
           const draftData: any = remote.data
           setAssessment(prev => ({
@@ -456,25 +454,6 @@ export const RiskAssessment = ({ youthId, youth, onAssessmentUpdated }: RiskAsse
           return;
         }
       } catch {}
-      const draftKey = `risk-assessment-draft-${youthId}`;
-      const draft = localStorage.getItem(draftKey);
-      if (draft && !isLoading) {
-        try {
-          const draftData = JSON.parse(draft);
-          setAssessment(prev => ({
-            ...prev,
-            ...draftData,
-            assessmentDate: new Date(draftData.assessmentDate),
-            createdAt: new Date(draftData.createdAt),
-            updatedAt: new Date(draftData.updatedAt)
-          }));
-          setQuestionResponses(draftData.questionResponses || {});
-          setHasUnsavedChanges(true);
-          toast.info("Draft loaded from auto-save", { duration: 2000 });
-        } catch (error) {
-          console.error("Failed to load draft:", error);
-        }
-      }
     })();
   }, [youthId, isLoading, user]);
 
@@ -604,8 +583,6 @@ export const RiskAssessment = ({ youthId, youth, onAssessmentUpdated }: RiskAsse
       setAssessment(updatedAssessment);
 
       // Clear draft after successful save
-      const draftKey = `risk-assessment-draft-${youthId}`;
-      localStorage.removeItem(draftKey);
       setHasUnsavedChanges(false);
 
       // Trigger callback to refresh parent component

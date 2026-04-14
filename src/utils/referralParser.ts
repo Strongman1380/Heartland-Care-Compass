@@ -177,6 +177,38 @@ export const SECTION_CONFIG = [
   },
 ];
 
+// ---------------------------------------------------------------------------
+// Pre-computed keyword lookup index — built once at module load.
+// Sorted by keyword length descending so longer (more specific) keywords are
+// checked first, preventing short tokens like "age" from shadowing more precise
+// matches on the same field name (e.g. "language" has "language" keyword in
+// restrictions, which is longer than "age" in demographics).
+// ---------------------------------------------------------------------------
+interface _KwEntry { kw: string; section: keyof ParsedReferral }
+const _SORTED_KEYWORDS: _KwEntry[] = [];
+for (const _sc of SECTION_CONFIG) {
+  for (const _kw of _sc.keywords) {
+    _SORTED_KEYWORDS.push({ kw: _kw, section: _sc.key });
+  }
+}
+_SORTED_KEYWORDS.sort((a, b) => b.kw.length - a.kw.length);
+
+// Regex cache for word-boundary matching on short (≤4 char) pure-alpha keywords.
+// Without this, "age" would match "language", "mst" would match "most", etc.
+const _shortKwRegexCache = new Map<string, RegExp>();
+
+function _matchesKeyword(fieldLower: string, kw: string): boolean {
+  if (kw.length <= 4 && /^[a-z]+$/.test(kw)) {
+    let re = _shortKwRegexCache.get(kw);
+    if (!re) {
+      re = new RegExp(`\\b${kw}\\b`);
+      _shortKwRegexCache.set(kw, re);
+    }
+    return re.test(fieldLower);
+  }
+  return fieldLower.includes(kw);
+}
+
 // Contact person detection — field names that represent a person role
 const CONTACT_PERSON_RE = /^(mother'?s?|father'?s?|parent'?s?|parent\/guardian'?s?|parent\/guardians?|step-?mother|step-?father|legal guardian|primary guardian|secondary guardian|guardian'?s?|caregiver|next of kin|emergency contact|foster parent|relative|aunt|uncle|grandmother|grandfather|grandparent|grandma|grandpa|attorney|caseworker|case worker|probation officer|parole officer|gal|casa|judge)$/i;
 
@@ -217,6 +249,10 @@ function normalizeContactPersonLabel(fieldName: string): string {
 function normalizeFieldName(fieldName: string): string {
   // Strip leading checkbox characters (☒, ☐, and variants)
   let name = fieldName.replace(/^[\s☒☐✓✗□\u2610\u2611\u2612]+/, "").trim();
+  // Strip numbered/lettered list prefixes: "1. ", "2) ", "a. "
+  name = name.replace(/^\d+[.)]\s+/, "").replace(/^[a-zA-Z][.)]\s+/, "").trim();
+  // Strip markdown bold/italic markers: **Field** or *Field*
+  name = name.replace(/^\*{1,2}(.*?)\*{1,2}$/, "$1").trim();
   // Normalize possessive forms: "Mother's Phone" → "Mother Phone"
   name = name.replace(/['']s\s+/g, ' ').replace(/['']s$/g, '').trim();
   return name;
@@ -261,7 +297,7 @@ function normalizeCheckboxValue(value: string): string {
   return stripped;
 }
 
-export const UNKNOWN_VALUE_RE = /^(n\/a|na|none|unknown|not provided|not documented|unspecified|-|—|click or tap here to enter text\.?|click here\.?|tap here\.?)$/i;
+export const UNKNOWN_VALUE_RE = /^(n\/a|na|none|unknown|not provided|not documented|unspecified|-|—|click or tap here to enter text\.?|click here\.?|tap here\.?|tbd|pending|see attached|see above|see document|see below|not applicable|not available|not known|none listed|none noted|not yet|n\.a\.?|see file|to be determined|to be completed|not assessed|no information)$/i;
 
 export const LINE_MARKER_RE = /^Line\s+(\d+):\s*$/i;
 
@@ -272,22 +308,31 @@ const PROBATION_ENTRY_ALT_RE =
   /^(?<name>.+?)\s*-\s*(?<age>\d{1,2})\s*-\s*(?<decision>Yes|Maybe|No\+?-?|No\+o|No)\s*-\s*(?<rest>.+)$/i;
 
 export const parseFieldLine = (line: string): { fieldName: string; value: string } | null => {
-  const colonMatch = line.match(/^([^:]{2,80}):\s*(.+)$/);
+  // Strip leading numbered list markers ("1. ", "2) ") and bold markdown (**Field:**)
+  const cleaned = line
+    .replace(/^\s*\d+[.)]\s+/, "")
+    .replace(/\*{1,2}([^*:]+)\*{1,2}(\s*:)/, "$1$2");
+
+  const colonMatch = cleaned.match(/^([^:]{2,80}):\s*(.+)$/);
   if (colonMatch) return { fieldName: colonMatch[1].trim(), value: colonMatch[2].trim() };
 
-  const tabMatch = line.match(/^([^\t]{2,80})\t+(.+)$/);
+  const tabMatch = cleaned.match(/^([^\t]{2,80})\t+(.+)$/);
   if (tabMatch) return { fieldName: tabMatch[1].trim(), value: tabMatch[2].trim() };
 
-  const dashMatch = line.match(/^([A-Za-z][A-Za-z0-9 /()#&]{2,80})\s[-–—]\s(.+)$/);
+  const dashMatch = cleaned.match(/^([A-Za-z][A-Za-z0-9 /()#&]{2,80})\s[-–—]\s(.+)$/);
   if (dashMatch) return { fieldName: dashMatch[1].trim(), value: dashMatch[2].trim() };
+
+  // Equals separator: "Field = Value" or "Field=Value" (some digital forms)
+  const equalsMatch = cleaned.match(/^([A-Za-z][A-Za-z0-9 /()#&]{2,80})\s*=\s*(.+)$/);
+  if (equalsMatch) return { fieldName: equalsMatch[1].trim(), value: equalsMatch[2].trim() };
 
   return null;
 };
 
 export const detectSectionForField = (field: string): keyof ParsedReferral | null => {
   const fieldLower = field.toLowerCase();
-  for (const section of SECTION_CONFIG) {
-    if (section.keywords.some((kw) => fieldLower.includes(kw))) return section.key;
+  for (const { kw, section } of _SORTED_KEYWORDS) {
+    if (_matchesKeyword(fieldLower, kw)) return section;
   }
   return null;
 };
@@ -440,6 +485,25 @@ export const parseProbationStyleBlock = (raw: string): ParsedReferral | null => 
   return parsed;
 };
 
+/**
+ * Assigns value to key in record.
+ * If the key already exists with a different value, appends with "; " rather
+ * than silently overwriting — handles multi-value fields like repeated
+ * "Medication:" lines or duplicate diagnosis entries.
+ */
+function setField(record: Record<string, string>, key: string, value: string): void {
+  const existing = record[key];
+  if (!existing) {
+    record[key] = value;
+    return;
+  }
+  // Avoid appending an exact duplicate
+  const parts = existing.split(/;\s*/);
+  if (!parts.some((p) => p.toLowerCase().trim() === value.toLowerCase().trim())) {
+    record[key] = `${existing}; ${value}`;
+  }
+}
+
 export const parseReferralText = (raw: string): ParsedReferral => {
   const probationParsed = parseProbationStyleBlock(raw);
   if (probationParsed) return probationParsed;
@@ -500,7 +564,7 @@ export const parseReferralText = (raw: string): ParsedReferral => {
           if (value && !UNKNOWN_VALUE_RE.test(value)) {
             const fieldNameLower = fieldName.toLowerCase().trim();
             if (/^placement outcome\s+\d+/i.test(fieldNameLower)) {
-              result.goals[fieldName] = value;
+              setField(result.goals, fieldName, value);
               currentFieldRef = { section: 'goals', fieldName };
             } else if (CONTACT_PERSON_RE.test(fieldName)) {
               const personLabel = normalizeContactPersonLabel(fieldName);
@@ -517,7 +581,7 @@ export const parseReferralText = (raw: string): ParsedReferral => {
               const detectedSection = detectSectionForField(fieldName);
               if (detectedSection && detectedSection !== 'family') activeContactPerson = null;
               const section = detectedSection || activeSection;
-              result[section][fieldName] = value;
+              setField(result[section], fieldName, value);
               currentFieldRef = { section, fieldName };
             }
           }
@@ -591,7 +655,7 @@ export const parseReferralText = (raw: string): ParsedReferral => {
 
     // "Placement Outcome N" fields belong in goals, not placement
     if (/^placement outcome\s+\d+/i.test(fieldNameLower)) {
-      result.goals[fieldName] = value;
+      setField(result.goals, fieldName, value);
       currentFieldRef = { section: 'goals', fieldName };
       continue;
     }
@@ -623,7 +687,7 @@ export const parseReferralText = (raw: string): ParsedReferral => {
 
     const section = detectedSection || activeSection;
     if (value && !UNKNOWN_VALUE_RE.test(value)) {
-      result[section][fieldName] = value;
+      setField(result[section], fieldName, value);
       currentFieldRef = { section, fieldName };
     }
 
@@ -636,7 +700,7 @@ export const parseReferralText = (raw: string): ParsedReferral => {
         const sfValue = normalizeCheckboxValue(secondField.value);
         if (sfName && sfValue && !UNKNOWN_VALUE_RE.test(sfValue)) {
           const sfSection = detectSectionForField(sfName) || section;
-          result[sfSection][sfName] = sfValue;
+          setField(result[sfSection], sfName, sfValue);
           currentFieldRef = { section: sfSection, fieldName: sfName };
         }
       } else {

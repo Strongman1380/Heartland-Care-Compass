@@ -160,9 +160,7 @@ const QuickISPAssessment: React.FC<QuickISPAssessmentProps> = ({ selectedYouth, 
         timestamp: Date.now()
       };
 
-      const draftKey = getDraftKey();
-      try { await draftsService.save(ispData.youthId || null, 'quick_isp', (user as any)?.id || null, draftData) } catch {}
-      localStorage.setItem(draftKey, JSON.stringify(draftData));
+      try { await draftsService.save(ispData.youthId || null, 'quick_isp', user?.uid || null, draftData) } catch {}
 
       setHasUnsavedChanges(false);
 
@@ -191,7 +189,7 @@ const QuickISPAssessment: React.FC<QuickISPAssessmentProps> = ({ selectedYouth, 
   const loadDraft = async () => {
     try {
       try {
-        const remote = await draftsService.get(ispData.youthId || null, 'quick_isp', (user as any)?.id || null)
+        const remote = await draftsService.get(ispData.youthId || null, 'quick_isp', user?.uid || null)
         if (remote?.data) {
           const { timestamp, ...rest } = (remote.data as any)
           setISPData(rest as ISPData)
@@ -200,31 +198,13 @@ const QuickISPAssessment: React.FC<QuickISPAssessmentProps> = ({ selectedYouth, 
           return
         }
       } catch {}
-      const draftKey = getDraftKey();
-      const draftData = localStorage.getItem(draftKey);
-
-      if (draftData) {
-        const parsed = JSON.parse(draftData);
-
-        // Only load draft if it's less than 24 hours old
-        const dayInMs = 24 * 60 * 60 * 1000;
-        if (parsed.timestamp && (Date.now() - parsed.timestamp < dayInMs)) {
-          const { timestamp, ...formDataWithoutTimestamp } = parsed;
-          setISPData(formDataWithoutTimestamp);
-          setHasUnsavedChanges(true);
-
-          toast.info("Previous ISP draft loaded", { duration: 2000 });
-        }
-      }
     } catch (error) {
       console.error("Failed to load draft:", error);
     }
   };
 
   const clearDraft = async () => {
-    const draftKey = getDraftKey();
-    try { await draftsService.delete(ispData.youthId || null, 'quick_isp', (user as any)?.id || null) } catch {}
-    localStorage.removeItem(draftKey);
+    try { await draftsService.delete(ispData.youthId || null, 'quick_isp', user?.uid || null) } catch {}
     setHasUnsavedChanges(false);
   };
 

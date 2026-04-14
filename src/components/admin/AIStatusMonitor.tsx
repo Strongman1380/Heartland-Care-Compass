@@ -92,6 +92,10 @@ export const AIStatusMonitor = () => {
           {status && (
             <div className="mt-4 space-y-2 text-sm">
               <div className="flex justify-between">
+                <span className="text-muted-foreground">Provider:</span>
+                <span>{status.provider || 'Not specified'}</span>
+              </div>
+              <div className="flex justify-between">
                 <span className="text-muted-foreground">Model:</span>
                 <span>{status.model || 'Not specified'}</span>
               </div>
@@ -257,8 +261,9 @@ export const AIStatusMonitor = () => {
           <CardContent className="text-sm text-yellow-700">
             <p>AI service is configured but not available. This could be due to:</p>
             <ul className="mt-2 list-disc list-inside space-y-1">
-              <li>Invalid or expired OpenAI API key</li>
+              <li>Missing, invalid, or expired AI provider key</li>
               <li>Insufficient API quota or billing issues</li>
+              <li>Missing Firebase sign-in or expired auth session</li>
               <li>Network connectivity problems</li>
               <li>Model availability issues</li>
             </ul>

@@ -6,8 +6,6 @@ import {
   type PlacementResponse,
   RESPONSE_LABELS,
 } from "@/integrations/firebase/referralResponseTokenService";
-import { alertsService } from "@/integrations/firebase/alertsService";
-import emailjs from "@emailjs/browser";
 import { format } from "date-fns";
 
 type PageState = "loading" | "active" | "already_responded" | "expired" | "error" | "confirmed";
@@ -44,32 +42,6 @@ export default function PoResponsePage() {
     setSubmitting(true);
     try {
       await referralResponseTokenService.saveResponse(token, response);
-
-      // In-app alert for staff
-      await alertsService.save({
-        title: "PO Response Received",
-        body: `${tokenDoc.poName || "PO"} responded for ${tokenDoc.referralName}: ${RESPONSE_LABELS[response]}`,
-        level: "info",
-        status: "open",
-      });
-
-      // Email notification to admissions staff
-      try {
-        await emailjs.send(
-          import.meta.env.VITE_EMAILJS_SERVICE_ID,
-          import.meta.env.VITE_EMAILJS_PO_RESPONSE_TEMPLATE_ID,
-          {
-            youth_name: tokenDoc.referralName,
-            po_name: tokenDoc.poName || "PO",
-            response_text: RESPONSE_LABELS[response],
-            date: format(new Date(), "MMMM d, yyyy"),
-            to_email: "admissions@heartlandboyshomenebraska.org",
-          },
-          import.meta.env.VITE_EMAILJS_PUBLIC_KEY
-        );
-      } catch {
-        // Email notification is best-effort; don't fail the whole response
-      }
 
       setConfirmedResponse(response);
       setPageState("confirmed");

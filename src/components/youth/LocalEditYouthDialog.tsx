@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
@@ -233,6 +233,9 @@ export default function LocalEditYouthDialog({ youth, open, onClose, onSuccess }
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-xl font-semibold">Edit Youth Profile</DialogTitle>
+          <DialogDescription className="sr-only">
+            Review and update the selected youth profile across personal, background, education, medical, and mental health tabs.
+          </DialogDescription>
         </DialogHeader>
         <form onSubmit={onSubmit} className="space-y-4 py-2">
           <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -264,4 +267,3 @@ export default function LocalEditYouthDialog({ youth, open, onClose, onSuccess }
     </Dialog>
   );
 }
-

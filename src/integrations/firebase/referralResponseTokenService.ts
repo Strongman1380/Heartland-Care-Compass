@@ -1,8 +1,7 @@
 import { db } from "@/lib/firebase";
-import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
+import { doc, setDoc } from "firebase/firestore";
 import { v4 as uuidv4 } from "uuid";
-import { referralNotesService } from "./referralNotesService";
-import { format } from "date-fns";
+import { buildApiUrl } from "@/utils/apiUrl";
 
 const COLLECTION = "referral_response_tokens";
 
@@ -48,37 +47,27 @@ export const referralResponseTokenService = {
   },
 
   async get(token: string): Promise<ResponseToken | null> {
-    const snap = await getDoc(doc(db, COLLECTION, token));
-    if (!snap.exists()) return null;
-    return snap.data() as ResponseToken;
+    const response = await fetch(buildApiUrl(`/api/public/po-response/${encodeURIComponent(token)}`));
+    if (response.status === 404) return null;
+    if (!response.ok) {
+      throw new Error("Failed to load response token");
+    }
+    return await response.json() as ResponseToken;
   },
 
   async saveResponse(token: string, response: PlacementResponse): Promise<void> {
-    const tokenDoc = await this.get(token);
-    if (!tokenDoc) throw new Error("Response token not found");
-
-    if (tokenDoc.respondedAt) {
-      throw new Error("This response link has already been used");
-    }
-
-    if (new Date(tokenDoc.expiresAt) <= new Date()) {
-      throw new Error("This response link has expired");
-    }
-
-    const now = new Date().toISOString();
-    await updateDoc(doc(db, COLLECTION, token), {
-      respondedAt: now,
-      response,
+    const result = await fetch(buildApiUrl(`/api/public/po-response/${encodeURIComponent(token)}`), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ response }),
     });
 
-    // Atomically append to referral po_contact_log
-    const newEntry = {
-      id: uuidv4(),
-      date: format(new Date(), "yyyy-MM-dd"),
-      notes: `PO Response (via link): ${RESPONSE_LABELS[response]}`,
-      followUpDate: "",
-    };
-    await referralNotesService.atomicAppendPoContactLog(tokenDoc.referralId, newEntry);
+    if (!result.ok) {
+      const payload = await result.json().catch(() => ({}));
+      throw new Error(payload.error || "Failed to record PO response");
+    }
   },
 };
 

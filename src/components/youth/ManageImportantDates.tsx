@@ -13,6 +13,7 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogFooter,
@@ -213,6 +214,11 @@ export const ManageImportantDates = ({ youthId }: ManageImportantDatesProps) => 
             <DialogTitle>
               {editingDate ? "Edit Important Date" : "Add Important Date"}
             </DialogTitle>
+            <DialogDescription className="sr-only">
+              {editingDate
+                ? "Update the selected important date for this youth."
+                : "Add a new important date for this youth."}
+            </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-2">

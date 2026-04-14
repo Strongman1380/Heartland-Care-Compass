@@ -70,6 +70,7 @@ export interface YouthFormData {
   tattoosScars: string;
 
   // Family & Legal Contact Information
+  guardianLanguage: string;
   motherName: string;
   motherPhone: string;
   fatherName: string;
@@ -78,12 +79,20 @@ export interface YouthFormData {
   nextOfKinRelationship: string;
   nextOfKinPhone: string;
   placingAgencyCounty: string;
+  district: string;
   caseworkerName: string;
   caseworkerPhone: string;
   guardianAdLitemName: string;
   attorney: string;
   judge: string;
   professionals: Professional[];
+
+  // Intake / Placement Details
+  reasonForPlacement: string;
+  parentsNotifiedOfPlacement: boolean;
+  immediateNeeds: string;
+  intakeObservation: string;
+  orientationCompletedBy: string;
 
   // Background Information
   referralReason: string;
@@ -243,6 +252,7 @@ const INITIAL_FORM_DATA: YouthFormData = {
   tattoosScars: "",
 
   // Family & Legal Contact Information
+  guardianLanguage: "",
   motherName: "",
   motherPhone: "",
   fatherName: "",
@@ -251,12 +261,20 @@ const INITIAL_FORM_DATA: YouthFormData = {
   nextOfKinRelationship: "",
   nextOfKinPhone: "",
   placingAgencyCounty: "",
+  district: "",
   caseworkerName: "",
   caseworkerPhone: "",
   guardianAdLitemName: "",
   attorney: "",
   judge: "",
   professionals: [],
+
+  // Intake / Placement Details
+  reasonForPlacement: "",
+  parentsNotifiedOfPlacement: false,
+  immediateNeeds: "",
+  intakeObservation: "",
+  orientationCompletedBy: "",
 
   // Background Information
   referralReason: "",
@@ -409,7 +427,7 @@ export const useYouthForm = () => {
         timestamp: Date.now()
       };
 
-      localStorage.setItem('youth-form-draft', JSON.stringify(draftData));
+      sessionStorage.setItem('youth-form-draft', JSON.stringify(draftData));
       setHasUnsavedChanges(false);
 
       // Show subtle success indicator
@@ -423,7 +441,7 @@ export const useYouthForm = () => {
 
   const loadDraft = () => {
     try {
-      const draftData = localStorage.getItem('youth-form-draft');
+      const draftData = sessionStorage.getItem('youth-form-draft');
 
       if (draftData) {
         const parsed = JSON.parse(draftData);
@@ -444,7 +462,7 @@ export const useYouthForm = () => {
   };
 
   const clearDraft = () => {
-    localStorage.removeItem('youth-form-draft');
+    sessionStorage.removeItem('youth-form-draft');
     setHasUnsavedChanges(false);
   };
 

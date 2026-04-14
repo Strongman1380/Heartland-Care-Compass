@@ -1,15 +1,16 @@
 import { useState, useEffect, useCallback } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Upload, Loader2, CheckCircle, AlertCircle } from "lucide-react";
+import { Upload, Download, Loader2, CheckCircle, AlertCircle } from "lucide-react";
 import { parseYouthProfileText } from "@/services/aiService";
 import { toast } from "sonner";
 import { useYouth } from "@/hooks/useSupabase";
 import { useYouthForm } from "@/hooks/useYouthForm";
 import { mapImportedProfileToFormPatch } from "@/utils/youthProfileImport";
+import { downloadYouthProfileTemplate } from "@/utils/youthProfileTemplate";
 import { professionalsToLegacyFields } from "@/utils/professionalUtils";
 import { PersonalInfoTab } from "./PersonalInfoTab";
 import { BackgroundTab } from "./BackgroundTab";
@@ -411,6 +412,9 @@ export const AddYouthDialog = ({ onClose, onSuccess }: AddYouthDialogProps) => {
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-xl font-semibold">Add New Youth</DialogTitle>
+          <DialogDescription className="sr-only">
+            Create a youth profile or import profile text before saving the record.
+          </DialogDescription>
           {/* Auto-save status */}
           {hasUnsavedChanges && (
             <div className="flex items-center gap-2 text-sm text-amber-600 bg-amber-50 p-2 rounded-md border border-amber-200 mt-2">
@@ -510,6 +514,15 @@ export const AddYouthDialog = ({ onClose, onSuccess }: AddYouthDialogProps) => {
                     className="border-gray-300 text-gray-700 hover:bg-gray-50"
                   >
                     Clear
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={downloadYouthProfileTemplate}
+                    className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    Download Template
                   </Button>
                 </div>
               </div>

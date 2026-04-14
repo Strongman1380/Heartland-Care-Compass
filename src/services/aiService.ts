@@ -44,7 +44,7 @@ const formatAIErrorMessage = (status: number, payload: any): string => {
   if (status === 408) return 'AI request timed out. Try a shorter input.';
   if (status === 429) return 'AI rate limit reached. Try again shortly.';
   if (status === 402) return 'AI quota exceeded. Contact admin to update billing.';
-  if (status === 401) return 'AI credentials are invalid. Contact admin.';
+  if (status === 401) return 'You are not signed in or your session expired. Sign in again and retry.';
   if (status >= 500) return 'AI service is temporarily unavailable.';
   return `AI request failed with status ${status}`;
 };
@@ -91,7 +91,7 @@ async function makeAIRequest<T>(
   payload: any,
   config: AIRequestConfig = {}
 ): Promise<AIResponse<T>> {
-  const { maxRetries = 2, timeout = 30000, fallbackEnabled = true } = config;
+  const { maxRetries = 1, timeout = 20000, fallbackEnabled = true } = config;
 
   // Short-circuit when the breaker is open
   if (circuitBreaker.isOpen()) {
@@ -104,6 +104,7 @@ async function makeAIRequest<T>(
   }
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const requestStartedAt = Date.now();
     try {
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
@@ -115,7 +116,11 @@ async function makeAIRequest<T>(
           const token = await auth.currentUser.getIdToken();
           headers['Authorization'] = `Bearer ${token}`;
         } catch (tokenError) {
-          logger.warn('Could not retrieve Firebase token:', tokenError);
+          logger.warn('Could not retrieve Firebase token:', {
+            endpoint,
+            attempt: attempt + 1,
+            error: tokenError instanceof Error ? tokenError.message : String(tokenError),
+          });
         }
       }
 
@@ -162,6 +167,12 @@ async function makeAIRequest<T>(
       }
 
       circuitBreaker.recordSuccess();
+      logger.info('AI request completed', {
+        endpoint,
+        attempt: attempt + 1,
+        durationMs: Date.now() - requestStartedAt,
+        cached: data.cached === true,
+      });
       return {
         success: true,
         data: data,
@@ -173,18 +184,33 @@ async function makeAIRequest<T>(
         } : undefined,
       };
     } catch (error: any) {
-      logger.warn(`AI request attempt ${attempt + 1} failed:`, error);
+      const durationMs = Date.now() - requestStartedAt;
+      logger.warn(`AI request attempt ${attempt + 1} failed`, {
+        endpoint,
+        durationMs,
+        code: error?.code,
+        status: error?.status,
+        name: error?.name,
+        message: error?.message,
+      });
       circuitBreaker.recordFailure();
+      const message = String(error?.message || '');
+      const isNetworkFailure = /network|failed to fetch|load failed|cors/i.test(message);
       const retryable = error?.retryable === true
         || error?.name === 'AbortError'
-        || /network|failed to fetch/i.test(error?.message || '');
+        || isNetworkFailure;
       const isFinalAttempt = attempt === maxRetries || !retryable;
 
       if (isFinalAttempt) {
+        let errorMessage = error.message || 'AI request failed';
+        if (error?.name === 'AbortError') {
+          errorMessage = 'AI request timed out. The referral content may be too long or the service is under high load. Please try again.';
+        }
+
         return {
           success: false,
-          error: error.message || 'AI request failed',
-          code: error.code,
+          error: errorMessage,
+          code: error.code || (error?.name === 'AbortError' ? 'TIMEOUT' : undefined),
           retryable,
           requestId: error.requestId,
           fallback: fallbackEnabled,
@@ -783,9 +809,24 @@ export interface AIServiceStatus {
  */
 export async function checkAIStatus(): Promise<AIServiceStatus> {
   try {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+
+    if (typeof window !== 'undefined' && auth.currentUser) {
+      try {
+        const token = await auth.currentUser.getIdToken();
+        headers['Authorization'] = `Bearer ${token}`;
+      } catch (tokenError) {
+        logger.warn('Could not retrieve Firebase token for AI status check', {
+          error: tokenError instanceof Error ? tokenError.message : String(tokenError),
+        });
+      }
+    }
+
     const response = await fetch(buildApiUrl('/api/ai/status'), {
       method: 'GET',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
     });
 
     if (response.ok) {
@@ -926,11 +967,11 @@ export async function parseYouthProfileText(
  * with risk screens, violence assessment, house-fit analysis, and clarification questions.
  */
 export async function screenReferralIntake(referralText: string): Promise<AIResponse<{ screening: string }>> {
-  return makeAIRequest('/api/ai/screen-referral', { referralText }, { timeout: 90000, maxRetries: 0 });
+  return makeAIRequest('/api/ai/screen-referral', { referralText }, { timeout: 60000, maxRetries: 0 });
 }
 
 export async function extractReferralFields(referralText: string): Promise<AIResponse<Record<string, Record<string, string>>>> {
-  return makeAIRequest('/api/ai/extract-referral-fields', { referralText }, { timeout: 45000, maxRetries: 0 });
+  return makeAIRequest('/api/ai/extract-referral-fields', { referralText }, { timeout: 75000, maxRetries: 0 });
 }
 
 // ============================================================================

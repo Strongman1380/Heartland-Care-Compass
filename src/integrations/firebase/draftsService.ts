@@ -23,20 +23,28 @@ export type DraftRow = {
 
 export const draftsService = {
   async get(youth_id: string | null, draft_type: string, author_id: string | null): Promise<DraftRow | null> {
-    let q = query(collection(db, 'report_drafts'), where('draft_type', '==', draft_type))
-    // Firestore doesn't support conditional where clauses inline, so we filter after
+    if (!author_id) return null
+
+    let q = query(
+      collection(db, 'report_drafts'),
+      where('draft_type', '==', draft_type),
+      where('author_id', '==', author_id)
+    )
     const snapshot = await getDocs(q)
     const results = snapshot.docs
       .map(d => ({ id: d.id, ...d.data() } as DraftRow))
       .filter(d => {
         if (youth_id && d.youth_id !== youth_id) return false
-        if (author_id && d.author_id !== author_id) return false
         return true
       })
     return results[0] || null
   },
 
   async save(youth_id: string | null, draft_type: string, author_id: string | null, dataJson: any): Promise<DraftRow> {
+    if (!author_id) {
+      throw new Error('Cannot save a draft without an authenticated author')
+    }
+
     // Try to find existing draft to update
     const existing = await this.get(youth_id, draft_type, author_id)
     const id = existing?.id || uuidv4()
@@ -54,14 +62,19 @@ export const draftsService = {
   },
 
   async delete(youth_id: string | null, draft_type: string, author_id: string | null): Promise<void> {
-    const q = query(collection(db, 'report_drafts'), where('draft_type', '==', draft_type))
+    if (!author_id) return
+
+    const q = query(
+      collection(db, 'report_drafts'),
+      where('draft_type', '==', draft_type),
+      where('author_id', '==', author_id)
+    )
     const snapshot = await getDocs(q)
     const batch = writeBatch(db)
     snapshot.docs.forEach(d => {
       const data = d.data()
       const matchYouth = !youth_id || data.youth_id === youth_id
-      const matchAuthor = !author_id || data.author_id === author_id
-      if (matchYouth && matchAuthor) {
+      if (matchYouth) {
         batch.delete(d.ref)
       }
     })

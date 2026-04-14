@@ -4,16 +4,15 @@ import { File } from 'node:buffer';
 import express from 'express';
 import cors from 'cors';
 import multer from 'multer';
-import Anthropic from '@anthropic-ai/sdk';
+import OpenAI from 'openai';
 import { initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 
 // Config params
-const anthropicApiKey = defineString('ANTHROPIC_API_KEY', { default: '' });
-const anthropicModel = defineString('ANTHROPIC_MODEL', { default: 'claude-sonnet-4-6' });
 const openaiApiKey = defineString('OPENAI_API_KEY', { default: '' });
-const openaiModel = defineString('OPENAI_MODEL', { default: 'gpt-4o-mini' });
+const openaiModelStandard = defineString('OPENAI_MODEL_STANDARD', { default: 'gpt-4o-mini' });
+const openaiModelPremium = defineString('OPENAI_MODEL_PREMIUM', { default: 'gpt-4o' });
 const allowedOriginsParam = defineString('ALLOWED_ORIGINS', { default: '' });
 const PUBLIC_PO_RESPONSE_LABELS = {
   still_needed: 'Still needs placement',
@@ -83,100 +82,65 @@ async function requireFirebaseAuth(req, res, next) {
   }
 }
 
-// Lazy-init Anthropic
-let anthropicClient = null;
-function getAnthropic() {
-  if (anthropicClient) return anthropicClient;
-  const key = anthropicApiKey.value();
-  if (!key) return null;
-  anthropicClient = new Anthropic({ apiKey: key });
-  return anthropicClient;
-}
-
-function getConfiguredAIProvider() {
-  if (anthropicApiKey.value()) return 'anthropic';
-  if (openaiApiKey.value()) return 'openai';
-  return null;
-}
-
-async function completeOpenAIPrompt({ systemPrompt, userPrompt, maxTokens = 1000, temperature = 0.2 }) {
+// Lazy-init OpenAI
+let openaiClient = null;
+function getOpenAI() {
+  if (openaiClient) return openaiClient;
   const key = openaiApiKey.value();
-  if (!key) return { unavailable: true };
+  if (!key) return null;
+  openaiClient = new OpenAI({ apiKey: key });
+  return openaiClient;
+}
 
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${key}`,
-    },
-    body: JSON.stringify({
-      model: openaiModel.value(),
+const selectModel = (tier = 'standard') => {
+  if (tier === 'premium') return openaiModelPremium.value();
+  return openaiModelStandard.value();
+};
+
+/**
+ * Core AI completion using OpenAI
+ */
+async function completeAIPrompt({ systemPrompt, userPrompt, maxTokens = 1000, temperature = 0.2, tier = 'standard' }) {
+  const client = getOpenAI();
+  if (!client) return { unavailable: true };
+
+  const model = selectModel(tier);
+
+  try {
+    const response = await client.chat.completions.create({
+      model,
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt },
       ],
       max_tokens: maxTokens,
       temperature,
-    }),
-  });
+    });
 
-  if (!response.ok) {
-    const payload = await response.json().catch(() => ({}));
-    const error = new Error(payload?.error?.message || 'OpenAI request failed');
-    error.code = payload?.error?.code || `openai_${response.status}`;
-    error.status = response.status;
+    const content = response.choices[0]?.message?.content || '';
+    const tokens = response.usage?.total_tokens || 0;
+    logAIUsage(true, tokens);
+
+    return {
+      content,
+      usage: { total_tokens: tokens },
+      model: response.model,
+      provider: 'openai',
+    };
+  } catch (error) {
+    console.error('OpenAI completion failed:', error);
     throw error;
   }
-
-  const data = await response.json();
-  const content = data?.choices?.[0]?.message?.content || '';
-  const tokens = data?.usage?.total_tokens || 0;
-  logAIUsage(true, tokens);
-  return {
-    content,
-    usage: { total_tokens: tokens },
-    model: data?.model || openaiModel.value(),
-    provider: 'openai',
-  };
-}
-
-// Core AI completion
-async function completeClaudePrompt({ systemPrompt, userPrompt, maxTokens = 1000, temperature = 0.2 }) {
-  const provider = getConfiguredAIProvider();
-  if (provider === 'openai') {
-    return completeOpenAIPrompt({ systemPrompt, userPrompt, maxTokens, temperature });
-  }
-
-  const client = getAnthropic();
-  if (!client) return { unavailable: true };
-
-  const response = await client.messages.create({
-    model: anthropicModel.value(),
-    system: systemPrompt,
-    messages: [{ role: 'user', content: userPrompt }],
-    max_tokens: maxTokens,
-    temperature,
-  });
-
-  const content = response.content[0]?.text || '';
-  const tokens = (response.usage?.input_tokens || 0) + (response.usage?.output_tokens || 0);
-  logAIUsage(true, tokens);
-  return {
-    content,
-    usage: { total_tokens: tokens },
-    model: response.model,
-    provider: 'anthropic',
-  };
 }
 
 // Text completion (alias)
-async function completeTextPrompt({ systemPrompt, userPrompt, maxTokens = 800, temperature = 0.2 }) {
-  return completeClaudePrompt({ systemPrompt, userPrompt, maxTokens, temperature });
+async function completeTextPrompt({ systemPrompt, userPrompt, maxTokens = 800, temperature = 0.2, tier = 'standard' }) {
+  return completeAIPrompt({ systemPrompt, userPrompt, maxTokens, temperature, tier });
 }
 
-// JSON completion — runs Claude then parses JSON out of the response
-async function completeJSONPrompt({ systemPrompt, userPrompt, maxTokens = 800, temperature = 0.2 }) {
-  const result = await completeClaudePrompt({ systemPrompt, userPrompt, maxTokens, temperature });
+// JSON completion — runs AI then parses JSON out of the response
+async function completeJSONPrompt({ systemPrompt, userPrompt, maxTokens = 800, temperature = 0.2, tier = 'standard' }) {
+  const result = await completeAIPrompt({ systemPrompt, userPrompt, maxTokens, temperature, tier });
   if (result.unavailable) return result;
   const parsed = parseJSONContent(result.content);
   return { ...result, parsed };
@@ -433,8 +397,8 @@ app.post('/api/public/po-response/:token', async (req, res) => {
 // AI Status
 app.get('/api/ai/status', async (req, res) => {
   try {
-    const provider = getConfiguredAIProvider();
-    if (!provider) {
+    const client = getOpenAI();
+    if (!client) {
       return res.json({
         available: false,
         configured: false,
@@ -1027,7 +991,7 @@ app.post('/api/ai/screen-referral', async (req, res) => {
     const { referralText } = req.body || {};
     if (!referralText || !String(referralText).trim()) return res.status(400).json({ error: 'Referral text is required' });
 
-    const result = await completeClaudePrompt({
+    const result = await completeTextPrompt({
       systemPrompt: `You are the Heartland Boys Home Referral Screening Engine.
 
 MISSION: Run a 5-step screening process on the referral and return a structured JSON recommendation.

@@ -11,12 +11,16 @@
       "config": {
         "distDir": "dist"
       }
+    },
+    {
+      "src": "api/server.js",
+      "use": "@vercel/node"
     }
   ],
   "routes": [
     {
       "src": "/api/(.*)",
-      "dest": "https://us-central1-heartland-boys-home-data.cloudfunctions.net/api/$1"
+      "dest": "/api/server.js"
     },
     {
       "handle": "filesystem"

@@ -2113,37 +2113,70 @@ app.post('/api/ai/screen-referral', async (req, res) => {
 MISSION: Run a 5-step screening process on the referral and return a structured JSON recommendation.
 
 PROGRAM SCOPE
-Heartland Boys Home provides: 24/7 monitoring, on-site substance abuse and mental health counseling, skill-building, and medication management.
-Heartland DOES NOT provide: Secure/locked clinical containment (PRTF), hands-on physical intervention, or standard 1:1 staffing.
+Heartland Group Home A provides: 24/7 monitoring (rooms and facility), on-site substance abuse counseling, on-site mental health counseling, on-site skill-building programs, medication management support.
+Heartland does NOT provide: PRTF-level clinical containment or secure/locked programming, hands-on physical intervention (hands-off facility), 1:1 staffing as a standard baseline.
 
-STEP 1 — DATA EXTRACTION
-Extract: Youth Name, DOB, Referral Date, Referring Agency, Probation Officer, District, Current Placement, Program Level Requested, and Overall Risk Level (YLS/CMI).
+STEP 1 - PARSE + NORMALIZE
+Extract key fields. Set null for missing data and add field name to missing_info array.
+Fields to extract: youth basics (name, DOB/age, gender, county/jurisdiction, legal status), current placement + timeline (where now, how long, why moved), referral ask (treatment vs non-treatment, short vs long term), legal team (PO, PO phone, judge, attorney, GAL/CASA), family demographics and contacts (guardian names, relationships, address, city/state/zip, phone numbers, household context if explicitly stated), current placement contact details (facility name, address, city/state, phone number, contact person if explicitly stated), risk tools (YLS/CMI overall risk score, date completed, top drivers), safety risks (violence history, weapons, fire setting, elopement, gang, sexual behavior issues), clinical risks (psychosis, suicidality, recent hospitalization, med status/compliance), developmental (ASD/FASD/IQ/DD flags, IEP/504), substance use (substances, frequency, last use, UA history), family system (guardians, engagement, conflicts, contact restrictions), strengths + motivators, discharge constraints.
 
-STEP 2 — DOMAIN SCORING (1-5 Scale: 1=Poor/High Risk, 5=Strong/Low Risk)
-Score each domain based strictly on provided text:
-1. safety_supervision_fit: Can we safely supervise them?
-2. behavioral_history_severity: Aggression, running away, fire setting.
-3. sexual_behavior_risk: problematic sexual behavior.
-4. mental_health_stability: Psychosis, medications, stability.
-5. substance_use: Frequency, type, impact.
-6. family_dynamics_support: Guardian engagement/conflict.
-7. educational_engagement: School behavior, IEP/504.
-8. treatment_history_engagement: Prior placement results.
-9. motivation_accountability: Readiness for change.
-10. program_fit_assessment: Alignment with our model.
+STEP 2 - HARD SCREENS
+Auto-decline - set recommendation=DECLINE if ANY of these are explicitly present:
+- Active gang involvement, affiliation, or credible current gang-related behavior/pressure
+- Recent serious violence toward people/animals with pattern, escalation, weapon use, or predatory aggression that cannot be safely managed in a hands-off group home
+- PRTF-level psychiatric profile: recent psych hospitalization/hold, active psychosis/hallucinations not stabilized, or severe suicidal behavior requiring intensive containment
+- Any factor making 24/7 group home supervision without 1:1 staffing unsafe or operationally unmanageable
 
-STEP 3 — HARD SCREENS (Recommend DENY if any present)
-- Active gang affiliation/pressure.
-- Escalating predatory violence that cannot be managed in a hands-off facility.
-- Active psychosis or PRTF-level clinical needs.
+IMPORTANT nuances (do NOT auto-decline for these):
+- Absconding/running away: assess context (frequency, duration, reasons, risk while gone). Leaving is straightforward in Lincoln/Omaha. Not an auto-decline.
+- Prior detention: does NOT mean higher LOC is needed unless explicitly mandated OR there is a documented history of severe persistent non-compliance with MH/SA/medication interventions.
+- General negative behavior, defiance, or attitude: expected in this population. Do not penalize.
+- General mental health or substance abuse diagnoses: with on-site MH/SA counseling available, many therapeutic needs can be met directly.
 
-STEP 4 — DECISION
-- RECOMMEND INTERVIEW: Pass screens, fit is MIXED or STRONG.
-- CONDITIONAL: Pass screens but missing info or specific needs require clarification.
-- NEED MORE INFO: Critical documentation missing.
-- DENY / REDIRECT: Fails screens or clearly outside scope.
+Conditional flag - set screen_status=CONDITIONAL (NOT auto-decline) if:
+- Suspected or diagnosed ASD/FASD/DD/IQ limitations are present -> flag for accommodation planning, confirm functioning level, school/IEP plan, and behavior support needs
 
-OUTPUT: Return ONLY valid JSON.
+STEP 3 - HOUSE-FIT CHECK
+Evaluate fit_rating as STRONG, MIXED, or POOR based on:
+- Peer contagion risk: will this youth escalate others (gang talk, defiance culture, sexually reactive behavior, intimidation)?
+- Victimization risk: will this youth be targeted, bullied, or exploited by current residents?
+- Operational fit: can staff manage predictable behaviors within group home schedule/level system without constant 1:1?
+- Programming fit: can the youth tolerate structure, school, chores, groups, supervision, and correction?
+- "What works" alignment: does referral indicate structure/consistency helps? Do they respond to firm limits?
+
+STEP 4 - NEEDS-TO-SERVICES MATCH
+Map needs into buckets: behavioral (defiance, aggression, impulsivity, authority issues), clinical (therapy type needed, medication management, crisis history), educational (IEP/504, classroom tolerance, credit recovery), family (contact plan, reunification feasibility, guardianship), substance (prevention vs active SUD needs, UA expectations). Assess whether each need is within Heartland scope and whether aggregate needs can be handled without turning placement into a clinical containment unit.
+
+STEP 4.5 - DOMAIN SCORING (Form 1 — Referral Screening Assessment)
+Score each of the 10 domains 1–5 (1=Poor/High Concern, 5=Strong/Low Concern). Base scores strictly on what the referral explicitly states. For each domain provide: score (integer 1–5, or null if insufficient data), narrative (1–3 sentences citing specific referral data, or null), and is_flagged (true if this domain warrants a red flag — auto-flag safety_supervision_fit, sexual_behavior_risk, and program_fit_assessment when scored 1 or 2, or if explicit disqualifiers are documented for that domain).
+
+Domain keys and prompts:
+1. safety_supervision_fit — Can Heartland safely supervise this youth given current staffing and peer population?
+2. behavioral_history_severity — Nature, frequency, and severity of behavioral concerns including aggression, self-harm, elopement, and property destruction.
+3. sexual_behavior_risk — Any history of problematic sexual behavior, adjudications, contact restrictions, or treatment requirements.
+4. mental_health_stability — Current diagnoses, psychiatric history, medication compliance, and whether clinical need exceeds group-home capacity.
+5. substance_use — Current and historical substance use, UA history, and whether use patterns create contraband or supervision risk.
+6. family_dynamics_support — Who is engaged, who is undermining, and whether family will support or sabotage placement stability.
+7. educational_engagement — Current school status, IEP or 504, behavioral history at school, and compatibility with Heartland's school-day model.
+8. treatment_history_engagement — Prior placements, why they ended, what worked, what failed, and current treatment engagement.
+9. motivation_accountability — Does the youth demonstrate readiness for change? Can he identify goals? Does he accept responsibility?
+10. program_fit_assessment — Overall compatibility with Heartland's model, peer population, and staffing capacity.
+
+Also populate screening_flags (array of strings) with any specific red flag items warranting immediate attention (e.g. "Adjudicated sexual assault — victims are minors"). Set flags_present=true if any flags exist.
+
+STEP 5 - DECISION
+Set screening_decision to exactly one of these values:
+- "RECOMMEND INTERVIEW": Hard screens pass, fit is MIXED or STRONG, services can meet needs
+- "NEED MORE INFO": Critical records missing, risk severity unclear, cannot make defensible recommendation
+- "CONDITIONAL": Hard screens pass but specific conditions must be met before interview — list conditions
+- "DENY / REDIRECT": Hard screen triggered, fit is clearly unsafe, or needs exceed scope
+
+Also set recommendation to: INTERVIEW (for RECOMMEND INTERVIEW), INTERVIEW_WITH_CONDITIONS (for CONDITIONAL or NEED MORE INFO), DECLINE (for DENY / REDIRECT).
+
+Set overall_narrative to a concise paragraph (3–6 sentences) for the "Screening Recommendation" box: summarize primary strengths, primary concerns, unresolved questions, and whether this referral is a good fit, conditional fit, or poor fit for Heartland Boys Home.
+
+OUTPUT: Return ONLY valid JSON - no preamble, no markdown fences, no text outside the JSON object.
+
 {
   "youth_name": null,
   "date_of_birth": null,
@@ -2154,18 +2187,37 @@ OUTPUT: Return ONLY valid JSON.
   "current_placement": null,
   "program_level_requested": null,
   "overall_risk_level": null,
-  "screening_decision": "RECOMMEND INTERVIEW",
-  "overall_narrative": "...",
-  "fit_rating": "STRONG",
-  "screening_domains": [
-    { "domain_key": "safety_supervision_fit", "score": 3, "narrative": "...", "is_flagged": false }
-  ],
-  "screening_flags": [],
-  "screening_followup_questions": [],
-  "conditions": [],
+  "family_contacts": { "contacts": [ { "name": null, "role": null, "relationship": null, "phone": null, "alt_phone": null, "email": null, "address": null, "city_state_zip": null, "engagement": null } ] },
+  "legal_team": { "po_phone": null, "judge": null, "attorney": null, "gal_casa": null },
+  "current_placement_contact": { "facility_name": null, "address": null, "city_state": null, "phone": null, "contact_name": null },
+  "risk_summary": { "yls_score": null, "yls_date": null, "top_drivers": [] },
+  "behavioral_flags": { "violence": null, "gang": null, "weapons": null, "elopement": null, "fire": null, "sexual_behavior": null },
+  "clinical_flags": { "psychosis": null, "suicidality": null, "hospitalizations": null, "meds": null },
+  "developmental_flags": { "asd_fasd_dd": null, "iq": null, "iep_504": null },
+  "substance_flags": { "substances": null, "frequency": null, "last_use": null },
+  "family_flags": { "guardians": null, "engagement": null, "contact_restrictions": null },
   "strengths": [],
   "barriers": [],
-  "missing_info": []
+  "missing_info": [],
+  "screen_status": "PASS",
+  "fit_rating": "MIXED",
+  "recommendation": "INTERVIEW",
+  "conditions": [],
+  "rationale_bullets": [],
+  "flags_present": false,
+  "screening_flags": [],
+  "screening_domains": [
+    { "domain_number": 1, "domain_key": "safety_supervision_fit", "score": null, "narrative": null, "is_flagged": false },
+    { "domain_number": 2, "domain_key": "behavioral_history_severity", "score": null, "narrative": null, "is_flagged": false },
+    { "domain_number": 3, "domain_key": "sexual_behavior_risk", "score": null, "narrative": null, "is_flagged": false },
+    { "domain_number": 4, "domain_key": "mental_health_stability", "score": null, "narrative": null, "is_flagged": false },
+    { "domain_number": 5, "domain_key": "substance_use", "score": null, "narrative": null, "is_flagged": false },
+    { "domain_number": 6, "domain_key": "family_dynamics_support", "score": null, "narrative": null, "is_flagged": false },
+    { "domain_number": 7, "domain_key": "educational_engagement", "score": null, "narrative": null, "is_flagged": false },
+    { "domain_number": 8, "domain_key": "treatment_history_engagement", "score": null, "narrative": null, "is_flagged": false },
+    { "domain_number": 9, "domain_key": "motivation_accountability", "score": null, "narrative": null, "is_flagged": false },
+    { "domain_number": 10, "domain_key": "program_fit_assessment", "score": null, "narrative": null, "is_flagged": false }
+  ]
 }`;
 
     const result = await aiCompletion({
@@ -2507,13 +2559,16 @@ app.use((error, req, res, next) => {
   });
 });
 
-// Create HTTP server
-const server = createServer(app);
+// Export app for serverless deployment
+export default app;
 
-// Start the server
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📱 Open http://localhost:${PORT} in your browser`);
-  console.log(`🔗 Using Supabase for data operations`);
-});
+// Start the server (only if not running on Vercel)
+if (!process.env.VERCEL) {
+  const server = createServer(app);
+  const PORT = process.env.PORT || 3000;
+  server.listen(PORT, () => {
+    console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`📱 Open http://localhost:${PORT} in your browser`);
+    console.log(`🔗 Using Supabase for data operations`);
+  });
+}

@@ -4,23 +4,45 @@ import cors from 'cors';
 import { createServer } from 'http';
 import { join, resolve } from 'path';
 import dotenv from 'dotenv';
-import OpenAI from 'openai';
+import Anthropic from '@anthropic-ai/sdk';
 import crypto from 'crypto';
 import multer from 'multer';
 import helmet from 'helmet';
-import { initializeApp, getApps } from 'firebase-admin/app';
+import { initializeApp, getApps, cert } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 
 // Load environment variables
 dotenv.config();
 
 if (getApps().length === 0) {
-  const projectId = process.env.FIREBASE_PROJECT_ID || process.env.GCLOUD_PROJECT;
+  // Support VITE_FIREBASE_PROJECT_ID as fallback — Vercel sets this for the frontend build
+  // but all Vercel dashboard env vars are available in serverless functions at runtime.
+  const projectId =
+    process.env.FIREBASE_PROJECT_ID ||
+    process.env.GCLOUD_PROJECT ||
+    process.env.VITE_FIREBASE_PROJECT_ID;
+
+  // Optional: provide a service-account JSON key for credential-based init (recommended for Vercel)
+  // Set FIREBASE_SERVICE_ACCOUNT_KEY in the Vercel dashboard as the raw JSON string of your
+  // service account key file (Project Settings → Service accounts → Generate new private key).
+  const serviceAccountRaw = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+
   console.log(`[Firebase Admin] Initializing for project: ${projectId || 'default/auto'}`);
-  if (projectId) {
-    initializeApp({ projectId });
-  } else {
-    initializeApp();
+
+  try {
+    if (serviceAccountRaw) {
+      const serviceAccount = JSON.parse(serviceAccountRaw);
+      initializeApp({ credential: cert(serviceAccount) });
+    } else if (projectId) {
+      initializeApp({ projectId });
+    } else {
+      console.warn('[Firebase Admin] No FIREBASE_PROJECT_ID set — token verification may fail. Set FIREBASE_PROJECT_ID in Vercel env vars.');
+      initializeApp();
+    }
+  } catch (initError) {
+    console.error('[Firebase Admin] Initialization error:', initError.message);
+    // Still attempt a bare init so getAuth() returns an object
+    try { initializeApp(); } catch { /* ignore duplicate app error */ }
   }
 }
 
@@ -52,23 +74,13 @@ const corsOptions = {
   credentials: true,
 };
 
-// Initialize OpenAI client
-const openai = process.env.OPENAI_API_KEY ? new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+// Initialize Anthropic client
+const anthropic = process.env.ANTHROPIC_API_KEY ? new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY,
 }) : null;
 
-// Tiered model selection offers cost-effective defaults with an optional premium tier
-const modelTiers = {
-  standard: process.env.OPENAI_MODEL_STANDARD || process.env.OPENAI_MODEL || 'gpt-4o-mini',
-  premium: process.env.OPENAI_MODEL_PREMIUM || 'gpt-4o',
-};
-
-const selectModel = (tier = 'standard') => {
-  if (tier === 'premium' && modelTiers.premium) {
-    return modelTiers.premium;
-  }
-  return modelTiers[tier] || modelTiers.standard;
-};
+const CLAUDE_MODEL = 'claude-sonnet-4-5';
+const selectModel = () => CLAUDE_MODEL;
 
 // AI Usage tracking (in-memory for this session)
 let aiUsageStats = {
@@ -222,10 +234,11 @@ const requireFirebaseAuth = async (req, res, next) => {
     req.user = await adminAuth.verifyIdToken(match[1]);
     return next();
   } catch (error) {
-    console.error('Firebase auth verification failed:', error);
+    console.error('[Firebase Auth] Token verification failed:', error?.code || error?.message || error);
     return res.status(401).json({
       error: 'Invalid authentication token',
       code: 'invalid_auth_token',
+      detail: process.env.NODE_ENV !== 'production' ? (error?.message || String(error)) : undefined,
     });
   }
 };
@@ -519,14 +532,15 @@ const mapOpenAIError = (error) => {
   if (!error) {
     return { status: 500, code: 'unknown_error', message: 'Unknown AI error', retryable: false };
   }
-  if (error.code === 'insufficient_quota') {
-    return { status: 402, code: 'insufficient_quota', message: 'OpenAI quota exceeded. Update billing or reduce usage.', retryable: false };
+  // Anthropic error codes
+  if (error.status === 401 || error.code === 'authentication_error') {
+    return { status: 401, code: 'invalid_api_key', message: 'Anthropic API key is invalid. Update ANTHROPIC_API_KEY.', retryable: false };
   }
-  if (error.code === 'invalid_api_key') {
-    return { status: 401, code: 'invalid_api_key', message: 'OpenAI API key is invalid. Update OPENAI_API_KEY.', retryable: false };
+  if (error.status === 429 || error.code === 'rate_limit_error') {
+    return { status: 429, code: 'rate_limit_exceeded', message: 'Anthropic rate limit reached. Retry shortly.', retryable: true };
   }
-  if (error.code === 'rate_limit_exceeded') {
-    return { status: 429, code: 'rate_limit_exceeded', message: 'OpenAI rate limit reached. Retry shortly.', retryable: true };
+  if (error.status === 529 || error.code === 'overloaded_error') {
+    return { status: 503, code: 'ai_overloaded', message: 'Anthropic is temporarily overloaded. Retry shortly.', retryable: true };
   }
   if (error.name === 'AbortError') {
     return { status: 408, code: 'request_timeout', message: 'AI request timed out. Retry with less input context.', retryable: true };
@@ -600,7 +614,7 @@ const aiCompletion = async ({
   cacheTtlMs = AI_CACHE_TTL_MS,
 }) => {
   const requestId = getRequestId();
-  if (!openai) {
+  if (!anthropic) {
     return {
       requestId,
       unavailable: true,
@@ -619,21 +633,25 @@ const aiCompletion = async ({
     };
   }
 
-  const completion = await openai.chat.completions.create({
+  // Anthropic: system is a top-level param; JSON mode is instructed in the system prompt
+  const resolvedSystem = json
+    ? `${systemPrompt}\n\nRespond ONLY with valid JSON. Do not include markdown code fences.`
+    : systemPrompt;
+
+  const message = await anthropic.messages.create({
     model,
-    messages: [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userPrompt },
-    ],
+    system: resolvedSystem,
+    messages: [{ role: 'user', content: userPrompt }],
     max_tokens: maxTokens,
     temperature,
-    ...(json ? { response_format: { type: 'json_object' } } : {}),
   });
 
-  const content = completion.choices[0]?.message?.content || '';
-  const usage = completion.usage || null;
-  incrementTokenUsage(req, usage?.total_tokens || 0);
-  logAIUsage(true, usage?.total_tokens || 0);
+  const content = message.content[0]?.text || '';
+  const rawUsage = message.usage || null;
+  const totalTokens = rawUsage ? (rawUsage.input_tokens || 0) + (rawUsage.output_tokens || 0) : 0;
+  const usage = rawUsage ? { input_tokens: rawUsage.input_tokens, output_tokens: rawUsage.output_tokens, total_tokens: totalTokens } : null;
+  incrementTokenUsage(req, totalTokens);
+  logAIUsage(true, totalTokens);
 
   const payload = {
     content,
@@ -701,7 +719,7 @@ app.post('/api/ai/summarize-report', async (req, res) => {
 
     if (result.unavailable) {
       return res.status(503).json({
-        error: 'OpenAI service not configured. Please set OPENAI_API_KEY environment variable.',
+        error: 'Anthropic service not configured. Please set ANTHROPIC_API_KEY environment variable.',
         fallback: true,
         requestId: result.requestId,
       });
@@ -791,10 +809,10 @@ app.get('/api/ai/status', async (req, res) => {
       perClient: { requests: AI_CLIENT_DAILY_REQUEST_LIMIT, tokens: AI_CLIENT_DAILY_TOKEN_LIMIT },
     };
 
-    if (!openai) {
+    if (!anthropic) {
       return res.json({
         available: false,
-        error: 'OpenAI API key not configured',
+        error: 'Anthropic API key not configured',
         configured: false,
         models: modelTiers,
         limits,
@@ -805,18 +823,17 @@ app.get('/api/ai/status', async (req, res) => {
 
     const healthModel = selectModel('standard');
 
-    // Test the OpenAI connection with a minimal request
-    const testCompletion = await openai.chat.completions.create({
+    // Test the Anthropic connection with a minimal request
+    const testMessage = await anthropic.messages.create({
       model: healthModel,
       messages: [{ role: 'user', content: 'Test' }],
       max_tokens: 1,
-      temperature: 0,
     });
 
     res.json({
       available: true,
       configured: true,
-      model: testCompletion.model || healthModel,
+      model: testMessage.model || healthModel,
       models: modelTiers,
       status: 'operational',
       usage: aiUsageStats,
@@ -829,12 +846,12 @@ app.get('/api/ai/status', async (req, res) => {
     console.error('AI status check failed:', error);
 
     let errorMessage = 'Unknown error';
-    if (error.code === 'insufficient_quota') {
-      errorMessage = 'API quota exceeded';
-    } else if (error.code === 'invalid_api_key') {
+    if (error.status === 401 || error.code === 'authentication_error') {
       errorMessage = 'Invalid API key';
-    } else if (error.code === 'model_not_found') {
-      errorMessage = 'Model not available';
+    } else if (error.status === 429 || error.code === 'rate_limit_error') {
+      errorMessage = 'Rate limit reached';
+    } else if (error.status === 529) {
+      errorMessage = 'Anthropic overloaded';
     }
 
     res.json({
@@ -1312,25 +1329,25 @@ app.post('/api/ai/query-stream', async (req, res) => {
       res.write(`data: ${JSON.stringify(payload)}\n\n`);
     };
 
-    sendEvent('meta', { requestId, model: selectModel(isTextExpansion ? 'premium' : 'standard') });
+    const streamModel = selectModel(isTextExpansion ? 'premium' : 'standard');
+    sendEvent('meta', { requestId, model: streamModel });
 
-    const stream = await openai.chat.completions.create({
-      model: selectModel(isTextExpansion ? 'premium' : 'standard'),
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-      ],
+    const stream = anthropic.messages.stream({
+      model: streamModel,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userPrompt }],
       max_tokens: isTextExpansion ? 420 : 1100,
       temperature: isTextExpansion ? 0.45 : 0.2,
-      stream: true,
     });
 
     let fullText = '';
     for await (const chunk of stream) {
-      const delta = chunk?.choices?.[0]?.delta?.content || '';
-      if (!delta) continue;
-      fullText += delta;
-      sendEvent('chunk', { delta });
+      if (chunk.type === 'content_block_delta' && chunk.delta?.type === 'text_delta') {
+        const delta = chunk.delta.text || '';
+        if (!delta) continue;
+        fullText += delta;
+        sendEvent('chunk', { delta });
+      }
     }
 
     // Estimate tokens for streaming responses where usage may not be available

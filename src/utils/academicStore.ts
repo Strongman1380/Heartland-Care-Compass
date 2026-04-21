@@ -58,7 +58,7 @@ export const listCredits = async (): Promise<CreditsEarned[]> => {
   const rows = await academicsService.credits.list();
   return rows.map(row => ({
     id: row.id,
-    student_id: row.student_id,
+    student_id: row.youth_id || row.student_id,
     date_earned: row.date_earned,
     credit_value: row.credit_value,
     createdAt: row.created_at,
@@ -82,7 +82,7 @@ export const saveCredit = async (data: Omit<CreditsEarned, "id" | "createdAt" | 
   const result = await academicsService.credits.save(payload);
   return {
     id: result.id,
-    student_id: result.student_id,
+    student_id: result.youth_id || result.student_id,
     date_earned: result.date_earned,
     credit_value: result.credit_value,
     createdAt: result.created_at,
@@ -99,7 +99,7 @@ export const listGrades = async (): Promise<Grade[]> => {
   const rows = await academicsService.grades.list();
   return rows.map(row => ({
     id: row.id,
-    student_id: row.student_id,
+    student_id: row.youth_id || row.student_id,
     date_entered: row.date_entered,
     grade_value: row.grade_value,
     course_name: (row as any).course_name,
@@ -125,7 +125,7 @@ export const saveGrade = async (data: Omit<Grade, "id" | "createdAt" | "updatedA
   const result = await academicsService.grades.save(payload);
   return {
     id: result.id,
-    student_id: result.student_id,
+    student_id: result.youth_id || result.student_id,
     date_entered: result.date_entered,
     grade_value: result.grade_value,
     course_name: (result as any).course_name,
@@ -143,7 +143,7 @@ export const listSteps = async (): Promise<StepsCompleted[]> => {
   const rows = await academicsService.steps.list();
   return rows.map(row => ({
     id: row.id,
-    student_id: row.student_id,
+    student_id: row.youth_id || row.student_id,
     date_completed: row.date_completed,
     steps_count: row.steps_count,
     createdAt: row.created_at,
@@ -167,7 +167,7 @@ export const saveStep = async (data: Omit<StepsCompleted, "id" | "createdAt" | "
   const result = await academicsService.steps.save(payload);
   return {
     id: result.id,
-    student_id: result.student_id,
+    student_id: result.youth_id || result.student_id,
     date_completed: result.date_completed,
     steps_count: result.steps_count,
     createdAt: result.created_at,

@@ -11,32 +11,61 @@ import {
   writeBatch,
 } from 'firebase/firestore'
 import type { FacilityIncidentReport } from '@/types/facility-incident-types'
+import { youthService } from '@/integrations/firebase/services'
+import { auditLogService } from '@/integrations/firebase/auditLogService'
+import { dateOnlyIso, nowIso, stripUndefinedDeep, withFirestoreMeta } from '@/integrations/firebase/dataGovernance'
 
 const COLLECTION = 'facility_incidents'
-
-function stripUndefinedDeep<T>(value: T): T {
-  if (Array.isArray(value)) {
-    return value
-      .map((item) => stripUndefinedDeep(item))
-      .filter((item) => item !== undefined) as T
-  }
-
-  if (value && typeof value === 'object') {
-    const result: Record<string, unknown> = {}
-    Object.entries(value as Record<string, unknown>).forEach(([key, val]) => {
-      if (val === undefined) return
-      result[key] = stripUndefinedDeep(val)
-    })
-    return result as T
-  }
-
-  return value
-}
 
 function generateId(): string {
   const year = new Date().getFullYear()
   const rand = Math.floor(Math.random() * 100000).toString().padStart(5, '0')
   return `HBH-IR-${year}-${rand}`
+}
+
+async function resolveYouthId(report: Partial<FacilityIncidentReport>): Promise<string | undefined> {
+  if (report.youth_id) return report.youth_id
+  if (report.subjectType !== 'Resident') return undefined
+
+  const targetFirst = (report.firstName || '').trim().toLowerCase()
+  const targetLast = (report.lastName || '').trim().toLowerCase()
+  if (!targetFirst || !targetLast) return undefined
+
+  const youth = (await youthService.getAllIncludingArchived()).find(
+    (item) => item.firstName.trim().toLowerCase() === targetFirst && item.lastName.trim().toLowerCase() === targetLast
+  )
+  return youth?.id
+}
+
+async function normalizeIncident(report: Partial<FacilityIncidentReport> & { id?: string }, isNew: boolean, existing?: Record<string, unknown> | null): Promise<FacilityIncidentReport> {
+  const id = report.id || generateId()
+  const youthId = await resolveYouthId(report)
+  const normalizedYouthInvolved = (report.youthInvolved || []).map((item) => {
+    const normalized = { ...item }
+    if (!normalized.youth_id && youthId && normalized.role === 'primary') {
+      normalized.youth_id = youthId
+    }
+    return normalized
+  })
+  const base = withFirestoreMeta(stripUndefinedDeep({
+    ...(existing || {}),
+    ...report,
+    id,
+    youth_id: youthId || report.youth_id,
+    event_date: report.dateOfIncident ? dateOnlyIso(report.dateOfIncident) : existing?.event_date,
+    dateOfIncident: report.dateOfIncident ? dateOnlyIso(report.dateOfIncident) : existing?.dateOfIncident,
+    reportDate: report.reportDate ? dateOnlyIso(report.reportDate) : existing?.reportDate,
+    signatureDate: report.signatureDate ? dateOnlyIso(report.signatureDate) : existing?.signatureDate,
+    youthName: report.youthName || [report.lastName, [report.firstName, report.initial].filter(Boolean).join(' ')].filter(Boolean).join(', '),
+    youthInvolved: normalizedYouthInvolved,
+    schema_version: 2,
+  }), {
+    isNew,
+    createdBy: report.created_by || report.submittedBy || report.staffCompletingReport || null,
+    updatedBy: report.updated_by || report.submittedBy || report.staffCompletingReport || null,
+    source: report.source || 'manual',
+  })
+  return base as FacilityIncidentReport
 }
 
 export const incidentReportsService = {
@@ -54,41 +83,69 @@ export const incidentReportsService = {
 
   async save(report: Partial<FacilityIncidentReport> & { id?: string }): Promise<FacilityIncidentReport> {
     const id = report.id || generateId()
-    const now = new Date().toISOString()
-    const data = stripUndefinedDeep({
-      ...report,
-      id,
-      updatedAt: now,
-      createdAt: report.createdAt || now,
+    const ref = doc(db, COLLECTION, id)
+    const existingSnap = report.id ? await getDoc(ref) : null
+    const existing = existingSnap?.exists() ? (existingSnap.data() as Record<string, unknown>) : null
+    const data = await normalizeIncident(report, !existingSnap?.exists(), existing)
+    await setDoc(ref, data, { merge: true })
+    await auditLogService.log({
+      entity_type: 'facility_incident',
+      entity_id: id,
+      action: existing ? 'update' : 'create',
+      youth_id: data.youth_id,
+      changed_at: data.updatedAt,
+      changed_by: data.updated_by || data.created_by || data.submittedBy || null,
+      source: data.source || 'manual',
+      before: existing,
+      after: data as unknown as Record<string, unknown>,
     })
-    await setDoc(doc(db, COLLECTION, id), data, { merge: true })
     const snap = await getDoc(doc(db, COLLECTION, id))
     return { id: snap.id, ...snap.data() } as FacilityIncidentReport
   },
 
   async saveBulk(reports: Partial<FacilityIncidentReport>[]): Promise<string[]> {
     const batch = writeBatch(db)
-    const now = new Date().toISOString()
     const createdIds: string[] = []
 
-    reports.forEach((report) => {
+    for (const report of reports) {
       const id = report.id || generateId()
-      const data = stripUndefinedDeep({
-        ...report,
-        id,
-        updatedAt: now,
-        createdAt: report.createdAt || now,
-      })
+      const data = await normalizeIncident(report, !report.id, null)
       const docRef = doc(db, COLLECTION, id)
       batch.set(docRef, data, { merge: true })
       createdIds.push(id)
-    })
+    }
 
     await batch.commit()
+    await Promise.all(createdIds.map((id, index) => auditLogService.log({
+      entity_type: 'facility_incident',
+      entity_id: id,
+      action: 'create',
+      youth_id: reports[index].youth_id,
+      changed_at: nowIso(),
+      changed_by: reports[index].submittedBy || reports[index].staffCompletingReport || null,
+      source: reports[index].source || 'import',
+      after: reports[index] as Record<string, unknown>,
+      metadata: { bulk: true },
+    })))
     return createdIds
   },
 
   async delete(id: string): Promise<void> {
-    await deleteDoc(doc(db, COLLECTION, id))
+    const ref = doc(db, COLLECTION, id)
+    const existing = await getDoc(ref)
+    await deleteDoc(ref)
+    if (existing.exists()) {
+      const row = { id: existing.id, ...existing.data() } as FacilityIncidentReport
+      await auditLogService.log({
+        entity_type: 'facility_incident',
+        entity_id: id,
+        action: 'delete',
+        youth_id: row.youth_id,
+        changed_at: nowIso(),
+        changed_by: row.updated_by || row.created_by || row.submittedBy || null,
+        source: row.source || 'manual',
+        before: row as unknown as Record<string, unknown>,
+      })
+    }
   },
 }

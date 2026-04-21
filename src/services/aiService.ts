@@ -113,7 +113,7 @@ async function makeAIRequest<T>(
       // Add Firebase auth token if available
       if (typeof window !== 'undefined' && auth.currentUser) {
         try {
-          const token = await auth.currentUser.getIdToken();
+          const token = await auth.currentUser.getIdToken(true);
           headers['Authorization'] = `Bearer ${token}`;
         } catch (tokenError) {
           logger.warn('Could not retrieve Firebase token:', {
@@ -245,7 +245,7 @@ export async function queryDataStream(
 
   if (typeof window !== 'undefined' && auth.currentUser) {
     try {
-      const token = await auth.currentUser.getIdToken();
+      const token = await auth.currentUser.getIdToken(true);
       headers['Authorization'] = `Bearer ${token}`;
     } catch (tokenError) {
       logger.warn('Could not retrieve Firebase token for stream:', tokenError);
@@ -729,7 +729,7 @@ export async function generateBehavioralInsights(
 
   return {
     ...response,
-    data: response.data?.insights || response.data,
+    data: (response.data as any)?.insights || response.data,
   };
 }
 
@@ -815,7 +815,7 @@ export async function checkAIStatus(): Promise<AIServiceStatus> {
 
     if (typeof window !== 'undefined' && auth.currentUser) {
       try {
-        const token = await auth.currentUser.getIdToken();
+        const token = await auth.currentUser.getIdToken(true);
         headers['Authorization'] = `Bearer ${token}`;
       } catch (tokenError) {
         logger.warn('Could not retrieve Firebase token for AI status check', {

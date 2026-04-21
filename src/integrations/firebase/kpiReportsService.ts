@@ -11,6 +11,8 @@ import {
   updateDoc,
 } from "firebase/firestore";
 import { v4 as uuidv4 } from "uuid";
+import { auditLogService } from "@/integrations/firebase/auditLogService";
+import { stripUndefinedDeep, withFirestoreMeta } from "@/integrations/firebase/dataGovernance";
 
 export type KpiReportRow = {
   id: string;
@@ -45,31 +47,72 @@ export const kpiReportsService = {
   ): Promise<KpiReportRow> {
     const isNew = !row.id;
     const id = row.id || uuidv4();
-    const now = new Date().toISOString();
-    const data: Record<string, unknown> = {
-      ...row,
-      id,
-      updated_at: now,
-    };
-    if (isNew) {
-      data.created_at = now;
-    }
-    await setDoc(doc(db, COLLECTION, id), data, { merge: true });
+    const ref = doc(db, COLLECTION, id);
+    const existing = row.id ? await getDoc(ref) : null;
+    const existingData = existing?.exists() ? (existing.data() as Record<string, unknown>) : null;
+    const data: Record<string, unknown> = withFirestoreMeta(
+      stripUndefinedDeep({
+        ...(existingData || {}),
+        ...row,
+        id,
+      }),
+      {
+        isNew,
+        createdBy: row.generated_by || null,
+        updatedBy: row.generated_by || null,
+        source: "assessment-kpi",
+      }
+    );
+    await setDoc(ref, data, { merge: true });
+    await auditLogService.log({
+      entity_type: "kpi_report",
+      entity_id: id,
+      action: existingData ? "update" : "create",
+      changed_at: String(data.updated_at),
+      changed_by: row.generated_by || null,
+      source: "assessment-kpi",
+      before: existingData,
+      after: data,
+      metadata: { timeframe: row.timeframe },
+    });
     return { ...data, id } as unknown as KpiReportRow;
   },
 
   async update(id: string, updates: Partial<KpiReportRow>): Promise<KpiReportRow> {
     const ref = doc(db, COLLECTION, id);
+    const before = await getDoc(ref);
+    const beforeData = before.exists() ? (before.data() as Record<string, unknown>) : null;
     const { id: _id, created_at: _createdAt, ...allowed } = updates;
     await updateDoc(ref, { ...allowed, updated_at: new Date().toISOString() } as Record<string, unknown>);
     const snap = await getDoc(ref);
     const snapData = snap.data();
     if (!snapData) throw new Error(`KPI report not found after update: ${id}`);
+    await auditLogService.log({
+      entity_type: "kpi_report",
+      entity_id: id,
+      action: "update",
+      changed_at: String(snapData.updated_at || new Date().toISOString()),
+      changed_by: updates.generated_by || null,
+      source: "assessment-kpi",
+      before: beforeData,
+      after: snapData as Record<string, unknown>,
+    });
     return { id: snap.id, ...snapData } as KpiReportRow;
   },
 
   async delete(id: string): Promise<void> {
-    await deleteDoc(doc(db, COLLECTION, id));
+    const ref = doc(db, COLLECTION, id);
+    const before = await getDoc(ref);
+    await deleteDoc(ref);
+    if (before.exists()) {
+      await auditLogService.log({
+        entity_type: "kpi_report",
+        entity_id: id,
+        action: "delete",
+        changed_at: new Date().toISOString(),
+        source: "assessment-kpi",
+        before: before.data() as Record<string, unknown>,
+      });
+    }
   },
 };
-

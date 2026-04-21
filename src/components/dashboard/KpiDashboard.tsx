@@ -1,8 +1,17 @@
-import { useEffect, useMemo, useState, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { format, subDays, startOfMonth, differenceInDays, isValid, startOfDay, endOfDay } from "date-fns";
+import {
+  differenceInDays,
+  endOfDay,
+  format,
+  formatDistanceToNowStrict,
+  isValid,
+  startOfDay,
+  startOfMonth,
+  subDays,
+} from "date-fns";
 import {
   AlertCircle, TrendingDown, TrendingUp, FileText, ShieldAlert, Activity,
   Users, BookOpen, Star, BarChart3
@@ -18,6 +27,13 @@ import { academicsService, type CreditRow, type GradeRow, type StepRow } from "@
 import { notesService, type NoteRow } from "@/integrations/firebase/notesService";
 import type { FacilityIncidentReport } from "@/types/facility-incident-types";
 import { aggregateCaseNoteKpis } from "@/utils/kpiCaseNoteAi";
+import {
+  calculateCoveragePercent,
+  calculateStaleDays,
+  describePeriodDelta,
+  getLatestActivityAt,
+  incidentMatchesYouth,
+} from "@/utils/kpiDashboard";
 import { useTodayPoints } from "@/hooks/useTodayPoints";
 
 interface KpiDashboardProps {
@@ -91,49 +107,69 @@ export const KpiDashboard = ({ youthId, youth }: KpiDashboardProps) => {
   const [steps, setSteps] = useState<StepRow[]>([]);
   const [referralNotes, setReferralNotes] = useState<NoteRow[]>([]);
   const [extrasLoading, setExtrasLoading] = useState(true);
+  const [lastSyncedAt, setLastSyncedAt] = useState<string>("");
+  const isMountedRef = useRef(true);
   const { todayPoints } = useTodayPoints(youthId);
 
   const { caseNotes: notesData, loading: notesLoading } = useCaseNotes(youthId);
   const { behaviorPoints, loading: pointsLoading } = useBehaviorPoints(youthId);
   const { dailyRatings, loading: ratingsLoading } = useDailyRatings(youthId);
 
+  const fetchExtras = useCallback(async () => {
+    try {
+      setExtrasLoading(true);
+      const [incidentData, creditData, gradeData, stepData, allNotes] = await Promise.all([
+        incidentReportsService.list().catch(() => []),
+        academicsService.credits.list().catch(() => []),
+        academicsService.grades.list().catch(() => []),
+        academicsService.steps.list().catch(() => []),
+        notesService.listForYouth(youthId).catch(() => []),
+      ]);
+      if (!isMountedRef.current) return;
+      setIncidents(incidentData);
+      setCredits(creditData);
+      setGrades(gradeData);
+      setSteps(stepData);
+      const referrals = allNotes.filter((row) => {
+        if ((row.category || "").toLowerCase() === "referral") return true;
+        try {
+          const parsed = JSON.parse(row.text);
+          return parsed?.noteType === "referral" || Boolean(parsed?.referralData);
+        } catch {
+          return false;
+        }
+      });
+      setReferralNotes(referrals);
+      setLastSyncedAt(new Date().toISOString());
+    } catch {
+      // Silently handle — cards will show zero state
+    } finally {
+      if (isMountedRef.current) setExtrasLoading(false);
+    }
+  }, [youthId]);
+
   // Fetch incident reports and academic data
   useEffect(() => {
-    let cancelled = false;
-    const fetchExtras = async () => {
-      try {
-        setExtrasLoading(true);
-        const [incidentData, creditData, gradeData, stepData, allNotes] = await Promise.all([
-          incidentReportsService.list().catch(() => []),
-          academicsService.credits.list().catch(() => []),
-          academicsService.grades.list().catch(() => []),
-          academicsService.steps.list().catch(() => []),
-          notesService.listForYouth(youthId).catch(() => []),
-        ]);
-        if (cancelled) return;
-        setIncidents(incidentData);
-        setCredits(creditData);
-        setGrades(gradeData);
-        setSteps(stepData);
-        const referrals = allNotes.filter((row) => {
-          if ((row.category || "").toLowerCase() === "referral") return true;
-          try {
-            const parsed = JSON.parse(row.text);
-            return parsed?.noteType === "referral" || Boolean(parsed?.referralData);
-          } catch {
-            return false;
-          }
-        });
-        setReferralNotes(referrals);
-      } catch {
-        // Silently handle — cards will show zero state
-      } finally {
-        if (!cancelled) setExtrasLoading(false);
+    isMountedRef.current = true;
+    void fetchExtras();
+
+    const interval = window.setInterval(() => {
+      void fetchExtras();
+    }, 60000);
+
+    const onVisible = () => {
+      if (!document.hidden) {
+        void fetchExtras();
       }
     };
-    fetchExtras();
-    return () => { cancelled = true; };
-  }, [youthId]);
+    document.addEventListener("visibilitychange", onVisible);
+
+    return () => {
+      isMountedRef.current = false;
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [fetchExtras]);
 
   const analytics = useMemo(() => {
     const windowEnd = endOfDay(new Date());
@@ -153,11 +189,20 @@ export const KpiDashboard = ({ youthId, youth }: KpiDashboardProps) => {
     };
 
     const daySpan = Math.max(1, differenceInDays(windowEnd, startDate) + 1);
+    const previousStartDate = startOfDay(subDays(startDate, daySpan));
+
+    const inPreviousRange = (dateStr: string | null | undefined): boolean => {
+      if (!dateStr) return false;
+      const d = new Date(dateStr);
+      return !Number.isNaN(d.getTime()) && d >= previousStartDate && d < startDate;
+    };
 
     // --- Case Notes ---
     const filteredNotes = notesData.filter((n) => inRange(n.date || n.createdAt));
+    const previousNotes = notesData.filter((n) => inPreviousRange(n.date || n.createdAt));
     const aiAggregate = aggregateCaseNoteKpis(filteredNotes);
     const filteredReferralNotes = referralNotes.filter((r) => inRange(r.created_at));
+    const previousReferralNotes = referralNotes.filter((r) => inPreviousRange(r.created_at));
     const referralMeta = filteredReferralNotes.reduce(
       (acc, row) => {
         let parsed: any = null;
@@ -233,6 +278,7 @@ export const KpiDashboard = ({ youthId, youth }: KpiDashboardProps) => {
 
     // --- Daily Ratings (actual domain scores) ---
     const filteredRatings = dailyRatings.filter((r) => inRange(r.date || r.createdAt));
+    const previousRatings = dailyRatings.filter((r) => inPreviousRange(r.date || r.createdAt));
     const domainTotals = { peer: 0, adult: 0, investment: 0, authority: 0, count: 0 };
     filteredRatings.forEach((r) => {
       if (r.peerInteraction != null) {
@@ -289,7 +335,9 @@ export const KpiDashboard = ({ youthId, youth }: KpiDashboardProps) => {
 
     // --- Behavior Points ---
     const filteredPoints = behaviorPoints.filter((p) => inRange(p.date || p.createdAt));
+    const previousPoints = behaviorPoints.filter((p) => inPreviousRange(p.date || p.createdAt));
     const totalPointsSum = filteredPoints.reduce((sum, p) => sum + (p.totalPoints || 0), 0);
+    const previousTotalPointsSum = previousPoints.reduce((sum, p) => sum + (p.totalPoints || 0), 0);
     const avgPointsPerEntry = filteredPoints.length
       ? Number((totalPointsSum / filteredPoints.length).toFixed(1))
       : 0;
@@ -310,14 +358,9 @@ export const KpiDashboard = ({ youthId, youth }: KpiDashboardProps) => {
       .map(([, { label, total }]) => ({ date: label, points: total }));
 
     // --- Incident Reports ---
-    const youthFullName = `${youth.firstName} ${youth.lastName}`.trim().toLowerCase();
-    const youthIncidents = incidents.filter((inc) => {
-      // Strict equality match on normalized full name
-      if (inc.youthName?.trim().toLowerCase() === youthFullName) return true;
-      if (inc.youthInvolved?.some((y) => y.name?.trim().toLowerCase() === youthFullName)) return true;
-      return false;
-    });
+    const youthIncidents = incidents.filter((inc) => incidentMatchesYouth(inc, youth));
     const filteredIncidents = youthIncidents.filter((inc) => inRange(inc.dateOfIncident));
+    const previousIncidents = youthIncidents.filter((inc) => inPreviousRange(inc.dateOfIncident));
 
     // Incident type breakdown
     const incidentTypeCounts: Record<string, number> = {};
@@ -331,9 +374,12 @@ export const KpiDashboard = ({ youthId, youth }: KpiDashboardProps) => {
       .map(([name, value]) => ({ name, value }));
 
     // --- Academics ---
-    const youthCredits = credits.filter((c) => c.student_id?.toString() === youthId?.toString() && inRange(c.date_earned));
-    const youthGrades = grades.filter((g) => g.student_id?.toString() === youthId?.toString() && inRange(g.date_entered));
-    const youthSteps = steps.filter((s) => s.student_id?.toString() === youthId?.toString() && inRange(s.date_completed));
+    const allYouthCredits = credits.filter((c) => c.student_id?.toString() === youthId?.toString());
+    const allYouthGrades = grades.filter((g) => g.student_id?.toString() === youthId?.toString());
+    const allYouthSteps = steps.filter((s) => s.student_id?.toString() === youthId?.toString());
+    const youthCredits = allYouthCredits.filter((c) => inRange(c.date_earned));
+    const youthGrades = allYouthGrades.filter((g) => inRange(g.date_entered));
+    const youthSteps = allYouthSteps.filter((s) => inRange(s.date_completed));
 
     const totalCredits = youthCredits.reduce((sum, c) => sum + (c.credit_value || 0), 0);
     const avgGrade = youthGrades.length
@@ -341,6 +387,45 @@ export const KpiDashboard = ({ youthId, youth }: KpiDashboardProps) => {
       : null;
     const totalSteps = youthSteps.reduce((sum, s) => sum + (s.steps_count || 0), 0);
     const gradeClassification = avgGrade !== null ? classifyGrade(avgGrade) : null;
+    const activityDates = [
+      ...notesData.map((note) => note.date || note.createdAt),
+      ...referralNotes.map((note) => note.created_at),
+      ...dailyRatings.map((rating) => rating.date || rating.createdAt),
+      ...behaviorPoints.map((point) => point.date || point.createdAt),
+      ...youthIncidents.map((incident) => incident.dateOfIncident),
+      ...allYouthCredits.map((credit) => credit.date_earned),
+      ...allYouthGrades.map((grade) => grade.date_entered),
+      ...allYouthSteps.map((step) => step.date_completed),
+    ];
+    const currentActivityDates = [
+      ...filteredNotes.map((note) => note.date || note.createdAt),
+      ...filteredReferralNotes.map((note) => note.created_at),
+      ...filteredRatings.map((rating) => rating.date || rating.createdAt),
+      ...filteredPoints.map((point) => point.date || point.createdAt),
+      ...filteredIncidents.map((incident) => incident.dateOfIncident),
+      ...youthCredits.map((credit) => credit.date_earned),
+      ...youthGrades.map((grade) => grade.date_entered),
+      ...youthSteps.map((step) => step.date_completed),
+    ];
+    const lastActivityAt = getLatestActivityAt(activityDates);
+    const staleDays = calculateStaleDays(lastActivityAt);
+    const activityCoveragePercent = calculateCoveragePercent(currentActivityDates, daySpan);
+    const activeSourceCount = [
+      filteredNotes.length > 0,
+      filteredReferralNotes.length > 0,
+      filteredRatings.length > 0,
+      filteredPoints.length > 0,
+      filteredIncidents.length > 0,
+      youthCredits.length + youthGrades.length + youthSteps.length > 0,
+    ].filter(Boolean).length;
+    const anyDataOnFile = [
+      notesData.length,
+      referralNotes.length,
+      dailyRatings.length,
+      behaviorPoints.length,
+      youthIncidents.length,
+      allYouthCredits.length + allYouthGrades.length + allYouthSteps.length,
+    ].some((count) => count > 0);
 
     return {
       // Case note AI analysis
@@ -376,6 +461,17 @@ export const KpiDashboard = ({ youthId, youth }: KpiDashboardProps) => {
       totalSteps,
       gradeClassification,
       gradeEntries: youthGrades.length,
+      activeSourceCount,
+      activityCoveragePercent,
+      anyDataOnFile,
+      lastActivityAt,
+      staleDays,
+      previousComparisons: {
+        documentation: describePeriodDelta(filteredNotes.length + filteredReferralNotes.length, previousNotes.length + previousReferralNotes.length),
+        points: describePeriodDelta(totalPointsSum, previousTotalPointsSum),
+        ratings: describePeriodDelta(filteredRatings.length, previousRatings.length),
+        incidents: describePeriodDelta(filteredIncidents.length, previousIncidents.length),
+      },
       // General
       notesPerDay: Number((filteredNotes.length / daySpan).toFixed(1)),
       documentationPerDay: Number(((filteredNotes.length + filteredReferralNotes.length) / daySpan).toFixed(1)),
@@ -396,7 +492,10 @@ export const KpiDashboard = ({ youthId, youth }: KpiDashboardProps) => {
     );
   }
 
-  const hasAnyData = notesData.length > 0 || referralNotes.length > 0 || behaviorPoints.length > 0 || dailyRatings.length > 0 || incidents.length > 0 || credits.length > 0 || grades.length > 0 || steps.length > 0;
+  const hasAnyData = analytics.anyDataOnFile;
+  const freshnessLabel = analytics.lastActivityAt
+    ? `${formatDistanceToNowStrict(new Date(analytics.lastActivityAt), { addSuffix: true })}`
+    : "No activity yet";
 
   return (
     <div className="space-y-6">
@@ -406,6 +505,22 @@ export const KpiDashboard = ({ youthId, youth }: KpiDashboardProps) => {
           <p className="text-muted-foreground mb-4">
             Live KPIs from ratings, points, notes, incidents, and academics for {youth.firstName}.
           </p>
+          <div className="flex flex-wrap gap-2">
+            <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30">
+              {analytics.activeSourceCount}/6 sources active
+            </Badge>
+            <Badge variant="outline" className="bg-secondary/20 text-secondary-foreground border-secondary/40">
+              {analytics.activityCoveragePercent}% day coverage
+            </Badge>
+            <Badge variant="outline" className="bg-muted text-muted-foreground border-border">
+              Last activity {freshnessLabel}
+            </Badge>
+            {lastSyncedAt && (
+              <Badge variant="outline" className="bg-muted text-muted-foreground border-border">
+                Synced {format(new Date(lastSyncedAt), "MMM d, h:mm a")}
+              </Badge>
+            )}
+          </div>
         </div>
         <Select value={timeframe} onValueChange={(value) => setTimeframe(value as Timeframe)}>
           <SelectTrigger className="w-full sm:w-[180px]">
@@ -470,6 +585,7 @@ export const KpiDashboard = ({ youthId, youth }: KpiDashboardProps) => {
             <p className="text-xs text-muted-foreground">
               Avg entry: {analytics.avgPointsPerEntry || "--"}
             </p>
+            <p className="text-xs text-muted-foreground mt-1">{analytics.previousComparisons.points}</p>
           </CardContent>
         </Card>
 
@@ -482,6 +598,7 @@ export const KpiDashboard = ({ youthId, youth }: KpiDashboardProps) => {
           <CardContent>
             <div className="text-2xl font-bold">{analytics.ratingsCount}</div>
             <p className="text-xs text-muted-foreground">in period</p>
+            <p className="text-xs text-muted-foreground mt-1">{analytics.previousComparisons.ratings}</p>
           </CardContent>
         </Card>
 
@@ -499,6 +616,7 @@ export const KpiDashboard = ({ youthId, youth }: KpiDashboardProps) => {
             <p className="text-xs text-muted-foreground mt-1">
               {analytics.aiAggregate.noteCount} case | {analytics.referralCount} referral
             </p>
+            <p className="text-xs text-muted-foreground mt-1">{analytics.previousComparisons.documentation}</p>
           </CardContent>
         </Card>
 
@@ -511,6 +629,7 @@ export const KpiDashboard = ({ youthId, youth }: KpiDashboardProps) => {
           <CardContent>
             <div className="text-2xl font-bold">{analytics.incidentCount}</div>
             <p className="text-xs text-muted-foreground">{analytics.totalIncidents} total on file</p>
+            <p className="text-xs text-muted-foreground mt-1">{analytics.previousComparisons.incidents}</p>
           </CardContent>
         </Card>
 
@@ -526,6 +645,9 @@ export const KpiDashboard = ({ youthId, youth }: KpiDashboardProps) => {
               <p className={`text-xs font-medium mt-1 ${GRADE_LABELS[analytics.gradeClassification!]?.color || ""}`}>
                 {analytics.avgGrade} avg ({GRADE_LABELS[analytics.gradeClassification!]?.label})
               </p>
+            )}
+            {analytics.totalSteps > 0 && (
+              <p className="text-xs text-muted-foreground mt-1">{analytics.totalSteps} academic steps</p>
             )}
           </CardContent>
         </Card>
@@ -634,10 +756,24 @@ export const KpiDashboard = ({ youthId, youth }: KpiDashboardProps) => {
                   <span className="font-medium">{(todayPoints ?? 0).toLocaleString()}</span>
                 </div>
               )}
+              {analytics.lastActivityAt && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Last Activity</span>
+                  <span className="font-medium">{safeFormatDate(analytics.lastActivityAt, "MMM d, h:mm a")}</span>
+                </div>
+              )}
               {youth.pointTotal != null && (
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Lifetime Points</span>
                   <span className="font-medium">{youth.pointTotal.toLocaleString()}</span>
+                </div>
+              )}
+              {analytics.staleDays !== null && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Data Freshness</span>
+                  <span className="font-medium">
+                    {analytics.staleDays === 0 ? "Updated today" : `${analytics.staleDays} day${analytics.staleDays === 1 ? "" : "s"} old`}
+                  </span>
                 </div>
               )}
               {analytics.totalSteps > 0 && (

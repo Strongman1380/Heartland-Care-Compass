@@ -18,6 +18,8 @@ import { logger } from '@/utils/logger';
 import { facilityNotesService, type FacilityNoteRow } from "@/integrations/firebase/facilityNotesService";
 import { facilityReportsService, type FacilityReportRow } from "@/integrations/firebase/facilityReportsService";
 import { referralNotesService, type ReferralNoteRow } from "@/integrations/firebase/referralNotesService";
+import { auditLogService, type AuditLogRow } from "@/integrations/firebase/auditLogService";
+import { kpiSnapshotsService, type KpiSnapshotRow } from "@/integrations/firebase/kpiSnapshotsService";
 import {
   behaviorPointsService,
   caseNotesService,
@@ -29,7 +31,10 @@ import {
   youthService,
 } from "@/integrations/firebase/services";
 import { incidentReportsService } from "@/integrations/firebase/incidentReportsService";
+import { academicsService, type CreditRow, type GradeRow, type StepRow } from "@/integrations/firebase/academicsService";
 import type { FacilityIncidentReport } from "@/types/facility-incident-types";
+import { backfillCanonicalDatabaseFields, type BackfillSummary } from "@/utils/backfillGovernance";
+import { buildYouthSnapshots, computeYouthDataQuality, type YouthDataQualityRow } from "@/utils/dataGovernanceMetrics";
 
 type Timeframe = "week" | "month" | "quarter" | "year";
 
@@ -97,6 +102,14 @@ const AdminFacility = () => {
   const [isDeletingYouth, setIsDeletingYouth] = useState<string | null>(null);
   const [userRoles, setUserRoles] = useState<Array<{ uid: string; email: string; role: UserRole }>>([]);
   const [isUpdatingRole, setIsUpdatingRole] = useState<string | null>(null);
+  const [recentAuditLog, setRecentAuditLog] = useState<AuditLogRow[]>([]);
+  const [kpiSnapshots, setKpiSnapshots] = useState<KpiSnapshotRow[]>([]);
+  const [isRunningBackfill, setIsRunningBackfill] = useState(false);
+  const [backfillSummary, setBackfillSummary] = useState<BackfillSummary | null>(null);
+  const [credits, setCredits] = useState<CreditRow[]>([]);
+  const [grades, setGrades] = useState<GradeRow[]>([]);
+  const [steps, setSteps] = useState<StepRow[]>([]);
+  const [isSavingYouthSnapshots, setIsSavingYouthSnapshots] = useState(false);
 
   // Level configuration
   const { levels: levelConfig, loading: loadingLevels, save: saveLevels } = useLevelConfig();
@@ -106,7 +119,7 @@ const AdminFacility = () => {
   const loadData = async () => {
     try {
       setIsRefreshing(true);
-      const [loadedNotes, loadedReports, loadedYouths, loadedPoints, loadedCaseNotes, loadedIncidents, loadedReferrals, loadedArchived] = await Promise.all([
+      const [loadedNotes, loadedReports, loadedYouths, loadedPoints, loadedCaseNotes, loadedIncidents, loadedReferrals, loadedArchived, loadedAudit, loadedSnapshots, loadedCredits, loadedGrades, loadedSteps] = await Promise.all([
         facilityNotesService.list(),
         facilityReportsService.list(),
         youthService.getAll(),
@@ -115,6 +128,11 @@ const AdminFacility = () => {
         incidentReportsService.list(),
         referralNotesService.list(),
         youthService.getArchived(),
+        auditLogService.listRecent(20),
+        kpiSnapshotsService.list("program"),
+        academicsService.credits.list(),
+        academicsService.grades.list(),
+        academicsService.steps.list(),
       ]);
 
       const ratingPromises = loadedYouths.map((youth) =>
@@ -131,6 +149,11 @@ const AdminFacility = () => {
       setReferrals(loadedReferrals);
       setDailyRatings(loadedRatings);
       setArchivedYouths(loadedArchived);
+      setRecentAuditLog(loadedAudit);
+      setKpiSnapshots(loadedSnapshots.slice(0, 12));
+      setCredits(loadedCredits);
+      setGrades(loadedGrades);
+      setSteps(loadedSteps);
       setLastRefreshAt(new Date().toISOString());
     } catch (error) {
       logger.error("Failed to load facility admin data:", error);
@@ -502,11 +525,74 @@ const AdminFacility = () => {
     }
   };
 
+  const handleBackfillGovernance = async () => {
+    try {
+      setIsRunningBackfill(true);
+      const summary = await backfillCanonicalDatabaseFields();
+      setBackfillSummary(summary);
+      toast.success("Canonical data backfill completed");
+      await loadData();
+    } catch (error) {
+      logger.error("Failed to run governance backfill:", error);
+      toast.error("Failed to run governance backfill");
+    } finally {
+      setIsRunningBackfill(false);
+    }
+  };
+
+  const handleSaveYouthSnapshots = async () => {
+    try {
+      setIsSavingYouthSnapshots(true);
+      const rows = buildYouthSnapshots({
+        youths,
+        behaviorPoints,
+        caseNotes,
+        dailyRatings,
+        incidents: facilityIncidents,
+        credits,
+        grades,
+        steps,
+        generatedBy: reportStaffName.trim() || null,
+      });
+      await Promise.all(rows.map((row) => kpiSnapshotsService.save(row)));
+      toast.success(`Saved ${rows.length} youth KPI snapshots`);
+      await loadData();
+    } catch (error) {
+      logger.error("Failed to save youth snapshots:", error);
+      toast.error("Failed to save youth snapshots");
+    } finally {
+      setIsSavingYouthSnapshots(false);
+    }
+  };
+
   const filteredReportHistory = useMemo(() => {
     if (historyView === "all") return facilityReports;
     if (historyView === "archived") return facilityReports.filter((x) => x.archived);
     return facilityReports.filter((x) => !x.archived);
   }, [facilityReports, historyView]);
+
+  const dataQualityRows = useMemo<YouthDataQualityRow[]>(
+    () =>
+      computeYouthDataQuality({
+        youths,
+        caseNotes,
+        dailyRatings,
+        incidents: facilityIncidents,
+        grades,
+      }),
+    [youths, caseNotes, dailyRatings, facilityIncidents, grades]
+  );
+
+  const dataQualitySummary = useMemo(
+    () => ({
+      missingAdmissionDate: dataQualityRows.filter((row) => row.missingAdmissionDate).length,
+      missingHyrna: dataQualityRows.filter((row) => row.missingHyrna).length,
+      missingIncidentLinkage: dataQualityRows.reduce((sum, row) => sum + row.missingIncidentLinkage, 0),
+      staleCaseNotes: dataQualityRows.filter((row) => row.staleCaseNotesDays !== null && row.staleCaseNotesDays >= 3).length,
+      staleRatings: dataQualityRows.filter((row) => row.staleRatingsDays !== null && row.staleRatingsDays >= 2).length,
+    }),
+    [dataQualityRows]
+  );
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-red-50 via-yellow-50 to-red-100">
@@ -710,6 +796,123 @@ const AdminFacility = () => {
                 ))}
               </div>
             )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Data Governance</CardTitle>
+            <CardDescription>
+              Backfill legacy records into the canonical database shape and inspect recent audit and KPI snapshot activity.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex flex-wrap gap-2">
+              <Button onClick={handleBackfillGovernance} disabled={isRunningBackfill}>
+                {isRunningBackfill ? "Running Backfill..." : "Run Canonical Backfill"}
+              </Button>
+              <Button variant="secondary" onClick={handleSaveYouthSnapshots} disabled={isSavingYouthSnapshots}>
+                {isSavingYouthSnapshots ? "Saving Youth Snapshots..." : "Save Youth KPI Snapshots"}
+              </Button>
+              <Button variant="outline" onClick={loadData} disabled={isRefreshing}>
+                Refresh Governance Data
+              </Button>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Missing Admission Dates</p><p className="text-xl font-semibold">{dataQualitySummary.missingAdmissionDate}</p></CardContent></Card>
+              <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Missing HYRNA</p><p className="text-xl font-semibold">{dataQualitySummary.missingHyrna}</p></CardContent></Card>
+              <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Unlinked Incidents</p><p className="text-xl font-semibold">{dataQualitySummary.missingIncidentLinkage}</p></CardContent></Card>
+              <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Stale Case Notes</p><p className="text-xl font-semibold">{dataQualitySummary.staleCaseNotes}</p></CardContent></Card>
+              <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Stale Ratings</p><p className="text-xl font-semibold">{dataQualitySummary.staleRatings}</p></CardContent></Card>
+            </div>
+
+            {backfillSummary && (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Credits Updated</p><p className="text-xl font-semibold">{backfillSummary.creditsUpdated}</p></CardContent></Card>
+                <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Grades Updated</p><p className="text-xl font-semibold">{backfillSummary.gradesUpdated}</p></CardContent></Card>
+                <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Steps Updated</p><p className="text-xl font-semibold">{backfillSummary.stepsUpdated}</p></CardContent></Card>
+                <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Incidents Updated</p><p className="text-xl font-semibold">{backfillSummary.incidentsUpdated}</p></CardContent></Card>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+              <div className="rounded-md border bg-white p-4">
+                <h3 className="text-sm font-semibold mb-3">Recent Audit Activity</h3>
+                {recentAuditLog.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No audit activity found.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {recentAuditLog.map((row) => (
+                      <div key={row.id} className="rounded-md border p-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-sm font-medium">{row.entity_type} · {row.action}</p>
+                          <Badge variant="outline">{format(new Date(row.changed_at), "MMM d, h:mm a")}</Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {row.entity_id}
+                          {row.youth_id ? ` · Youth ${row.youth_id}` : ""}
+                          {row.changed_by ? ` · By ${row.changed_by}` : ""}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="rounded-md border bg-white p-4">
+                <h3 className="text-sm font-semibold mb-3">Program KPI Snapshots</h3>
+                {kpiSnapshots.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No KPI snapshots saved yet.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {kpiSnapshots.map((snapshot) => (
+                      <div key={snapshot.id} className="rounded-md border p-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-sm font-medium">{snapshot.timeframe} snapshot</p>
+                          <Badge variant="secondary">{snapshot.snapshot_date}</Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Generated {format(new Date(snapshot.generated_at), "MMM d, yyyy h:mm a")}
+                          {snapshot.generated_by ? ` · ${snapshot.generated_by}` : ""}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Active youth: {(snapshot.metrics.activeYouth as number) ?? "-"} · High risk: {(snapshot.metrics.highRiskYouth as number) ?? "-"}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="rounded-md border bg-white p-4">
+                <h3 className="text-sm font-semibold mb-3">Youth Data Quality</h3>
+                {dataQualityRows.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No youth records found.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {dataQualityRows.slice(0, 20).map((row) => (
+                      <div key={row.youthId} className="rounded-md border p-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-sm font-medium">{row.youthName}</p>
+                          <Badge variant="outline">{row.youthId.slice(0, 8)}</Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {row.missingAdmissionDate ? "Missing admission date · " : ""}
+                          {row.missingGradeValue ? "No grade value · " : ""}
+                          {row.missingHyrna ? "No HYRNA on file · " : ""}
+                          {row.noCaseNotes ? "No case notes · " : row.staleCaseNotesDays !== null ? `${row.staleCaseNotesDays}d since case note · ` : ""}
+                          {row.noRatings ? "No ratings" : row.staleRatingsDays !== null ? `${row.staleRatingsDays}d since rating` : ""}
+                        </p>
+                        {row.missingIncidentLinkage > 0 && (
+                          <p className="text-xs text-red-700 mt-1">{row.missingIncidentLinkage} incident record(s) still missing canonical youth linkage.</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
           </CardContent>
         </Card>
 

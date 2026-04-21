@@ -1,15 +1,55 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Search } from "lucide-react";
+import { Search, GraduationCap } from "lucide-react";
 import type { Youth } from "@/integrations/firebase/services";
 import { PointSummaryInline } from "@/components/common/PointSummaryInline";
+import { getYouthStats, type YouthScoreStats } from "@/utils/schoolScores";
 
 interface QuickAccessYouthListProps {
   youths: Youth[];
 }
+
+const SchoolAverageBadge = ({ youthId }: { youthId: string }) => {
+  const [stats, setStats] = useState<YouthScoreStats | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    const fetchStats = async () => {
+      try {
+        const data = await getYouthStats(youthId);
+        if (!cancelled) {
+          setStats(data);
+          setLoading(false);
+        }
+      } catch {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    fetchStats();
+    return () => { cancelled = true; };
+  }, [youthId]);
+
+  if (loading || !stats) return null;
+
+  const avg = stats.average;
+  const getScoreColor = (score: number) => {
+    if (score >= 3.5) return "bg-green-100 text-green-800 border-green-300";
+    if (score >= 3.0) return "bg-blue-100 text-blue-800 border-blue-300";
+    if (score >= 2.0) return "bg-yellow-100 text-yellow-800 border-yellow-300";
+    return "bg-red-100 text-red-800 border-red-300";
+  };
+
+  return (
+    <Badge variant="outline" className={`text-[10px] px-1.5 py-0 flex items-center gap-1 ${getScoreColor(avg)}`}>
+      <GraduationCap className="h-2.5 w-2.5" />
+      {avg.toFixed(1)}
+    </Badge>
+  );
+};
 
 export const QuickAccessYouthList = ({ youths }: QuickAccessYouthListProps) => {
   const navigate = useNavigate();
@@ -74,6 +114,7 @@ export const QuickAccessYouthList = ({ youths }: QuickAccessYouthListProps) => {
                   <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${getLevelColor(youth.level)}`}>
                     Lvl {youth.level || "—"}
                   </Badge>
+                  <SchoolAverageBadge youthId={youth.id} />
                   <PointSummaryInline youthId={youth.id} />
                 </div>
               </div>
@@ -90,3 +131,4 @@ export const QuickAccessYouthList = ({ youths }: QuickAccessYouthListProps) => {
     </div>
   );
 };
+

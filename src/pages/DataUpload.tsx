@@ -9,10 +9,11 @@ import type { ShiftType } from '@/integrations/firebase/shiftScoresService'
 import { behaviorPointsService, dailyRatingsService, caseNotesService } from '@/integrations/firebase/services'
 import { referralNotesService } from '@/integrations/firebase/referralNotesService'
 import { parseDpnText, type DpnShiftEntry } from '@/utils/dpnParser'
+import { bulkUpsert as bulkUpsertSchoolScores } from '@/utils/schoolScores'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { Upload, FileText, CheckCircle2, XCircle, AlertTriangle } from 'lucide-react'
+import { Upload, FileText, CheckCircle2, XCircle, AlertTriangle, GraduationCap } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 
 // ── Parsed Row Types ──
@@ -23,6 +24,7 @@ type PointsRow = { youthName: string; youthId: string; date: string; totalPoints
 type RatingsRow = { youthName: string; youthId: string; date: string; peer: number; adult: number; investment: number; authority: number; staff: string; comments: string }
 type ReferralRow = { referralName: string; referralSource: string; referralDate: string; staffName: string; status: string; priority: string; summary: string }
 type CaseNoteRow = { youthName: string; youthId: string; date: string; summary: string; note: string; staff: string }
+type SchoolScoreRow = { youthName: string; youthId: string; date: string; score: number }
 
 // ── Column Definitions ──
 
@@ -78,6 +80,12 @@ const caseNoteColumns: ColumnDef[] = [
   { key: 'summary', label: 'Summary' },
   { key: 'note', label: 'Note', width: '200px' },
   { key: 'staff', label: 'Staff' },
+]
+
+const schoolScoreColumns: ColumnDef[] = [
+  { key: 'youthName', label: 'Youth' },
+  { key: 'date', label: 'Date' },
+  { key: 'score', label: 'Score (0–4)' },
 ]
 
 // ── Helper to parse 4-domain scores ──
@@ -520,6 +528,66 @@ const DataUpload: React.FC = () => {
     return { imported, skipped, errors }
   }, [])
 
+  // ── School Scores Parser ──
+  const parseSchoolScoreRows = useCallback((rows: string[][]): ParsedRow<SchoolScoreRow>[] => {
+    if (rows.length === 0) return []
+    const hasHeader = detectHeaders(rows[0])
+    const header = hasHeader ? rows[0].map(h => h.toLowerCase()) : []
+    const dataRows = hasHeader ? rows.slice(1) : rows
+
+    const nameIdx = hasHeader ? findColumnIndex(header, 'name', 'youth') : 0
+    const dateIdx = hasHeader ? findColumnIndex(header, 'date') : 1
+    const scoreIdx = hasHeader ? findColumnIndex(header, 'score') : 2
+
+    return dataRows.map(cols => {
+      const errors: string[] = []
+      const warnings: string[] = []
+      const nameVal = cols[nameIdx] || ''
+      const matched = matchYouth(nameVal, youthList)
+      if (!matched) errors.push(`Youth "${nameVal}" not found`)
+      const { date, error: dateErr } = normalizeDate(cols[dateIdx] || '')
+      if (dateErr) errors.push(dateErr)
+      if (date) {
+        const dow = new Date(`${date}T00:00:00`).getDay()
+        if (dow === 0 || dow === 6) warnings.push(`${date} is a weekend — school scores are typically Mon–Fri`)
+      }
+      const rawScore = parseFloat(cols[scoreIdx >= 0 ? scoreIdx : 2] || '')
+      const { score: clamped, clamped: wasClamped } = clampScore(rawScore, 0, 4)
+      if (isNaN(rawScore)) errors.push('Score must be a number')
+      if (wasClamped) warnings.push(`Score ${rawScore} clamped to ${clamped}`)
+
+      return {
+        data: {
+          youthName: matched ? `${matched.firstName} ${matched.lastName}` : nameVal,
+          youthId: matched?.id || '',
+          date,
+          score: clamped ?? 0,
+        },
+        valid: errors.length === 0,
+        errors,
+        warnings,
+      }
+    })
+  }, [youthList])
+
+  const importSchoolScores = useCallback(async (rows: SchoolScoreRow[]): Promise<ImportResult> => {
+    let imported = 0, skipped = 0
+    const errors: string[] = []
+    const chunkSize = 20
+    for (let i = 0; i < rows.length; i += chunkSize) {
+      const chunk = rows.slice(i, i + chunkSize)
+      const results = await Promise.allSettled(chunk.map(row => {
+        const weekday = new Date(`${row.date}T00:00:00`).getDay()
+        return bulkUpsertSchoolScores([{ youth_id: row.youthId, date: row.date, weekday, score: row.score }])
+      }))
+      results.forEach((res, idx) => {
+        if (res.status === 'fulfilled') imported++
+        else { skipped++; errors.push(`${chunk[idx].youthName} ${chunk[idx].date}: ${res.reason}`) }
+      })
+    }
+    return { imported, skipped, errors }
+  }, [])
+
   // ── DPN Parsing Handlers ──
   const handleDpnParse = useCallback(() => {
     const result = parseDpnText(dpnText)
@@ -598,7 +666,7 @@ const DataUpload: React.FC = () => {
             Data Upload Center
           </h1>
           <p className="text-sm text-gray-600 dark:text-slate-400 mt-1">
-            Upload or paste CSV data for shift scores, behavior points, daily ratings, referrals, case notes, and DPN files.
+            Upload or paste CSV data for shift scores, behavior points, daily ratings, referrals, case notes, school scores, and DPN files.
             Copy the template format below and provide it to your AI tool so it can format the extracted data correctly.
           </p>
         </div>
@@ -611,6 +679,7 @@ const DataUpload: React.FC = () => {
             <TabsTrigger value="daily_ratings" className="text-xs flex-1 min-w-[80px]">Ratings</TabsTrigger>
             <TabsTrigger value="referral_upload" className="text-xs flex-1 min-w-[80px]">Referrals</TabsTrigger>
             <TabsTrigger value="bulk_case_notes" className="text-xs flex-1 min-w-[80px]">Case Notes</TabsTrigger>
+            <TabsTrigger value="school_scores" className="text-xs flex-1 min-w-[80px]">School Scores</TabsTrigger>
             <TabsTrigger value="dpn_parse" className="text-xs flex-1 min-w-[80px]">DPN Parse</TabsTrigger>
           </TabsList>
 
@@ -666,6 +735,15 @@ const DataUpload: React.FC = () => {
                 parseRows={parseCaseNoteRows}
                 columns={caseNoteColumns}
                 onImport={importCaseNotes}
+              />
+            </TabsContent>
+
+            <TabsContent value="school_scores">
+              <CsvUploader<SchoolScoreRow>
+                templateType="school_scores"
+                parseRows={parseSchoolScoreRows}
+                columns={schoolScoreColumns}
+                onImport={importSchoolScores}
               />
             </TabsContent>
 

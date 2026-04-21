@@ -81,6 +81,7 @@ export type DocumentationType =
   | 'Other';
 
 export interface InvolvedYouth {
+  youth_id?: string;
   name: string;
   age: string;
   role: 'primary' | 'secondary' | 'witness' | 'victim';
@@ -107,6 +108,12 @@ export interface FollowUpItem {
 
 export interface FacilityIncidentReport {
   id: string;
+  youth_id?: string;
+  event_date?: string;
+  source?: string | null;
+  created_by?: string | null;
+  updated_by?: string | null;
+  schema_version?: number;
   // Subject info
   subjectType: SubjectType;
   lastName: string;

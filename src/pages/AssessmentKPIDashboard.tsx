@@ -37,6 +37,7 @@ import { useNavigate } from 'react-router-dom';
 import { exportHTMLToDocx, exportHTMLToPDF } from '@/utils/export';
 import { toast } from 'sonner';
 import { kpiReportsService, type KpiReportRow } from '@/integrations/firebase/kpiReportsService';
+import { kpiSnapshotsService } from '@/integrations/firebase/kpiSnapshotsService';
 import {
   youthService,
   behaviorPointsService,
@@ -517,25 +518,41 @@ const AssessmentKPIDashboard = () => {
 
     try {
       setIsSavingReport(true);
+      const metricsSnapshot = {
+        activeYouth: analytics.metrics.activeYouth,
+        admissionsInWindow: analytics.metrics.admissionsInWindow,
+        avgRiskScore: analytics.metrics.avgRiskScore,
+        highRiskYouth: analytics.metrics.highRiskYouth,
+        highRiskPercent: analytics.metrics.highRiskPercent,
+        avgPeer: analytics.metrics.avgDomain.peer,
+        avgAdult: analytics.metrics.avgDomain.adult,
+        avgInvestment: analytics.metrics.avgDomain.investment,
+        avgAuthority: analytics.metrics.avgDomain.authority,
+      };
       await kpiReportsService.save({
         title: reportTitle.trim() || 'Program KPI Report',
         timeframe,
         generated_at: reportGeneratedAt || new Date().toISOString(),
         generated_by: reportPreparedBy.trim() || null,
         report_html: reportHtml,
-        metrics_snapshot: {
-          activeYouth: analytics.metrics.activeYouth,
-          admissionsInWindow: analytics.metrics.admissionsInWindow,
-          avgRiskScore: analytics.metrics.avgRiskScore,
-          highRiskYouth: analytics.metrics.highRiskYouth,
-          highRiskPercent: analytics.metrics.highRiskPercent,
-          avgPeer: analytics.metrics.avgDomain.peer,
-          avgAdult: analytics.metrics.avgDomain.adult,
-          avgInvestment: analytics.metrics.avgDomain.investment,
-          avgAuthority: analytics.metrics.avgDomain.authority,
-        },
+        metrics_snapshot: metricsSnapshot,
         archived: false,
         archived_at: null,
+      });
+      await kpiSnapshotsService.save({
+        scope: 'program',
+        timeframe,
+        snapshot_date: format(new Date(reportGeneratedAt || new Date()), 'yyyy-MM-dd'),
+        generated_at: reportGeneratedAt || new Date().toISOString(),
+        generated_by: reportPreparedBy.trim() || null,
+        source: 'assessment-kpi',
+        metrics: metricsSnapshot,
+        metadata: {
+          reportTitle: reportTitle.trim() || 'Program KPI Report',
+          documentedYouth: analytics.metrics.documentedYouth,
+          colorsDistribution: analytics.realColorsDistribution,
+          riskDistribution: analytics.riskDistribution,
+        },
       });
       toast.success('KPI report snapshot saved');
       await fetchAllData(false);

@@ -27,13 +27,26 @@ if (getApps().length === 0) {
   // service account key file (Project Settings → Service accounts → Generate new private key).
   const serviceAccountRaw = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
 
+  if (projectId && !process.env.FIREBASE_PROJECT_ID) {
+    process.env.FIREBASE_PROJECT_ID = projectId;
+  }
+
   console.log(`[Firebase Admin] Initializing for project: ${projectId || 'default/auto'}`);
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('[Firebase Admin] Env check:', {
+      FIREBASE_PROJECT_ID: !!process.env.FIREBASE_PROJECT_ID,
+      VITE_FIREBASE_PROJECT_ID: !!process.env.VITE_FIREBASE_PROJECT_ID,
+      FIREBASE_SERVICE_ACCOUNT_KEY: !!process.env.FIREBASE_SERVICE_ACCOUNT_KEY
+    });
+  }
 
   try {
     if (serviceAccountRaw) {
+      console.log('[Firebase Admin] Using service account key');
       const serviceAccount = JSON.parse(serviceAccountRaw);
-      initializeApp({ credential: cert(serviceAccount) });
+      initializeApp({ credential: cert(serviceAccount), projectId });
     } else if (projectId) {
+      console.log('[Firebase Admin] Using project ID:', projectId);
       initializeApp({ projectId });
     } else {
       console.warn('[Firebase Admin] No FIREBASE_PROJECT_ID set — token verification may fail. Set FIREBASE_PROJECT_ID in Vercel env vars.');
@@ -42,7 +55,7 @@ if (getApps().length === 0) {
   } catch (initError) {
     console.error('[Firebase Admin] Initialization error:', initError.message);
     // Still attempt a bare init so getAuth() returns an object
-    try { initializeApp(); } catch { /* ignore duplicate app error */ }
+    try { initializeApp({ projectId: projectId || undefined }); } catch { /* ignore duplicate app error */ }
   }
 }
 
@@ -235,6 +248,12 @@ const requireFirebaseAuth = async (req, res, next) => {
     return next();
   } catch (error) {
     console.error('[Firebase Auth] Token verification failed:', error?.code || error?.message || error);
+    // Log more details in dev to help troubleshoot
+    if (process.env.NODE_ENV !== 'production') {
+      console.error('[Firebase Auth] Project ID used for Admin init:', adminAuth.app.options.projectId);
+      console.error('[Firebase Auth] Full error:', error);
+    }
+    
     return res.status(401).json({
       error: 'Invalid authentication token',
       code: 'invalid_auth_token',

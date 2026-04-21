@@ -726,10 +726,10 @@ const toHistoryItem = (row: ReferralNoteRow): ReferralHistoryItem => {
     ? Object.values(referralData).filter((v: any) => v && typeof v === "object" && Object.keys(v).length > 0).length
     : 0;
   const fieldCount = referralData
-    ? Object.values(referralData).reduce((sum: number, section: any) => {
+    ? (Object.values(referralData).reduce((sum: number, section: any) => {
       if (!section || typeof section !== "object") return sum;
       return sum + Object.keys(section).length;
-    }, 0)
+    }, 0) as number)
     : 0;
 
   return {
@@ -904,8 +904,9 @@ export const ReferralTab = () => {
     }
     try {
       const result = await screenReferralIntake(text);
-      if (result.error) {
-        toast.error("AI screening failed: " + result.error);
+      if (!result.success) {
+        toast.error(`AI screening failed: ${result.error}${result.detail ? ` (${result.detail})` : ""}`);
+        setIsScreeningNew(false);
         return;
       }
       const screeningText = result.data?.screening || "";
@@ -2423,7 +2424,7 @@ export const ReferralTab = () => {
   ) => {
     if (!parsedData || !query.trim()) {
       if (sectionFilter === "all") return parsedData;
-      return { [sectionFilter]: parsedData[sectionFilter] } as ParsedReferral;
+      return { [sectionFilter]: parsedData[sectionFilter] } as unknown as ParsedReferral;
     }
 
     const queryLower = query.toLowerCase();

@@ -244,8 +244,12 @@ export default function FacilityIncidentForm({ incident, onSave, onCancel }: Pro
     const nameParts = [lastName, [firstName, initial].filter(Boolean).join(' ')].filter(Boolean)
     const youthName = nameParts.join(', ')
     const isNonResident = subjectType === 'Non-Resident'
+    const matchedResident = subjectType === 'Resident'
+      ? youths.find((y) => y.firstName.trim().toLowerCase() === firstName.trim().toLowerCase() && y.lastName.trim().toLowerCase() === lastName.trim().toLowerCase())
+      : null
     const data: FacilityIncidentFormData = {
       id: incident?.id,
+      youth_id: incident?.youth_id || matchedResident?.id,
       subjectType,
       lastName,
       firstName,
@@ -276,6 +280,10 @@ export default function FacilityIncidentForm({ incident, onSave, onCancel }: Pro
       submittedBy: resolvedSubmittedBy,
       reviewedBy,
       signatureDate: resolvedSignatureDate,
+      source: incident?.source || 'manual',
+      created_by: incident?.created_by || resolvedSubmittedBy || null,
+      updated_by: resolvedSubmittedBy || null,
+      schema_version: incident?.schema_version || 2,
     }
     onSave(data)
   }
@@ -303,6 +311,7 @@ export default function FacilityIncidentForm({ incident, onSave, onCancel }: Pro
     }
 
     const nextYouth = {
+      youth_id: youth.id,
       name: displayName,
       age: youth.age ? String(youth.age) : '',
       role: selectedRosterRole,

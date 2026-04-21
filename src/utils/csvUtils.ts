@@ -205,7 +205,7 @@ export function detectHeaders(row: string[]): boolean {
 
 // ── CSV Template Types ──
 
-export type CsvTemplateType = 'weekly_eval' | 'daily_shift' | 'behavior_points' | 'daily_ratings' | 'daily_ratings_youth' | 'referral_upload' | 'bulk_case_notes'
+export type CsvTemplateType = 'weekly_eval' | 'daily_shift' | 'behavior_points' | 'daily_ratings' | 'daily_ratings_youth' | 'referral_upload' | 'bulk_case_notes' | 'school_scores'
 
 interface CsvTemplate {
   label: string
@@ -328,6 +328,22 @@ export const CSV_TEMPLATES: Record<CsvTemplateType, CsvTemplate> = {
       'Summary: Brief summary/title of the note',
       'Note: Full case note content',
       'Staff: Staff member who created the note',
+    ],
+  },
+  school_scores: {
+    label: 'School Daily Scores',
+    description: 'Bulk upload daily school scores (0–4 scale) for each youth.',
+    headers: 'Youth Name,Date,Score',
+    sampleRows: [
+      'Chance Thaller,2026-04-14,3.5',
+      'Dagen Dickey,2026-04-14,4.0',
+      'Chance Thaller,2026-04-15,2.8',
+    ],
+    notes: [
+      'Youth Name: First name, last name, or full name (case-insensitive)',
+      'Date: YYYY-MM-DD or MM/DD/YYYY — must be a weekday (Mon–Fri)',
+      'Score: 0–4 scale (decimals allowed); values outside range are clamped',
+      'Duplicate entries for the same youth + date are overwritten',
     ],
   },
 }

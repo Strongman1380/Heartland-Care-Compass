@@ -15,7 +15,7 @@ export const auditLogSchema = z.object({
   metadata: z.record(z.string(), z.unknown()).nullish(),
 });
 
-const academicBaseSchema = z.object({
+const academicBaseObject = z.object({
   id: z.string().min(1).optional(),
   youth_id: z.string().min(1).optional(),
   student_id: z.string().min(1).optional(),
@@ -25,26 +25,29 @@ const academicBaseSchema = z.object({
   event_date: isoDateSchema.optional(),
   created_at: z.string().datetime().optional(),
   updated_at: z.string().datetime().optional(),
-}).refine((value) => Boolean(value.youth_id || value.student_id), {
-  message: "A canonical youth identifier is required",
-  path: ["youth_id"],
 });
 
-export const academicCreditSchema = academicBaseSchema.extend({
+const withYouthIdentifier = <T extends typeof academicBaseObject>(schema: T) =>
+  schema.refine((value) => Boolean(value.youth_id || value.student_id), {
+    message: "A canonical youth identifier is required",
+    path: ["youth_id"],
+  });
+
+export const academicCreditSchema = withYouthIdentifier(academicBaseObject.extend({
   date_earned: isoDateSchema,
   credit_value: z.number().finite().min(0),
-});
+}));
 
-export const academicGradeSchema = academicBaseSchema.extend({
+export const academicGradeSchema = withYouthIdentifier(academicBaseObject.extend({
   date_entered: isoDateSchema,
   grade_value: z.number().finite().min(0),
   course_name: z.string().optional(),
-});
+}));
 
-export const academicStepSchema = academicBaseSchema.extend({
+export const academicStepSchema = withYouthIdentifier(academicBaseObject.extend({
   date_completed: isoDateSchema,
   steps_count: z.number().int().min(0),
-});
+}));
 
 export const kpiSnapshotSchema = z.object({
   id: z.string().min(1).optional(),

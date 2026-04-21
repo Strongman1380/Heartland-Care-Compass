@@ -21,6 +21,7 @@ interface AIResponse<T = any> {
   success: boolean;
   data?: T;
   error?: string;
+  detail?: string;
   code?: string;
   retryable?: boolean;
   requestId?: string;
@@ -155,6 +156,7 @@ async function makeAIRequest<T>(
             code: data.code,
             retryable: data.retryable,
             requestId: data.requestId,
+            detail: data.detail,
             fallback: true,
           };
         }
@@ -162,6 +164,7 @@ async function makeAIRequest<T>(
         requestError.code = data.code;
         requestError.retryable = data.retryable;
         requestError.requestId = data.requestId;
+        requestError.detail = data.detail;
         requestError.status = response.status;
         throw requestError;
       }
@@ -213,6 +216,7 @@ async function makeAIRequest<T>(
           code: error.code || (error?.name === 'AbortError' ? 'TIMEOUT' : undefined),
           retryable,
           requestId: error.requestId,
+          detail: error.detail,
           fallback: fallbackEnabled,
         };
       }

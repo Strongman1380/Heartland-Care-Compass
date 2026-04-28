@@ -4377,27 +4377,173 @@ export const ReferralTab = () => {
                                   <span className="text-xs text-muted-foreground ml-auto shrink-0">{formattedDate}</span>
                                   {isExpanded ? <ChevronUp className="h-4 w-4 text-muted-foreground shrink-0" /> : <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />}
                                 </div>
-                                {isExpanded && (
-                                  <div className="mt-3 pt-3 border-t border-green-100 flex flex-wrap gap-2 text-xs text-green-700">
-                                    <button
-                                      className="underline hover:text-green-900"
-                                      onClick={() => setEditingInterviewTarget(item)}
-                                    >
-                                      View Interview Report
-                                    </button>
-                                    <span>·</span>
-                                    <button
-                                      className="underline hover:text-red-600 text-red-500"
-                                      onClick={async () => {
-                                        if (!confirm(`Move "${item.referralName}" back to active pipeline?`)) return;
-                                        await referralNotesService.update(toReferralLookup(item), { status: "pending_interview" });
-                                        await loadReferralHistory();
-                                      }}
-                                    >
-                                      Move back to pipeline
-                                    </button>
+                                {isExpanded && (() => {
+                                  const { email: inferredPoEmail, firstName: poFirstName, friendlyName: friendlyPoName } = derivePoContact(item);
+                                  const mailtoTo = inferredPoEmail ? encodeURIComponent(inferredPoEmail) : encodeURIComponent(friendlyPoName);
+                                  const currentPlacementIY =
+                                    item.parsedData?.demographics?.["Current Placement"] ||
+                                    item.parsedData?.demographics?.["current placement"] ||
+                                    item.parsedData?.placement?.["Current Placement"] ||
+                                    item.parsedData?.placement?.["current placement"] ||
+                                    "detention/shelter";
+                                  const hrefCheckIY = `mailto:${mailtoTo}?subject=${encodeURIComponent(`Referral Status Check – ${item.referralName || 'the youth'}`)}&body=${encodeURIComponent(`Hi ${poFirstName},\n\nWe wanted to follow up regarding ${item.referralName || 'the youth'} and check on next steps for placement. Could you give us an update on where things stand?\n\nFeel free to reply here or call us at (402) 759-3335.\n\nThanks,\nHeartland Admissions\nHeartland Boys Home\nadmissions@heartlandboyshomenebraska.org\n(402) 759-3335`)}`;
+                                  const hrefAcceptIY = `mailto:${mailtoTo}?subject=${encodeURIComponent(`Placement Decision – ${item.referralName || "the youth"} – Accepted`)}&body=${encodeURIComponent(`Hi ${poFirstName},\n\nWe are pleased to let you know that we are able to accept ${item.referralName || "the youth"} for placement at Heartland Boys Home.\n\nTo move forward, please reach out to coordinate intake logistics including intake date, transportation, and any immediate needs.\n\nWarm regards,\nHeartland Admissions\nHeartland Boys Home\nadmissions@heartlandboyshomenebraska.org\n(402) 759-3335`)}`;
+                                  const hrefDenyIY = `mailto:${mailtoTo}?subject=${encodeURIComponent(`Regarding ${item.referralName || "the youth"}'s Referral`)}&body=${encodeURIComponent(`Hi ${poFirstName},\n\nJust wanted to let you know that after reviewing the referral for ${item.referralName || "the youth"}, we are going to have to pass at this time. Unfortunately, ${item.referralName || "the youth"} does not meet our standard criteria for placement at Heartland Boys Home, and we wouldn't be able to provide the level of support needed to set them up for success here.\n\nWe appreciate you sending this our way and hope you're able to find a good fit.\n\nThanks,\nHeartland Admissions\nHeartland Boys Home\nadmissions@heartlandboyshomenebraska.org\n(402) 759-3335`)}`;
+                                  const hrefInterviewIY = item.interviewScheduledDate ? (() => {
+                                    const intDate = format(new Date(item.interviewScheduledDate + "T00:00:00"), "MMMM d, yyyy");
+                                    const intTime = item.interviewTime ? new Date(`2000-01-01T${item.interviewTime}`).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true }) : "TBD";
+                                    const intPlace = item.interviewPlace || "TBD";
+                                    return `mailto:${mailtoTo}?subject=${encodeURIComponent(`Interview Confirmation – ${item.referralName || "the youth"} – ${intDate}`)}&body=${encodeURIComponent(`Hi ${poFirstName},\n\nConfirming the interview for ${item.referralName || "the youth"} at Heartland Boys Home.\n\n  Date:     ${intDate}\n  Time:     ${intTime}\n  Location: ${intPlace}\n\nLet us know if you need to reschedule.\n\nWarm regards,\nHeartland Admissions\n(402) 759-3335`)}`;
+                                  })() : null;
+                                  return (
+                                  <div className="mt-3 pt-3 border-t border-green-100 space-y-3">
+                                    {/* Status update */}
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <span className="text-xs text-gray-600 font-medium">Status:</span>
+                                      <Select
+                                        value={item.status || "interviewed_yes"}
+                                        onValueChange={(val) => handleQuickStatusUpdate(item, val)}
+                                        disabled={updatingStatusId === rowKey}
+                                      >
+                                        <SelectTrigger className="h-7 text-xs w-[180px] bg-white">
+                                          <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          {REFERRAL_STATUS_OPTIONS.map((option) => (
+                                            <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+
+                                    {/* Quick email actions */}
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <span className="text-xs font-semibold text-gray-500 flex items-center gap-1"><Mail className="h-3 w-3" /> Quick Emails:</span>
+                                      <a href={hrefCheckIY} onClick={() => logEmailAction(item, "Check Need")} className="text-xs bg-sky-100 text-sky-800 hover:bg-sky-200 px-2 py-1 rounded border border-sky-300 transition-colors font-medium no-brand-override">Check Need</a>
+                                      <a href={hrefAcceptIY} onClick={() => logEmailAction(item, "Accept")} className="text-xs bg-green-100 text-green-800 hover:bg-green-200 px-2 py-1 rounded border border-green-300 transition-colors font-medium no-brand-override">Accept</a>
+                                      <a href={hrefDenyIY} onClick={() => logEmailAction(item, "Deny")} className="text-xs bg-red-100 text-red-800 hover:bg-red-200 px-2 py-1 rounded border border-red-300 transition-colors font-medium no-brand-override">Deny</a>
+                                      {hrefInterviewIY && (
+                                        <a href={hrefInterviewIY} onClick={() => logEmailAction(item, "Interview Confirmation")} className="text-xs bg-yellow-50 text-yellow-800 hover:bg-yellow-100 px-2 py-1 rounded border border-yellow-300 transition-colors font-medium no-brand-override">Interview</a>
+                                      )}
+                                    </div>
+
+                                    {/* Notes Log */}
+                                    <div>
+                                      <button
+                                        onClick={() => setExpandedNotesLogId(expandedNotesLogId === rowKey ? null : rowKey)}
+                                        className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors shadow-sm"
+                                        style={{ backgroundColor: '#d97706', color: '#ffffff' }}
+                                      >
+                                        <FileText className="h-3 w-3" />
+                                        Notes Log ({(item.notesLog || []).length})
+                                        {expandedNotesLogId === rowKey ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                                      </button>
+                                      {expandedNotesLogId === rowKey && (
+                                        <div className="mt-2 space-y-2 rounded-md border border-amber-100 bg-amber-50 p-3">
+                                          {(item.notesLog || []).length > 0 && (
+                                            <div className="space-y-1 mb-3">
+                                              {(item.notesLog || []).map((entry) => (
+                                                <div key={entry.id} className="text-xs bg-white rounded border border-amber-100 p-2">
+                                                  <span className="font-medium text-amber-800">{format(new Date(entry.date), "MMM d, yyyy h:mm a")}</span>
+                                                  <p className="text-gray-700 mt-0.5">{entry.note}</p>
+                                                </div>
+                                              ))}
+                                            </div>
+                                          )}
+                                          <div className="space-y-2">
+                                            <Textarea
+                                              value={notesLogInput}
+                                              onChange={(e) => setNotesLogInput(e.target.value)}
+                                              placeholder="Document follow-up notes..."
+                                              rows={2}
+                                              className="text-xs"
+                                            />
+                                            <Button size="sm" onClick={() => handleAddNotesEntry(item)} disabled={savingNotesLogId === rowKey} className="border-0" style={{ backgroundColor: '#d97706', color: '#ffffff' }}>
+                                              {savingNotesLogId === rowKey ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <><Plus className="h-3.5 w-3.5 mr-1" />Log Note</>}
+                                            </Button>
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
+
+                                    {/* PO Contact Log */}
+                                    <div>
+                                      <button
+                                        onClick={() => setExpandedPoLogId(expandedPoLogId === rowKey ? null : rowKey)}
+                                        className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors shadow-sm"
+                                        style={{ backgroundColor: '#4338ca', color: '#ffffff' }}
+                                      >
+                                        <Mail className="h-3 w-3" />
+                                        PO Contact Log ({item.poContactLog.length})
+                                        {expandedPoLogId === rowKey ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                                      </button>
+                                      {expandedPoLogId === rowKey && (
+                                        <div className="mt-2 space-y-2 rounded-md border border-indigo-100 bg-indigo-50 p-3">
+                                          {item.poContactLog.length > 0 && (
+                                            <div className="space-y-1 mb-3">
+                                              {item.poContactLog.map((entry) => (
+                                                <div key={entry.id} className="text-xs bg-white rounded border border-indigo-100 p-2">
+                                                  <span className="font-medium text-indigo-800">{format(new Date(entry.date), "MMM d, yyyy")}</span>
+                                                  {entry.notes && <p className="text-gray-700 mt-0.5">{entry.notes}</p>}
+                                                </div>
+                                              ))}
+                                            </div>
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
+
+                                    {/* Parsed referral data */}
+                                    {item.parsedData && Object.values(item.parsedData).some((s: any) => s && typeof s === "object" && Object.keys(s).length > 0) && (
+                                      <div className="space-y-2 pt-2 border-t border-green-100">
+                                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Referral Data</p>
+                                        <KeyInformationCard parsedData={item.parsedData} item={item} />
+                                        {SECTION_CONFIG_UI.map((sectionDef) => {
+                                          const data = item.parsedData?.[sectionDef.key];
+                                          if (!data || typeof data !== "object" || Object.keys(data).length === 0) return null;
+                                          const Icon = sectionDef.icon;
+                                          const { percentage } = calculateFieldCompletion(data);
+                                          return (
+                                            <ReferralSectionCard
+                                              key={sectionDef.key}
+                                              title={sectionDef.label}
+                                              icon={Icon}
+                                              fieldCount={Object.keys(data).length}
+                                              completionPercentage={percentage}
+                                              defaultOpen={false}
+                                              borderColor={`border ${colorMap[sectionDef.color].split(" ").slice(1).join(" ")}`}
+                                              backgroundColor={colorMap[sectionDef.color]}
+                                            >
+                                              <div className="grid grid-cols-1 md:grid-cols-2 gap-0">
+                                                {Object.entries(data).map(([key, val]) => (
+                                                  <ReferralFieldRow key={key} label={key} value={val as string} />
+                                                ))}
+                                              </div>
+                                            </ReferralSectionCard>
+                                          );
+                                        })}
+                                      </div>
+                                    )}
+
+                                    {/* Action buttons */}
+                                    <div className="flex flex-wrap gap-2 pt-2 border-t border-green-100">
+                                      <Button size="sm" variant="outline" onClick={() => setEditingInterviewTarget(item)}>Interview Report</Button>
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="bg-white border-red-300 text-red-600 hover:bg-red-50 no-brand-override"
+                                        onClick={async () => {
+                                          if (!confirm(`Move "${item.referralName}" back to active pipeline?`)) return;
+                                          await referralNotesService.update(toReferralLookup(item), { status: "pending_interview" });
+                                          await loadReferralHistory();
+                                        }}
+                                      >
+                                        Move back to pipeline
+                                      </Button>
+                                    </div>
                                   </div>
-                                )}
+                                  );
+                                })()}
                               </div>
                             );
                           })}

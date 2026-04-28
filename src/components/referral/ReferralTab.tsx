@@ -875,12 +875,20 @@ export const ReferralTab = () => {
   const [savingPoContactId, setSavingPoContactId] = useState<string | null>(null);
   const [sendingEmailId, setSendingEmailId] = useState<string | null>(null);
 
+  // Inline field editing
+  const [editingField, setEditingField] = useState<{ itemId: string; sectionKey: string; fieldKey: string } | null>(null);
+  const [editingValue, setEditingValue] = useState("");
+  const [savingEditField, setSavingEditField] = useState(false);
+
   // AI Screening state
   const [newReferralScreening, setNewReferralScreening] = useState<string>("");
   const [isScreeningNew, setIsScreeningNew] = useState(false);
   const [aiScreeningResults, setAiScreeningResults] = useState<Record<string, string>>({});
   const [aiScreeningLoading, setAiScreeningLoading] = useState<Set<string>>(new Set());
   const [isBulkAIScreening, setIsBulkAIScreening] = useState(false);
+  const [pasteScreeningItem, setPasteScreeningItem] = useState<ReferralHistoryItem | null>(null);
+  const [pasteScreeningText, setPasteScreeningText] = useState("");
+  const [pasteScreeningSaving, setPasteScreeningSaving] = useState(false);
   const [isBulkReparsing, setIsBulkReparsing] = useState(false);
   const [exportingKey, setExportingKey] = useState<string | null>(null);
   const [isExportingNewScreening, setIsExportingNewScreening] = useState<"pdf" | "docx" | null>(null);
@@ -965,6 +973,36 @@ export const ReferralTab = () => {
         next.delete(rowKey);
         return next;
       });
+    }
+  };
+
+  const handlePasteScreening = async () => {
+    if (!pasteScreeningItem || !pasteScreeningText.trim()) return;
+    const rowKey = referralRowKey(pasteScreeningItem);
+    // Strip markdown fencing
+    const stripped = pasteScreeningText.trim()
+      .replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
+    // Validate JSON
+    try {
+      JSON.parse(stripped);
+    } catch {
+      toast.error("Could not parse as valid JSON. Paste the raw JSON output from Claude.");
+      return;
+    }
+    setPasteScreeningSaving(true);
+    try {
+      await referralNotesService.update(toReferralLookup(pasteScreeningItem), { screening_result: stripped });
+      setAiScreeningResults((prev) => ({ ...prev, [rowKey]: stripped }));
+      setHistory((prev) =>
+        prev.map((h) => referralRowKey(h) === rowKey ? { ...h, screeningResult: stripped } : h)
+      );
+      toast.success("Screening result saved.");
+      setPasteScreeningItem(null);
+      setPasteScreeningText("");
+    } catch {
+      toast.error("Failed to save screening result.");
+    } finally {
+      setPasteScreeningSaving(false);
     }
   };
 
@@ -2218,6 +2256,65 @@ export const ReferralTab = () => {
     }
   };
 
+  const logEmailAction = async (item: ReferralHistoryItem, actionLabel: string) => {
+    try {
+      const { v4: uuidv4 } = await import("uuid");
+      const now = new Date();
+      const noteText = `${actionLabel} email opened`;
+      const noteEntry: NotesLogEntry = {
+        id: uuidv4(),
+        date: now.toISOString(),
+        note: noteText,
+      };
+      const poEntry: POContactEntry = {
+        id: uuidv4(),
+        date: format(now, "yyyy-MM-dd"),
+        notes: noteText,
+        followUpDate: "",
+      };
+      const updatedNotes = [noteEntry, ...(item.notesLog || [])];
+      const updatedPO = [...(item.poContactLog || []), poEntry];
+      await referralNotesService.update(toReferralLookup(item), {
+        notes_log: updatedNotes,
+        po_contact_log: updatedPO,
+      } as any);
+      setHistory((prev) =>
+        prev.map((h) =>
+          sameReferral(h, item)
+            ? { ...h, notesLog: updatedNotes, poContactLog: updatedPO }
+            : h
+        )
+      );
+    } catch {
+      // Non-blocking — let the email still open
+    }
+  };
+
+  const handleFieldEdit = async (item: ReferralHistoryItem, sectionKey: string, fieldKey: string, newValue: string) => {
+    if (!item.parsedData) { setEditingField(null); return; }
+    const currentValue = (item.parsedData as any)[sectionKey]?.[fieldKey];
+    if (currentValue === newValue) { setEditingField(null); return; }
+    const updatedParsedData = {
+      ...item.parsedData,
+      [sectionKey]: {
+        ...((item.parsedData as any)[sectionKey] || {}),
+        [fieldKey]: newValue,
+      },
+    };
+    setSavingEditField(true);
+    try {
+      await referralNotesService.update(toReferralLookup(item), { parsed_data: updatedParsedData });
+      setHistory((prev) =>
+        prev.map((h) => sameReferral(h, item) ? { ...h, parsedData: updatedParsedData } : h)
+      );
+    } catch {
+      toast.error("Failed to save field");
+    } finally {
+      setSavingEditField(false);
+      setEditingField(null);
+    }
+  };
+
   const sendAndLogEmail = async (
     item: ReferralHistoryItem,
     emailType: "accept" | "deny" | "interview" | "check_need",
@@ -2260,18 +2357,28 @@ export const ReferralTab = () => {
       );
       const { v4: uuidv4 } = await import("uuid");
       const logNote = `${labels[emailType]} email auto-sent to PO (${toEmail || "unknown email"})`;
-      const newEntry: POContactEntry = {
+      const now = new Date();
+      const poEntry: POContactEntry = {
         id: uuidv4(),
-        date: format(new Date(), "yyyy-MM-dd"),
+        date: format(now, "yyyy-MM-dd"),
         notes: logNote,
         followUpDate: emailType === "interview" && item.interviewScheduledDate ? item.interviewScheduledDate : "",
       };
-      const updatedLog = [...(item.poContactLog || []), newEntry];
-      await referralNotesService.update(toReferralLookup(item), { po_contact_log: updatedLog });
+      const noteEntry: NotesLogEntry = {
+        id: uuidv4(),
+        date: now.toISOString(),
+        note: logNote,
+      };
+      const updatedPO = [...(item.poContactLog || []), poEntry];
+      const updatedNotes = [noteEntry, ...(item.notesLog || [])];
+      await referralNotesService.update(toReferralLookup(item), {
+        po_contact_log: updatedPO,
+        notes_log: updatedNotes,
+      } as any);
       setHistory((prev) =>
-        prev.map((h) => (sameReferral(h, item) ? { ...h, poContactLog: updatedLog } : h))
+        prev.map((h) => (sameReferral(h, item) ? { ...h, poContactLog: updatedPO, notesLog: updatedNotes } : h))
       );
-      toast.success(`${labels[emailType]} email sent and logged in PO contact log`);
+      toast.success(`${labels[emailType]} email sent and logged`);
     } catch (err) {
       const errMsg = err && typeof err === "object" && "text" in err ? (err as { text: string }).text : "Unknown error";
       toast.error(`Failed to send email: ${errMsg}`);
@@ -2940,15 +3047,6 @@ export const ReferralTab = () => {
                   <Button onClick={handleParse} disabled={!rawText.trim() || isParsing} className="whitespace-nowrap">
                     {isParsing ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Parsing...</> : "Parse Referral"}
                   </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleAIScreen(rawText)}
-                    disabled={!rawText.trim() || isScreeningNew}
-                    className="border-purple-300 text-purple-700 hover:bg-purple-50 whitespace-nowrap"
-                  >
-                    {isScreeningNew ? <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" />Screening...</> : <><Sparkles className="h-4 w-4 mr-1.5" />AI Screen</>}
-                  </Button>
                   {(rawText || parsed) && (
                     <Button variant="outline" size="sm" onClick={() => { handleReset(); setNewReferralScreening(""); }}><RotateCcw className="h-4 w-4 mr-1" />Reset</Button>
                   )}
@@ -3423,7 +3521,7 @@ export const ReferralTab = () => {
                       ? `\n\nAs we prepare for the interview, we also have a few follow-up questions we would appreciate you looking into ahead of time:\n\n${interviewFollowUpQuestions.map((q, i) => `${i + 1}. ${q}`).join("\n")}`
                       : "";
 
-                    const hrefInterviewRequest = `mailto:${mailtoTo}?subject=${encodeURIComponent(`Interview Request – ${item.referralName || 'the youth'}`)}&body=${encodeURIComponent(`Hi ${poFirstName},\n\nThank you for submitting the referral for ${item.referralName || 'the youth'}. After reviewing the documentation, we would like to move forward with scheduling an interview to further assess placement fit at Heartland Boys Home.\n\nPlease let us know a few dates and times that work for you, the youth, and the family, and we will do our best to accommodate. If there is a preferred method for coordinating the interview, please share that as well.${followUpSection}\n\nFeel free to reply to this email or reach us directly at admissions@heartlandboyshomenebraska.org or (402) 759-3335.\n\nWe look forward to connecting with you.\n\nSincerely,\nHeartland Admissions\nHeartland Boys Home\nadmissions@heartlandboyshomenebraska.org\n(402) 759-3335`)}`;
+                    const hrefInterviewRequest = `mailto:${mailtoTo}?subject=${encodeURIComponent(`Interview Request – ${item.referralName || 'the youth'}`)}&body=${encodeURIComponent(`Hi ${poFirstName},\n\nJust wanted to reach out and let you know we'd like to set up an interview with ${item.referralName || 'the youth'}. What's the best way to make that happen on your end?\n\nFeel free to reply here or give us a call at (402) 759-3335 — we're happy to work around your schedule.\n\nThanks!\nHeartland Admissions\nHeartland Boys Home\nadmissions@heartlandboyshomenebraska.org\n(402) 759-3335`)}`;
 
                     const hrefAccept = `mailto:${mailtoTo}?subject=${encodeURIComponent(`Placement Decision – ${item.referralName || "the youth"} – Accepted`)}&body=${encodeURIComponent(`Hi ${poFirstName},\n\nWe are pleased to let you know that we are able to accept ${item.referralName || "the youth"} for placement at Heartland Boys Home.\n\nTo move forward, please reach out to coordinate intake logistics. A few things we'll need to confirm:\n\n  • Intake date and arrival time\n  • Transportation arrangements\n  • Any immediate medical, behavioral, or safety needs we should be prepared for on arrival\n\nWe're excited to welcome ${item.referralName || "the youth"} and are committed to providing a structured, supportive environment. Please don't hesitate to contact us with any questions.\n\nWarm regards,\nHeartland Admissions\nHeartland Boys Home\nadmissions@heartlandboyshomenebraska.org\n(402) 759-3335`)}`;
 
@@ -3800,24 +3898,28 @@ export const ReferralTab = () => {
                         </span>
                         <a
                           href={hrefCheck}
+                          onClick={() => logEmailAction(item, "Check Need")}
                           className="text-xs bg-sky-100 text-sky-800 hover:bg-sky-200 px-2 py-1 rounded border border-sky-300 transition-colors font-medium no-brand-override"
                         >
                           Check Need
                         </a>
                         <a
                           href={hrefInterviewRequest}
+                          onClick={() => logEmailAction(item, "Request Interview")}
                           className="text-xs bg-yellow-100 text-yellow-800 hover:bg-yellow-200 px-2 py-1 rounded border border-yellow-300 transition-colors font-medium no-brand-override"
                         >
                           Request Interview
                         </a>
                         <a
                           href={hrefAccept}
+                          onClick={() => logEmailAction(item, "Accept")}
                           className="text-xs bg-green-100 text-green-800 hover:bg-green-200 px-2 py-1 rounded border border-green-300 transition-colors font-medium no-brand-override"
                         >
                           Accept
                         </a>
                         <a
                           href={hrefDeny}
+                          onClick={() => logEmailAction(item, "Deny")}
                           className="text-xs bg-red-100 text-red-800 hover:bg-red-200 px-2 py-1 rounded border border-red-300 transition-colors font-medium no-brand-override"
                         >
                           Deny
@@ -3856,6 +3958,7 @@ export const ReferralTab = () => {
                           return (
                             <a
                               href={hrefInterview}
+                              onClick={() => logEmailAction(item, "Interview Confirmation")}
                               className="text-xs bg-yellow-50 text-yellow-800 hover:bg-yellow-100 px-2 py-1 rounded border border-yellow-300 transition-colors font-medium no-brand-override"
                             >
                               Interview
@@ -3869,14 +3972,10 @@ export const ReferralTab = () => {
                         <Button
                           size="sm"
                           variant="outline"
-                          className="bg-white border-red-300 text-red-600 hover:bg-red-50 no-brand-override"
-                          onClick={() => handleAIScreen(item.rawText || JSON.stringify(item.parsedData || {}), rowKey)}
-                          disabled={aiScreeningLoading.has(rowKey)}
+                          className="bg-white border-purple-300 text-purple-700 hover:bg-purple-50 no-brand-override"
+                          onClick={() => { setPasteScreeningItem(item); setPasteScreeningText(""); }}
                         >
-                          {aiScreeningLoading.has(rowKey)
-                            ? <><Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />Screening...</>
-                            : <><Sparkles className="h-3.5 w-3.5 mr-1" />{(item.screeningResult || aiScreeningResults[rowKey]) ? "Re-screen" : "AI Screen"}</>
-                          }
+                          <ClipboardPaste className="h-3.5 w-3.5 mr-1" />Paste Screening
                         </Button>
                         <Button
                           size="sm"
@@ -4004,47 +4103,115 @@ export const ReferralTab = () => {
                                       }
                                     }}
                                   >
-                                    {sectionDef.key === 'family' ? (() => {
-                                      const { contacts, ungrouped } = groupContactPersons(data as Record<string, string>);
-                                      const hasContacts = contacts.length > 0;
-                                      return (
-                                        <div className="space-y-2">
-                                          {hasContacts && renderContactPersonCards(contacts, referralSearchQuery)}
-                                          {Object.keys(ungrouped).length > 0 && (
-                                            <div className={`grid ${Object.keys(ungrouped).length >= 4 ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1"} gap-2 ${hasContacts ? "mt-2 pt-2 border-t border-amber-100" : ""}`}>
-                                              {Object.entries(ungrouped).map(([key, val]) => (
-                                                <ReferralFieldRow
-                                                  key={key}
-                                                  label={highlightText(key, referralSearchQuery) as string}
-                                                  value={highlightText(val as string, referralSearchQuery)}
-                                                />
-                                              ))}
-                                            </div>
-                                          )}
-                                        </div>
-                                      );
-                                    })() : (
-                                      <div className={`grid ${fieldCount >= 6 ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1"} gap-2`}>
-                                        {Object.entries(data).map(([key, val]) => {
-                                          const isNarrative = typeof val === 'string' && (val as string).length > 120;
+                                    {(() => {
+                                      const itemId = item.id || item.createdAt;
+                                      const renderEditableField = (fKey: string, fVal: string, sKey: string, isNarrative?: boolean) => {
+                                        const isEditing = editingField?.itemId === itemId && editingField?.sectionKey === sKey && editingField?.fieldKey === fKey;
+                                        if (isEditing) {
                                           return (
-                                            <div key={key} className={isNarrative ? "col-span-full" : ""}>
+                                            <div className="py-1.5 px-2.5">
+                                              <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 mb-1">{fKey}</p>
                                               {isNarrative ? (
-                                                <div className="space-y-0.5">
-                                                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{highlightText(key, referralSearchQuery)}</p>
-                                                  <p className="text-sm text-gray-900 whitespace-pre-wrap leading-relaxed bg-gray-50 rounded p-2 border border-gray-100">{highlightText(val as string, referralSearchQuery)}</p>
-                                                </div>
+                                                <Textarea
+                                                  autoFocus
+                                                  value={editingValue}
+                                                  onChange={(e) => setEditingValue(e.target.value)}
+                                                  onBlur={() => handleFieldEdit(item, sKey, fKey, editingValue)}
+                                                  rows={4}
+                                                  className="text-sm"
+                                                  disabled={savingEditField}
+                                                />
                                               ) : (
-                                                <ReferralFieldRow
-                                                  label={highlightText(key, referralSearchQuery) as string}
-                                                  value={highlightText(val as string, referralSearchQuery)}
+                                                <Input
+                                                  autoFocus
+                                                  value={editingValue}
+                                                  onChange={(e) => setEditingValue(e.target.value)}
+                                                  onBlur={() => handleFieldEdit(item, sKey, fKey, editingValue)}
+                                                  className="h-7 text-sm"
+                                                  disabled={savingEditField}
                                                 />
                                               )}
+                                              <p className="text-[10px] text-gray-400 mt-0.5">Auto-saves when done</p>
                                             </div>
                                           );
-                                        })}
-                                      </div>
-                                    )}
+                                        }
+                                        return (
+                                          <div
+                                            className="group/field cursor-text"
+                                            title="Click to edit"
+                                            onClick={() => { setEditingField({ itemId, sectionKey: sKey, fieldKey: fKey }); setEditingValue(fVal); }}
+                                          >
+                                            {isNarrative ? (
+                                              <div className="space-y-0.5 py-1.5 px-2.5">
+                                                <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 flex items-center gap-1">
+                                                  {highlightText(fKey, referralSearchQuery)}
+                                                  <span className="opacity-0 group-hover/field:opacity-100 text-blue-400 normal-case tracking-normal">(click to edit)</span>
+                                                </p>
+                                                <p className="text-sm text-gray-900 whitespace-pre-wrap leading-relaxed bg-gray-50 rounded p-2 border border-gray-100 group-hover/field:border-blue-200 transition-colors">
+                                                  {highlightText(fVal, referralSearchQuery)}
+                                                </p>
+                                              </div>
+                                            ) : (
+                                              <ReferralFieldRow
+                                                label={highlightText(fKey, referralSearchQuery) as string}
+                                                value={highlightText(fVal, referralSearchQuery)}
+                                              />
+                                            )}
+                                          </div>
+                                        );
+                                      };
+
+                                      if (sectionDef.key === 'family') {
+                                        const { contacts, ungrouped } = groupContactPersons(data as Record<string, string>);
+                                        const hasContacts = contacts.length > 0;
+                                        return (
+                                          <div className="space-y-2">
+                                            {hasContacts && (
+                                              <div className="space-y-2">
+                                                {contacts.map((card) => (
+                                                  <div key={card.role} className="rounded border border-amber-200 bg-amber-50/50 p-2.5">
+                                                    <p className="text-xs font-bold text-amber-800 mb-1.5 uppercase tracking-wide">{card.role}</p>
+                                                    <div className="space-y-1">
+                                                      {card.fields.map(({ label, value }) => {
+                                                        // Reconstruct original key
+                                                        const origKey = label === 'Name' && data[card.role] !== undefined
+                                                          ? card.role
+                                                          : `${card.role} ${label}`;
+                                                        return (
+                                                          <div key={label}>
+                                                            {renderEditableField(origKey, value, 'family')}
+                                                          </div>
+                                                        );
+                                                      })}
+                                                    </div>
+                                                  </div>
+                                                ))}
+                                              </div>
+                                            )}
+                                            {Object.keys(ungrouped).length > 0 && (
+                                              <div className={`grid ${Object.keys(ungrouped).length >= 4 ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1"} gap-0 ${hasContacts ? "mt-2 pt-2 border-t border-amber-100" : ""}`}>
+                                                {Object.entries(ungrouped).map(([key, val]) => (
+                                                  <div key={key}>{renderEditableField(key, val as string, 'family')}</div>
+                                                ))}
+                                              </div>
+                                            )}
+                                          </div>
+                                        );
+                                      }
+
+                                      return (
+                                        <div className={`grid ${fieldCount >= 6 ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1"} gap-0`}>
+                                          {Object.entries(data).map(([key, val]) => {
+                                            const isNarrative = typeof val === 'string' && (val as string).length > 120;
+                                            return (
+                                              <div key={key} className={isNarrative ? "col-span-full" : ""}>
+                                                {renderEditableField(key, val as string, sectionDef.key, isNarrative)}
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      );
+                                    })()}
                                   </ReferralSectionCard>
                                 );
                               })}
@@ -4071,22 +4238,41 @@ export const ReferralTab = () => {
                                       }
                                     }}
                                   >
-                                    <div className="grid grid-cols-1 gap-2">
-                                      {Object.entries(otherData).map(([key, val]) => (
-                                        <div key={key}>
-                                          {key === "Referral Notes" || /^Line\s+\d+$/i.test(key) ? (
-                                            <div className="text-sm">
-                                              {key !== "Referral Notes" ? null : <span className="font-medium text-gray-600">{key}: </span>}
-                                              <div className="whitespace-pre-wrap text-gray-800 mt-0.5">{highlightText(val as string, referralSearchQuery)}</div>
+                                    <div className="grid grid-cols-1 gap-0">
+                                      {Object.entries(otherData).map(([key, val]) => {
+                                        const itemId = item.id || item.createdAt;
+                                        const isEditing = editingField?.itemId === itemId && editingField?.sectionKey === "other" && editingField?.fieldKey === key;
+                                        if (isEditing) {
+                                          return (
+                                            <div key={key} className="py-1.5 px-2.5">
+                                              <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 mb-1">{key}</p>
+                                              <Textarea
+                                                autoFocus
+                                                value={editingValue}
+                                                onChange={(e) => setEditingValue(e.target.value)}
+                                                onBlur={() => handleFieldEdit(item, "other", key, editingValue)}
+                                                rows={4}
+                                                className="text-sm"
+                                                disabled={savingEditField}
+                                              />
+                                              <p className="text-[10px] text-gray-400 mt-0.5">Auto-saves when done</p>
                                             </div>
-                                          ) : (
+                                          );
+                                        }
+                                        return (
+                                          <div
+                                            key={key}
+                                            className="group/field cursor-text"
+                                            title="Click to edit"
+                                            onClick={() => { setEditingField({ itemId, sectionKey: "other", fieldKey: key }); setEditingValue(val as string); }}
+                                          >
                                             <ReferralFieldRow
                                               label={highlightText(key, referralSearchQuery) as string}
                                               value={highlightText(val as string, referralSearchQuery)}
                                             />
-                                          )}
-                                        </div>
-                                      ))}
+                                          </div>
+                                        );
+                                      })}
                                     </div>
                                 </ReferralSectionCard>
                                 );
@@ -4108,14 +4294,6 @@ export const ReferralTab = () => {
                                 <span className="text-sm font-semibold text-purple-800 flex items-center gap-1.5 no-brand-override">
                                   <Sparkles className="h-4 w-4" />AI Screening Result
                                 </span>
-                                <button
-                                  onClick={() => handleAIScreen(item.rawText || JSON.stringify(item.parsedData || {}), rowKey)}
-                                  disabled={aiScreeningLoading.has(rowKey)}
-                                  className="text-xs text-purple-600 hover:text-purple-800 flex items-center gap-1"
-                                >
-                                  {aiScreeningLoading.has(rowKey) ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCcw className="h-3 w-3" />}
-                                  Re-run
-                                </button>
                               </div>
                               {renderAIScreening(item.screeningResult || aiScreeningResults[rowKey])}
                             </div>
@@ -4224,6 +4402,61 @@ export const ReferralTab = () => {
                   )}
                 </div>
               )}
+
+              {/* Paste Screening Dialog */}
+              <Dialog
+                open={Boolean(pasteScreeningItem)}
+                onOpenChange={(open) => { if (!open) setPasteScreeningItem(null); }}
+              >
+                <DialogContent className="sm:max-w-2xl">
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                      <ClipboardPaste className="h-4 w-4 text-purple-600" />
+                      Paste Claude Screening — {pasteScreeningItem?.referralName}
+                    </DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-3">
+                    <p className="text-sm text-muted-foreground">
+                      Ask Claude to screen this referral using your screening criteria, then paste the JSON output here.
+                      The result will be saved and displayed in the screening view.
+                    </p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-xs"
+                      onClick={() => {
+                        const referralText = pasteScreeningItem?.rawText
+                          || JSON.stringify(pasteScreeningItem?.parsedData || {});
+                        const prompt = `You are a referral screener for Heartland Boys Home, a group home for youth. Screen the following referral and return ONLY valid JSON — no markdown, no preamble.\n\nReturn this exact JSON structure (fill in all fields based on the referral):\n{\n  "youth_name": null,\n  "date_of_birth": null,\n  "referring_agency": null,\n  "probation_officer": null,\n  "current_placement": null,\n  "overall_risk_level": null,\n  "screen_status": "PASS",\n  "fit_rating": "MIXED",\n  "screening_decision": "RECOMMEND INTERVIEW",\n  "recommendation": "INTERVIEW",\n  "overall_narrative": "",\n  "rationale_bullets": [],\n  "conditions": [],\n  "screening_flags": [],\n  "flags_present": false,\n  "missing_info": [],\n  "strengths": [],\n  "barriers": [],\n  "risk_summary": { "yls_score": null, "yls_date": null, "top_drivers": [] },\n  "behavioral_flags": { "violence": null, "gang": null, "weapons": null, "elopement": null, "fire": null, "sexual_behavior": null },\n  "clinical_flags": { "psychosis": null, "suicidality": null, "hospitalizations": null, "meds": null },\n  "developmental_flags": { "asd_fasd_dd": null, "iq": null, "iep_504": null },\n  "substance_flags": { "substances": null, "frequency": null, "last_use": null },\n  "family_flags": { "guardians": null, "engagement": null, "contact_restrictions": null },\n  "screening_domains": [\n    { "domain_number": 1, "domain_key": "safety_supervision_fit", "score": null, "narrative": null, "is_flagged": false },\n    { "domain_number": 2, "domain_key": "behavioral_history_severity", "score": null, "narrative": null, "is_flagged": false },\n    { "domain_number": 3, "domain_key": "sexual_behavior_risk", "score": null, "narrative": null, "is_flagged": false },\n    { "domain_number": 4, "domain_key": "mental_health_stability", "score": null, "narrative": null, "is_flagged": false },\n    { "domain_number": 5, "domain_key": "substance_use", "score": null, "narrative": null, "is_flagged": false },\n    { "domain_number": 6, "domain_key": "family_dynamics_support", "score": null, "narrative": null, "is_flagged": false },\n    { "domain_number": 7, "domain_key": "educational_engagement", "score": null, "narrative": null, "is_flagged": false },\n    { "domain_number": 8, "domain_key": "treatment_history_engagement", "score": null, "narrative": null, "is_flagged": false },\n    { "domain_number": 9, "domain_key": "motivation_accountability", "score": null, "narrative": null, "is_flagged": false },\n    { "domain_number": 10, "domain_key": "program_fit_assessment", "score": null, "narrative": null, "is_flagged": false }\n  ]\n}\n\nscreening_decision must be exactly one of: "RECOMMEND INTERVIEW", "NEED MORE INFO", "CONDITIONAL", "DENY / REDIRECT"\nrecommendation must be exactly one of: "INTERVIEW", "INTERVIEW_WITH_CONDITIONS", "DECLINE"\nfit_rating must be: "STRONG", "MIXED", or "POOR"\nDomain scores are 1–5 (1=Poor/High Concern, 5=Strong/Low Concern).\n\nREFERRAL:\n${referralText}`;
+                        navigator.clipboard.writeText(prompt);
+                        toast.success("Screening prompt copied — paste into Claude, then copy the JSON response back here.");
+                      }}
+                    >
+                      <Copy className="h-3.5 w-3.5 mr-1" />
+                      Copy Prompt for Claude
+                    </Button>
+                    <Textarea
+                      value={pasteScreeningText}
+                      onChange={(e) => setPasteScreeningText(e.target.value)}
+                      placeholder="Paste the JSON from Claude here..."
+                      rows={14}
+                      className="font-mono text-xs"
+                    />
+                    <div className="flex gap-2">
+                      <Button
+                        onClick={handlePasteScreening}
+                        disabled={pasteScreeningSaving || !pasteScreeningText.trim()}
+                      >
+                        {pasteScreeningSaving
+                          ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" />Saving...</>
+                          : <><Save className="h-4 w-4 mr-1" />Parse & Save</>
+                        }
+                      </Button>
+                      <Button variant="outline" onClick={() => setPasteScreeningItem(null)}>Cancel</Button>
+                    </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
 
               <Dialog
                 open={Boolean(editingInterviewTarget)}

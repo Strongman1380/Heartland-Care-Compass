@@ -247,7 +247,27 @@ export default function IncidentReports() {
               </h2>
             </div>
             <div className="divide-y">
-              {incidents.map(inc => (
+              {(() => {
+                const sorted = [...incidents].sort((a, b) => {
+                  const da = a.dateOfIncident ? new Date(a.dateOfIncident + 'T00:00:00').getTime() : 0
+                  const db = b.dateOfIncident ? new Date(b.dateOfIncident + 'T00:00:00').getTime() : 0
+                  return db - da
+                })
+                const rows: React.ReactNode[] = []
+                let lastDate = ''
+                sorted.forEach(inc => {
+                  const dateKey = inc.dateOfIncident ?? ''
+                  if (dateKey !== lastDate) {
+                    lastDate = dateKey
+                    const d = dateKey ? new Date(dateKey + 'T00:00:00') : null
+                    const label = d && !isNaN(d.getTime()) ? format(d, 'EEEE, MMMM d, yyyy') : 'No Date'
+                    rows.push(
+                      <div key={`header-${dateKey}`} className="px-4 py-2 bg-slate-50 border-b">
+                        <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{label}</span>
+                      </div>
+                    )
+                  }
+                  rows.push(
                 <div key={inc.id} className="p-4 hover:bg-slate-50 transition-colors">
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1 space-y-1.5">
@@ -318,7 +338,10 @@ export default function IncidentReports() {
                     </div>
                   </div>
                 </div>
-              ))}
+                  )
+                })
+                return rows
+              })()}
             </div>
           </div>
         )}

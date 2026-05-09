@@ -26,9 +26,9 @@ services:
       - key: ANTHROPIC_API_KEY
         sync: false
       - key: ANTHROPIC_MODEL_STANDARD
-        value: claude-3-5-haiku-20241022
+        value: claude-haiku-4-5-20251001
       - key: ANTHROPIC_MODEL_PREMIUM
-        value: claude-3-5-haiku-20241022
+        value: claude-haiku-4-5-20251001
       - key: FIREBASE_PROJECT_ID
         value: heartland-boys-home-data
       - key: CORS_ORIGIN

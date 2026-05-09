@@ -95,8 +95,8 @@ const anthropic = process.env.ANTHROPIC_API_KEY ? new Anthropic({
 }) : null;
 
 const modelTiers = {
-  standard: process.env.ANTHROPIC_MODEL_STANDARD || process.env.ANTHROPIC_MODEL || 'claude-3-5-haiku-20241022',
-  premium: process.env.ANTHROPIC_MODEL_PREMIUM || process.env.ANTHROPIC_MODEL || 'claude-3-5-haiku-20241022',
+  standard: process.env.ANTHROPIC_MODEL_STANDARD || process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001',
+  premium: process.env.ANTHROPIC_MODEL_PREMIUM || process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001',
 };
 const selectModel = (tier = 'standard') => modelTiers[tier] || modelTiers.standard;
 

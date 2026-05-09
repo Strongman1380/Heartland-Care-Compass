@@ -23,11 +23,13 @@ services:
         sync: false
       - key: ADMIN_API_KEY
         sync: false
-      - key: OPENAI_API_KEY
+      - key: ANTHROPIC_API_KEY
         sync: false
-      - key: OPENAI_MODEL
-        value: gpt-4o-mini
-      - key: OPENAI_MODEL_PREMIUM
-        value: gpt-4o
+      - key: ANTHROPIC_MODEL_STANDARD
+        value: claude-3-5-haiku-20241022
+      - key: ANTHROPIC_MODEL_PREMIUM
+        value: claude-3-5-haiku-20241022
+      - key: FIREBASE_PROJECT_ID
+        value: heartland-boys-home-data
       - key: CORS_ORIGIN
         value: https://strongman1380.github.io,https://heartland-care-compass.vercel.app,http://localhost:8080

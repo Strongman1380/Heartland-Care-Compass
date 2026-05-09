@@ -14,13 +14,16 @@ import { getAuth } from 'firebase-admin/auth';
 // Load environment variables
 dotenv.config();
 
+const DEFAULT_FIREBASE_PROJECT_ID = 'heartland-boys-home-data';
+
 if (getApps().length === 0) {
   // Support VITE_FIREBASE_PROJECT_ID as fallback — Vercel sets this for the frontend build
   // but all Vercel dashboard env vars are available in serverless functions at runtime.
   const projectId =
     process.env.FIREBASE_PROJECT_ID ||
     process.env.GCLOUD_PROJECT ||
-    process.env.VITE_FIREBASE_PROJECT_ID;
+    process.env.VITE_FIREBASE_PROJECT_ID ||
+    DEFAULT_FIREBASE_PROJECT_ID;
 
   // Optional: provide a service-account JSON key for credential-based init (recommended for Vercel)
   // Set FIREBASE_SERVICE_ACCOUNT_KEY in the Vercel dashboard as the raw JSON string of your
@@ -49,8 +52,7 @@ if (getApps().length === 0) {
       console.log('[Firebase Admin] Using project ID:', projectId);
       initializeApp({ projectId });
     } else {
-      console.warn('[Firebase Admin] No FIREBASE_PROJECT_ID set — token verification may fail. Set FIREBASE_PROJECT_ID in Vercel env vars.');
-      initializeApp();
+      initializeApp({ projectId: DEFAULT_FIREBASE_PROJECT_ID });
     }
   } catch (initError) {
     console.error('[Firebase Admin] Initialization error:', initError.message);
@@ -92,8 +94,11 @@ const anthropic = process.env.ANTHROPIC_API_KEY ? new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 }) : null;
 
-const CLAUDE_MODEL = 'claude-sonnet-4-5';
-const selectModel = () => CLAUDE_MODEL;
+const modelTiers = {
+  standard: process.env.ANTHROPIC_MODEL_STANDARD || process.env.ANTHROPIC_MODEL || 'claude-3-5-haiku-20241022',
+  premium: process.env.ANTHROPIC_MODEL_PREMIUM || process.env.ANTHROPIC_MODEL || 'claude-3-5-haiku-20241022',
+};
+const selectModel = (tier = 'standard') => modelTiers[tier] || modelTiers.standard;
 
 // AI Usage tracking (in-memory for this session)
 let aiUsageStats = {
@@ -248,9 +253,9 @@ const requireFirebaseAuth = async (req, res, next) => {
     return next();
   } catch (error) {
     console.error('[Firebase Auth] Token verification failed:', error?.code || error?.message || error);
+    console.error('[Firebase Auth] Project ID used for Admin init:', adminAuth.app.options.projectId);
     // Log more details in dev to help troubleshoot
     if (process.env.NODE_ENV !== 'production') {
-      console.error('[Firebase Auth] Project ID used for Admin init:', adminAuth.app.options.projectId);
       console.error('[Firebase Auth] Full error:', error);
     }
     
@@ -993,7 +998,7 @@ ${noteContent}`,
     });
 
     if (result.unavailable) {
-      return res.status(503).json({ error: 'OpenAI not configured', fallback: true, requestId: result.requestId });
+      return res.status(503).json({ error: 'Anthropic API key not configured', fallback: true, requestId: result.requestId });
     }
 
     const parsed = result.parsed || {};
@@ -1652,7 +1657,7 @@ Important:
     console.error('Parse youth profile error:', error);
     logAIUsage(false, 0, error);
     const mapped = mapOpenAIError(error);
-    res.status(500).json({ 
+    res.status(mapped.status).json({ 
       error: mapped.message, 
       code: mapped.code,
       retryable: mapped.retryable,

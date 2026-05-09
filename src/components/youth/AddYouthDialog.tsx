@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { flushSync } from "react-dom";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -111,7 +112,15 @@ export const AddYouthDialog = ({ onClose, onSuccess }: AddYouthDialogProps) => {
       }
       const parsedData: any = (response as any).data.parsedData || response.data;
       const importPatch = mapImportedProfileToFormPatch(parsedData);
-      setFormData((prev) => ({ ...prev, ...importPatch }));
+      const nextFormData = { ...formData, ...importPatch };
+
+      if (!nextFormData.firstName || !nextFormData.lastName) {
+        throw new Error("Import could not confidently identify first and last name.");
+      }
+
+      flushSync(() => {
+        setFormData(nextFormData);
+      });
       setImportStatus('success');
 
       const warnings = Array.isArray(parsedData.warnings) ? parsedData.warnings : [];
@@ -120,11 +129,11 @@ export const AddYouthDialog = ({ onClose, onSuccess }: AddYouthDialogProps) => {
       if (warnings.length > 0) {
         toast.warning("Import completed with warnings", { description: parsedData.warnings.join(", ") });
       } else {
-        toast.success("Profile data imported successfully!", { description: `Confidence: ${confidence !== undefined ? Math.round(confidence * 100) : 'N/A'}%` });
+        toast.success("Profile imported. Saving youth record...", { description: `Confidence: ${confidence !== undefined ? Math.round(confidence * 100) : 'N/A'}%` });
       }
 
       setImportText("");
-      setActiveTab("personal");
+      (document.getElementById("add-youth-form") as HTMLFormElement | null)?.requestSubmit();
     } catch (error) {
       console.error("Import error:", error);
       setImportStatus('error');
@@ -433,7 +442,7 @@ export const AddYouthDialog = ({ onClose, onSuccess }: AddYouthDialogProps) => {
           )}
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4 py-2">
+        <form id="add-youth-form" onSubmit={handleSubmit} className="space-y-4 py-2">
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList className="grid grid-cols-6 mb-4">
               {tabs.map(tab => (

@@ -96,6 +96,60 @@ export const AddYouthDialog = ({ onClose, onSuccess }: AddYouthDialogProps) => {
     return age;
   };
 
+  const splitImportedFullName = (value: string) => {
+    const cleaned = value
+      .replace(/^(resident|youth|child|client|student|juvenile|name)\s*[:,-]\s*/i, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!cleaned) return {};
+
+    if (cleaned.includes(",")) {
+      const [last, first] = cleaned.split(",").map((part) => part.trim()).filter(Boolean);
+      if (first && last) return { firstName: first.split(/\s+/)[0], lastName: last };
+    }
+
+    const parts = cleaned.split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) {
+      return { firstName: parts[0], lastName: parts.slice(1).join(" ") };
+    }
+
+    return {};
+  };
+
+  const inferNameFromImportText = (text: string) => {
+    const lines = text
+      .split(/\r?\n/)
+      .map((line) => line.replace(/^\s*[•*\-]\s*/, "").trim())
+      .filter(Boolean);
+
+    let firstName = "";
+    let lastName = "";
+
+    for (const line of lines) {
+      const firstMatch = line.match(/^(?:first\s*name|given\s*name|first)\s*[:,]\s*(.+)$/i);
+      if (firstMatch) firstName = firstMatch[1].trim();
+
+      const lastMatch = line.match(/^(?:last\s*name|surname|family\s*name|last)\s*[:,]\s*(.+)$/i);
+      if (lastMatch) lastName = lastMatch[1].trim();
+
+      const fullMatch = line.match(/^(?:resident\s*name|youth\s*name|child\s*name|client\s*name|student\s*name|juvenile\s*name|full\s*name|name)\s*[:,]\s*(.+)$/i);
+      if (fullMatch) {
+        const split = splitImportedFullName(fullMatch[1]);
+        firstName ||= split.firstName || "";
+        lastName ||= split.lastName || "";
+      }
+
+      const csvMatch = line.match(/^"?(?:resident\s*name|youth\s*name|child\s*name|client\s*name|student\s*name|juvenile\s*name|full\s*name|name)"?\s*,\s*"?(.+?)"?$/i);
+      if (csvMatch) {
+        const split = splitImportedFullName(csvMatch[1]);
+        firstName ||= split.firstName || "";
+        lastName ||= split.lastName || "";
+      }
+    }
+
+    return { firstName, lastName };
+  };
+
   const handleImportProfile = async () => {
     if (!importText.trim()) {
       toast.error("Please paste some profile text to import");
@@ -112,9 +166,17 @@ export const AddYouthDialog = ({ onClose, onSuccess }: AddYouthDialogProps) => {
       }
       const parsedData: any = (response as any).data.parsedData || response.data;
       const importPatch = mapImportedProfileToFormPatch(parsedData);
+      const inferredName = inferNameFromImportText(importText);
+      if (!importPatch.firstName && inferredName.firstName) importPatch.firstName = inferredName.firstName;
+      if (!importPatch.lastName && inferredName.lastName) importPatch.lastName = inferredName.lastName;
+
       const nextFormData = { ...formData, ...importPatch };
 
       if (!nextFormData.firstName || !nextFormData.lastName) {
+        console.warn("Profile import missing name fields", {
+          parsedKeys: parsedData && typeof parsedData === "object" ? Object.keys(parsedData) : [],
+          inferredName,
+        });
         throw new Error("Import could not confidently identify first and last name.");
       }
 

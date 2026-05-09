@@ -16,6 +16,26 @@ const firstDefined = (source: AnyRecord, keys: string[]): any => {
   return undefined;
 };
 
+const normalizeKey = (key: string): string => key.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+const findDeepValue = (source: any, keys: string[], depth = 0): any => {
+  if (!source || typeof source !== "object" || depth > 4) return undefined;
+  const wanted = new Set(keys.map(normalizeKey));
+
+  for (const [key, value] of Object.entries(source)) {
+    if (wanted.has(normalizeKey(key)) && value !== undefined && value !== null) {
+      return value;
+    }
+  }
+
+  for (const value of Object.values(source)) {
+    const found = findDeepValue(value, keys, depth + 1);
+    if (found !== undefined && found !== null) return found;
+  }
+
+  return undefined;
+};
+
 const normalizeString = (value: any): string | undefined => {
   if (value === null || value === undefined) return undefined;
   if (typeof value === "string") {
@@ -94,7 +114,7 @@ const splitFullName = (value: any): { firstName?: string; lastName?: string } =>
 
 export function mapImportedProfileToFormPatch(parsedData: AnyRecord): Partial<YouthFormData> {
   const patch: Partial<YouthFormData> = {};
-  const fullName = firstDefined(parsedData, [
+  const fullNameKeys = [
     "name",
     "fullName",
     "full_name",
@@ -106,7 +126,8 @@ export function mapImportedProfileToFormPatch(parsedData: AnyRecord): Partial<Yo
     "child_name",
     "clientName",
     "client_name",
-  ]);
+  ];
+  const fullName = firstDefined(parsedData, fullNameKeys) ?? findDeepValue(parsedData, fullNameKeys);
   const splitName = splitFullName(fullName);
 
   const legalGuardian = firstDefined(parsedData, ["legalGuardian", "guardian"]);
@@ -131,8 +152,8 @@ export function mapImportedProfileToFormPatch(parsedData: AnyRecord): Partial<Yo
   const physDesc = parsedData.physicalDescription;
 
   const stringMappings: Array<{ formKey: keyof YouthFormData; values: any[] }> = [
-    { formKey: "firstName", values: [firstDefined(parsedData, ["firstName", "first_name", "givenName"]), splitName.firstName] },
-    { formKey: "lastName", values: [firstDefined(parsedData, ["lastName", "last_name", "surname", "familyName"]), splitName.lastName] },
+    { formKey: "firstName", values: [firstDefined(parsedData, ["firstName", "first_name", "givenName"]), findDeepValue(parsedData, ["firstName", "first_name", "givenName", "given_name"]), splitName.firstName] },
+    { formKey: "lastName", values: [firstDefined(parsedData, ["lastName", "last_name", "surname", "familyName"]), findDeepValue(parsedData, ["lastName", "last_name", "surname", "familyName", "family_name"]), splitName.lastName] },
     { formKey: "sex", values: [firstDefined(parsedData, ["sex", "gender"])] },
     { formKey: "race", values: [parsedData.race] },
     { formKey: "religion", values: [parsedData.religion] },

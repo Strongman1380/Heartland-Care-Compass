@@ -72,8 +72,42 @@ const splitPeople = (value: any): string[] => {
     .filter(Boolean);
 };
 
+const splitFullName = (value: any): { firstName?: string; lastName?: string } => {
+  const text = normalizeString(value)
+    ?.replace(/^(resident|youth|child|client|name)\s*:\s*/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!text) return {};
+
+  if (text.includes(",")) {
+    const [last, first] = text.split(",").map((part) => part.trim()).filter(Boolean);
+    if (first && last) return { firstName: first.split(/\s+/)[0], lastName: last };
+  }
+
+  const parts = text.split(/\s+/).filter(Boolean);
+  if (parts.length === 1) return { firstName: parts[0] };
+  return {
+    firstName: parts[0],
+    lastName: parts.slice(1).join(" "),
+  };
+};
+
 export function mapImportedProfileToFormPatch(parsedData: AnyRecord): Partial<YouthFormData> {
   const patch: Partial<YouthFormData> = {};
+  const fullName = firstDefined(parsedData, [
+    "name",
+    "fullName",
+    "full_name",
+    "residentName",
+    "resident_name",
+    "youthName",
+    "youth_name",
+    "childName",
+    "child_name",
+    "clientName",
+    "client_name",
+  ]);
+  const splitName = splitFullName(fullName);
 
   const legalGuardian = firstDefined(parsedData, ["legalGuardian", "guardian"]);
   const probationOfficer = firstDefined(parsedData, ["probationOfficer", "probation"]);
@@ -97,8 +131,8 @@ export function mapImportedProfileToFormPatch(parsedData: AnyRecord): Partial<Yo
   const physDesc = parsedData.physicalDescription;
 
   const stringMappings: Array<{ formKey: keyof YouthFormData; values: any[] }> = [
-    { formKey: "firstName", values: [firstDefined(parsedData, ["firstName", "first_name", "givenName"])] },
-    { formKey: "lastName", values: [firstDefined(parsedData, ["lastName", "last_name", "surname", "familyName"])] },
+    { formKey: "firstName", values: [firstDefined(parsedData, ["firstName", "first_name", "givenName"]), splitName.firstName] },
+    { formKey: "lastName", values: [firstDefined(parsedData, ["lastName", "last_name", "surname", "familyName"]), splitName.lastName] },
     { formKey: "sex", values: [firstDefined(parsedData, ["sex", "gender"])] },
     { formKey: "race", values: [parsedData.race] },
     { formKey: "religion", values: [parsedData.religion] },

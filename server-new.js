@@ -355,6 +355,35 @@ const splitResidentName = (fullName) => {
   };
 };
 
+const pickFirst = (...values) => {
+  for (const value of values) {
+    const normalized = normalizeImportScalar(value);
+    if (normalized) return normalized;
+  }
+  return null;
+};
+
+const hydrateParsedName = (parsed) => {
+  if (!parsed || (parsed.firstName && parsed.lastName)) return parsed;
+  const fullName = pickFirst(
+    parsed.name,
+    parsed.fullName,
+    parsed.full_name,
+    parsed.residentName,
+    parsed.resident_name,
+    parsed.youthName,
+    parsed.youth_name,
+    parsed.childName,
+    parsed.child_name,
+    parsed.clientName,
+    parsed.client_name
+  );
+  const split = splitResidentName(fullName);
+  if (!parsed.firstName && split.firstName) parsed.firstName = split.firstName;
+  if (!parsed.lastName && split.lastName) parsed.lastName = split.lastName;
+  return parsed;
+};
+
 const splitPeople = (value) => {
   const text = normalizeImportScalar(value);
   if (!text) return [];
@@ -549,7 +578,7 @@ const mergeParsedProfileData = (aiParsed, deterministicParsed) => {
     if (value === null || value === undefined) continue;
     merged[key] = value;
   }
-  return merged;
+  return hydrateParsedName(merged);
 };
 
 const mapOpenAIError = (error) => {

@@ -48,7 +48,7 @@ export interface ReportOptions {
     assessment: boolean;
     documents: boolean;
   };
-  outputFormat?: 'text' | 'pdf' | 'docx';
+  outputFormat?: 'text' | 'pdf' | 'docx' | 'json';
   useAI?: boolean;
 }
 

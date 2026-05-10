@@ -2472,6 +2472,8 @@ app.get('*', (req, res) => {
 // Helper function to generate enhanced AI prompts
 function generateAIPrompt(youth, reportType, period, data) {
   const progressNotes = data.progressNotes || [];
+  const behaviorPoints = data.behaviorPoints || [];
+  const dailyRatings = data.dailyRatings || [];
   const noteCount = progressNotes.length;
 
   // Extract readable text from case notes (supports multiple note formats)
@@ -2500,8 +2502,24 @@ function generateAIPrompt(youth, reportType, period, data) {
     return `[${dateStr}]${staff} ${text}`;
   }).filter(entry => entry.trim().length > 15);
 
-  // Limit to most recent 20 notes to stay within token limits
-  const recentNotes = caseNoteEntries.slice(-20);
+  // Limit to most recent 40 notes to stay within token limits
+  const recentNotes = caseNoteEntries.slice(-40);
+
+  let behaviorSummary = '';
+  if (behaviorPoints.length > 0) {
+    const totalPoints = behaviorPoints.reduce((sum, p) => sum + (p.totalPoints || 0), 0);
+    const avgPoints = Math.round(totalPoints / behaviorPoints.length);
+    behaviorSummary = `- Average daily behavior points: ${avgPoints}\n- Total points in period: ${totalPoints}\n- Total recorded days: ${behaviorPoints.length}`;
+  }
+
+  let ratingSummary = '';
+  if (dailyRatings.length > 0) {
+    const calcAvg = (field) => {
+      const vals = dailyRatings.map(r => r[field]).filter(v => typeof v === 'number' && v > 0);
+      return vals.length > 0 ? (vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(1) : 'N/A';
+    };
+    ratingSummary = `- Peer Interaction Avg: ${calcAvg('peerInteraction')}/5\n- Adult Interaction Avg: ${calcAvg('adultInteraction')}/5\n- Program Investment Avg: ${calcAvg('investmentLevel')}/5\n- Authority Response Avg: ${calcAvg('dealAuthority')}/5`;
+  }
 
   const basePrompt = `
 Generate a professional ${reportType} report narrative for ${youth.firstName} ${youth.lastName}, a ${youth.age || 'N/A'} year old resident at Heartland Boys Home.
@@ -2517,6 +2535,10 @@ YOUTH PROFILE:
 - Strengths/Talents: ${youth.strengthsTalents || 'Not documented'}
 
 REPORTING PERIOD: ${period?.startDate || 'Not specified'} to ${period?.endDate || 'Not specified'}
+
+BEHAVIORAL & DAILY RATING DATA:
+${behaviorSummary || 'No behavior points recorded.'}
+${ratingSummary || 'No daily ratings recorded.'}
 
 CASE NOTES (${noteCount} total entries, showing most recent ${recentNotes.length}):
 ${recentNotes.length > 0 ? recentNotes.join('\n\n') : 'No case notes documented during this period.'}

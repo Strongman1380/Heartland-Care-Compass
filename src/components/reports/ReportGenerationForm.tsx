@@ -29,7 +29,7 @@ export const ReportGenerationForm = ({ onGenerateReport, isGenerating }: ReportG
     assessment: false,
     documents: false,
   });
-  const [outputFormat, setOutputFormat] = useState<'text' | 'pdf' | 'docx'>('pdf');
+  const [outputFormat, setOutputFormat] = useState<'text' | 'pdf' | 'docx' | 'json'>('pdf');
   const [useAI, setUseAI] = useState<boolean>(false);
 
   // Check if selected report type should auto-export to PDF
@@ -196,8 +196,8 @@ export const ReportGenerationForm = ({ onGenerateReport, isGenerating }: ReportG
               <Select
                 value={outputFormat}
                 onValueChange={(value) => {
-                  if (value === "text" || value === "pdf" || value === "docx") {
-                    setOutputFormat(value);
+                  if (value === "text" || value === "pdf" || value === "docx" || value === "json") {
+                    setOutputFormat(value as any);
                   }
                 }}
               >
@@ -208,6 +208,7 @@ export const ReportGenerationForm = ({ onGenerateReport, isGenerating }: ReportG
                   <SelectItem value="text">Plain Text (.txt)</SelectItem>
                   <SelectItem value="pdf">PDF (.pdf)</SelectItem>
                   <SelectItem value="docx">Word (.docx)</SelectItem>
+                  <SelectItem value="json">Raw Data for Claude (.json)</SelectItem>
                 </SelectContent>
               </Select>
             )}

@@ -104,24 +104,59 @@ export const ReportCenter = ({ youthId, youth, preselectedType }: ReportCenterPr
             .replace(/([a-z])([A-Z])/g, "$1 $2")
             .replace(/^./, (c) => c.toUpperCase());
       const base = buildReportFilename(youth, reportTypeLabel, new Date());
-      if (effectiveOptions.outputFormat === 'pdf' || effectiveOptions.outputFormat === 'docx') {
+      if (effectiveOptions.outputFormat === 'json') {
+        const now = new Date();
+        const range = (() => {
+          switch (effectiveOptions.period) {
+            case 'last7': return { start: new Date(now.getTime() - 7*24*60*60*1000), end: now };
+            case 'last30': return { start: new Date(now.getTime() - 30*24*60*60*1000), end: now };
+            case 'last90': return { start: new Date(now.getTime() - 90*24*60*60*1000), end: now };
+            case 'custom': return { start: effectiveOptions.customStartDate ? new Date(effectiveOptions.customStartDate) : new Date(now.getTime() - 30*24*60*60*1000), end: effectiveOptions.customEndDate ? new Date(effectiveOptions.customEndDate) : now };
+            case 'allTime': default: return { start: new Date('2020-01-01'), end: now };
+          }
+        })();
+        const [allPoints, allNotes, allRatings, allSchoolScores] = await Promise.all([
+          getBehaviorPointsByYouth(youth.id).catch(() => fetchBehaviorPoints(youth.id)),
+          fetchAllProgressNotes(youth.id),
+          getDailyRatingsByYouth(youth.id).catch(() => fetchDailyRatings(youth.id)),
+          getScoresByYouth(youth.id).catch(() => []),
+        ]);
+        const inRange = (d?: any) => d && new Date(d) >= range.start && new Date(d) <= range.end;
+        const data = {
+          reportType: effectiveOptions.reportType,
+          generatedAt: new Date().toISOString(),
+          period: {
+            startDate: range.start.toISOString(),
+            endDate: range.end.toISOString(),
+          },
+          youth,
+          behaviorPoints: (allPoints || []).filter((p:any)=> inRange(p.date)),
+          progressNotes: (allNotes || []).filter((n:any)=> inRange(n.date)),
+          dailyRatings: (allRatings || []).filter((r:any)=> inRange(r.date)),
+          schoolScores: (allSchoolScores || []).filter((s:any)=> inRange(s.date)),
+        };
+        const content = JSON.stringify(data, null, 2);
+        const blob = new Blob([content], { type: 'application/json' });
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `${base}.json`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+      } else if (effectiveOptions.outputFormat === 'pdf' || effectiveOptions.outputFormat === 'docx') {
         let styledHTML = await generateReportHTML(youth, { ...effectiveOptions });
         // Optional AI narrative
         if (options.useAI) {
           const now = new Date();
           const range = (() => {
             switch (effectiveOptions.period) {
-              case 'last7':
-                return { start: new Date(now.getTime() - 7*24*60*60*1000), end: now };
-              case 'last30':
-                return { start: new Date(now.getTime() - 30*24*60*60*1000), end: now };
-              case 'last90':
-                return { start: new Date(now.getTime() - 90*24*60*60*1000), end: now };
-              case 'custom':
-                return { start: effectiveOptions.customStartDate ? new Date(effectiveOptions.customStartDate) : new Date(now.getTime() - 30*24*60*60*1000), end: effectiveOptions.customEndDate ? new Date(effectiveOptions.customEndDate) : now };
-              case 'allTime':
-              default:
-                return { start: new Date('2020-01-01'), end: now };
+              case 'last7': return { start: new Date(now.getTime() - 7*24*60*60*1000), end: now };
+              case 'last30': return { start: new Date(now.getTime() - 30*24*60*60*1000), end: now };
+              case 'last90': return { start: new Date(now.getTime() - 90*24*60*60*1000), end: now };
+              case 'custom': return { start: effectiveOptions.customStartDate ? new Date(effectiveOptions.customStartDate) : new Date(now.getTime() - 30*24*60*60*1000), end: effectiveOptions.customEndDate ? new Date(effectiveOptions.customEndDate) : now };
+              case 'allTime': default: return { start: new Date('2020-01-01'), end: now };
             }
           })();
           const [allPoints, allNotes, allRatings, allSchoolScores] = await Promise.all([

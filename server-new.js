@@ -2502,8 +2502,8 @@ function generateAIPrompt(youth, reportType, period, data) {
     return `[${dateStr}]${staff} ${text}`;
   }).filter(entry => entry.trim().length > 15);
 
-  // Limit to most recent 40 notes to stay within token limits
-  const recentNotes = caseNoteEntries.slice(-40);
+  // Limit to the most recent 40 notes to stay within token limits
+  const recentNotes = caseNoteEntries.slice(0, 40);
 
   let behaviorSummary = '';
   if (behaviorPoints.length > 0) {
@@ -2515,7 +2515,7 @@ function generateAIPrompt(youth, reportType, period, data) {
   let ratingSummary = '';
   if (dailyRatings.length > 0) {
     const calcAvg = (field) => {
-      const vals = dailyRatings.map(r => r[field]).filter(v => typeof v === 'number' && v > 0);
+      const vals = dailyRatings.map(r => r[field]).filter(v => typeof v === 'number' && Number.isFinite(v));
       return vals.length > 0 ? (vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(1) : 'N/A';
     };
     ratingSummary = `- Peer Interaction Avg: ${calcAvg('peerInteraction')}/5\n- Adult Interaction Avg: ${calcAvg('adultInteraction')}/5\n- Program Investment Avg: ${calcAvg('investmentLevel')}/5\n- Authority Response Avg: ${calcAvg('dealAuthority')}/5`;

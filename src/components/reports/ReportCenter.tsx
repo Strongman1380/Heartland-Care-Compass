@@ -42,6 +42,34 @@ export const ReportCenter = ({ youthId, youth, preselectedType }: ReportCenterPr
   const [evalVariant, setEvalVariant] = useState<EvalReportType | null>(null);
   const [formKey, setFormKey] = useState(0);
 
+  const normalizeRange = (start: Date, end: Date) => {
+    const normalizedStart = new Date(start);
+    normalizedStart.setHours(0, 0, 0, 0);
+    const normalizedEnd = new Date(end);
+    normalizedEnd.setHours(23, 59, 59, 999);
+    return { start: normalizedStart, end: normalizedEnd };
+  };
+
+  const getDateRange = (period: ReportOptions["period"], customStartDate?: string, customEndDate?: string) => {
+    const now = new Date();
+    switch (period) {
+      case 'last7':
+        return normalizeRange(new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000), now);
+      case 'last30':
+        return normalizeRange(new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000), now);
+      case 'last90':
+        return normalizeRange(new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000), now);
+      case 'custom':
+        return normalizeRange(
+          customStartDate ? new Date(customStartDate) : new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000),
+          customEndDate ? new Date(customEndDate) : now
+        );
+      case 'allTime':
+      default:
+        return normalizeRange(new Date('2020-01-01'), now);
+    }
+  };
+
   // Auto-trigger when preselectedType changes from parent
   useEffect(() => {
     if (!preselectedType) return;
@@ -105,21 +133,17 @@ export const ReportCenter = ({ youthId, youth, preselectedType }: ReportCenterPr
             .replace(/^./, (c) => c.toUpperCase());
       const base = buildReportFilename(youth, reportTypeLabel, new Date());
       if (effectiveOptions.outputFormat === 'json') {
-        const now = new Date();
-        const range = (() => {
-          switch (effectiveOptions.period) {
-            case 'last7': return { start: new Date(now.getTime() - 7*24*60*60*1000), end: now };
-            case 'last30': return { start: new Date(now.getTime() - 30*24*60*60*1000), end: now };
-            case 'last90': return { start: new Date(now.getTime() - 90*24*60*60*1000), end: now };
-            case 'custom': return { start: effectiveOptions.customStartDate ? new Date(effectiveOptions.customStartDate) : new Date(now.getTime() - 30*24*60*60*1000), end: effectiveOptions.customEndDate ? new Date(effectiveOptions.customEndDate) : now };
-            case 'allTime': default: return { start: new Date('2020-01-01'), end: now };
-          }
-        })();
+        const range = getDateRange(effectiveOptions.period, effectiveOptions.customStartDate, effectiveOptions.customEndDate);
+        const warnings: string[] = [];
         const [allPoints, allNotes, allRatings, allSchoolScores] = await Promise.all([
           getBehaviorPointsByYouth(youth.id).catch(() => fetchBehaviorPoints(youth.id)),
           fetchAllProgressNotes(youth.id),
           getDailyRatingsByYouth(youth.id).catch(() => fetchDailyRatings(youth.id)),
-          getScoresByYouth(youth.id).catch(() => []),
+          getScoresByYouth(youth.id).catch((error) => {
+            console.warn('Failed to load school scores for JSON export:', error);
+            warnings.push('School scores could not be loaded for this export.');
+            return [];
+          }),
         ]);
         const inRange = (d?: any) => d && new Date(d) >= range.start && new Date(d) <= range.end;
         const data = {
@@ -134,6 +158,7 @@ export const ReportCenter = ({ youthId, youth, preselectedType }: ReportCenterPr
           progressNotes: (allNotes || []).filter((n:any)=> inRange(n.date)),
           dailyRatings: (allRatings || []).filter((r:any)=> inRange(r.date)),
           schoolScores: (allSchoolScores || []).filter((s:any)=> inRange(s.date)),
+          warnings,
         };
         const content = JSON.stringify(data, null, 2);
         const blob = new Blob([content], { type: 'application/json' });
@@ -145,20 +170,18 @@ export const ReportCenter = ({ youthId, youth, preselectedType }: ReportCenterPr
         link.click();
         document.body.removeChild(link);
         window.URL.revokeObjectURL(url);
+        if (warnings.length > 0) {
+          toast({
+            title: "Report Generated with Warnings",
+            description: warnings.join(' '),
+            variant: "destructive",
+          });
+        }
       } else if (effectiveOptions.outputFormat === 'pdf' || effectiveOptions.outputFormat === 'docx') {
         let styledHTML = await generateReportHTML(youth, { ...effectiveOptions });
         // Optional AI narrative
         if (options.useAI) {
-          const now = new Date();
-          const range = (() => {
-            switch (effectiveOptions.period) {
-              case 'last7': return { start: new Date(now.getTime() - 7*24*60*60*1000), end: now };
-              case 'last30': return { start: new Date(now.getTime() - 30*24*60*60*1000), end: now };
-              case 'last90': return { start: new Date(now.getTime() - 90*24*60*60*1000), end: now };
-              case 'custom': return { start: effectiveOptions.customStartDate ? new Date(effectiveOptions.customStartDate) : new Date(now.getTime() - 30*24*60*60*1000), end: effectiveOptions.customEndDate ? new Date(effectiveOptions.customEndDate) : now };
-              case 'allTime': default: return { start: new Date('2020-01-01'), end: now };
-            }
-          })();
+          const range = getDateRange(effectiveOptions.period, effectiveOptions.customStartDate, effectiveOptions.customEndDate);
           const [allPoints, allNotes, allRatings, allSchoolScores] = await Promise.all([
             getBehaviorPointsByYouth(youth.id).catch(() => fetchBehaviorPoints(youth.id)),
             fetchAllProgressNotes(youth.id),

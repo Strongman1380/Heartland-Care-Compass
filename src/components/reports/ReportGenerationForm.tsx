@@ -39,7 +39,7 @@ export const ReportGenerationForm = ({ onGenerateReport, isGenerating }: ReportG
 
   // Handle report type change and auto-set PDF format for DPN/eval reports
   const handleReportTypeChange = (value: string) => {
-    setSelectedReportType(value);
+    setSelectedReportType(value as ReportTypeOption);
     if (value.startsWith('dpn') || value === 'court' || value.startsWith('eval')) {
       setOutputFormat('pdf');
     }

@@ -8,7 +8,16 @@ import { calculateTotalPoints, calculatePointsForPeriod, getPointStatistics } fr
 // API fetch functions with fallback to localStorage
 const fetchBehaviorPointsAPI = async (youthId: string): Promise<BehaviorPoints[]> => {
   try {
-    return await getBehaviorPointsByYouth(youthId);
+    const data = await getBehaviorPointsByYouth(youthId);
+    return data.map(item => ({
+      ...item,
+      date: item.date ? new Date(item.date) : null,
+      createdAt: item.createdAt ? new Date(item.createdAt) : null,
+      morningPoints: item.morningPoints || 0,
+      afternoonPoints: item.afternoonPoints || 0,
+      eveningPoints: item.eveningPoints || 0,
+      totalPoints: item.totalPoints || 0
+    })) as BehaviorPoints[];
   } catch (e) {
     console.warn('API fetch failed for behavior-points; falling back to localStorage:', e);
     return fetchBehaviorPoints(youthId);
@@ -19,7 +28,13 @@ const fetchProgressNotesAPI = fetchAllProgressNotes;
 
 const fetchDailyRatingsAPI = async (youthId: string): Promise<DailyRating[]> => {
   try {
-    return await getDailyRatingsByYouth(youthId);
+    const data = await getDailyRatingsByYouth(youthId);
+    return data.map(item => ({
+      ...item,
+      date: item.date ? new Date(item.date) : null,
+      createdAt: item.createdAt ? new Date(item.createdAt) : null,
+      updatedAt: item.updatedAt ? new Date(item.updatedAt) : null,
+    })) as DailyRating[];
   } catch (e) {
     console.warn('API fetch failed for daily-ratings; falling back to localStorage:', e);
     return fetchDailyRatings(youthId);
@@ -224,18 +239,18 @@ export const generateReportHTML = async (youth: Youth, options: ReportOptions): 
     });
     const rows = Object.entries(monthly).map(([month, points]) => {
       const total = points.reduce((s, p)=> s + (p.totalPoints || 0), 0);
-      return `<tr><td style=\"padding:6pt 8pt;border:1pt solid #000;\">${esc(month)}</td><td style=\"padding:6pt 8pt;border:1pt solid #000;\">${total}</td><td style=\"padding:6pt 8pt;border:1pt solid #000;\">${points.length}</td></tr>`;
+      return `<tr><td style="padding:6pt 8pt;border:1pt solid #000;">${esc(month)}</td><td style="padding:6pt 8pt;border:1pt solid #000;">${total}</td><td style="padding:6pt 8pt;border:1pt solid #000;">${points.length}</td></tr>`;
     }).join('');
     if (!rows) return '';
     return `
-      <div style=\"margin:12pt 0;\">
-        <h3 style=\"font-size:12pt; margin:0 0 6pt;\">Monthly Breakdown</h3>
-        <table style=\"border-collapse:collapse; font-size:11pt;\">
+      <div style="margin:12pt 0;">
+        <h3 style="font-size:12pt; margin:0 0 6pt;">Monthly Breakdown</h3>
+        <table style="border-collapse:collapse; font-size:11pt;">
           <thead>
             <tr>
-              <th style=\"padding:6pt 8pt;border:1pt solid #000; text-align:left;\">Month</th>
-              <th style=\"padding:6pt 8pt;border:1pt solid #000; text-align:left;\">Total Points</th>
-              <th style=\"padding:6pt 8pt;border:1pt solid #000; text-align:left;\">Days</th>
+              <th style="padding:6pt 8pt;border:1pt solid #000; text-align:left;">Month</th>
+              <th style="padding:6pt 8pt;border:1pt solid #000; text-align:left;">Total Points</th>
+              <th style="padding:6pt 8pt;border:1pt solid #000; text-align:left;">Days</th>
             </tr>
           </thead>
           <tbody>${rows}</tbody>
@@ -1123,7 +1138,7 @@ ${youth.firstName} is following the established treatment plan with regular part
 - Medical and mental health services as needed
 
 RISK ASSESSMENT:
-Current risk level: ${youth.level === 'I' ? 'Low' : youth.level === 'II' ? 'Moderate' : youth.level === 'III' ? 'Moderate-High' : 'Moderate'}
+Current risk level: ${youth.level === 1 ? 'Low' : youth.level === 2 ? 'Moderate' : youth.level === 3 ? 'Moderate-High' : 'Moderate'}
 No significant safety concerns identified during this evaluation period.
 
 RECOMMENDATIONS FOR NEXT PERIOD:

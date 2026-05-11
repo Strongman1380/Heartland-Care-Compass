@@ -414,7 +414,7 @@ export const RiskAssessment = ({ youthId, youth, onAssessmentUpdated }: RiskAsse
       setIsAutoSaving(true);
       
       // Save to the authenticated remote draft store
-      try { await draftsService.save(youthId, 'risk_assessment', user?.uid || null, { ...assessment, questionResponses, savedAt: new Date().toISOString() }) } catch {}
+      try { await draftsService.save(youthId, 'risk_assessment', user?.uid || null, { ...assessment, questionResponses, savedAt: new Date().toISOString() }) } catch { /* noop */ }
       
       setHasUnsavedChanges(false);
 
@@ -453,7 +453,7 @@ export const RiskAssessment = ({ youthId, youth, onAssessmentUpdated }: RiskAsse
           setHasUnsavedChanges(true);
           return;
         }
-      } catch {}
+      } catch { /* noop */ }
     })();
   }, [youthId, isLoading, user]);
 

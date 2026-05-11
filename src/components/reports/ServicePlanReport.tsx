@@ -323,7 +323,7 @@ export const ServicePlanReport = ({ youth }: ServicePlanReportProps) => {
           .join(' ');
       }
       if (parsed?.content && typeof parsed.content === 'string') return parsed.content;
-    } catch {}
+    } catch { /* noop */ }
     return rawNote;
   };
 

@@ -171,7 +171,7 @@ export function parseIncidentText(text: string): Partial<FacilityIncidentFormDat
   try {
     const data = JSON.parse(text);
     if (data && typeof data === 'object') return data as Partial<FacilityIncidentFormData>;
-  } catch (e) {}
+  } catch (e) { /* noop */ }
 
   const result: Partial<FacilityIncidentFormData> = {
     incidentTypes: [],

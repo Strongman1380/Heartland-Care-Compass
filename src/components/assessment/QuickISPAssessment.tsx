@@ -160,7 +160,7 @@ const QuickISPAssessment: React.FC<QuickISPAssessmentProps> = ({ selectedYouth, 
         timestamp: Date.now()
       };
 
-      try { await draftsService.save(ispData.youthId || null, 'quick_isp', user?.uid || null, draftData) } catch {}
+      try { await draftsService.save(ispData.youthId || null, 'quick_isp', user?.uid || null, draftData) } catch { /* noop */ }
 
       setHasUnsavedChanges(false);
 
@@ -197,14 +197,14 @@ const QuickISPAssessment: React.FC<QuickISPAssessmentProps> = ({ selectedYouth, 
           toast.info("Previous ISP draft loaded", { duration: 2000 });
           return
         }
-      } catch {}
+      } catch { /* noop */ }
     } catch (error) {
       console.error("Failed to load draft:", error);
     }
   };
 
   const clearDraft = async () => {
-    try { await draftsService.delete(ispData.youthId || null, 'quick_isp', user?.uid || null) } catch {}
+    try { await draftsService.delete(ispData.youthId || null, 'quick_isp', user?.uid || null) } catch { /* noop */ }
     setHasUnsavedChanges(false);
   };
 

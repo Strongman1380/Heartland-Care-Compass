@@ -106,7 +106,7 @@ const preInsertDateNewlines = (text: string): string =>
     // YYYY-MM-DD: appearing mid-line (not preceded by a newline)
     .replace(/([^\n])[^\S\n]*(\d{4}-\d{2}-\d{2}[^\S\n]*[:\-–])/g, "$1\n$2")
     // M/D/YYYY: or M-D-YYYY: appearing mid-line
-    .replace(/([^\n])[^\S\n]*(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}[^\S\n]*[:\-–])/g, "$1\n$2")
+    .replace(/([^\n])[^\S\n]*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4}[^\S\n]*[:\-–])/g, "$1\n$2")
     // Month-name formats like "January 15, 2026 -" appearing mid-line
     .replace(
       /([^\n])[^\S\n]*((?:January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[^\S\n]+\d{1,2},?[^\S\n]+\d{2,4}[^\S\n]*[:\-–])/gi,
@@ -119,7 +119,7 @@ const splitCombinedEntries = (raw: string): string[] => {
 
   // If text has date markers, split on them directly
   const byDateMarker = normalized
-    .split(/(?=^\d{4}-\d{2}-\d{2}\s*[:\-–]|^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}\s*[:\-–])/m)
+    .split(/(?=^\d{4}-\d{2}-\d{2}\s*[:\-–]|^\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\s*[:\-–])/m)
     .map((entry) => entry.trim())
     .filter(Boolean);
   if (byDateMarker.length > 1) return byDateMarker;
@@ -598,9 +598,9 @@ export const EnhancedCaseNotes = ({ youthId, youth }: EnhancedCaseNotesProps) =>
   // Parse a short date like "2-11-26" or "2/11/26" into a proper Date
   const parseShortDate = (raw: string): Date | null => {
     // Handle M-D-YY, M/D/YY, M-D-YYYY, M/D/YYYY formats
-    const parts = raw.split(/[\/\-]/);
+    const parts = raw.split(/[/-]/);
     if (parts.length !== 3) return null;
-    let [month, day, year] = parts.map(Number);
+    const [month, day, year] = parts.map(Number);
     if (!month || !day || isNaN(year)) return null;
     // Expand 2-digit year: 00-49 → 2000s, 50-99 → 1900s
     if (year < 100) year += year < 50 ? 2000 : 1900;
@@ -695,7 +695,7 @@ export const EnhancedCaseNotes = ({ youthId, youth }: EnhancedCaseNotesProps) =>
 
     // Date patterns to look for at the start of lines:
     // "1/15/2026", "01/15/2026", "1-15-2026", "January 15, 2026", "Jan 15, 2026", "2026-01-15"
-    const dateLineRegex = /^(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}|(?:January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2},?\s+\d{2,4}|\d{4}-\d{2}-\d{2})\s*[:\-–]?\s*/i;
+    const dateLineRegex = /^(\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|(?:January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2},?\s+\d{2,4}|\d{4}-\d{2}-\d{2})\s*[:\-–]?\s*/i;
 
     const lines = normalized.split("\n");
     const notes: { date: string; content: string }[] = [];

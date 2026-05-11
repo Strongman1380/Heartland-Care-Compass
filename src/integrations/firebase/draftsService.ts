@@ -25,7 +25,7 @@ export const draftsService = {
   async get(youth_id: string | null, draft_type: string, author_id: string | null): Promise<DraftRow | null> {
     if (!author_id) return null
 
-    let q = query(
+    const q = query(
       collection(db, 'report_drafts'),
       where('draft_type', '==', draft_type),
       where('author_id', '==', author_id)

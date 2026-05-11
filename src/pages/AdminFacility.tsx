@@ -783,7 +783,7 @@ const AdminFacility = () => {
                           variant="outline"
                           className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
                           onClick={() => {
-                            if (confirm(`Delete report \"${report.title}\"? This cannot be undone.`)) {
+                            if (confirm(`Delete report "${report.title}"? This cannot be undone.`)) {
                               deleteReport(report.id);
                             }
                           }}

@@ -145,7 +145,7 @@ export const DischargeReport = ({ youth }: DischargeReportProps) => {
           setReportData((prev) => ({ ...prev, ...(draft.data as any) }));
           return;
         }
-      } catch {}
+      } catch { /* noop */ }
       setReportData((prev) => ({
         ...prev,
         residentName: `${youth.firstName} ${youth.lastName}`,
@@ -160,7 +160,7 @@ export const DischargeReport = ({ youth }: DischargeReportProps) => {
       try {
         setIsAutoSaving(true);
         await draftsService.save(youth.id, "discharge_report", user?.uid || null, reportData);
-      } catch {}
+      } catch { /* noop */ }
       setTimeout(() => setIsAutoSaving(false), 500);
     };
     const timer = setTimeout(autoSave, 2000);
@@ -375,7 +375,7 @@ CRITICAL OUTPUT RULES:
 
   const handleReset = async () => {
     if (confirm("Reset the discharge report? All data will be lost.")) {
-      try { await draftsService.delete(youth.id, "discharge_report", user?.uid || null); } catch {}
+      try { await draftsService.delete(youth.id, "discharge_report", user?.uid || null); } catch { /* noop */ }
       window.location.reload();
     }
   };

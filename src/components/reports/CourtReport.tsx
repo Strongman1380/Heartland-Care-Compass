@@ -98,7 +98,7 @@ const CourtReportPreview = ({ data }: CourtReportPreviewProps) => {
   const sectionBreakStyle: CSSProperties = {
     breakInside: 'avoid',
     pageBreakInside: 'avoid',
-    // @ts-ignore - Vendor prefixes not in standard CSSProperties type
+    // @ts-expect-error - Vendor prefixes not in standard CSSProperties type
     WebkitColumnBreakInside: 'avoid',
     WebkitPageBreakInside: 'avoid',
     MozPageBreakInside: 'avoid'
@@ -663,7 +663,7 @@ export const CourtReport = ({ youth }: CourtReportProps) => {
           setAutoSaveStatus('saved');
           loaded = true;
         }
-      } catch {}
+      } catch { /* noop */ }
 
       // Always sync live youth data (name, DOB, level) so reports reflect current status
       const placementParts = ['Heartland Boys Home - Group Home'];

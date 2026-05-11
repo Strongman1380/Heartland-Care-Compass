@@ -55,7 +55,7 @@ export const EditYouthDialog = ({ youth, open, onClose, onSuccess }: EditYouthDi
   useEffect(() => {
     if (youth && open) {
       // Ensure any previous draft does not overwrite the loaded profile
-      try { clearDraft(); } catch {}
+      try { clearDraft(); } catch { /* noop */ }
       const populatedData: YouthFormData = {
         // Personal Information
         firstName: youth.firstName || "",

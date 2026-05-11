@@ -27,7 +27,7 @@ const SHIFT_PATTERNS: { shift: DpnShiftEntry["shift"]; regex: RegExp }[] = [
   { shift: "night", regex: /\b(?:night\s*(?:shift)?|overnight\s*(?:shift)?)\b/i },
 ];
 
-const DATE_REGEX = /(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}|\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2})/;
+const DATE_REGEX = /(\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{4}[/-]\d{1,2}[/-]\d{1,2})/;
 
 const DOMAIN_PATTERNS = [
   { key: "peer" as const, regex: /peer\s*(?:interaction)?\s*[:\-=]?\s*([\d.]+)/i },
@@ -42,13 +42,13 @@ const YOUTH_NAME_REGEX = /(?:youth|resident|client|name)\s*[:\-=]?\s*([A-Z][a-z]
 function normalizeDate(raw: string): string {
   const cleaned = raw.trim();
   // Try YYYY-MM-DD
-  if (/^\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2}$/.test(cleaned)) {
-    const [y, m, d] = cleaned.split(/[\/\-]/);
+  if (/^\d{4}[/-]\d{1,2}[/-]\d{1,2}$/.test(cleaned)) {
+    const [y, m, d] = cleaned.split(/[/-]/);
     return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
   }
   // Try MM/DD/YYYY or MM-DD-YYYY
-  if (/^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}$/.test(cleaned)) {
-    const parts = cleaned.split(/[\/\-]/);
+  if (/^\d{1,2}[/-]\d{1,2}[/-]\d{2,4}$/.test(cleaned)) {
+    const parts = cleaned.split(/[/-]/);
     let y = parts[2];
     if (y.length === 2) y = `20${y}`;
     return `${y}-${parts[0].padStart(2, "0")}-${parts[1].padStart(2, "0")}`;

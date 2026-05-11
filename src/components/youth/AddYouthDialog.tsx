@@ -119,7 +119,7 @@ export const AddYouthDialog = ({ onClose, onSuccess }: AddYouthDialogProps) => {
   const inferNameFromImportText = (text: string) => {
     const lines = text
       .split(/\r?\n/)
-      .map((line) => line.replace(/^\s*[•*\-]\s*/, "").trim())
+      .map((line) => line.replace(/^\s*[•*-]\s*/, "").trim())
       .filter(Boolean);
 
     let firstName = "";

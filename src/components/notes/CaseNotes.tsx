@@ -254,7 +254,7 @@ export const CaseNotes = ({ youthId, youth, onYouthChange, onBackToSelection }: 
         <p>${value
           .trim()
           .replace(/\n/g, '<br>')
-          .replace(/  /g, '&nbsp;&nbsp;')
+          .replace(/ {2}/g, '&nbsp;&nbsp;')
           .replace(/\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;')}</p>
       </div>
     `;
@@ -399,7 +399,7 @@ export const CaseNotes = ({ youthId, youth, onYouthChange, onBackToSelection }: 
                 ${renderStructuredSection('Plan / Next Steps', structured.planNextSteps)}
               ` : `<div class="note-section"><p>${(note.note || 'No content')
                 .replace(/\n/g, '<br>')
-                .replace(/  /g, '&nbsp;&nbsp;')
+                .replace(/ {2}/g, '&nbsp;&nbsp;')
                 .replace(/\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;')}</p></div>`;
 
               return `

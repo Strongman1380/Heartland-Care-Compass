@@ -458,7 +458,7 @@ export const ProgressNotes = ({ youthId, youth }: ProgressNotesProps) => {
           <p>${value
             .trim()
             .replace(/\n/g, '<br>')
-            .replace(/  /g, '&nbsp;&nbsp;')
+            .replace(/ {2}/g, '&nbsp;&nbsp;')
             .replace(/\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;')}</p>
         </div>
       `;

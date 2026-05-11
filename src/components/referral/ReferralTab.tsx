@@ -58,6 +58,7 @@ import { alertsService } from "@/integrations/firebase/alertsService";
 import { screenReferralIntake, extractReferralFields } from "@/services/aiService";
 import { useAuth } from "@/contexts/AuthContext";
 import { downloadReferralTemplate } from "@/utils/referralTemplate";
+import { ReferralSummaryReport } from "./ReferralSummaryReport";
 import {
   type ParsedReferral,
   SECTION_CONFIG,
@@ -630,13 +631,13 @@ const extractProbationOfficer = (item: ReferralHistoryItem): string[] => {
 const derivePoContact = (item: ReferralHistoryItem): { email: string; firstName: string; friendlyName: string } => {
   const extractedPOs = extractProbationOfficer(item);
   const rawPOName = extractedPOs.length > 0 ? extractedPOs[0] : "";
-  const friendlyName = rawPOName.split(/[,\(0-9]/)[0].trim() || "Worker";
+  const friendlyName = rawPOName.split(/[,(0-9]/)[0].trim() || "Worker";
   const firstName = friendlyName.split(" ")[0] || "Worker";
   const clean = rawPOName.trim();
   let email = "";
   if (clean.includes(",")) {
     const [last, rest] = clean.split(",");
-    const first = (rest || "").trim().split(/[\s\(]/)[0];
+    const first = (rest || "").trim().split(/[\s(]/)[0];
     if (first && last.trim()) email = `${first.toLowerCase()}.${last.trim().toLowerCase()}@nejudicial.gov`;
   } else {
     const parts = clean.split(/\s+/);
@@ -838,6 +839,7 @@ export const ReferralTab = () => {
   const [poContactFilter, setPoContactFilter] = useState(false);
   const [poFilter, setPoFilter] = useState("all");
   const [history, setHistory] = useState<ReferralHistoryItem[]>([]);
+  const [summaryReportOpen, setSummaryReportOpen] = useState(false);
 
   const [visibleCount, setVisibleCount] = useState(15);
 
@@ -2443,7 +2445,7 @@ export const ReferralTab = () => {
     // Top diagnoses from mental health section
     const diagnosisTop = tallyTop(active.flatMap((h) => {
       const d = h.parsedData?.mentalHealth?.["Diagnosis"] || h.parsedData?.mentalHealth?.["Diagnoses"] || h.parsedData?.mentalHealth?.["diagnosis"] || "";
-      return d ? d.split(/[,;\/]/).map((s) => s.trim()).filter((s) => s.length > 2) : [];
+      return d ? d.split(/[,;/]/).map((s) => s.trim()).filter((s) => s.length > 2) : [];
     }));
 
     // Top offenses from legal section
@@ -2618,13 +2620,24 @@ export const ReferralTab = () => {
       <Collapsible defaultOpen>
       <Card>
         <CardHeader className="cursor-pointer pb-2">
-          <CollapsibleTrigger className="flex items-center justify-between w-full text-left">
-            <div>
-              <CardTitle className="text-base">Referral KPI Dashboard</CardTitle>
-              <CardDescription>Operational intake metrics, source analysis, and intake trends</CardDescription>
-            </div>
-            <ChevronDown className="h-4 w-4 text-muted-foreground" />
-          </CollapsibleTrigger>
+          <div className="flex items-center justify-between w-full gap-2">
+            <CollapsibleTrigger className="flex items-center justify-between flex-1 text-left min-w-0">
+              <div className="min-w-0">
+                <CardTitle className="text-base">Referral KPI Dashboard</CardTitle>
+                <CardDescription>Operational intake metrics, source analysis, and intake trends</CardDescription>
+              </div>
+              <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0 ml-2" />
+            </CollapsibleTrigger>
+            <Button
+              size="sm"
+              variant="outline"
+              className="shrink-0 gap-1.5 text-xs"
+              onClick={(e) => { e.stopPropagation(); setSummaryReportOpen(true); }}
+            >
+              <Printer className="h-3.5 w-3.5" />
+              Print Report
+            </Button>
+          </div>
         </CardHeader>
         <CollapsibleContent>
         <CardContent className="pt-2">
@@ -4626,7 +4639,7 @@ export const ReferralTab = () => {
                         try {
                           const raw = editingInterviewTarget.interviewReport;
                           if (raw && raw.startsWith("{")) return JSON.parse(raw);
-                        } catch {}
+                        } catch { /* noop */ }
                         return null;
                       })()}
                       onSave={async (data, newStatus) => {
@@ -4812,6 +4825,12 @@ export const ReferralTab = () => {
               </Dialog>
             </CardContent>
           </Card>
+
+      <ReferralSummaryReport
+        open={summaryReportOpen}
+        onClose={() => setSummaryReportOpen(false)}
+        history={history}
+      />
     </div>
   );
 };

@@ -370,7 +370,7 @@ const OHP_SECTION_HEADER_MAP: Record<string, keyof ParsedReferral> = {
 export const detectSectionHeader = (line: string): keyof ParsedReferral | null => {
   // Strip leading checkbox characters before testing
   const stripped = line.replace(/^[\s☒☐✓✗□\u2610\u2611\u2612]+/, "").trim();
-  const normalized = stripped.toLowerCase().replace(/[:\-]+$/g, "").trim();
+  const normalized = stripped.toLowerCase().replace(/[:-]+$/g, "").trim();
   if (!normalized || normalized.length < 4) return null;
 
   // Check OHP form section titles first (exact or near-exact match)
@@ -528,7 +528,7 @@ export const parseReferralText = (raw: string): ParsedReferral => {
 
   const lines = raw
     .split(/\r?\n/)
-    .map((l) => l.replace(/^\s*[•\-\u2022\*☒☐\u2610\u2611\u2612]\s*/, "").trim())
+    .map((l) => l.replace(/^\s*[•\-\u2022*☒☐\u2610\u2611\u2612]\s*/, "").trim())
     .filter((l) => l.length > 0);
 
   let currentFieldRef: { section: keyof ParsedReferral; fieldName: string } | null = null;

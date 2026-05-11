@@ -259,7 +259,7 @@ export const BehaviorCard = ({ youthId, youth, onYouthUpdated }: BehaviorCardPro
   const normalizeDate = (raw: string): { date: string; error: string } => {
     const todayIso = new Date().toISOString().split("T")[0];
     let date = "";
-    let error = "";
+    const error = "";
     if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
       date = raw;
     } else if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(raw)) {

@@ -224,7 +224,7 @@ export const RapidPlacementAssessment = () => {
         timestamp: Date.now()
       };
 
-      try { await draftsService.save(selectedYouthId || null, 'rapid_placement', user?.uid || null, draftData) } catch {}
+      try { await draftsService.save(selectedYouthId || null, 'rapid_placement', user?.uid || null, draftData) } catch { /* noop */ }
 
       setHasUnsavedChanges(false);
 
@@ -270,14 +270,14 @@ export const RapidPlacementAssessment = () => {
           setShowAssessment(parsed.showAssessment || false);
           return
         }
-      } catch {}
+      } catch { /* noop */ }
     } catch (error) {
       console.error("Failed to load draft:", error);
     }
   };
 
   const clearDraft = () => {
-    try { void draftsService.delete(selectedYouthId || null, 'rapid_placement', user?.uid || null) } catch {}
+    try { void draftsService.delete(selectedYouthId || null, 'rapid_placement', user?.uid || null) } catch { /* noop */ }
   };
 
   const handleStartAssessment = () => {

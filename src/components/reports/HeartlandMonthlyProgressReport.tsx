@@ -157,7 +157,7 @@ export const HeartlandMonthlyProgressReport = ({ youth }: HeartlandMonthlyProgre
           setReportData(prev => ({ ...prev, ...(draft.data as any) }));
           hasLoadedData = true;
         }
-      } catch {}
+      } catch { /* draft may not exist yet */ }
       // Always sync live youth data (name, level, ID) so reports reflect current status
       setReportData(prev => ({
         ...prev,
@@ -187,7 +187,7 @@ export const HeartlandMonthlyProgressReport = ({ youth }: HeartlandMonthlyProgre
       try {
         setIsAutoSaving(true);
         await draftsService.save(youth.id, 'monthly_progress_heartland', user?.uid || null, reportData)
-      } catch {}
+      } catch { /* auto-save failures are non-critical */ }
       setTimeout(() => setIsAutoSaving(false), 500);
     };
     const timer = setTimeout(autoSave, 2000);
@@ -211,7 +211,7 @@ export const HeartlandMonthlyProgressReport = ({ youth }: HeartlandMonthlyProgre
 
   const handleResetForm = async () => {
     if (confirm("Are you sure you want to reset the form? All data will be lost.")) {
-      try { await draftsService.delete(youth.id, 'monthly_progress_heartland', user?.uid || null) } catch {}
+      try { await draftsService.delete(youth.id, 'monthly_progress_heartland', user?.uid || null) } catch { /* ignore if no draft exists */ }
       window.location.reload();
     }
   };

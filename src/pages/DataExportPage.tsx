@@ -20,10 +20,9 @@ import { getBehaviorPointsByYouth, getDailyRatingsByYouth } from "@/lib/api";
 import { fetchAllProgressNotes } from "@/utils/local-storage-utils";
 import { getScoresByYouth } from "@/utils/schoolScores";
 import {
-  weeklyEvalService,
-  dailyShiftService,
   caseNotesService,
 } from "@/integrations/firebase/services";
+import { dailyShiftService, weeklyEvalService } from "@/integrations/firebase/shiftScoresService";
 import { incidentReportsService } from "@/integrations/firebase/incidentReportsService";
 import { youthService } from "@/integrations/firebase/services";
 import { logger } from "@/utils/logger";

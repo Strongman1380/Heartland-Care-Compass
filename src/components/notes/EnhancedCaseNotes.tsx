@@ -600,7 +600,8 @@ export const EnhancedCaseNotes = ({ youthId, youth }: EnhancedCaseNotesProps) =>
     // Handle M-D-YY, M/D/YY, M-D-YYYY, M/D/YYYY formats
     const parts = raw.split(/[/-]/);
     if (parts.length !== 3) return null;
-    const [month, day, year] = parts.map(Number);
+    const [month, day, initialYear] = parts.map(Number);
+    let year = initialYear;
     if (!month || !day || isNaN(year)) return null;
     // Expand 2-digit year: 00-49 → 2000s, 50-99 → 1900s
     if (year < 100) year += year < 50 ? 2000 : 1900;

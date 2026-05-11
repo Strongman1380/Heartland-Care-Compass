@@ -353,47 +353,143 @@ export const HeartlandMonthlyProgressReport = ({ youth }: HeartlandMonthlyProgre
       const evalAvgInvestment = ec > 0 ? (allEvals.reduce((s, e) => s + (e.investment ?? 0), 0) / ec).toFixed(1) : "N/A";
       const evalAvgAuthority = ec > 0 ? (allEvals.reduce((s, e) => s + (e.authority ?? 0), 0) / ec).toFixed(1) : "N/A";
 
+      // Build the full youth profile block for the AI
+      const fmtBool = (v: any) => v === true ? "Yes" : v === false ? "No" : "";
+      const fmtList = (v: any) => Array.isArray(v) ? v.filter(Boolean).join(", ") : (v || "");
+      const fmtVal = (v: any) => (v !== undefined && v !== null && v !== "") ? String(v) : "";
+
+      const profileLines: string[] = [
+        `Name: ${youth.firstName} ${youth.lastName}`,
+        youth.dob ? `Date of Birth: ${youth.dob}` : "",
+        youth.age ? `Age: ${youth.age}` : "",
+        youth.sex ? `Sex: ${youth.sex}` : "",
+        youth.race ? `Race: ${youth.race}` : "",
+        youth.admissionDate ? `Admission Date: ${youth.admissionDate}` : "",
+        youth.level ? `Current Program Level: ${youth.level}` : "",
+        youth.legalStatus ? `Legal Status: ${youth.legalStatus}` : "",
+        // Contacts
+        youth.mother?.name ? `Mother: ${youth.mother.name}${youth.mother.phone ? ` (${youth.mother.phone})` : ""}` : "",
+        youth.father?.name ? `Father: ${youth.father.name}${youth.father.phone ? ` (${youth.father.phone})` : ""}` : "",
+        (typeof youth.legalGuardian === "object" ? youth.legalGuardian?.name : fmtVal(youth.legalGuardian))
+          ? `Legal Guardian: ${typeof youth.legalGuardian === "object" ? `${youth.legalGuardian?.name || ""}${youth.legalGuardian?.phone ? " — " + youth.legalGuardian.phone : ""}` : youth.legalGuardian}` : "",
+        youth.nextOfKin?.name ? `Next of Kin: ${youth.nextOfKin.name}${youth.nextOfKin.relationship ? ` (${youth.nextOfKin.relationship})` : ""}${youth.nextOfKin.phone ? `, ${youth.nextOfKin.phone}` : ""}` : "",
+        (typeof youth.probationOfficer === "object" ? youth.probationOfficer?.name : fmtVal(youth.probationOfficer))
+          ? `Probation Officer: ${typeof youth.probationOfficer === "object" ? `${youth.probationOfficer?.name || ""}${youth.probationOfficer?.phone ? " — " + youth.probationOfficer.phone : ""}` : youth.probationOfficer}` : "",
+        (typeof youth.caseworker === "object" ? youth.caseworker?.name : fmtVal(youth.caseworker))
+          ? `Caseworker: ${typeof youth.caseworker === "object" ? `${youth.caseworker?.name || ""}` : youth.caseworker}` : "",
+        // Health / Education
+        youth.allergies ? `Allergies: ${youth.allergies}` : "",
+        youth.currentMedications ? `Current Medications: ${youth.currentMedications}` : "",
+        youth.significantHealthConditions ? `Significant Health Conditions: ${youth.significantHealthConditions}` : "",
+        youth.currentDiagnoses || youth.diagnoses ? `Diagnoses: ${youth.currentDiagnoses || youth.diagnoses}` : "",
+        youth.traumaHistory ? `Trauma History: ${fmtList(youth.traumaHistory)}` : "",
+        youth.previousTreatment ? `Previous Treatment: ${youth.previousTreatment}` : "",
+        youth.selfHarmHistory ? `Self-Harm History: ${fmtList(youth.selfHarmHistory)}` : "",
+        youth.hasSafetyPlan !== undefined ? `Has Safety Plan: ${fmtBool(youth.hasSafetyPlan)}` : "",
+        youth.currentGrade || youth.grade ? `Current Grade: ${youth.currentGrade || youth.grade}` : "",
+        youth.hasIEP !== undefined ? `IEP: ${fmtBool(youth.hasIEP)}` : "",
+        youth.lastSchoolAttended ? `Last School Attended: ${youth.lastSchoolAttended}` : "",
+        youth.academicStrengths ? `Academic Strengths: ${youth.academicStrengths}` : "",
+        youth.academicChallenges ? `Academic Challenges: ${youth.academicChallenges}` : "",
+        youth.educationGoals ? `Education Goals: ${youth.educationGoals}` : "",
+        // Behavioral
+        youth.strengthsTalents ? `Strengths / Talents: ${youth.strengthsTalents}` : "",
+        youth.interests ? `Interests: ${youth.interests}` : "",
+        youth.getAlongWithOthers ? `Gets Along With Others: ${youth.getAlongWithOthers}` : "",
+        youth.behaviorProblems ? `Behavior Problems: ${youth.behaviorProblems}` : "",
+        youth.angerTriggers ? `Anger Triggers: ${youth.angerTriggers}` : "",
+        youth.dislikesAboutSelf ? `Dislikes About Self: ${youth.dislikesAboutSelf}` : "",
+        youth.historyPhysicallyHurting !== undefined ? `History of Physical Harm to Others: ${fmtBool(youth.historyPhysicallyHurting)}` : "",
+        youth.historyVandalism !== undefined ? `History of Vandalism: ${fmtBool(youth.historyVandalism)}` : "",
+        youth.gangInvolvement !== undefined ? `Gang Involvement: ${fmtBool(youth.gangInvolvement)}` : "",
+        // Treatment Focus
+        youth.treatmentFocus ? [
+          youth.treatmentFocus.acceptanceOfAuthority ? "Acceptance of Authority" : "",
+          youth.treatmentFocus.peerRelationship ? "Peer Relationship" : "",
+          youth.treatmentFocus.parentChildRelationship ? "Parent-Child Relationship" : "",
+          youth.treatmentFocus.withdrawalIsolation ? "Withdrawal/Isolation" : "",
+          youth.treatmentFocus.excessiveDependency ? "Excessive Dependency" : "",
+          youth.treatmentFocus.lying ? "Lying" : "",
+          youth.treatmentFocus.poorAcademicAchievement ? "Poor Academic Achievement" : "",
+          youth.treatmentFocus.poorSelfEsteem ? "Poor Self-Esteem" : "",
+          youth.treatmentFocus.manipulative ? "Manipulative" : "",
+          youth.treatmentFocus.propertyDestruction ? "Property Destruction" : "",
+          youth.treatmentFocus.hyperactivity ? "Hyperactivity" : "",
+          youth.treatmentFocus.anxiety ? "Anxiety" : "",
+          youth.treatmentFocus.verbalAggression ? "Verbal Aggression" : "",
+          youth.treatmentFocus.assaultive ? "Assaultive" : "",
+          youth.treatmentFocus.depression ? "Depression" : "",
+          youth.treatmentFocus.stealing ? "Stealing" : "",
+        ].filter(Boolean).length > 0
+          ? `Treatment Focus Areas: ${[
+            youth.treatmentFocus.acceptanceOfAuthority ? "Acceptance of Authority" : "",
+            youth.treatmentFocus.peerRelationship ? "Peer Relationship" : "",
+            youth.treatmentFocus.parentChildRelationship ? "Parent-Child Relationship" : "",
+            youth.treatmentFocus.withdrawalIsolation ? "Withdrawal/Isolation" : "",
+            youth.treatmentFocus.excessiveDependency ? "Excessive Dependency" : "",
+            youth.treatmentFocus.lying ? "Lying" : "",
+            youth.treatmentFocus.poorAcademicAchievement ? "Poor Academic Achievement" : "",
+            youth.treatmentFocus.poorSelfEsteem ? "Poor Self-Esteem" : "",
+            youth.treatmentFocus.manipulative ? "Manipulative" : "",
+            youth.treatmentFocus.propertyDestruction ? "Property Destruction" : "",
+            youth.treatmentFocus.hyperactivity ? "Hyperactivity" : "",
+            youth.treatmentFocus.anxiety ? "Anxiety" : "",
+            youth.treatmentFocus.verbalAggression ? "Verbal Aggression" : "",
+            youth.treatmentFocus.assaultive ? "Assaultive" : "",
+            youth.treatmentFocus.depression ? "Depression" : "",
+            youth.treatmentFocus.stealing ? "Stealing" : "",
+          ].filter(Boolean).join(", ")}` : "" : "",
+        // Referral / placement context
+        youth.referralReason ? `Referral Reason: ${youth.referralReason}` : "",
+        youth.placingAgencyCounty ? `Placing Agency/County: ${youth.placingAgencyCounty}` : "",
+        youth.dischargePlan?.estimatedLengthOfStayMonths
+          ? `Estimated Length of Stay: ${youth.dischargePlan.estimatedLengthOfStayMonths} months` : "",
+      ].filter(Boolean);
+
       // Build a shared data context block for all AI prompts
       const dataContext = `You are a clinical staff member at Heartland Boys Home writing a Monthly Progress Report for ${youth.firstName} ${youth.lastName}.
-Current Level: ${youth.level || "Not specified"}
 Reporting Period: Last 30 days
 
+=== YOUTH PROFILE ===
+${profileLines.join("\n")}
+
+=== BEHAVIORAL DATA (LAST 30 DAYS) ===
 POINT SYSTEM: Heartland uses a behavioral point system where daily totals are measured in thousands. A typical daily total ranges from 8,000 to 15,000. Above 12,000 is excellent; 10,000–12,000 is good; 8,000–10,000 is satisfactory.
-Average Daily Behavior Points this period: ${avgPoints} (over ${recentBehavior.length} days)
+Average Daily Behavior Points: ${avgPoints} (${recentBehavior.length} days recorded)
 
 Daily Performance Ratings (0-5 scale, ${rc} entries):
 - Peer Interaction: ${avgPeer}/5
 - Adult Interaction: ${avgAdult}/5
 - Program Investment: ${avgInvestment}/5
 - Dealing with Authority: ${avgAuthority}/5
+
 Weekly Eval / Shift Scores (0-4 scale, ${ec} entries):
 - Peer: ${evalAvgPeer}/4, Adult: ${evalAvgAdult}/4, Investment: ${evalAvgInvestment}/4, Authority: ${evalAvgAuthority}/4
-${youth.currentDiagnoses || youth.diagnoses ? `Diagnoses: ${youth.currentDiagnoses || youth.diagnoses}` : ""}
-${youth.strengthsTalents ? `Known Strengths: ${youth.strengthsTalents}` : ""}
-${youth.legalGuardian ? `Guardian: ${youth.legalGuardian}` : ""}
 
-Staff Case Notes (last 30 days):
+=== STAFF CASE NOTES (LAST 30 DAYS) ===
 ${caseNotesText || "No case notes documented for this period."}
 
-CRITICAL OUTPUT RULES:
+=== CRITICAL OUTPUT RULES ===
 1. Output ONLY plain text. No headings, no titles, no labels, no "Summary:", no "Recommendations:", no markdown, no bullet points with dashes.
 2. Do NOT start your response with the field name or a heading. Just write the content directly.
-3. Write in professional clinical language.
+3. Write in professional clinical language appropriate for a youth residential care monthly report.
 4. Do not include raw dates or staff names.
 5. Do not fabricate incidents or data not documented in case notes.
-6. When referencing points, use the thousands format (e.g., "averaging 95,000 daily points").`;
+6. When referencing points, use the thousands format (e.g., "averaging 95,000 daily points").
+7. NEVER write statements about missing data, absent documentation, data gaps, unavailable metrics, or absent case notes. If data is limited or unavailable, write professional clinical narrative based on the youth's full profile above — you always have enough information to write useful clinical content.
+8. If behavioral metrics show N/A or zero entries, write general professional narrative about program participation, behavioral expectations, and treatment progress appropriate for a youth at this program level. Draw from the youth's known strengths, treatment focus areas, diagnoses, and referral reason.`;
 
       const fields = [
         { key: "significantIncidentsDescription", prompt: `${dataContext}\n\nThis text goes into the "Brief Description of Significant Incidents" textarea on the form. Write 2-4 sentences describing any significant behavioral incidents this month (restraints, AWOL, fights, property damage). If no incidents are documented in the case notes, simply write "No significant behavioral incidents were reported during this reporting period." Do not invent incidents.` },
-        { key: "goal1Notes", prompt: `${dataContext}\n\nThis text goes into the "Goal #1 Notes" textarea on the form. Write 2-3 sentences describing progress on Goal 1 (typically behavioral regulation, compliance, or emotional management). Reference the youth's average daily points and relevant behavioral observations from case notes.` },
-        { key: "goal2Notes", prompt: `${dataContext}\n\nThis text goes into the "Goal #2 Notes" textarea on the form. Write 2-3 sentences describing progress on Goal 2 (typically peer/social skills). Reference peer interaction ratings and case note observations about peer relationships.` },
-        { key: "goal3Notes", prompt: `${dataContext}\n\nThis text goes into the "Goal #3 Notes" textarea on the form. Write 2-3 sentences describing progress on Goal 3 (typically adult interaction, authority acceptance, or program investment). Reference relevant rating data and case note observations.` },
-        { key: "socialSkills", prompt: `${dataContext}\n\nThis text goes into the "Social Skills" textarea. Write 2-3 sentences about social skills development: peer communication, conflict resolution, empathy, group participation. Reference peer interaction scores.` },
-        { key: "academicProgress", prompt: `${dataContext}\n\n${youth.firstName} attends the Heartland Boys Home Independent School managed by Berniklau Education Solutions.${youth.currentGrade ? ` Grade: ${youth.currentGrade}.` : ""}${youth.hasIEP ? " Has an active IEP." : ""}\nThis text goes into the "Academic Progress" textarea. Write 2-3 sentences about academic engagement based on behavioral observations in school. Do NOT fabricate grades or test scores.` },
+        { key: "goal1Notes", prompt: `${dataContext}\n\nThis text goes into the "Goal #1 Notes" textarea on the form. Write 2-3 sentences describing progress on Goal 1 (typically behavioral regulation, compliance, or emotional management). If specific metrics are unavailable, write professional clinical narrative about program participation and behavioral expectations based on the youth's profile.` },
+        { key: "goal2Notes", prompt: `${dataContext}\n\nThis text goes into the "Goal #2 Notes" textarea on the form. Write 2-3 sentences describing progress on Goal 2 (typically peer/social skills). If specific ratings are unavailable, write professional clinical narrative based on the youth's known strengths and social profile.` },
+        { key: "goal3Notes", prompt: `${dataContext}\n\nThis text goes into the "Goal #3 Notes" textarea on the form. Write 2-3 sentences describing progress on Goal 3 (typically adult interaction, authority acceptance, or program investment). Write professional clinical narrative based on the youth's profile and treatment focus areas.` },
+        { key: "socialSkills", prompt: `${dataContext}\n\nThis text goes into the "Social Skills" textarea. Write 2-3 sentences about social skills development: peer communication, conflict resolution, empathy, group participation. Base the narrative on the youth's known strengths and treatment focus areas.` },
+        { key: "academicProgress", prompt: `${dataContext}\n\n${youth.firstName} attends the Heartland Boys Home Independent School managed by Berniklau Education Solutions.${youth.currentGrade ? ` Grade: ${youth.currentGrade}.` : ""}${youth.hasIEP ? " Has an active IEP." : ""}\nThis text goes into the "Academic Progress" textarea. Write 2-3 sentences about academic engagement and participation in educational programming. Do NOT fabricate grades or test scores.` },
         { key: "independentLivingSkills", prompt: `${dataContext}\n\nThis text goes into the "Independent Living Skills" textarea. Write 2-3 sentences about daily living skills: hygiene, room maintenance, laundry, personal organization, time management.` },
-        { key: "areasOfGrowth", prompt: `${dataContext}\n\nThis text goes into the "Areas of Growth" textarea. Write 3-4 short statements about areas of growth this month, separated by periods. Example: "Improved peer interactions. Higher daily point averages. Better compliance with schedule. More engaged in group activities."` },
+        { key: "areasOfGrowth", prompt: `${dataContext}\n\nThis text goes into the "Areas of Growth" textarea. Write 3-4 short statements about areas of growth this month, separated by periods. Example: "Improved peer interactions. Better compliance with schedule. More engaged in group activities. Developing stronger relationships with staff."` },
         { key: "areasNeedingDevelopment", prompt: `${dataContext}\n\nThis text goes into the "Areas Needing Development" textarea. Write 3-4 short statements about areas needing improvement, separated by periods.` },
-        { key: "familyEngagementNotes", prompt: `${dataContext}\n\nThis text goes into the "Family Engagement Notes" textarea. Write 2-4 sentences giving a brief synopsis of the youth's family contact this month: visits with parents/guardians, phone calls, home passes, and general quality of family engagement. Keep it factual and based on case notes.` },
+        { key: "familyEngagementNotes", prompt: `${dataContext}\n\nThis text goes into the "Family Engagement Notes" textarea. Write 2-4 sentences giving a brief synopsis of the youth's family contact this month: visits with parents/guardians, phone calls, home passes, and general quality of family engagement. Keep it factual and based on available case notes and profile information.` },
         { key: "strengthsDemonstrated", prompt: `${dataContext}\n\nThis text goes into the "Strengths Demonstrated" textarea. Write 2-3 sentences about the youth's key strengths this month: positive behaviors, skills, attitude, interests, talents.` },
         { key: "challengesConcerns", prompt: `${dataContext}\n\nThis text goes into the "Challenges/Concerns" textarea. Write 2-3 sentences about ongoing challenges and concerns: behavioral patterns, areas of regression, treatment barriers. Be honest but constructive.` },
         { key: "planAdjustmentsNeeded", prompt: `${dataContext}\n\nThis text goes into the "Plan Adjustments Needed" textarea. Write 2-3 sentences about any adjustments to the treatment plan for next month: intervention changes, goal modifications, level recommendations.` },
@@ -423,16 +519,39 @@ CRITICAL OUTPUT RULES:
         ),
       ]);
 
+      // Patterns that indicate the AI generated a disclaimer instead of clinical narrative
+      const disclaimerPatterns = [
+        /MISSING DATA/i,
+        /missing data/i,
+        /data not available/i,
+        /no data.*recorded/i,
+        /absent.*documentation/i,
+        /documentation.*absent/i,
+        /zero entries/i,
+        /not possible to assess/i,
+        /cannot be assessed/i,
+        /prevents.*assessment/i,
+        /absence of.*data/i,
+        /no case notes.*documented/i,
+        /required to complete/i,
+        /RECOMMENDED ACTION/i,
+        /RECOMMENDATION:/i,
+      ];
+
+      const isDisclaimer = (text: string) =>
+        disclaimerPatterns.some((re) => re.test(text));
+
       const updates: Partial<MonthlyProgressData> = {};
       let aiSuccessCount = 0;
 
       results.forEach((result, idx) => {
         const fieldKey = fields[idx].key;
-        if (result.status === "fulfilled" && result.value?.value) {
-          updates[fieldKey as keyof MonthlyProgressData] = result.value.value as any;
+        const aiValue = result.status === "fulfilled" ? result.value?.value : null;
+        if (aiValue && !isDisclaimer(aiValue)) {
+          updates[fieldKey as keyof MonthlyProgressData] = aiValue as any;
           aiSuccessCount++;
         } else {
-          // Use local fallback for this field
+          // AI was unavailable, timed out, or produced a disclaimer — use local fallback
           const fallback = generateLocalFallback(fieldKey, localStats);
           if (fallback) {
             updates[fieldKey as keyof MonthlyProgressData] = fallback as any;
@@ -456,22 +575,27 @@ CRITICAL OUTPUT RULES:
   };
 
   const handleExportPDF = async () => {
-    if (printRef.current) {
+    if (!printRef.current) return;
+    try {
+      const filename = `${buildReportFilename(youth, "Monthly Progress Report")}.pdf`;
+      // Apply export-mode class so CSS strips form control borders during capture
+      printRef.current.classList.add('pdf-export-mode');
       try {
-        const filename = `${buildReportFilename(youth, "Monthly Progress Report")}.pdf`;
         await exportElementToPDF(printRef.current, filename);
-        toast({
-          title: "PDF Exported",
-          description: "Monthly Progress Report has been exported as PDF."
-        });
-      } catch (error) {
-        logger.error("Error exporting PDF:", error);
-        toast({
-          title: "Export Error",
-          description: "Failed to export PDF. Please try again.",
-          variant: "destructive"
-        });
+      } finally {
+        printRef.current.classList.remove('pdf-export-mode');
       }
+      toast({
+        title: "PDF Exported",
+        description: "Monthly Progress Report has been exported as PDF."
+      });
+    } catch (error) {
+      logger.error("Error exporting PDF:", error);
+      toast({
+        title: "Export Error",
+        description: "Failed to export PDF. Please try again.",
+        variant: "destructive"
+      });
     }
   };
 
@@ -903,23 +1027,82 @@ CRITICAL OUTPUT RULES:
               font-size: 12pt !important;
               line-height: 1.4 !important;
             }
-            .print-section h1 {
-              font-size: 16pt !important;
-              margin-bottom: 8pt !important;
+            /* Make all form inputs look like plain text */
+            .print-section input[type="text"],
+            .print-section input[type="date"],
+            .print-section input:not([type="checkbox"]) {
+              border: none !important;
+              border-bottom: 1pt solid #000 !important;
+              border-radius: 0 !important;
+              background: transparent !important;
+              box-shadow: none !important;
+              padding: 2pt 0 !important;
+              height: auto !important;
+              font-size: 11pt !important;
+              color: black !important;
+              width: 100% !important;
             }
-            .print-section h2 {
-              font-size: 14pt !important;
-              margin-bottom: 12pt !important;
+            .print-section textarea {
+              border: 1pt solid #ccc !important;
+              border-radius: 0 !important;
+              background: transparent !important;
+              box-shadow: none !important;
+              resize: none !important;
+              overflow: visible !important;
+              height: auto !important;
+              min-height: unset !important;
+              font-size: 11pt !important;
+              font-family: Arial, sans-serif !important;
+              color: black !important;
+              width: 100% !important;
+              padding: 4pt !important;
             }
-            .print-section h3 {
-              font-size: 12pt !important;
-              margin-bottom: 8pt !important;
-              margin-top: 16pt !important;
+            /* Hide Select dropdowns — their trigger text is still visible */
+            .print-section [data-radix-select-trigger] button,
+            .print-section button[role="combobox"] svg,
+            .print-section [role="combobox"] svg {
+              display: none !important;
             }
-            @page {
-              margin: 0.75in !important;
-              size: letter !important;
+            .print-section [role="combobox"] {
+              border: none !important;
+              border-bottom: 1pt solid #000 !important;
+              background: transparent !important;
+              box-shadow: none !important;
+              padding: 2pt 0 !important;
             }
+            /* Checkboxes — keep them visible but clean */
+            .print-section input[type="checkbox"] {
+              width: 12pt !important;
+              height: 12pt !important;
+              accent-color: #000 !important;
+            }
+            .print-section label {
+              font-size: 11pt !important;
+              color: black !important;
+            }
+            .print-section h1 { font-size: 16pt !important; margin-bottom: 8pt !important; }
+            .print-section h2 { font-size: 14pt !important; margin-bottom: 12pt !important; }
+            .print-section h3 { font-size: 12pt !important; margin-bottom: 8pt !important; margin-top: 16pt !important; }
+            @page { margin: 0.75in !important; size: letter !important; }
+          }
+
+          /* Also apply clean styles during html2pdf export (not just @media print) */
+          .pdf-export-mode input[type="text"],
+          .pdf-export-mode input[type="date"],
+          .pdf-export-mode input:not([type="checkbox"]) {
+            border: none !important;
+            border-bottom: 1pt solid #000 !important;
+            border-radius: 0 !important;
+            background: transparent !important;
+            box-shadow: none !important;
+          }
+          .pdf-export-mode textarea {
+            border: 1pt solid #ccc !important;
+            background: transparent !important;
+            box-shadow: none !important;
+            resize: none !important;
+            overflow: visible !important;
+            height: auto !important;
           }
         `
       }} />

@@ -48,6 +48,7 @@ import {
   type CaseNotes,
   type DailyRatings,
 } from '@/integrations/firebase/services';
+import { trackEvent, AnalyticsEvents } from '@/utils/analytics';
 
 type Timeframe = 'week' | 'month' | 'quarter' | 'year';
 
@@ -507,6 +508,7 @@ const AssessmentKPIDashboard = () => {
     `;
     setReportHtml(html);
     setReportGeneratedAt(generatedAt.toISOString());
+    trackEvent(AnalyticsEvents.REPORT_GENERATED, { timeframe, title: reportTitle });
     toast.success('KPI report generated');
   };
 
@@ -568,6 +570,7 @@ const AssessmentKPIDashboard = () => {
     if (!reportHtml) return;
     try {
       await exportHTMLToPDF(reportHtml, `Program-KPI-Report-${format(new Date(), 'yyyy-MM-dd')}.pdf`);
+      trackEvent(AnalyticsEvents.PDF_EXPORT, { report_type: 'kpi_report', timeframe });
       toast.success('KPI report PDF exported');
     } catch (error) {
       logger.error('Failed to export KPI report PDF:', error);

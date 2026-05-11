@@ -12,6 +12,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Loader2, Send, Sparkles, TrendingUp, Users, FileText, AlertCircle, Brain } from 'lucide-react';
 import { toast } from 'sonner';
 import aiService from '@/services/aiService';
+import { trackEvent, AnalyticsEvents } from '@/utils/analytics';
 
 interface Message {
   id: string;
@@ -92,6 +93,7 @@ export function AIQueryInterface({
     setMessages(prev => [...prev, userMessage]);
     setQuery('');
     setIsLoading(true);
+    trackEvent(AnalyticsEvents.AI_QUERY, { query: userQuery });
 
     try {
       const assistantId = (Date.now() + 1).toString();

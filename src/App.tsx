@@ -14,6 +14,7 @@ import { ProtectedRoute } from "@/components/layout/ProtectedRoute";
 import { AwardsProvider } from "@/contexts/AwardsContext";
 import { PwaInstallBanner } from "@/components/layout/PwaInstallBanner";
 import { BottomNav } from "@/components/layout/BottomNav";
+import { AnalyticsTracker } from "@/components/common/AnalyticsTracker";
 import { CommandPalette, useCommandPalette } from "@/components/common/CommandPalette";
 
 // Lazy load heavy report and dashboard components
@@ -34,6 +35,7 @@ const AdminFacility = lazy(() => import("./pages/AdminFacility"));
 const AdminForms = lazy(() => import("./pages/AdminForms"));
 const PoResponsePage = lazy(() => import("./pages/PoResponsePage"));
 const DataUpload = lazy(() => import("./pages/DataUpload"));
+const DataExportPage = lazy(() => import("./pages/DataExportPage"));
 const YouthDetailPage = lazy(() => import("./pages/YouthDetailPage"));
 
 const queryClient = new QueryClient();
@@ -82,6 +84,7 @@ const RoutedApp = () => {
               <Route path="/incident-reports" element={<ProtectedRoute><IncidentReports /></ProtectedRoute>} />
               <Route path="/migrate-data" element={<ProtectedRoute requireAdmin><DataMigrationPage /></ProtectedRoute>} />
               <Route path="/data-upload" element={<ProtectedRoute><DataUpload /></ProtectedRoute>} />
+              <Route path="/data-export" element={<ProtectedRoute><DataExportPage /></ProtectedRoute>} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </Suspense>
@@ -107,6 +110,7 @@ const AppContent = () => {
           <Toaster />
           <Sonner />
           <BrowserRouter basename={import.meta.env.BASE_URL}>
+            <AnalyticsTracker />
             <RoutedApp />
           </BrowserRouter>
         </TooltipProvider>

@@ -13,9 +13,97 @@
 const PRINT_STYLES = `
   @page { margin: 0.5in; size: letter portrait; }
   * { box-sizing: border-box; }
-  body { margin: 0; padding: 0; background: #fff; color: #111; }
+  body { margin: 0; padding: 0; background: #fff; color: #111; font-family: Arial, Helvetica, sans-serif; }
   @media print {
     body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
+
+  /* ── Form control cleanup ── */
+  /* Text inputs — show as underlined plain text */
+  input[type="text"],
+  input[type="date"],
+  input[type="number"],
+  input[type="email"],
+  input:not([type="checkbox"]):not([type="radio"]) {
+    border: none !important;
+    border-bottom: 1px solid #555 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    outline: none !important;
+    padding: 1px 0 !important;
+    font-size: inherit !important;
+    font-family: inherit !important;
+    color: #000 !important;
+    width: 100% !important;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
+  /* Textareas — show as flowing plain text, no scroll box */
+  textarea {
+    border: none !important;
+    border-bottom: 1px solid #ccc !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    outline: none !important;
+    resize: none !important;
+    overflow: visible !important;
+    height: auto !important;
+    min-height: unset !important;
+    max-height: none !important;
+    font-size: inherit !important;
+    font-family: inherit !important;
+    color: #000 !important;
+    width: 100% !important;
+    padding: 2px 0 !important;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
+  /* Select / combobox triggers — remove dropdown arrow and box */
+  select,
+  button[role="combobox"],
+  [role="combobox"] {
+    border: none !important;
+    border-bottom: 1px solid #555 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    outline: none !important;
+    padding: 1px 0 !important;
+    font-size: inherit !important;
+    font-family: inherit !important;
+    color: #000 !important;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
+  /* Hide dropdown arrow SVG icons inside select triggers */
+  button[role="combobox"] svg,
+  [role="combobox"] svg,
+  [data-radix-select-icon],
+  .lucide-chevron-down {
+    display: none !important;
+  }
+
+  /* Checkboxes — keep visible but clean */
+  input[type="checkbox"] {
+    width: 13px !important;
+    height: 13px !important;
+    accent-color: #000 !important;
+    cursor: default !important;
+  }
+
+  /* Hide UI-only elements (tooltips, popovers, dropdowns, toasts) */
+  [data-radix-popper-content-wrapper],
+  [data-radix-select-content],
+  [role="listbox"],
+  [role="menu"],
+  [data-sonner-toaster],
+  .heartland-monthly-print-hide {
+    display: none !important;
   }
 `;
 

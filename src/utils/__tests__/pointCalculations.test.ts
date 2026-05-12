@@ -1,4 +1,4 @@
-import { describe, it, expect } from '@jest/globals';
+import { describe, it, expect } from 'vitest';
 import { calculatePointsNeededForNextLevel } from '../pointCalculations';
 
 // Minimal stub — cast via unknown to avoid full type compatibility

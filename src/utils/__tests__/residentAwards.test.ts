@@ -1,39 +1,39 @@
-import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { Youth } from '@/integrations/firebase/services';
 
 // ---------------------------------------------------------------------------
 // Mock Firebase services and shiftScores before importing residentAwards
 // ---------------------------------------------------------------------------
 
-jest.mock('@/integrations/firebase/services', () => ({
+vi.mock('@/integrations/firebase/services', () => ({
   behaviorPointsService: {
-    getByYouthId: jest.fn(),
+    getByYouthId: vi.fn(),
   },
 }));
 
-jest.mock('@/utils/shiftScores', () => ({
-  calculateCombinedAveragesForRange: jest.fn(),
+vi.mock('@/utils/shiftScores', () => ({
+  calculateCombinedAveragesForRange: vi.fn(),
 }));
 
 import { calculateResidentAwardsForYouths } from '../residentAwards';
 import { behaviorPointsService } from '@/integrations/firebase/services';
 import { calculateCombinedAveragesForRange } from '@/utils/shiftScores';
 
-const mockGetByYouthId = behaviorPointsService.getByYouthId as jest.MockedFunction<typeof behaviorPointsService.getByYouthId>;
-const mockCalcAvg = calculateCombinedAveragesForRange as jest.MockedFunction<typeof calculateCombinedAveragesForRange>;
+const mockGetByYouthId = vi.mocked(behaviorPointsService.getByYouthId);
+const mockCalcAvg = vi.mocked(calculateCombinedAveragesForRange);
 
 const makeYouth = (id: string, firstName: string, lastName: string): Youth =>
   ({ id, firstName, lastName, level: 1, pointTotal: 0 } as unknown as Youth);
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   // Default: no behavior points, 0 averages
   mockGetByYouthId.mockResolvedValue([]);
   mockCalcAvg.mockResolvedValue({ peer: 0, adult: 0, investment: 0, authority: 0, overall: 0, totalEntries: 0 });
 });
 
 afterEach(() => {
-  jest.useRealTimers();
+  vi.useRealTimers();
 });
 
 describe('calculateResidentAwardsForYouths', () => {
@@ -76,7 +76,8 @@ describe('calculateResidentAwardsForYouths', () => {
   });
 
   it('uses a rolling last 7 days window for Resident of the Week', async () => {
-    jest.useFakeTimers().setSystemTime(new Date('2026-02-28T12:00:00Z'));
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-02-28T12:00:00Z'));
 
     const alice = makeYouth('alice', 'Alice', 'Smith');
     const bob = makeYouth('bob', 'Bob', 'Jones');

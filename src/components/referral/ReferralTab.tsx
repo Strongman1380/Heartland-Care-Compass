@@ -2258,27 +2258,30 @@ export const ReferralTab = () => {
     }
   };
 
-  const logEmailAction = async (item: ReferralHistoryItem, actionLabel: string) => {
+  const logEmailAction = async (item: ReferralHistoryItem, actionLabel: string, emailBody?: string) => {
     try {
       const { v4: uuidv4 } = await import("uuid");
       const now = new Date();
-      const noteText = `${actionLabel} email opened`;
-      const noteEntry: NotesLogEntry = {
-        id: uuidv4(),
-        date: now.toISOString(),
-        note: noteText,
-      };
+      const noteText = emailBody
+        ? `${actionLabel} email sent\n\n${emailBody}`
+        : `${actionLabel} email opened`;
       const poEntry: POContactEntry = {
         id: uuidv4(),
         date: format(now, "yyyy-MM-dd"),
         notes: noteText,
         followUpDate: "",
       };
+      // Atomic append — no read needed, reliable even under concurrent updates
+      await referralNotesService.atomicAppendPoContactLog(toReferralLookup(item), poEntry);
+      const noteEntry: NotesLogEntry = {
+        id: uuidv4(),
+        date: now.toISOString(),
+        note: noteText,
+      };
       const updatedNotes = [noteEntry, ...(item.notesLog || [])];
       const updatedPO = [...(item.poContactLog || []), poEntry];
       await referralNotesService.update(toReferralLookup(item), {
         notes_log: updatedNotes,
-        po_contact_log: updatedPO,
       } as any);
       setHistory((prev) =>
         prev.map((h) =>
@@ -2287,8 +2290,9 @@ export const ReferralTab = () => {
             : h
         )
       );
-    } catch {
-      // Non-blocking — let the email still open
+    } catch (err) {
+      console.error("Failed to log email action:", err);
+      toast.error("Email opened but failed to log contact — check your connection");
     }
   };
 
@@ -2395,11 +2399,13 @@ export const ReferralTab = () => {
     const totalReceived = history.length;
     const pendingCount = active.filter((h) => PENDING_REFERRAL_STATUSES.has(h.status || "")).length;
     const scheduledCount = active.filter((h) => h.status === "interview_scheduled").length;
-    const interviewedYes = active.filter((h) => h.status === "interviewed_yes").length;
-    const interviewedNo = active.filter((h) => h.status === "interviewed_no").length;
-    const deniedCount = active.filter((h) => h.status === "denied").length;
-    const acceptedCount = active.filter((h) => h.status === "accepted").length;
-    const waitlistedCount = active.filter((h) => h.status === "waitlisted").length;
+    // interviewed_yes and waitlisted are not auto-archived, but use history to catch manual archives
+    const interviewedYes = history.filter((h) => h.status === "interviewed_yes").length;
+    // denied and interviewed_no ARE auto-archived — must count from history, not active
+    const interviewedNo = history.filter((h) => h.status === "interviewed_no").length;
+    const deniedCount = history.filter((h) => h.status === "denied").length;
+    const acceptedCount = history.filter((h) => h.status === "accepted").length;
+    const waitlistedCount = history.filter((h) => h.status === "waitlisted").length;
     const alreadyFoundPlacement = history.filter((h) => h.status === "already_found_placement").length;
 
     // PO contact tracking
@@ -3508,7 +3514,8 @@ export const ReferralTab = () => {
                       ? encodeURIComponent(inferredPoEmail)
                       : encodeURIComponent(friendlyPoName);
 
-                    const hrefCheck = `mailto:${mailtoTo}?subject=${encodeURIComponent(`Referral Status Check – ${item.referralName || 'the youth'}`)}&body=${encodeURIComponent(`Hi ${poFirstName},\n\nWe wanted to follow up regarding the referral we received for ${item.referralName || 'this youth'}. Could you let us know whether placement is still needed, or if they have since been placed elsewhere?\n\nIf this referral is no longer active, a quick reply would help us update our records and keep everything current on our end. We appreciate your partnership and the work you do for the youth in your care.\n\nPlease don't hesitate to reach out if you have any questions or need anything from us in the meantime.\n\nWarm regards,\nHeartland Admissions\nHeartland Boys Home\nadmissions@heartlandboyshomenebraska.org\n(402) 759-4334`)}`;
+                    const bodyCheck = `Hi ${poFirstName},\n\nWe wanted to follow up regarding the referral we received for ${item.referralName || 'this youth'}. Could you let us know whether placement is still needed, or if they have since been placed elsewhere?\n\nIf this referral is no longer active, a quick reply would help us update our records and keep everything current on our end. We appreciate your partnership and the work you do for the youth in your care.\n\nPlease don't hesitate to reach out if you have any questions or need anything from us in the meantime.\n\nWarm regards,\nHeartland Admissions\nHeartland Boys Home\nadmissions@heartlandboyshomenebraska.org\n(402) 759-4334`;
+                    const hrefCheck = `mailto:${mailtoTo}?subject=${encodeURIComponent(`Referral Status Check – ${item.referralName || 'the youth'}`)}&body=${encodeURIComponent(bodyCheck)}`;
 
                     // Parse AI screening JSON once for use in multiple email templates
                     let denialReasons = "[reason]";
@@ -3540,11 +3547,14 @@ export const ReferralTab = () => {
                       item.parsedData?.placement?.["Current Placement"] ||
                       item.parsedData?.placement?.["current placement"] ||
                       "detention/shelter";
-                    const hrefInterviewRequest = `mailto:${mailtoTo}?subject=${encodeURIComponent(`Interview Request – ${item.referralName || 'the youth'}`)}&body=${encodeURIComponent(`Hi ${poFirstName},\n\nJust wanted to reach out and let you know that we'd like to set up an interview with ${item.referralName || 'the youth'}. What's the best way to make this happen on our end? Can we set up something with the family?\n\n${item.referralName || 'The youth'} is presently in ${currentPlacement}.\n\nFeel free to reply here or give us a call at (402) 759-4334.\n\nThanks!\nHeartland Admissions\nHeartland Boys Home\nadmissions@heartlandboyshomenebraska.org\n(402) 759-4334`)}`;
+                    const bodyInterviewRequest = `Hi ${poFirstName},\n\nJust wanted to reach out and let you know that we'd like to set up an interview with ${item.referralName || 'the youth'}. What's the best way to make this happen on our end? Can we set up something with the family?\n\n${item.referralName || 'The youth'} is presently in ${currentPlacement}.\n\nFeel free to reply here or give us a call at (402) 759-4334.\n\nThanks!\nHeartland Admissions\nHeartland Boys Home\nadmissions@heartlandboyshomenebraska.org\n(402) 759-4334`;
+                    const hrefInterviewRequest = `mailto:${mailtoTo}?subject=${encodeURIComponent(`Interview Request – ${item.referralName || 'the youth'}`)}&body=${encodeURIComponent(bodyInterviewRequest)}`;
 
-                    const hrefAccept = `mailto:${mailtoTo}?subject=${encodeURIComponent(`Placement Decision – ${item.referralName || "the youth"} – Accepted`)}&body=${encodeURIComponent(`Hi ${poFirstName},\n\nWe are pleased to let you know that we are able to accept ${item.referralName || "the youth"} for placement at Heartland Boys Home.\n\nTo move forward, please reach out to coordinate intake logistics. A few things we'll need to confirm:\n\n  • Intake date and arrival time\n  • Transportation arrangements\n  • Any immediate medical, behavioral, or safety needs we should be prepared for on arrival\n\nWe're excited to welcome ${item.referralName || "the youth"} and are committed to providing a structured, supportive environment. Please don't hesitate to contact us with any questions.\n\nWarm regards,\nHeartland Admissions\nHeartland Boys Home\nadmissions@heartlandboyshomenebraska.org\n(402) 759-4334`)}`;
+                    const bodyAccept = `Hi ${poFirstName},\n\nWe are pleased to let you know that we are able to accept ${item.referralName || "the youth"} for placement at Heartland Boys Home.\n\nTo move forward, please reach out to coordinate intake logistics. A few things we'll need to confirm:\n\n  • Intake date and arrival time\n  • Transportation arrangements\n  • Any immediate medical, behavioral, or safety needs we should be prepared for on arrival\n\nWe're excited to welcome ${item.referralName || "the youth"} and are committed to providing a structured, supportive environment. Please don't hesitate to contact us with any questions.\n\nWarm regards,\nHeartland Admissions\nHeartland Boys Home\nadmissions@heartlandboyshomenebraska.org\n(402) 759-4334`;
+                    const hrefAccept = `mailto:${mailtoTo}?subject=${encodeURIComponent(`Placement Decision – ${item.referralName || "the youth"} – Accepted`)}&body=${encodeURIComponent(bodyAccept)}`;
 
-                    const hrefDeny = `mailto:${mailtoTo}?subject=${encodeURIComponent(`Regarding ${item.referralName || "the youth"}'s Referral`)}&body=${encodeURIComponent(`Hi ${poFirstName},\n\nJust wanted to let you know that after reviewing the referral for ${item.referralName || "the youth"}, we are going to have to pass at this time. Unfortunately, ${item.referralName || "the youth"} does not meet our standard criteria for placement at Heartland Boys Home, and we wouldn't be able to provide the level of support needed to set them up for success here.\n\nWe appreciate you sending this our way and hope you're able to find a good fit. Don't hesitate to reach out if you have any questions.\n\nThanks,\nHeartland Admissions\nHeartland Boys Home\nadmissions@heartlandboyshomenebraska.org\n(402) 759-4334`)}`;
+                    const bodyDeny = `Hi ${poFirstName},\n\nJust wanted to let you know that after reviewing the referral for ${item.referralName || "the youth"}, we are going to have to pass at this time. Unfortunately, ${item.referralName || "the youth"} does not meet our standard criteria for placement at Heartland Boys Home, and we wouldn't be able to provide the level of support needed to set them up for success here.\n\nWe appreciate you sending this our way and hope you're able to find a good fit. Don't hesitate to reach out if you have any questions.\n\nThanks,\nHeartland Admissions\nHeartland Boys Home\nadmissions@heartlandboyshomenebraska.org\n(402) 759-4334`;
+                    const hrefDeny = `mailto:${mailtoTo}?subject=${encodeURIComponent(`Regarding ${item.referralName || "the youth"}'s Referral`)}&body=${encodeURIComponent(bodyDeny)}`;
 
                     return (
                     <div key={rowKey} className={`rounded-md border transition-colors ${isExpanded ? "p-3 border-blue-200 bg-blue-50/20" : "p-2 hover:bg-slate-50 cursor-pointer"}`}>
@@ -3916,28 +3926,28 @@ export const ReferralTab = () => {
                         </span>
                         <a
                           href={hrefCheck}
-                          onClick={() => logEmailAction(item, "Check Need")}
+                          onClick={() => logEmailAction(item, "Check Need", bodyCheck)}
                           className="text-xs bg-sky-100 text-sky-800 hover:bg-sky-200 px-2 py-1 rounded border border-sky-300 transition-colors font-medium no-brand-override"
                         >
                           Check Need
                         </a>
                         <a
                           href={hrefInterviewRequest}
-                          onClick={() => logEmailAction(item, "Request Interview")}
+                          onClick={() => logEmailAction(item, "Request Interview", bodyInterviewRequest)}
                           className="text-xs bg-yellow-100 text-yellow-800 hover:bg-yellow-200 px-2 py-1 rounded border border-yellow-300 transition-colors font-medium no-brand-override"
                         >
                           Request Interview
                         </a>
                         <a
                           href={hrefAccept}
-                          onClick={() => logEmailAction(item, "Accept")}
+                          onClick={() => logEmailAction(item, "Accept", bodyAccept)}
                           className="text-xs bg-green-100 text-green-800 hover:bg-green-200 px-2 py-1 rounded border border-green-300 transition-colors font-medium no-brand-override"
                         >
                           Accept
                         </a>
                         <a
                           href={hrefDeny}
-                          onClick={() => logEmailAction(item, "Deny")}
+                          onClick={() => logEmailAction(item, "Deny", bodyDeny)}
                           className="text-xs bg-red-100 text-red-800 hover:bg-red-200 px-2 py-1 rounded border border-red-300 transition-colors font-medium no-brand-override"
                         >
                           Deny
@@ -3972,11 +3982,12 @@ export const ReferralTab = () => {
                             ? new Date(`2000-01-01T${item.interviewTime}`).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })
                             : "TBD";
                           const intPlace = item.interviewPlace || "TBD";
-                          const hrefInterview = `mailto:${mailtoTo}?subject=${encodeURIComponent(`Interview Confirmation – ${item.referralName || "the youth"} – ${intDate}`)}&body=${encodeURIComponent(`Hi ${poFirstName},\n\nWe are writing to confirm the interview for ${item.referralName || "the youth"} at Heartland Boys Home. Please see the details below:\n\n  Date:     ${intDate}\n  Time:     ${intTime}\n  Location: ${intPlace}\n\nPlease plan to arrive a few minutes early. If you need to reschedule or have any questions beforehand, don't hesitate to reach out — we are happy to work with you.\n\nWe look forward to meeting with you and ${item.referralName || "the youth"}.\n\nWarm regards,\nHeartland Admissions\nHeartland Boys Home\nadmissions@heartlandboyshomenebraska.org\n(402) 759-4334`)}`;
+                          const bodyInterview = `Hi ${poFirstName},\n\nWe are writing to confirm the interview for ${item.referralName || "the youth"} at Heartland Boys Home. Please see the details below:\n\n  Date:     ${intDate}\n  Time:     ${intTime}\n  Location: ${intPlace}\n\nPlease plan to arrive a few minutes early. If you need to reschedule or have any questions beforehand, don't hesitate to reach out — we are happy to work with you.\n\nWe look forward to meeting with you and ${item.referralName || "the youth"}.\n\nWarm regards,\nHeartland Admissions\nHeartland Boys Home\nadmissions@heartlandboyshomenebraska.org\n(402) 759-4334`;
+                          const hrefInterview = `mailto:${mailtoTo}?subject=${encodeURIComponent(`Interview Confirmation – ${item.referralName || "the youth"} – ${intDate}`)}&body=${encodeURIComponent(bodyInterview)}`;
                           return (
                             <a
                               href={hrefInterview}
-                              onClick={() => logEmailAction(item, "Interview Confirmation")}
+                              onClick={() => logEmailAction(item, "Interview Confirmation", bodyInterview)}
                               className="text-xs bg-yellow-50 text-yellow-800 hover:bg-yellow-100 px-2 py-1 rounded border border-yellow-300 transition-colors font-medium no-brand-override"
                             >
                               Interview
@@ -4399,14 +4410,19 @@ export const ReferralTab = () => {
                                     item.parsedData?.placement?.["Current Placement"] ||
                                     item.parsedData?.placement?.["current placement"] ||
                                     "detention/shelter";
-                                  const hrefCheckIY = `mailto:${mailtoTo}?subject=${encodeURIComponent(`Referral Status Check – ${item.referralName || 'the youth'}`)}&body=${encodeURIComponent(`Hi ${poFirstName},\n\nWe wanted to follow up regarding ${item.referralName || 'the youth'} and check on next steps for placement. Could you give us an update on where things stand?\n\nFeel free to reply here or call us at (402) 759-4334.\n\nThanks,\nHeartland Admissions\nHeartland Boys Home\nadmissions@heartlandboyshomenebraska.org\n(402) 759-4334`)}`;
-                                  const hrefAcceptIY = `mailto:${mailtoTo}?subject=${encodeURIComponent(`Placement Decision – ${item.referralName || "the youth"} – Accepted`)}&body=${encodeURIComponent(`Hi ${poFirstName},\n\nWe are pleased to let you know that we are able to accept ${item.referralName || "the youth"} for placement at Heartland Boys Home.\n\nTo move forward, please reach out to coordinate intake logistics including intake date, transportation, and any immediate needs.\n\nWarm regards,\nHeartland Admissions\nHeartland Boys Home\nadmissions@heartlandboyshomenebraska.org\n(402) 759-4334`)}`;
-                                  const hrefDenyIY = `mailto:${mailtoTo}?subject=${encodeURIComponent(`Regarding ${item.referralName || "the youth"}'s Referral`)}&body=${encodeURIComponent(`Hi ${poFirstName},\n\nJust wanted to let you know that after reviewing the referral for ${item.referralName || "the youth"}, we are going to have to pass at this time. Unfortunately, ${item.referralName || "the youth"} does not meet our standard criteria for placement at Heartland Boys Home, and we wouldn't be able to provide the level of support needed to set them up for success here.\n\nWe appreciate you sending this our way and hope you're able to find a good fit.\n\nThanks,\nHeartland Admissions\nHeartland Boys Home\nadmissions@heartlandboyshomenebraska.org\n(402) 759-4334`)}`;
+                                  const bodyCheckIY = `Hi ${poFirstName},\n\nWe wanted to follow up regarding ${item.referralName || 'the youth'} and check on next steps for placement. Could you give us an update on where things stand?\n\nFeel free to reply here or call us at (402) 759-4334.\n\nThanks,\nHeartland Admissions\nHeartland Boys Home\nadmissions@heartlandboyshomenebraska.org\n(402) 759-4334`;
+                                  const hrefCheckIY = `mailto:${mailtoTo}?subject=${encodeURIComponent(`Referral Status Check – ${item.referralName || 'the youth'}`)}&body=${encodeURIComponent(bodyCheckIY)}`;
+                                  const bodyAcceptIY = `Hi ${poFirstName},\n\nWe are pleased to let you know that we are able to accept ${item.referralName || "the youth"} for placement at Heartland Boys Home.\n\nTo move forward, please reach out to coordinate intake logistics including intake date, transportation, and any immediate needs.\n\nWarm regards,\nHeartland Admissions\nHeartland Boys Home\nadmissions@heartlandboyshomenebraska.org\n(402) 759-4334`;
+                                  const hrefAcceptIY = `mailto:${mailtoTo}?subject=${encodeURIComponent(`Placement Decision – ${item.referralName || "the youth"} – Accepted`)}&body=${encodeURIComponent(bodyAcceptIY)}`;
+                                  const bodyDenyIY = `Hi ${poFirstName},\n\nJust wanted to let you know that after reviewing the referral for ${item.referralName || "the youth"}, we are going to have to pass at this time. Unfortunately, ${item.referralName || "the youth"} does not meet our standard criteria for placement at Heartland Boys Home, and we wouldn't be able to provide the level of support needed to set them up for success here.\n\nWe appreciate you sending this our way and hope you're able to find a good fit.\n\nThanks,\nHeartland Admissions\nHeartland Boys Home\nadmissions@heartlandboyshomenebraska.org\n(402) 759-4334`;
+                                  const hrefDenyIY = `mailto:${mailtoTo}?subject=${encodeURIComponent(`Regarding ${item.referralName || "the youth"}'s Referral`)}&body=${encodeURIComponent(bodyDenyIY)}`;
+                                  let bodyInterviewIY: string | null = null;
                                   const hrefInterviewIY = item.interviewScheduledDate ? (() => {
                                     const intDate = format(new Date(item.interviewScheduledDate + "T00:00:00"), "MMMM d, yyyy");
                                     const intTime = item.interviewTime ? new Date(`2000-01-01T${item.interviewTime}`).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true }) : "TBD";
                                     const intPlace = item.interviewPlace || "TBD";
-                                    return `mailto:${mailtoTo}?subject=${encodeURIComponent(`Interview Confirmation – ${item.referralName || "the youth"} – ${intDate}`)}&body=${encodeURIComponent(`Hi ${poFirstName},\n\nConfirming the interview for ${item.referralName || "the youth"} at Heartland Boys Home.\n\n  Date:     ${intDate}\n  Time:     ${intTime}\n  Location: ${intPlace}\n\nLet us know if you need to reschedule.\n\nWarm regards,\nHeartland Admissions\n(402) 759-4334`)}`;
+                                    bodyInterviewIY = `Hi ${poFirstName},\n\nConfirming the interview for ${item.referralName || "the youth"} at Heartland Boys Home.\n\n  Date:     ${intDate}\n  Time:     ${intTime}\n  Location: ${intPlace}\n\nLet us know if you need to reschedule.\n\nWarm regards,\nHeartland Admissions\n(402) 759-4334`;
+                                    return `mailto:${mailtoTo}?subject=${encodeURIComponent(`Interview Confirmation – ${item.referralName || "the youth"} – ${intDate}`)}&body=${encodeURIComponent(bodyInterviewIY)}`;
                                   })() : null;
                                   return (
                                   <div className="mt-3 pt-3 border-t border-green-100 space-y-3">
@@ -4432,11 +4448,11 @@ export const ReferralTab = () => {
                                     {/* Quick email actions */}
                                     <div className="flex flex-wrap items-center gap-2">
                                       <span className="text-xs font-semibold text-gray-500 flex items-center gap-1"><Mail className="h-3 w-3" /> Quick Emails:</span>
-                                      <a href={hrefCheckIY} onClick={() => logEmailAction(item, "Check Need")} className="text-xs bg-sky-100 text-sky-800 hover:bg-sky-200 px-2 py-1 rounded border border-sky-300 transition-colors font-medium no-brand-override">Check Need</a>
-                                      <a href={hrefAcceptIY} onClick={() => logEmailAction(item, "Accept")} className="text-xs bg-green-100 text-green-800 hover:bg-green-200 px-2 py-1 rounded border border-green-300 transition-colors font-medium no-brand-override">Accept</a>
-                                      <a href={hrefDenyIY} onClick={() => logEmailAction(item, "Deny")} className="text-xs bg-red-100 text-red-800 hover:bg-red-200 px-2 py-1 rounded border border-red-300 transition-colors font-medium no-brand-override">Deny</a>
+                                      <a href={hrefCheckIY} onClick={() => logEmailAction(item, "Check Need", bodyCheckIY)} className="text-xs bg-sky-100 text-sky-800 hover:bg-sky-200 px-2 py-1 rounded border border-sky-300 transition-colors font-medium no-brand-override">Check Need</a>
+                                      <a href={hrefAcceptIY} onClick={() => logEmailAction(item, "Accept", bodyAcceptIY)} className="text-xs bg-green-100 text-green-800 hover:bg-green-200 px-2 py-1 rounded border border-green-300 transition-colors font-medium no-brand-override">Accept</a>
+                                      <a href={hrefDenyIY} onClick={() => logEmailAction(item, "Deny", bodyDenyIY)} className="text-xs bg-red-100 text-red-800 hover:bg-red-200 px-2 py-1 rounded border border-red-300 transition-colors font-medium no-brand-override">Deny</a>
                                       {hrefInterviewIY && (
-                                        <a href={hrefInterviewIY} onClick={() => logEmailAction(item, "Interview Confirmation")} className="text-xs bg-yellow-50 text-yellow-800 hover:bg-yellow-100 px-2 py-1 rounded border border-yellow-300 transition-colors font-medium no-brand-override">Interview</a>
+                                        <a href={hrefInterviewIY} onClick={() => logEmailAction(item, "Interview Confirmation", bodyInterviewIY ?? undefined)} className="text-xs bg-yellow-50 text-yellow-800 hover:bg-yellow-100 px-2 py-1 rounded border border-yellow-300 transition-colors font-medium no-brand-override">Interview</a>
                                       )}
                                     </div>
 

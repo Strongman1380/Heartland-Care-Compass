@@ -10,7 +10,7 @@ import {
   orderBy
 } from 'firebase/firestore'
 import { v4 as uuidv4 } from 'uuid'
-import { auditLogService } from '@/integrations/firebase/auditLogService'
+import { logAuditBestEffort } from '@/integrations/firebase/auditLogBestEffort'
 import { canonicalYouthId, dateOnlyIso, stripUndefinedDeep, validateRecord, withFirestoreMeta } from '@/integrations/firebase/dataGovernance'
 import { academicCreditSchema, academicGradeSchema, academicStepSchema } from '@/schemas/database-records'
 
@@ -96,7 +96,7 @@ export const academicsService = {
         })
       ) as CreditRow
       await setDoc(doc(db, 'academic_credits', id), validated, { merge: true })
-      await auditLogService.log({
+      await logAuditBestEffort({
         entity_type: 'academic_credit',
         entity_id: id,
         action: existingData ? 'update' : 'create',
@@ -106,7 +106,7 @@ export const academicsService = {
         source: validated.source || 'manual',
         before: existingData,
         after: validated,
-      })
+      }, 'save', 'academicsService')
       const snap = await getDoc(doc(db, 'academic_credits', id))
       return normalizeAcademicRow({ id: snap.id, ...snap.data() } as CreditRow) as CreditRow
     },
@@ -116,7 +116,7 @@ export const academicsService = {
       await deleteDoc(doc(db, 'academic_credits', id))
       if (existing.exists()) {
         const row = normalizeAcademicRow({ id: existing.id, ...existing.data() } as CreditRow) as CreditRow
-        await auditLogService.log({
+        await logAuditBestEffort({
           entity_type: 'academic_credit',
           entity_id: id,
           action: 'delete',
@@ -125,7 +125,7 @@ export const academicsService = {
           changed_by: row.updated_by || row.created_by || null,
           source: row.source || 'manual',
           before: row,
-        })
+        }, 'delete', 'academicsService')
       }
     }
   },
@@ -158,7 +158,7 @@ export const academicsService = {
         })
       ) as GradeRow
       await setDoc(doc(db, 'academic_grades', id), validated, { merge: true })
-      await auditLogService.log({
+      await logAuditBestEffort({
         entity_type: 'academic_grade',
         entity_id: id,
         action: existingData ? 'update' : 'create',
@@ -168,7 +168,7 @@ export const academicsService = {
         source: validated.source || 'manual',
         before: existingData,
         after: validated,
-      })
+      }, 'save', 'academicsService')
       const snap = await getDoc(doc(db, 'academic_grades', id))
       return normalizeAcademicRow({ id: snap.id, ...snap.data() } as GradeRow) as GradeRow
     },
@@ -178,7 +178,7 @@ export const academicsService = {
       await deleteDoc(doc(db, 'academic_grades', id))
       if (existing.exists()) {
         const row = normalizeAcademicRow({ id: existing.id, ...existing.data() } as GradeRow) as GradeRow
-        await auditLogService.log({
+        await logAuditBestEffort({
           entity_type: 'academic_grade',
           entity_id: id,
           action: 'delete',
@@ -187,7 +187,7 @@ export const academicsService = {
           changed_by: row.updated_by || row.created_by || null,
           source: row.source || 'manual',
           before: row,
-        })
+        }, 'delete', 'academicsService')
       }
     }
   },
@@ -220,7 +220,7 @@ export const academicsService = {
         })
       ) as StepRow
       await setDoc(doc(db, 'academic_steps_completed', id), validated, { merge: true })
-      await auditLogService.log({
+      await logAuditBestEffort({
         entity_type: 'academic_step',
         entity_id: id,
         action: existingData ? 'update' : 'create',
@@ -230,7 +230,7 @@ export const academicsService = {
         source: validated.source || 'manual',
         before: existingData,
         after: validated,
-      })
+      }, 'save', 'academicsService')
       const snap = await getDoc(doc(db, 'academic_steps_completed', id))
       return normalizeAcademicRow({ id: snap.id, ...snap.data() } as StepRow) as StepRow
     },
@@ -240,7 +240,7 @@ export const academicsService = {
       await deleteDoc(doc(db, 'academic_steps_completed', id))
       if (existing.exists()) {
         const row = normalizeAcademicRow({ id: existing.id, ...existing.data() } as StepRow) as StepRow
-        await auditLogService.log({
+        await logAuditBestEffort({
           entity_type: 'academic_step',
           entity_id: id,
           action: 'delete',
@@ -249,7 +249,7 @@ export const academicsService = {
           changed_by: row.updated_by || row.created_by || null,
           source: row.source || 'manual',
           before: row,
-        })
+        }, 'delete', 'academicsService')
       }
     }
   }

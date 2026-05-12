@@ -11,7 +11,7 @@ import {
   updateDoc,
 } from "firebase/firestore";
 import { v4 as uuidv4 } from "uuid";
-import { auditLogService } from "@/integrations/firebase/auditLogService";
+import { logAuditBestEffort } from "@/integrations/firebase/auditLogBestEffort";
 import { stripUndefinedDeep, withFirestoreMeta } from "@/integrations/firebase/dataGovernance";
 
 export type KpiReportRow = {
@@ -64,7 +64,7 @@ export const kpiReportsService = {
       }
     );
     await setDoc(ref, data, { merge: true });
-    await auditLogService.log({
+    await logAuditBestEffort({
       entity_type: "kpi_report",
       entity_id: id,
       action: existingData ? "update" : "create",
@@ -74,7 +74,7 @@ export const kpiReportsService = {
       before: existingData,
       after: data,
       metadata: { timeframe: row.timeframe },
-    });
+    }, "save", "kpiReportsService");
     return { ...data, id } as unknown as KpiReportRow;
   },
 
@@ -87,7 +87,7 @@ export const kpiReportsService = {
     const snap = await getDoc(ref);
     const snapData = snap.data();
     if (!snapData) throw new Error(`KPI report not found after update: ${id}`);
-    await auditLogService.log({
+    await logAuditBestEffort({
       entity_type: "kpi_report",
       entity_id: id,
       action: "update",
@@ -96,7 +96,7 @@ export const kpiReportsService = {
       source: "assessment-kpi",
       before: beforeData,
       after: snapData as Record<string, unknown>,
-    });
+    }, "update", "kpiReportsService");
     return { id: snap.id, ...snapData } as KpiReportRow;
   },
 
@@ -105,14 +105,14 @@ export const kpiReportsService = {
     const before = await getDoc(ref);
     await deleteDoc(ref);
     if (before.exists()) {
-      await auditLogService.log({
+      await logAuditBestEffort({
         entity_type: "kpi_report",
         entity_id: id,
         action: "delete",
         changed_at: new Date().toISOString(),
         source: "assessment-kpi",
         before: before.data() as Record<string, unknown>,
-      });
+      }, "delete", "kpiReportsService");
     }
   },
 };

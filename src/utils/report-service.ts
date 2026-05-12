@@ -1,45 +1,8 @@
 import { Youth, BehaviorPoints, DailyRating, ProgressNote } from "@/types/app-types";
-import { fetchBehaviorPoints, fetchDailyRatings, fetchAllProgressNotes } from "./local-storage-utils";
-import { getBehaviorPointsByYouth, getDailyRatingsByYouth } from "@/lib/api";
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subWeeks, subMonths, subDays } from "date-fns";
 import { summarizeReport, generateBehavioralInsights, generateTreatmentRecommendations } from "@/lib/aiClient";
 import { calculateTotalPoints, calculatePointsForPeriod, getPointStatistics } from "./pointCalculations";
-
-// API fetch functions with fallback to localStorage
-const fetchBehaviorPointsAPI = async (youthId: string): Promise<BehaviorPoints[]> => {
-  try {
-    const data = await getBehaviorPointsByYouth(youthId);
-    return data.map(item => ({
-      ...item,
-      date: item.date ? new Date(item.date) : null,
-      createdAt: item.createdAt ? new Date(item.createdAt) : null,
-      morningPoints: item.morningPoints || 0,
-      afternoonPoints: item.afternoonPoints || 0,
-      eveningPoints: item.eveningPoints || 0,
-      totalPoints: item.totalPoints || 0
-    })) as BehaviorPoints[];
-  } catch (e) {
-    console.warn('API fetch failed for behavior-points; falling back to localStorage:', e);
-    return fetchBehaviorPoints(youthId);
-  }
-};
-
-const fetchProgressNotesAPI = fetchAllProgressNotes;
-
-const fetchDailyRatingsAPI = async (youthId: string): Promise<DailyRating[]> => {
-  try {
-    const data = await getDailyRatingsByYouth(youthId);
-    return data.map(item => ({
-      ...item,
-      date: item.date ? new Date(item.date) : null,
-      createdAt: item.createdAt ? new Date(item.createdAt) : null,
-      updatedAt: item.updatedAt ? new Date(item.updatedAt) : null,
-    })) as DailyRating[];
-  } catch (e) {
-    console.warn('API fetch failed for daily-ratings; falling back to localStorage:', e);
-    return fetchDailyRatings(youthId);
-  }
-};
+import { reportDataHydrator } from "@/services/report-data-hydrator";
 
 export interface ReportOptions {
   reportType:
@@ -66,6 +29,12 @@ export interface ReportOptions {
   outputFormat?: 'text' | 'pdf' | 'docx' | 'json';
   useAI?: boolean;
 }
+
+type ReportData = Partial<{
+  behaviorPoints: BehaviorPoints[];
+  dailyRatings: DailyRating[];
+  progressNotes: ProgressNote[];
+}>;
 
 export const generateReport = async (youth: Youth, options: ReportOptions): Promise<string> => {
   // Calculate date range
@@ -102,7 +71,7 @@ export const generateReportHTML = async (youth: Youth, options: ReportOptions): 
   const data = await fetchReportData(youth.id, options, startDate, endDate);
 
   const fmt = (d?: Date | string | null) => d ? format(new Date(d), "M/d/yyyy") : "Not provided";
-  const esc = (s: any) => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const esc = (s: unknown) => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
   const logoUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}${import.meta.env.BASE_URL}files/BoysHomeLogo.png`;
   let logoSrc = logoUrl;
@@ -286,10 +255,10 @@ export const generateReportHTML = async (youth: Youth, options: ReportOptions): 
       break;
   }
 
-  const fmtBool = (v: any) => (v === true ? 'Yes' : v === false ? 'No' : 'Not provided');
-  const joinList = (v: any) => Array.isArray(v) && v.length ? esc(v.join(', ')) : 'Not provided';
-  const safe = (v: any) => v !== undefined && v !== null && v !== '' ? esc(v) : 'Not provided';
-  const safePre = (v: any) => v !== undefined && v !== null && v !== '' ? `<div style="white-space:pre-wrap;">${esc(v)}</div>` : 'Not provided';
+  const fmtBool = (v: unknown) => (v === true ? 'Yes' : v === false ? 'No' : 'Not provided');
+  const joinList = (v: unknown) => Array.isArray(v) && v.length ? esc(v.join(', ')) : 'Not provided';
+  const safe = (v: unknown) => v !== undefined && v !== null && v !== '' ? esc(v) : 'Not provided';
+  const safePre = (v: unknown) => v !== undefined && v !== null && v !== '' ? `<div style="white-space:pre-wrap;">${esc(v)}</div>` : 'Not provided';
 
   const profileFormSection = () => {
     if (!options.includeOptions.profile) return '';
@@ -323,7 +292,7 @@ export const generateReportHTML = async (youth: Youth, options: ReportOptions): 
             <table class="section-table" style="width:100%; border-collapse:collapse; font-size:10.5pt;">
               ${row('Name', `${esc(youth.firstName)} ${esc(youth.lastName)}`)}
               ${row('ID Number', safe(youth.idNumber || youth.id))}
-              ${row('Date of Birth', esc(fmt(youth.dob as any)))}
+              ${row('Date of Birth', esc(fmt(youth.dob)))}
               ${row('Age', safe(youth.age))}
               ${row('Sex', safe(youth.sex))}
               ${row('Race', safe(youth.race))}
@@ -335,10 +304,10 @@ export const generateReportHTML = async (youth: Youth, options: ReportOptions): 
         </div>
 
         ${tableWithHeaderOpen('Admission / Status')}
-          ${row('Admission Date', esc(fmt(youth.admissionDate as any)))}
+          ${row('Admission Date', esc(fmt(youth.admissionDate)))}
           ${row('Admission Time', safe(youth.admissionTime))}
           ${row('RCS In', safe(youth.rcsIn))}
-          ${row('Discharge Date', esc(fmt(youth.dischargeDate as any)))}
+          ${row('Discharge Date', esc(fmt(youth.dischargeDate)))}
           ${row('Discharge Time', safe(youth.dischargeTime))}
           ${row('RCS Out', safe(youth.rcsOut))}
           ${row('Current Level', safe(youth.level))}
@@ -464,12 +433,12 @@ export const generateReportHTML = async (youth: Youth, options: ReportOptions): 
           ${row('Parents Notified', fmtBool(youth.emergencyShelterCare?.parentsNotified))}
           ${row('Immediate Needs', safePre(youth.emergencyShelterCare?.immediateNeeds))}
           ${row('Placing Agency Individual', safe(youth.emergencyShelterCare?.placingAgencyIndividual))}
-          ${row('Placement Date', esc(fmt(youth.emergencyShelterCare?.placementDate as any)))}
+          ${row('Placement Date', esc(fmt(youth.emergencyShelterCare?.placementDate)))}
           ${row('Placement Time', safe(youth.emergencyShelterCare?.placementTime))}
           ${row('Reason for Placement', safePre(youth.emergencyShelterCare?.reasonForPlacement))}
           ${row('Intake Worker Observation', safePre(youth.emergencyShelterCare?.intakeWorkerObservation))}
           ${row('Orientation Completed By', safe(youth.emergencyShelterCare?.orientationCompletedBy))}
-          ${row('Orientation Date', esc(fmt(youth.emergencyShelterCare?.orientationDate as any)))}
+          ${row('Orientation Date', esc(fmt(youth.emergencyShelterCare?.orientationDate)))}
           ${row('Orientation Time', safe(youth.emergencyShelterCare?.orientationTime))}
         ${tableClose}
 
@@ -604,40 +573,17 @@ const getDateRange = (options: ReportOptions): { startDate: Date; endDate: Date 
 };
 
 const fetchReportData = async (youthId: string, options: ReportOptions, startDate: Date, endDate: Date) => {
-  const data: any = {};
-  
-  if (options.includeOptions.points) {
-    const allPoints = await fetchBehaviorPointsAPI(youthId);
-    data.behaviorPoints = allPoints.filter(point => {
-      if (!point.date) return false;
-      const pointDate = new Date(point.date);
-      return pointDate >= startDate && pointDate <= endDate;
-    });
-  }
-  
-  if (options.includeOptions.notes) {
-    const allNotes = await fetchProgressNotesAPI(youthId);
-    data.progressNotes = allNotes.filter(note => {
-      if (!note.date) return false;
-      const noteDate = new Date(note.date);
-      return noteDate >= startDate && noteDate <= endDate;
-    });
-  }
-  
-  // Fetch daily ratings for assessment data
-  const allRatings = await fetchDailyRatingsAPI(youthId);
-  data.dailyRatings = allRatings.filter(rating => {
-    if (!rating.date) return false;
-    const ratingDate = new Date(rating.date);
-    return ratingDate >= startDate && ratingDate <= endDate;
-  });
-  
-  return data;
+  const sections = [
+    ...(options.includeOptions.points ? ["behaviorPoints"] as const : []),
+    ...(options.includeOptions.notes ? ["progressNotes"] as const : []),
+    "dailyRatings" as const,
+  ];
+  return reportDataHydrator.loadSections(youthId, sections, { start: startDate, end: endDate });
 };
 
 const generateComprehensiveReport = async (
   youth: Youth, 
-  data: any, 
+  data: ReportData, 
   startDate: Date, 
   endDate: Date, 
   options: ReportOptions
@@ -725,7 +671,7 @@ Deal with Authority Average: ${calcAvg('dealAuthority')} / 5
 
 const generateSummaryReport = async (
   youth: Youth, 
-  data: any, 
+  data: ReportData, 
   startDate: Date, 
   endDate: Date, 
   options: ReportOptions
@@ -768,7 +714,7 @@ Overall Performance: ${Math.round((calcAvg('peerInteraction') + calcAvg('adultIn
 
 const generateProgressReport = async (
   youth: Youth, 
-  data: any, 
+  data: ReportData, 
   startDate: Date, 
   endDate: Date, 
   options: ReportOptions
@@ -835,7 +781,7 @@ Authority Response: ${calcAvg('dealAuthority')} / 5
 // Enhanced AI-powered report generation helper
 const generateAIEnhancedReport = async (
   youth: Youth,
-  data: any,
+  data: ReportData,
   startDate: Date,
   endDate: Date,
   options: ReportOptions,
@@ -912,7 +858,7 @@ const generateSampleData = (youth: Youth, reportType: string) => {
 
 const generateCourtReport = async (
   youth: Youth,
-  data: any,
+  data: ReportData,
   startDate: Date,
   endDate: Date,
   options: ReportOptions
@@ -971,7 +917,7 @@ BEHAVIORAL PROGRESS:
 `;
 
   if (reportData.behaviorPoints && reportData.behaviorPoints.length > 0) {
-    const totalPoints = reportData.behaviorPoints.reduce((sum: number, p: any) => sum + (p.totalPoints || 0), 0);
+    const totalPoints = reportData.behaviorPoints.reduce((sum: number, p: BehaviorPoints) => sum + (p.totalPoints || 0), 0);
     const avgDaily = Math.round(totalPoints / reportData.behaviorPoints.length);
     
     report += `During the reporting period, ${youth.firstName} earned a total of ${totalPoints} behavior points over ${reportData.behaviorPoints.length} days, averaging ${avgDaily} points per day. The point system measures compliance with program expectations, peer interactions, and staff cooperation.
@@ -981,7 +927,7 @@ BEHAVIORAL PROGRESS:
 
   if (reportData.dailyRatings && reportData.dailyRatings.length > 0) {
     const calcAvg = (field: string) => {
-      const values = reportData.dailyRatings.map((r: any) => r[field]).filter((v: any) => v !== null && v !== undefined && v > 0);
+      const values = reportData.dailyRatings.map((r: DailyRating) => r[field]).filter((v) => v !== null && v !== undefined && (v as number) > 0) as number[];
       return values.length > 0 ? Math.round((values.reduce((sum: number, v: number) => sum + v, 0) / values.length) * 10) / 10 : 0;
     };
 
@@ -1008,11 +954,11 @@ RECENT PROGRESS NOTES:
 `;
 
   if (reportData.progressNotes && reportData.progressNotes.length > 0) {
-    [...reportData.progressNotes].sort((a: any, b: any) => {
+    [...reportData.progressNotes].sort((a: ProgressNote, b: ProgressNote) => {
       const dateA = a.date ? new Date(a.date).getTime() : 0;
       const dateB = b.date ? new Date(b.date).getTime() : 0;
       return dateB - dateA;
-    }).slice(0, 30).forEach((note: any) => {
+    }).slice(0, 30).forEach((note: ProgressNote) => {
       report += `${note.date ? format(new Date(note.date), "M/d/yyyy") : "Recent"} - ${note.category || "General"}: ${note.note || "Progress documented"}\n`;
     });
   }
@@ -1037,7 +983,7 @@ Date: ${format(new Date(), "M/d/yyyy")}
 
 const generateDPNReport = async (
   youth: Youth,
-  data: any,
+  data: ReportData,
   startDate: Date,
   endDate: Date,
   options: ReportOptions,
@@ -1072,7 +1018,7 @@ BEHAVIORAL PERFORMANCE:
 `;
 
   if (reportData.behaviorPoints && reportData.behaviorPoints.length > 0) {
-    const totalPoints = reportData.behaviorPoints.reduce((sum: number, p: any) => sum + (p.totalPoints || 0), 0);
+    const totalPoints = reportData.behaviorPoints.reduce((sum: number, p: BehaviorPoints) => sum + (p.totalPoints || 0), 0);
     const avgDaily = Math.round(totalPoints / reportData.behaviorPoints.length);
     report += `Behavior Point Summary:
 - Total Points Earned: ${totalPoints.toLocaleString()}
@@ -1085,7 +1031,7 @@ BEHAVIORAL PERFORMANCE:
 
   if (reportData.dailyRatings && reportData.dailyRatings.length > 0) {
     const calcAvg = (field: string) => {
-      const values = reportData.dailyRatings.map((r: any) => r[field]).filter((v: any) => v !== null && v !== undefined && v > 0);
+      const values = reportData.dailyRatings.map((r: DailyRating) => r[field]).filter((v) => v !== null && v !== undefined && (v as number) > 0) as number[];
       return values.length > 0 ? Math.round((values.reduce((sum: number, v: number) => sum + v, 0) / values.length) * 10) / 10 : 0;
     };
 
@@ -1113,12 +1059,12 @@ SIGNIFICANT INCIDENTS/ACHIEVEMENTS:
 `;
 
   if (reportData.progressNotes && reportData.progressNotes.length > 0) {
-    const recentNotes = [...reportData.progressNotes].sort((a: any, b: any) => {
+    const recentNotes = [...reportData.progressNotes].sort((a: ProgressNote, b: ProgressNote) => {
       const dateA = a.date ? new Date(a.date).getTime() : 0;
       const dateB = b.date ? new Date(b.date).getTime() : 0;
       return dateB - dateA;
     }).slice(0, 15);
-    recentNotes.forEach((note: any) => {
+    recentNotes.forEach((note: ProgressNote) => {
       report += `• ${note.date ? format(new Date(note.date), "M/d/yyyy") : "Recent"}: ${note.note || "Progress documented in treatment plan"}\n`;
     });
   } else {

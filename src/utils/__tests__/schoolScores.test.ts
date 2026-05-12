@@ -1,21 +1,21 @@
-import { describe, it, expect, jest, beforeEach } from '@jest/globals';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mock the Firebase schoolScoresService before importing schoolScores
-jest.mock('@/integrations/firebase/schoolScoresService', () => ({
+vi.mock('@/integrations/firebase/schoolScoresService', () => ({
   schoolScoresService: {
-    upsert: jest.fn(),
-    get: jest.fn(),
-    range: jest.fn(),
-    forYouth: jest.fn(),
-    all: jest.fn(),
-    delete: jest.fn(),
+    upsert: vi.fn(),
+    get: vi.fn(),
+    range: vi.fn(),
+    forYouth: vi.fn(),
+    all: vi.fn(),
+    delete: vi.fn(),
   },
 }));
 
 import { schoolScoresService } from '@/integrations/firebase/schoolScoresService';
 import { getYouthStats } from '../schoolScores';
 
-const mockForYouth = schoolScoresService.forYouth as jest.MockedFunction<typeof schoolScoresService.forYouth>;
+const mockForYouth = vi.mocked(schoolScoresService.forYouth);
 
 // Build a mock SchoolScoreRow. Scores stored as tenths (0–40).
 const mockRow = (date: string, score: number) => ({
@@ -29,7 +29,7 @@ const mockRow = (date: string, score: number) => ({
 });
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
 });
 
 describe('getYouthStats — trend detection', () => {

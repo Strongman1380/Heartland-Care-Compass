@@ -25,7 +25,7 @@
     "deploy:hosting": "npm run build && firebase deploy --only hosting",
     "deploy:functions": "cd functions && npm install && cd .. && firebase deploy --only functions",
     "deploy:rules": "firebase deploy --only firestore:rules,firestore:indexes",
-    "test": "jest --config jest.config.cjs tests/incident-api.test.js",
+    "test": "vitest run",
     "test:unit": "vitest run",
     "test:unit:watch": "vitest",
     "test:unit:coverage": "vitest run --coverage",

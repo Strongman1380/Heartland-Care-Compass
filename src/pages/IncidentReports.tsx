@@ -3,6 +3,16 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import {
   Plus, Eye, Edit, Trash2, AlertTriangle, Loader2,
   FileDown, Printer, ArrowLeft, Sparkles,
 } from 'lucide-react'
@@ -28,6 +38,7 @@ export default function IncidentReports() {
   const printRef = useRef<HTMLDivElement>(null)
   const [isExporting, setIsExporting] = useState(false)
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false)
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
 
   const loadIncidents = useCallback(async () => {
     try {
@@ -62,8 +73,14 @@ export default function IncidentReports() {
     }
   }, [loadIncidents])
 
-  const handleDelete = useCallback(async (id: string) => {
-    if (!confirm('Are you sure you want to delete this incident report?')) return
+  const handleDelete = useCallback((id: string) => {
+    setPendingDeleteId(id)
+  }, [])
+
+  const confirmDelete = useCallback(async () => {
+    if (!pendingDeleteId) return
+    const id = pendingDeleteId
+    setPendingDeleteId(null)
     try {
       await incidentReportsService.delete(id)
       toast.success('Incident report deleted')
@@ -76,7 +93,7 @@ export default function IncidentReports() {
       logger.error('Error deleting incident:', error)
       toast.error('Failed to delete incident report')
     }
-  }, [loadIncidents, selectedIncident])
+  }, [pendingDeleteId, loadIncidents, selectedIncident])
 
   const handleExportPDF = useCallback(async () => {
     if (!printRef.current || !selectedIncident) return
@@ -181,6 +198,26 @@ export default function IncidentReports() {
             <FacilityIncidentPrintView ref={printRef} report={selectedIncident} />
           </div>
         </main>
+
+        <AlertDialog open={pendingDeleteId !== null} onOpenChange={(open) => { if (!open) setPendingDeleteId(null) }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Incident Report</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to delete this incident report? This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-red-600 hover:bg-red-700 text-white"
+                onClick={confirmDelete}
+              >
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     )
   }
@@ -346,6 +383,26 @@ export default function IncidentReports() {
           </div>
         )}
       </main>
+
+      <AlertDialog open={pendingDeleteId !== null} onOpenChange={(open) => { if (!open) setPendingDeleteId(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Incident Report</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this incident report? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700 text-white"
+              onClick={confirmDelete}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

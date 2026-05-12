@@ -89,7 +89,7 @@ export const SECTION_CONFIG = [
     keywords: [
       "behavior", "aggression", "anger", "violence", "runaway", "fighting",
       "impulsivity", "risk factor", "thc", "cannabis", "drug use", "alcohol", "threatening",
-      "substance abuse", "substance misuse", "substance use history", "substance use disorder",
+      "substance use", "substance abuse", "substance misuse", "substance use history", "substance use disorder",
       "drug abuse", "tox screen",
       "youth responsivity", "family responsivity", "trafficking", "gang", "suicide",
       "assaultive", "weapons", "fire setting", "missing from home", "problematic sexual",
@@ -210,7 +210,7 @@ function _matchesKeyword(fieldLower: string, kw: string): boolean {
 }
 
 // Contact person detection — field names that represent a person role
-const CONTACT_PERSON_RE = /^(mother'?s?|father'?s?|parent'?s?|parent\/guardian'?s?|parent\/guardians?|step-?mother|step-?father|legal guardian|primary guardian|secondary guardian|guardian'?s?|caregiver|next of kin|emergency contact|foster parent|relative|aunt|uncle|grandmother|grandfather|grandparent|grandma|grandpa|attorney|caseworker|case worker|probation officer|parole officer|gal|casa|judge)$/i;
+const CONTACT_PERSON_RE = /^(mother'?s?|father'?s?|parent'?s?|parent\/guardian'?s?|parent\/guardians?|step-?mother|step-?father|legal guardian|primary guardian|secondary guardian|guardian'?s?|caregiver|next of kin|emergency contact|foster parent|relative|aunt|uncle|grandmother|grandfather|grandparent|grandma|grandpa)$/i;
 
 // Generic sub-fields that should inherit the active contact person's prefix
 const CONTACT_SUBFIELD_NAMES = new Set([

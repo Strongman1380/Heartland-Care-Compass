@@ -214,6 +214,31 @@ npm run test:coverage
 
 ---
 
+## ✅ Firebase Smoke Checklist
+
+Use this after deploys or incident-import changes to confirm the app is writing to Firebase correctly.
+
+### Incident Reports
+1. Create a single incident from the Smart Import dialog using text that includes `Incident Narrative:`.
+2. Confirm the record appears in the incident list and opens in the form after import.
+3. Save an edit to the incident and confirm the update persists after refresh.
+4. Delete the incident and confirm it disappears from the list and from the `facility_incidents` collection.
+5. Bulk import two incidents separated by `---` and confirm both documents are created.
+
+### Firebase Data Verification
+1. In the Firebase console, confirm the incident documents exist in `facility_incidents`.
+2. Check `incident_audit_logs` or `audit_log` if the environment uses audit logging.
+3. Confirm a failed audit write does not block the incident save or delete operation.
+4. Verify imported narrative text is mapped into the saved narrative field rather than dropped.
+
+### Adjacent Write Paths
+1. Save and update a KPI report.
+2. Save a KPI snapshot.
+3. Save and delete an academic credit, grade, and step entry.
+4. Confirm those writes still succeed even if audit logging is unavailable.
+
+---
+
 ## 📤 Export Options
 
 ### Full Report (Internal)

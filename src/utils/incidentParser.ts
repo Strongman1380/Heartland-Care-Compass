@@ -135,6 +135,8 @@ const FIELD_MAP: Record<string, keyof FacilityIncidentFormData> = {
   'report time': 'reportTime',
   'location': 'location',
   'narrative': 'narrativeSummary',
+  'narrative summary': 'narrativeSummary',
+  'incident narrative': 'narrativeSummary',
   'summary': 'narrativeSummary',
   'incident summary': 'narrativeSummary',
   'staff': 'staffCompletingReport',

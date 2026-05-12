@@ -17,7 +17,7 @@ interface AIRequestConfig {
   fallbackEnabled?: boolean;
 }
 
-interface AIResponse<T = any> {
+interface AIResponse<T = unknown> {
   success: boolean;
   data?: T;
   error?: string;
@@ -34,14 +34,15 @@ interface AIResponse<T = any> {
 }
 
 interface AIStreamHandlers {
-  onMeta?: (meta: any) => void;
+  onMeta?: (meta: unknown) => void;
   onChunk?: (chunk: string) => void;
-  onDone?: (result: { answer: string; usage?: any; requestId?: string; cached?: boolean }) => void;
+  onDone?: (result: { answer: string; usage?: { total_tokens?: number }; requestId?: string; cached?: boolean }) => void;
   onError?: (error: { error: string; code?: string; retryable?: boolean; requestId?: string }) => void;
 }
 
-const formatAIErrorMessage = (status: number, payload: any): string => {
-  if (payload?.error) return payload.error;
+const formatAIErrorMessage = (status: number, payload: unknown): string => {
+  const errorPayload = payload as { error?: string } | null;
+  if (errorPayload?.error) return errorPayload.error;
   if (status === 408) return 'AI request timed out. Try a shorter input.';
   if (status === 429) return 'AI rate limit reached. Try again shortly.';
   if (status === 402) return 'AI quota exceeded. Contact admin to update billing.';
@@ -89,7 +90,7 @@ const circuitBreaker = {
  */
 async function makeAIRequest<T>(
   endpoint: string,
-  payload: any,
+  payload: unknown,
   config: AIRequestConfig = {}
 ): Promise<AIResponse<T>> {
   const { maxRetries = 1, timeout = 20000, fallbackEnabled = true } = config;
@@ -138,10 +139,10 @@ async function makeAIRequest<T>(
       clearTimeout(timeoutId);
 
       const rawBody = await response.text();
-      let data: any = {};
+      let data: Record<string, unknown> = {};
       if (rawBody) {
         try {
-          data = JSON.parse(rawBody);
+          data = JSON.parse(rawBody) as Record<string, unknown>;
         } catch {
           data = { error: rawBody };
         }
@@ -149,22 +150,28 @@ async function makeAIRequest<T>(
 
       if (!response.ok) {
         const message = formatAIErrorMessage(response.status, data);
-        if (data.fallback && fallbackEnabled) {
+        if (data.fallback === true && fallbackEnabled) {
           return {
             success: false,
             error: message,
-            code: data.code,
-            retryable: data.retryable,
-            requestId: data.requestId,
-            detail: data.detail,
+            code: typeof data.code === 'string' ? data.code : undefined,
+            retryable: data.retryable === true,
+            requestId: typeof data.requestId === 'string' ? data.requestId : undefined,
+            detail: typeof data.detail === 'string' ? data.detail : undefined,
             fallback: true,
           };
         }
-        const requestError: any = new Error(message);
-        requestError.code = data.code;
-        requestError.retryable = data.retryable;
-        requestError.requestId = data.requestId;
-        requestError.detail = data.detail;
+        const requestError = new Error(message) as Error & {
+          code?: string;
+          retryable?: boolean;
+          requestId?: string;
+          detail?: string;
+          status?: number;
+        };
+        requestError.code = typeof data.code === 'string' ? data.code : undefined;
+        requestError.retryable = data.retryable === true;
+        requestError.requestId = typeof data.requestId === 'string' ? data.requestId : undefined;
+        requestError.detail = typeof data.detail === 'string' ? data.detail : undefined;
         requestError.status = response.status;
         throw requestError;
       }
@@ -178,45 +185,54 @@ async function makeAIRequest<T>(
       });
       return {
         success: true,
-        data: data,
-        requestId: data.requestId,
-        cached: data.cached,
+        data: data as T,
+        requestId: typeof data.requestId === 'string' ? data.requestId : undefined,
+        cached: data.cached === true,
         usage: data.usage ? {
-          model: data.model,
-          tokens: data.usage?.total_tokens,
+          model: typeof data.model === 'string' ? data.model : undefined,
+          tokens: typeof (data.usage as { total_tokens?: unknown })?.total_tokens === 'number' ? (data.usage as { total_tokens?: number }).total_tokens : undefined,
         } : undefined,
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       const durationMs = Date.now() - requestStartedAt;
+      const normalizedError = error as {
+        code?: string;
+        status?: number;
+        name?: string;
+        message?: string;
+        retryable?: boolean;
+        requestId?: string;
+        detail?: string;
+      };
       logger.warn(`AI request attempt ${attempt + 1} failed`, {
         endpoint,
         durationMs,
-        code: error?.code,
-        status: error?.status,
-        name: error?.name,
-        message: error?.message,
+        code: normalizedError.code,
+        status: normalizedError.status,
+        name: normalizedError.name,
+        message: normalizedError.message,
       });
       circuitBreaker.recordFailure();
-      const message = String(error?.message || '');
+      const message = String(normalizedError.message || '');
       const isNetworkFailure = /network|failed to fetch|load failed|cors/i.test(message);
-      const retryable = error?.retryable === true
-        || error?.name === 'AbortError'
+      const retryable = normalizedError.retryable === true
+        || normalizedError.name === 'AbortError'
         || isNetworkFailure;
       const isFinalAttempt = attempt === maxRetries || !retryable;
 
       if (isFinalAttempt) {
-        let errorMessage = error.message || 'AI request failed';
-        if (error?.name === 'AbortError') {
+        let errorMessage = normalizedError.message || 'AI request failed';
+        if (normalizedError.name === 'AbortError') {
           errorMessage = 'AI request timed out. The referral content may be too long or the service is under high load. Please try again.';
         }
 
         return {
           success: false,
           error: errorMessage,
-          code: error.code || (error?.name === 'AbortError' ? 'TIMEOUT' : undefined),
+          code: normalizedError.code || (normalizedError.name === 'AbortError' ? 'TIMEOUT' : undefined),
           retryable,
-          requestId: error.requestId,
-          detail: error.detail,
+          requestId: normalizedError.requestId,
+          detail: normalizedError.detail,
           fallback: fallbackEnabled,
         };
       }
@@ -239,7 +255,7 @@ async function makeAIRequest<T>(
  */
 export async function queryDataStream(
   question: string,
-  context: any,
+  context: unknown,
   handlers: AIStreamHandlers = {}
 ): Promise<AIResponse<{ answer: string }>> {
   const headers: Record<string, string> = {
@@ -301,7 +317,7 @@ export async function queryDataStream(
   const decoder = new TextDecoder();
   let buffer = '';
   let fullAnswer = '';
-  let donePayload: any = null;
+  let donePayload: { answer?: string; usage?: { total_tokens?: number }; requestId?: string; cached?: boolean } | null = null;
 
   while (true) {
     const { value, done } = await reader.read();
@@ -318,7 +334,7 @@ export async function queryDataStream(
       if (!dataLine) continue;
 
       const eventType = eventLine ? eventLine.replace('event:', '').trim() : 'message';
-      let payload: any = null;
+      let payload: unknown = null;
       try {
         payload = JSON.parse(dataLine.replace('data:', '').trim());
       } catch {
@@ -380,7 +396,7 @@ export interface SearchResult {
   id: string;
   relevance: number;
   summary: string;
-  data: any;
+  data: Record<string, unknown> | unknown[];
   highlights?: string[];
 }
 
@@ -396,7 +412,7 @@ export async function searchData(searchQuery: SearchQuery): Promise<AIResponse<S
  * Natural language query interface
  * Example: "What interventions have been most effective for youth with trauma history?"
  */
-export async function queryData(question: string, context?: any): Promise<AIResponse<{ answer: string }>> {
+export async function queryData(question: string, context?: unknown): Promise<AIResponse<{ answer: string }>> {
   return makeAIRequest('/api/ai/query', { question, context });
 }
 
@@ -430,7 +446,7 @@ export interface CaseNoteSuggestion {
 export async function suggestCaseNoteContent(
   youthId: string,
   noteType: string,
-  recentData?: any
+  recentData?: unknown
 ): Promise<AIResponse<CaseNoteSuggestion>> {
   return makeAIRequest('/api/ai/suggest-note', {
     youthId,
@@ -456,7 +472,7 @@ export async function summarizeCaseNote(noteContent: string, maxLength?: number)
 /**
  * Analyze sentiment and risk indicators in case notes
  */
-export async function analyzeNoteContent(noteContent: string, youth: any): Promise<AIResponse<{
+export async function analyzeNoteContent(noteContent: string, youth: unknown): Promise<AIResponse<{
   sentiment: 'positive' | 'neutral' | 'concerning' | 'critical';
   riskIndicators: Array<{
     type: string;
@@ -492,9 +508,9 @@ export interface IncidentAnalysis {
  * Analyze incident report and identify patterns
  */
 export async function analyzeIncident(
-  incidentData: any,
+  incidentData: unknown,
   youthId: string,
-  historicalIncidents?: any[]
+  historicalIncidents?: unknown[]
 ): Promise<AIResponse<IncidentAnalysis>> {
   return makeAIRequest('/api/ai/analyze-incident', {
     incidentData,
@@ -566,8 +582,8 @@ export interface RiskPrediction {
  */
 export async function assessRisk(
   youthId: string,
-  assessmentData: any,
-  historicalData?: any
+  assessmentData: unknown,
+  historicalData?: unknown
 ): Promise<AIResponse<RiskPrediction>> {
   return makeAIRequest('/api/ai/assess-risk', {
     youthId,
@@ -580,8 +596,8 @@ export async function assessRisk(
  * Suggest intervention targets based on assessment
  */
 export async function suggestInterventions(
-  assessmentData: any,
-  youth: any
+  assessmentData: unknown,
+  youth: unknown
 ): Promise<AIResponse<Array<{
   intervention: string;
   rationale: string;
@@ -619,7 +635,7 @@ export interface BehaviorPrediction {
  */
 export async function analyzeBehaviorTrends(
   youthId: string,
-  behaviorData: any[],
+  behaviorData: unknown[],
   timeframe?: number
 ): Promise<AIResponse<BehaviorPrediction>> {
   return makeAIRequest('/api/ai/analyze-behavior', {
@@ -634,7 +650,7 @@ export async function analyzeBehaviorTrends(
  */
 export async function checkBehavioralWarnings(
   youthId: string,
-  recentData: any
+  recentData: unknown
 ): Promise<AIResponse<{
   warnings: Array<{
     type: string;
@@ -655,8 +671,8 @@ export async function checkBehavioralWarnings(
  */
 export async function analyzeInterventionEffectiveness(
   youthId: string,
-  interventionHistory: any[],
-  outcomeData: any[]
+  interventionHistory: unknown[],
+  outcomeData: unknown[]
 ): Promise<AIResponse<{
   effectiveInterventions: Array<{
     intervention: string;
@@ -678,10 +694,10 @@ export async function analyzeInterventionEffectiveness(
 // ============================================================================
 
 export interface ReportGenerationRequest {
-  youth: any;
+  youth: Record<string, unknown>;
   reportType: string;
   period: { startDate: string; endDate: string };
-  data: any;
+  data: Record<string, unknown>;
   sections?: string[];
 }
 
@@ -703,7 +719,7 @@ export async function generateReport(request: ReportGenerationRequest): Promise<
 export async function enhanceReport(
   reportContent: string,
   reportType: string,
-  youth: any
+  youth: unknown
 ): Promise<AIResponse<{
   enhancedContent: string;
   improvements: string[];
@@ -721,9 +737,9 @@ export async function enhanceReport(
  * Generate behavioral insights for reports
  */
 export async function generateBehavioralInsights(
-  behaviorData: any[],
-  youth: any,
-  period?: any
+  behaviorData: unknown[],
+  youth: unknown,
+  period?: unknown
 ): Promise<AIResponse<string>> {
   const response = await makeAIRequest('/api/ai/behavioral-insights', {
     behaviorData,
@@ -733,7 +749,7 @@ export async function generateBehavioralInsights(
 
   return {
     ...response,
-    data: (response.data as any)?.insights || response.data,
+    data: (response.data as { insights?: string } | undefined)?.insights || response.data,
   };
 }
 
@@ -741,9 +757,9 @@ export async function generateBehavioralInsights(
  * Generate treatment recommendations
  */
 export async function generateTreatmentRecommendations(
-  youth: any,
-  progressData: any,
-  assessmentData?: any
+  youth: unknown,
+  progressData: unknown,
+  assessmentData?: unknown
 ): Promise<AIResponse<{
   recommendations: string[];
   priorities: Array<{
@@ -842,11 +858,11 @@ export async function checkAIStatus(): Promise<AIServiceStatus> {
       configured: false,
       error: 'AI service unreachable',
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       available: false,
       configured: false,
-      error: error.message || 'Network error',
+      error: (error as Error)?.message || 'Network error',
     };
   }
 }
@@ -860,7 +876,7 @@ export async function checkAIStatus(): Promise<AIServiceStatus> {
  */
 export async function compareYouthProgress(
   youthId: string,
-  comparisonCriteria?: any
+  comparisonCriteria?: unknown
 ): Promise<AIResponse<{
   comparison: string;
   benchmarks: Array<{

@@ -16,15 +16,8 @@ import {
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { useYouth } from "@/hooks/useSupabase";
-import { getBehaviorPointsByYouth, getDailyRatingsByYouth } from "@/lib/api";
-import { fetchAllProgressNotes } from "@/utils/local-storage-utils";
-import { getScoresByYouth } from "@/utils/schoolScores";
-import {
-  caseNotesService,
-} from "@/integrations/firebase/services";
-import { dailyShiftService, weeklyEvalService } from "@/integrations/firebase/shiftScoresService";
-import { incidentReportsService } from "@/integrations/firebase/incidentReportsService";
 import { youthService } from "@/integrations/firebase/services";
+import { reportDataHydrator, type ReportDataSet } from "@/services/report-data-hydrator";
 import { logger } from "@/utils/logger";
 
 type ExportMode = "time_period" | "all_data";
@@ -84,11 +77,17 @@ function getQuickRange(range: QuickRange): { start: Date; end: Date } {
   }
 }
 
-function inRange(dateValue: any, start: Date, end: Date): boolean {
-  if (!dateValue) return false;
-  const d = new Date(dateValue);
-  return d >= start && d <= end;
-}
+type ExportPayload = {
+  exportMetadata: {
+    exportedAt: string;
+    youthId: string;
+    youthName: string;
+    exportType: ExportMode;
+    dateRange: { start: string; end: string } | "all_time";
+    sectionsIncluded: Array<keyof DataSections>;
+  };
+  profile?: unknown;
+} & Partial<ReportDataSet>;
 
 function downloadJSON(data: unknown, filename: string): void {
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
@@ -115,7 +114,7 @@ export default function DataExportPage() {
   const [isExporting, setIsExporting] = useState(false);
   const [lastExport, setLastExport] = useState<string | null>(null);
 
-  useEffect(() => { loadYouths(); }, []);
+  useEffect(() => { loadYouths(); }, [loadYouths]);
 
   const sortedYouths = useMemo(
     () => [...youths].sort((a, b) => a.lastName.localeCompare(b.lastName) || a.firstName.localeCompare(b.firstName)),
@@ -155,10 +154,7 @@ export default function DataExportPage() {
             : getQuickRange(quickRange)
           : null; // null = all time
 
-      const filter = (dateValue: any) =>
-        dateRange ? inRange(dateValue, dateRange.start, dateRange.end) : true;
-
-      const exportPayload: Record<string, unknown> = {
+      const exportPayload: ExportPayload = {
         exportMetadata: {
           exportedAt: new Date().toISOString(),
           youthId: selectedYouthId,
@@ -176,103 +172,19 @@ export default function DataExportPage() {
         },
       };
 
-      const fetches: Promise<void>[] = [];
-
       if (sections.profile) {
-        fetches.push(
-          youthService.getById(selectedYouthId)
-            .then((data) => { exportPayload.profile = data ?? null; })
-            .catch(() => { exportPayload.profile = null; })
-        );
+        exportPayload.profile = await youthService.getById(selectedYouthId);
       }
 
-      if (sections.behaviorPoints) {
-        fetches.push(
-          getBehaviorPointsByYouth(selectedYouthId)
-            .then((data) => {
-              exportPayload.behaviorPoints = (data ?? []).filter((p: any) => filter(p.date));
-            })
-            .catch(() => { exportPayload.behaviorPoints = []; })
-        );
-      }
-
-      if (sections.dailyRatings) {
-        fetches.push(
-          getDailyRatingsByYouth(selectedYouthId)
-            .then((data) => {
-              exportPayload.dailyRatings = (data ?? []).filter((r: any) => filter(r.date));
-            })
-            .catch(() => { exportPayload.dailyRatings = []; })
-        );
-      }
-
-      if (sections.progressNotes) {
-        fetches.push(
-          fetchAllProgressNotes(selectedYouthId)
-            .then((data) => {
-              exportPayload.progressNotes = (data ?? []).filter((n: any) => filter(n.date));
-            })
-            .catch(() => { exportPayload.progressNotes = []; })
-        );
-      }
-
-      if (sections.schoolScores) {
-        fetches.push(
-          getScoresByYouth(selectedYouthId)
-            .then((data) => {
-              exportPayload.schoolScores = (data ?? []).filter((s: any) => filter(s.date));
-            })
-            .catch(() => { exportPayload.schoolScores = []; })
-        );
-      }
-
-      if (sections.shiftScores) {
-        fetches.push(
-          dailyShiftService.forYouth(selectedYouthId)
-            .then((data) => {
-              exportPayload.shiftScores = (data ?? []).filter((s: any) => filter(s.date));
-            })
-            .catch(() => { exportPayload.shiftScores = []; })
-        );
-      }
-
-      if (sections.weeklyEvals) {
-        fetches.push(
-          weeklyEvalService.forYouth(selectedYouthId)
-            .then((data) => {
-              exportPayload.weeklyEvals = (data ?? []).filter((w: any) => filter(w.week_date));
-            })
-            .catch(() => { exportPayload.weeklyEvals = []; })
-        );
-      }
-
-      if (sections.caseNotes) {
-        fetches.push(
-          caseNotesService.getByYouthId(selectedYouthId)
-            .then((data) => {
-              exportPayload.caseNotes = (data ?? []).filter((n: any) => filter(n.date));
-            })
-            .catch(() => { exportPayload.caseNotes = []; })
-        );
-      }
-
-      if (sections.incidentReports) {
-        fetches.push(
-          incidentReportsService.list()
-            .then((data) => {
-              exportPayload.incidentReports = (data ?? []).filter((i: any) => {
-                const matchesYouth =
-                  (i.youthInvolved ?? []).some((y: any) =>
-                    y.id === selectedYouthId || y.name?.toLowerCase().includes(selectedYouth?.firstName?.toLowerCase() ?? "")
-                  ) || i.youthName;
-                return matchesYouth && filter(i.dateOfIncident);
-              });
-            })
-            .catch(() => { exportPayload.incidentReports = []; })
-        );
-      }
-
-      await Promise.all(fetches);
+      const requestedSections = Object.entries(sections)
+        .filter(([key, enabled]) => enabled && key !== "profile")
+        .map(([key]) => key as keyof DataSections);
+      const hydrated = await reportDataHydrator.loadSections(
+        selectedYouthId,
+        requestedSections,
+        dateRange ? { start: dateRange.start, end: dateRange.end } : undefined
+      );
+      Object.assign(exportPayload, hydrated);
 
       const youthName = selectedYouth
         ? `${selectedYouth.lastName}_${selectedYouth.firstName}`

@@ -197,7 +197,7 @@ export const ReportGenerationForm = ({ onGenerateReport, isGenerating }: ReportG
                 value={outputFormat}
                 onValueChange={(value) => {
                   if (value === "text" || value === "pdf" || value === "docx" || value === "json") {
-                    setOutputFormat(value as any);
+                    setOutputFormat(value);
                   }
                 }}
               >

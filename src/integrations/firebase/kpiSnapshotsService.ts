@@ -3,7 +3,7 @@ import { collection, doc, getDocs, orderBy, query, setDoc, where } from "firebas
 import { v4 as uuidv4 } from "uuid";
 import { kpiSnapshotSchema } from "@/schemas/database-records";
 import { stripUndefinedDeep, validateRecord, withFirestoreMeta } from "@/integrations/firebase/dataGovernance";
-import { auditLogService } from "@/integrations/firebase/auditLogService";
+import { logAuditBestEffort } from "@/integrations/firebase/auditLogBestEffort";
 
 export type KpiSnapshotRow = {
   id: string;
@@ -50,7 +50,7 @@ export const kpiSnapshotsService = {
       })
     ) as KpiSnapshotRow;
     await setDoc(doc(db, COLLECTION, id), validated, { merge: true });
-    await auditLogService.log({
+    await logAuditBestEffort({
       entity_type: "kpi_snapshot",
       entity_id: id,
       action: "snapshot",
@@ -60,7 +60,7 @@ export const kpiSnapshotsService = {
       source: validated.source || "dashboard",
       after: validated,
       metadata: { scope: validated.scope, timeframe: validated.timeframe, snapshot_date: validated.snapshot_date },
-    });
+    }, "save", "kpiSnapshotsService");
     return validated;
   },
 };

@@ -82,6 +82,7 @@ export const ReportCenter = ({ youthId, youth, preselectedType }: ReportCenterPr
       evalWeekly: "evalWeekly",
       evalMonthly: "evalMonthly",
       servicePlan: "progressMonthly",
+      discharge: "summary",
     };
     const mapped = typeMap[preselectedType];
     if (mapped === "court") {

@@ -42,19 +42,25 @@ export function SmartImportDialog({ open, onOpenChange, onImport, onBulkImportSu
   
   const parsedCount = text.trim() ? parseBulkIncidents(text).length : 0
 
-  const handleSingleParse = () => {
+  const handleSingleParse = async () => {
     if (!text.trim()) {
       toast.error('Please paste some text first')
       return
     }
     try {
       const result = parseIncidentText(text)
-      onImport(result)
+      setIsImporting(true)
+      const saved = await incidentReportsService.save(result as FacilityIncidentFormData)
+      onImport(saved)
+      onBulkImportSuccess?.()
       setText('')
       onOpenChange(false)
-      toast.success('Incident parsed successfully!')
+      toast.success('Incident imported successfully!')
     } catch (e) {
-      toast.error('Error parsing incident data')
+      console.error(e)
+      toast.error('Error importing incident data')
+    } finally {
+      setIsImporting(false)
     }
   }
 
@@ -97,7 +103,7 @@ export function SmartImportDialog({ open, onOpenChange, onImport, onBulkImportSu
             Smart Import Report
           </DialogTitle>
           <DialogDescription>
-            Paste an incident narrative or JSON data below. The system will pre-fill the form for you.
+            Paste an incident narrative or JSON data below. The system will save a draft to Firebase and open it for review.
           </DialogDescription>
         </DialogHeader>
 
@@ -151,13 +157,18 @@ export function SmartImportDialog({ open, onOpenChange, onImport, onBulkImportSu
               Save {parsedCount} Reports to Database
             </Button>
           ) : (
-            <Button 
-              className="bg-blue-600 hover:bg-blue-700"
-              onClick={handleSingleParse}
-              disabled={!text.trim() || isImporting}
-            >
-              Run Smart Parser
-            </Button>
+              <Button 
+                className="bg-blue-600 hover:bg-blue-700"
+                onClick={handleSingleParse}
+                disabled={!text.trim() || isImporting}
+              >
+              {isImporting ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <CheckCircle2 className="w-4 h-4 mr-2" />
+              )}
+              Import Single Report to Firebase
+              </Button>
           )}
         </DialogFooter>
       </DialogContent>

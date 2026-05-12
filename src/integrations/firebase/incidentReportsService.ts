@@ -12,7 +12,7 @@ import {
 } from 'firebase/firestore'
 import type { FacilityIncidentReport } from '@/types/facility-incident-types'
 import { youthService } from '@/integrations/firebase/services'
-import { auditLogService } from '@/integrations/firebase/auditLogService'
+import { logAuditBestEffort } from '@/integrations/firebase/auditLogBestEffort'
 import { dateOnlyIso, nowIso, stripUndefinedDeep, withFirestoreMeta } from '@/integrations/firebase/dataGovernance'
 
 const COLLECTION = 'facility_incidents'
@@ -88,7 +88,7 @@ export const incidentReportsService = {
     const existing = existingSnap?.exists() ? (existingSnap.data() as Record<string, unknown>) : null
     const data = await normalizeIncident(report, !existingSnap?.exists(), existing)
     await setDoc(ref, data, { merge: true })
-    await auditLogService.log({
+    await logAuditBestEffort({
       entity_type: 'facility_incident',
       entity_id: id,
       action: existing ? 'update' : 'create',
@@ -98,7 +98,7 @@ export const incidentReportsService = {
       source: data.source || 'manual',
       before: existing,
       after: data as unknown as Record<string, unknown>,
-    })
+    }, 'save', 'incidentReportsService')
     const snap = await getDoc(doc(db, COLLECTION, id))
     return { id: snap.id, ...snap.data() } as FacilityIncidentReport
   },
@@ -116,7 +116,7 @@ export const incidentReportsService = {
     }
 
     await batch.commit()
-    await Promise.all(createdIds.map((id, index) => auditLogService.log({
+    await Promise.all(createdIds.map((id, index) => logAuditBestEffort({
       entity_type: 'facility_incident',
       entity_id: id,
       action: 'create',
@@ -126,7 +126,7 @@ export const incidentReportsService = {
       source: reports[index].source || 'import',
       after: reports[index] as Record<string, unknown>,
       metadata: { bulk: true },
-    })))
+    }, 'bulk import', 'incidentReportsService')))
     return createdIds
   },
 
@@ -136,7 +136,7 @@ export const incidentReportsService = {
     await deleteDoc(ref)
     if (existing.exists()) {
       const row = { id: existing.id, ...existing.data() } as FacilityIncidentReport
-      await auditLogService.log({
+      await logAuditBestEffort({
         entity_type: 'facility_incident',
         entity_id: id,
         action: 'delete',
@@ -145,7 +145,7 @@ export const incidentReportsService = {
         changed_by: row.updated_by || row.created_by || row.submittedBy || null,
         source: row.source || 'manual',
         before: row as unknown as Record<string, unknown>,
-      })
+      }, 'delete', 'incidentReportsService')
     }
   },
 }

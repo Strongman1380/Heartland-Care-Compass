@@ -162,6 +162,8 @@ export interface FacilityIncidentReport {
   // Metadata
   createdAt: string;
   updatedAt: string;
+  deleted_at?: string;
+  deleted_by?: string;
 }
 
 export type FacilityIncidentFormData = Omit<FacilityIncidentReport, 'id' | 'createdAt' | 'updatedAt'> & {

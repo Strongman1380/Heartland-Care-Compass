@@ -23,6 +23,15 @@ function generateId(): string {
   return `HBH-IR-${year}-${rand}`
 }
 
+function isPermissionDenied(error: unknown): boolean {
+  return (
+    typeof error === 'object'
+    && error !== null
+    && 'code' in error
+    && (error as { code?: string }).code === 'permission-denied'
+  )
+}
+
 async function resolveYouthId(report: Partial<FacilityIncidentReport>): Promise<string | undefined> {
   if (report.youth_id) return report.youth_id
   if (report.subjectType !== 'Resident') return undefined
@@ -72,13 +81,15 @@ export const incidentReportsService = {
   async list(): Promise<FacilityIncidentReport[]> {
     const q = query(collection(db, COLLECTION), orderBy('dateOfIncident', 'desc'))
     const snapshot = await getDocs(q)
-    return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as FacilityIncidentReport))
+    return snapshot.docs
+      .map(d => ({ ...d.data(), id: d.id } as FacilityIncidentReport & { deleted_at?: string }))
+      .filter(report => !report.deleted_at)
   },
 
   async get(id: string): Promise<FacilityIncidentReport | null> {
     const docSnap = await getDoc(doc(db, COLLECTION, id))
     if (!docSnap.exists()) return null
-    return { id: docSnap.id, ...docSnap.data() } as FacilityIncidentReport
+    return { ...docSnap.data(), id: docSnap.id } as FacilityIncidentReport
   },
 
   async save(report: Partial<FacilityIncidentReport> & { id?: string }): Promise<FacilityIncidentReport> {
@@ -100,7 +111,7 @@ export const incidentReportsService = {
       after: data as unknown as Record<string, unknown>,
     }, 'save', 'incidentReportsService')
     const snap = await getDoc(doc(db, COLLECTION, id))
-    return { id: snap.id, ...snap.data() } as FacilityIncidentReport
+    return { ...snap.data(), id: snap.id } as FacilityIncidentReport
   },
 
   async saveBulk(reports: Partial<FacilityIncidentReport>[]): Promise<string[]> {
@@ -133,7 +144,23 @@ export const incidentReportsService = {
   async delete(id: string): Promise<void> {
     const ref = doc(db, COLLECTION, id)
     const existing = await getDoc(ref)
-    await deleteDoc(ref)
+    const deletedAt = nowIso()
+    let usedSoftDelete = false
+
+    try {
+      await deleteDoc(ref)
+    } catch (error) {
+      if (!isPermissionDenied(error) || !existing.exists()) {
+        throw error
+      }
+
+      await setDoc(ref, {
+        deleted_at: deletedAt,
+        updated_at: deletedAt,
+      }, { merge: true })
+      usedSoftDelete = true
+    }
+
     if (existing.exists()) {
       const row = { id: existing.id, ...existing.data() } as FacilityIncidentReport
       await logAuditBestEffort({
@@ -141,10 +168,11 @@ export const incidentReportsService = {
         entity_id: id,
         action: 'delete',
         youth_id: row.youth_id,
-        changed_at: nowIso(),
+        changed_at: deletedAt,
         changed_by: row.updated_by || row.created_by || row.submittedBy || null,
         source: row.source || 'manual',
         before: row as unknown as Record<string, unknown>,
+        metadata: usedSoftDelete ? { delete_mode: 'soft' } : { delete_mode: 'hard' },
       }, 'delete', 'incidentReportsService')
     }
   },

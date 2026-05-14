@@ -166,6 +166,7 @@ const STATUS_LABELS: Record<string, string> = {
   requested_more_info: "Requested More Info",
   waitlisted: "Waitlisted",
   accepted: "Accepted/Admitted",
+  on_run: "On Run / Eloped",
   // legacy values
   new: "New",
   reviewed: "Reviewed",
@@ -186,6 +187,7 @@ const STATUS_COLORS: Record<string, string> = {
   requested_more_info: "bg-cyan-100 text-cyan-800 border-cyan-300",
   waitlisted: "bg-amber-100 text-amber-800 border-amber-300",
   accepted: "bg-emerald-100 text-emerald-800 border-emerald-300",
+  on_run: "bg-red-50 text-red-700 border-red-300",
   new: "bg-gray-100 text-gray-800 border-gray-300",
   reviewed: "bg-purple-100 text-purple-800 border-purple-300",
   actioned: "bg-teal-100 text-teal-800 border-teal-300",
@@ -203,14 +205,17 @@ const REFERRAL_STATUS_OPTIONS = [
   { value: "requested_more_info", label: "Requested More Info" },
   { value: "already_found_placement", label: "Already Found Placement" },
   { value: "waitlisted", label: "Waitlisted" },
+  { value: "on_run", label: "On Run / Eloped" },
   { value: "accepted", label: "Accepted / Admitted" },
   { value: "denied", label: "Denied" },
 ] as const;
+
 
 const PENDING_REFERRAL_STATUSES = new Set([
   "pending_interview",
   "schedule_interview",
   "waiting_for_response",
+  "on_run",
   "new",
 ]);
 
@@ -788,6 +793,7 @@ const PLACEMENT_PRIORITY = [
   "Douglas County Youth Center",
   "Inpatient / Hospital",
   "Correctional Facility",
+  "On Run / Eloped",
 ];
 
 function normalizePlacementGroup(raw: string): string {
@@ -803,6 +809,7 @@ function normalizePlacementGroup(raw: string): string {
   if (/\bshelter\b|\bcrisis\s*center\b/.test(lower)) return "Shelter / Crisis";
   if (/\bhospital\b|\binpatient\b|\bpsychiatric\b/.test(lower)) return "Inpatient / Hospital";
   if (/\bjail\b|\bprison\b|\bcorrection/.test(lower)) return "Correctional Facility";
+  if (/\bon\s*run\b|\beloped\b|\belopement\b/.test(lower)) return "On Run / Eloped";
   return raw.trim();
 }
 
@@ -1363,11 +1370,15 @@ export const ReferralTab = () => {
   };
 
   const loadReferralHistory = async () => {
+    console.log("[ReferralTab] Starting loadReferralHistory...");
     try {
       setIsLoadingHistory(true);
       const rows = await referralNotesService.list();
+      console.log("[ReferralTab] Rows fetched:", rows?.length);
       const items = rows.map(toHistoryItem);
+      console.log("[ReferralTab] History items mapped:", items.length);
       setHistory(items);
+      console.log("[ReferralTab] setHistory called with", items.length, "items");
       // Run referral alert scan in the background (fire-and-forget)
       alertsService.list().then((existing) => {
         const existingTitles = new Set(existing.map((r) => r.title));
@@ -1382,6 +1393,7 @@ export const ReferralTab = () => {
   };
 
   useEffect(() => {
+    console.log("[ReferralTab] Mount effect triggered");
     loadReferralHistory();
   }, []);
 
@@ -1844,8 +1856,8 @@ export const ReferralTab = () => {
     });
   }, [filteredHistory]);
   // Only these statuses get their own group header; everything else is "Active Pipeline"
-  const STATUS_PINNED_GROUPS = ["interviewed_yes", "waitlisted"] as const;
-  const STATUS_PINNED_GROUP_ORDER = ["Active Pipeline", "interviewed_yes", "waitlisted"];
+  const STATUS_PINNED_GROUPS = ["interviewed_yes", "waitlisted", "on_run"] as const;
+  const STATUS_PINNED_GROUP_ORDER = ["Active Pipeline", "interviewed_yes", "waitlisted", "on_run"];
 
   const statusGroupEntries = useMemo(() => {
     const groups = new Map<string, ReferralHistoryItem[]>();
@@ -2395,6 +2407,8 @@ export const ReferralTab = () => {
   };
 
   const kpis = useMemo(() => {
+    console.log("[ReferralTab] Recalculating KPIs for history length:", history.length);
+    const start = performance.now();
     const active = history.filter((h) => !h.archived);
     const totalReceived = history.length;
     const pendingCount = active.filter((h) => PENDING_REFERRAL_STATUSES.has(h.status || "")).length;
@@ -2407,6 +2421,7 @@ export const ReferralTab = () => {
     const acceptedCount = history.filter((h) => h.status === "accepted").length;
     const waitlistedCount = history.filter((h) => h.status === "waitlisted").length;
     const alreadyFoundPlacement = history.filter((h) => h.status === "already_found_placement").length;
+    const onRunCount = history.filter((h) => h.status === "on_run").length;
 
     // PO contact tracking
     const noPoContact = active.filter((h) => (h.poContactLog || []).length === 0).length;
@@ -2466,7 +2481,7 @@ export const ReferralTab = () => {
     const stateTop = tallyTop(active.flatMap(extractStates));
     const poTop = tallyTop(active.flatMap(extractProbationOfficer));
 
-    return {
+    const kpiResult = {
       totalReceived,
       total: active.length,
       pendingCount,
@@ -2477,6 +2492,7 @@ export const ReferralTab = () => {
       acceptedCount,
       waitlistedCount,
       alreadyFoundPlacement,
+      onRunCount,
       noPoContact,
       poContacted,
       priorityUrgent,
@@ -2529,6 +2545,9 @@ export const ReferralTab = () => {
         return daysArr.length > 0 ? Math.round(daysArr.reduce((a, b) => a + b, 0) / daysArr.length) : null;
       })(),
     };
+    const end = performance.now();
+    console.log("[ReferralTab] KPI calculation took", (end - start).toFixed(2), "ms");
+    return kpiResult;
   }, [history]);
 
   // Helper function to filter parsed data based on search query and section filter
@@ -2537,9 +2556,10 @@ export const ReferralTab = () => {
     query: string,
     sectionFilter: "all" | keyof ParsedReferral
   ) => {
-    if (!parsedData || !query.trim()) {
+    if (!parsedData) return null;
+    if (!query.trim()) {
       if (sectionFilter === "all") return parsedData;
-      return { [sectionFilter]: parsedData[sectionFilter] } as unknown as ParsedReferral;
+      return { [sectionFilter]: (parsedData as any)[sectionFilter] } as unknown as ParsedReferral;
     }
 
     const queryLower = query.toLowerCase();
@@ -2656,7 +2676,7 @@ export const ReferralTab = () => {
 
             <TabsContent value="snapshot" className="space-y-3 mt-0">
               {/* Pipeline row */}
-              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-9 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-5 lg:grid-cols-10 gap-3">
                 <div className="rounded-md border p-3">
                   <p className="text-xs text-muted-foreground">Total Received</p>
                   <p className="text-xl font-semibold">{kpis.totalReceived}</p>
@@ -2696,6 +2716,11 @@ export const ReferralTab = () => {
                   <p className="text-xs text-red-700">Denied</p>
                   <p className="text-xl font-semibold text-red-800">{kpis.deniedCount}</p>
                   <p className="text-xs text-red-600 mt-0.5">not accepted</p>
+                </div>
+                <div className="rounded-md border border-rose-200 bg-rose-50 p-3">
+                  <p className="text-xs text-rose-700">On Run / Eloped</p>
+                  <p className="text-xl font-semibold text-rose-800">{kpis.onRunCount}</p>
+                  <p className="text-xs text-rose-600 mt-0.5">needs follow up</p>
                 </div>
                 <div className="rounded-md border border-slate-300 bg-slate-100 p-3">
                   <p className="text-xs text-slate-700">Already Found Placement</p>

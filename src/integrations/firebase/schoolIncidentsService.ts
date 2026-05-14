@@ -40,17 +40,28 @@ export type Involved = {
   role_in_incident: string
 }
 
+function isPermissionDenied(error: unknown): boolean {
+  return (
+    typeof error === 'object'
+    && error !== null
+    && 'code' in error
+    && (error as { code?: string }).code === 'permission-denied'
+  )
+}
+
 export const schoolIncidentsService = {
   async list(): Promise<SchoolIncident[]> {
     const q = query(collection(db, 'school_incidents'), orderBy('date_time', 'desc'))
     const snapshot = await getDocs(q)
-    return snapshot.docs.map(d => ({ incident_id: d.id, ...d.data() } as SchoolIncident))
+    return snapshot.docs
+      .map(d => ({ ...d.data(), incident_id: d.id } as SchoolIncident & { deleted_at?: string }))
+      .filter(incident => !incident.deleted_at)
   },
 
   async get(incident_id: string): Promise<SchoolIncident | null> {
     const docSnap = await getDoc(doc(db, 'school_incidents', incident_id))
     if (!docSnap.exists()) return null
-    return { incident_id: docSnap.id, ...docSnap.data() } as SchoolIncident
+    return { ...docSnap.data(), incident_id: docSnap.id } as SchoolIncident
   },
 
   async upsert(incident: Partial<SchoolIncident> & { incident_id?: string }): Promise<SchoolIncident> {
@@ -64,11 +75,22 @@ export const schoolIncidentsService = {
     const data = { ...incident, incident_id: id, updated_at: now, created_at: incident.created_at || now }
     await setDoc(doc(db, 'school_incidents', id), data, { merge: true })
     const snap = await getDoc(doc(db, 'school_incidents', id))
-    return { incident_id: snap.id, ...snap.data() } as SchoolIncident
+    return { ...snap.data(), incident_id: snap.id } as SchoolIncident
   },
 
   async delete(incident_id: string): Promise<void> {
-    await deleteDoc(doc(db, 'school_incidents', incident_id))
+    const ref = doc(db, 'school_incidents', incident_id)
+    try {
+      await deleteDoc(ref)
+    } catch (error) {
+      if (!isPermissionDenied(error)) {
+        throw error
+      }
+      await setDoc(ref, {
+        deleted_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }, { merge: true })
+    }
   },
 
   async listInvolved(incident_id: string): Promise<Involved[]> {

@@ -53,7 +53,45 @@ import { incidentReportsService } from '../incidentReportsService'
 describe('incidentReportsService', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.docMock.mockReturnValue({ path: 'facility_incidents/incident-1' })
+    mocks.collectionMock.mockReturnValue({ path: 'facility_incidents' })
+    mocks.orderByMock.mockReturnValue({ field: 'dateOfIncident' })
+    mocks.queryMock.mockReturnValue({ query: true })
     mocks.youthLookupMock.mockResolvedValue([])
+  })
+
+  it('hides soft-deleted incident reports from list results', async () => {
+    mocks.getDocsMock.mockResolvedValueOnce({
+      docs: [
+        {
+          id: 'incident-1',
+          data: () => ({ id: 'incident-1', dateOfIncident: '2026-05-11' }),
+        },
+        {
+          id: 'incident-2',
+          data: () => ({ id: 'incident-2', dateOfIncident: '2026-05-10', deleted_at: '2026-05-11T00:00:00.000Z' }),
+        },
+      ],
+    })
+
+    await expect(incidentReportsService.list()).resolves.toEqual([
+      { id: 'incident-1', dateOfIncident: '2026-05-11' },
+    ])
+  })
+
+  it('uses the Firestore document id even when stored incident data has a blank id', async () => {
+    mocks.getDocsMock.mockResolvedValueOnce({
+      docs: [
+        {
+          id: 'incident-doc-id',
+          data: () => ({ id: '', dateOfIncident: '2026-05-11' }),
+        },
+      ],
+    })
+
+    await expect(incidentReportsService.list()).resolves.toEqual([
+      { id: 'incident-doc-id', dateOfIncident: '2026-05-11' },
+    ])
   })
 
   it('does not fail delete when audit logging fails', async () => {
@@ -74,6 +112,30 @@ describe('incidentReportsService', () => {
 
     await expect(incidentReportsService.delete('incident-1')).resolves.toBeUndefined()
     expect(mocks.deleteDocMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('falls back to a soft delete when Firestore denies hard delete', async () => {
+    mocks.getDocMock.mockResolvedValueOnce({
+      exists: () => true,
+      id: 'incident-1',
+      data: () => ({
+        id: 'incident-1',
+        updated_by: 'staff-1',
+        source: 'manual',
+      }),
+    })
+    mocks.deleteDocMock.mockRejectedValueOnce({ code: 'permission-denied' })
+    mocks.setDocMock.mockResolvedValueOnce(undefined)
+
+    await expect(incidentReportsService.delete('incident-1')).resolves.toBeUndefined()
+    expect(mocks.setDocMock).toHaveBeenCalledWith(
+      { path: 'facility_incidents/incident-1' },
+      expect.objectContaining({
+        deleted_at: '2026-05-11T00:00:00.000Z',
+        updated_at: '2026-05-11T00:00:00.000Z',
+      }),
+      { merge: true }
+    )
   })
 
   it('does not fail save when audit logging fails', async () => {

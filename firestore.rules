@@ -113,5 +113,35 @@ service cloud.firestore {
       allow read: if isAdmin();
       allow write: if false;
     }
+
+    match /level_events/{docId} {
+      allow read, write: if signedIn();
+    }
+
+    match /weekly_eval_scores/{docId} {
+      allow read, write: if signedIn();
+    }
+
+    match /daily_shift_scores/{docId} {
+      allow read, write: if signedIn();
+    }
+
+    // collectionGroup rules — required for queries that span all subcollections
+    // with the same name, regardless of parent path.
+    match /{path=**}/behavior_points/{docId} {
+      allow read, write: if signedIn();
+    }
+
+    match /{path=**}/case_notes/{docId} {
+      allow read, write: if signedIn();
+    }
+
+    match /{path=**}/daily_ratings/{docId} {
+      allow read, write: if signedIn();
+    }
+
+    match /{path=**}/important_dates/{docId} {
+      allow read, write: if signedIn();
+    }
   }
 }

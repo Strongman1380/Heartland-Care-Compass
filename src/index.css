@@ -183,6 +183,16 @@
   }
 }
 
+/* Radix UI popper wrapper z-index fix.
+   The sticky header is z-50 (z-index: 50). Radix renders all dropdown/popover/select
+   content inside [data-radix-popper-content-wrapper] which is position:fixed but has
+   no explicit z-index (z-index: auto). CSS gives sticky z=50 priority over fixed z=auto,
+   so popper content renders behind the header. Setting z-index: 51 here ensures all
+   Radix popper content (dropdowns, selects, popovers, tooltips) appears above the header. */
+[data-radix-popper-content-wrapper] {
+  z-index: 51 !important;
+}
+
 /* Custom Heartland branding styles - Modernized */
 .heartland-gradient {
   background: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--secondary)) 70%, hsl(var(--secondary)) 100%);

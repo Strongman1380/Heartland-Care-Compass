@@ -56,9 +56,16 @@ export function useKeyboardShortcuts({ enabled = true }: UseKeyboardShortcutsOpt
         return;
       }
 
+      // Skip back-navigation if any Radix UI overlay/dialog/dropdown is open —
+      // those components handle Escape internally and call stopPropagation.
       if (key === 'escape' && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) {
-        event.preventDefault();
-        navigate(-1);
+        const hasOpenRadixLayer = !!document.querySelector(
+          '[data-radix-popper-content-wrapper],[data-radix-dialog-content],[data-radix-alert-dialog-content]'
+        );
+        if (!hasOpenRadixLayer) {
+          event.preventDefault();
+          navigate(-1);
+        }
       }
     };
 

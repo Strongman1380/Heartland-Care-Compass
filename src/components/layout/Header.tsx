@@ -148,6 +148,7 @@ export const Header = () => {
                   <DropdownMenu key={group.label}>
                     <DropdownMenuTrigger asChild>
                       <button
+                        type="button"
                         className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 whitespace-nowrap
                           ${active ? "bg-red-50 text-red-700" : "text-gray-600 hover:text-red-700 hover:bg-red-50"}`}
                       >
@@ -162,15 +163,14 @@ export const Header = () => {
                       {group.items.map((item) => {
                         const ItemIcon = item.icon;
                         return (
-                          <DropdownMenuItem key={item.path} asChild>
-                            <Link
-                              to={item.path}
-                              className={`flex items-center gap-2 cursor-pointer
-                                ${isActive(item.path) ? "text-red-700 font-medium" : ""}`}
-                            >
-                              <ItemIcon className="h-4 w-4" />
-                              {item.label}
-                            </Link>
+                          <DropdownMenuItem
+                            key={item.path}
+                            onSelect={() => navigate(item.path)}
+                            className={`flex items-center gap-2 cursor-pointer
+                              ${isActive(item.path) ? "text-red-700 font-medium" : ""}`}
+                          >
+                            <ItemIcon className="h-4 w-4" />
+                            {item.label}
                           </DropdownMenuItem>
                         );
                       })}

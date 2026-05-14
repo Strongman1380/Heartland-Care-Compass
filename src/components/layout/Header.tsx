@@ -146,16 +146,13 @@ export const Header = () => {
                 const active = isGroupActive(group);
                 return (
                   <DropdownMenu key={group.label}>
-                    <DropdownMenuTrigger asChild>
-                      <button
-                        type="button"
-                        className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 whitespace-nowrap
-                          ${active ? "bg-red-50 text-red-700" : "text-gray-600 hover:text-red-700 hover:bg-red-50"}`}
-                      >
-                        <GroupIcon className="h-4 w-4" />
-                        <span>{group.label}</span>
-                        <ChevronDown className="h-3 w-3 opacity-60" />
-                      </button>
+                    <DropdownMenuTrigger
+                      className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 whitespace-nowrap outline-none
+                        ${active ? "bg-red-50 text-red-700" : "text-gray-600 hover:text-red-700 hover:bg-red-50"}`}
+                    >
+                      <GroupIcon className="h-4 w-4" />
+                      <span>{group.label}</span>
+                      <ChevronDown className="h-3 w-3 opacity-60" />
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="start" className="w-48">
                       <DropdownMenuLabel className="text-xs text-muted-foreground">{group.label}</DropdownMenuLabel>
